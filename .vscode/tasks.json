@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "N.E.K.O: check frontline_td",
+      "type": "shell",
+      "command": "uv run neko-plugin check frontline_td",
+      "options": {
+        "cwd": "${config:nekoPlugin.repoRoot}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "N.E.K.O: sync frontline_td",
+      "type": "shell",
+      "command": "uv run neko-plugin sync frontline_td --clean",
+      "options": {
+        "cwd": "${config:nekoPlugin.repoRoot}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "N.E.K.O: check -r frontline_td",
+      "type": "shell",
+      "command": "uv run neko-plugin check -r frontline_td",
+      "options": {
+        "cwd": "${config:nekoPlugin.repoRoot}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "N.E.K.O: build frontline_td",
+      "type": "shell",
+      "command": "uv run neko-plugin build frontline_td",
+      "options": {
+        "cwd": "${config:nekoPlugin.repoRoot}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

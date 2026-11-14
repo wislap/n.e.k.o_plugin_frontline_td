@@ -1,0 +1,154 @@
+import type { IConfiguration } from 'dependency-cruiser';
+
+const CORE = 'src/core/';
+const KERNEL = 'src/kernel/';
+const CONTENT = 'src/content/';
+const PROTOCOL = 'src/protocol/';
+
+// Feature-relative escape hatches used in the sim / rules rules below.
+const SIM_PUBLIC = 'src/features/[^/]+/(sim/index[.]ts|protocol[.]ts|content[.]ts)';
+const RULES_PUBLIC = 'src/features/[^/]+/(rules/index[.]ts|protocol[.]ts|content[.]ts)';
+const CROSS_FEATURE_PUBLIC =
+  'src/features/[^/]+/(sim/index[.]ts|rules/index[.]ts|render/index[.]tsx?|ui/index[.]tsx?|protocol[.]ts|content[.]ts)';
+
+// Client-side directories that must never reach the simulation layer.
+const CLIENT_SIDE = 'src/(features/[^/]+/(render|ui)|client|input|render|ui|host|i18n)/';
+
+const config: IConfiguration = {
+  forbidden: [
+    {
+      name: 'no-circular',
+      severity: 'error',
+      comment: 'R1: circular dependencies are forbidden (ADR 0007).',
+      from: {},
+      to: { circular: true },
+    },
+    {
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      comment: 'Imports must resolve to a real module.',
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
+      name: 'core-is-leaf',
+      severity: 'error',
+      comment: 'R2: src/core may only import other src/core modules (ADR 0007).',
+      from: { path: `^${CORE}` },
+      to: { path: '^src/', pathNot: `^${CORE}` },
+    },
+    {
+      name: 'kernel-deps',
+      severity: 'error',
+      comment: 'R3: src/kernel may only import src/core and src/kernel (ADR 0007).',
+      from: { path: `^${KERNEL}` },
+      to: {
+        path: '^src/',
+        pathNot: `^(${CORE}|${KERNEL})`,
+      },
+    },
+    {
+      name: 'sim-deps',
+      severity: 'error',
+      comment:
+        'R4: features/<x>/sim may import core, kernel, content, the same feature' +
+        " (sim/, rules/, content.ts, protocol.ts) and other features' public" +
+        ' sim/index.ts / protocol.ts / content.ts (ADR 0007).',
+      from: { path: '^src/features/([^/]+)/sim/' },
+      to: {
+        path: '^src/',
+        pathNot:
+          `^(${CORE}|${KERNEL}|${CONTENT}|` +
+          'src/features/$1/(sim|rules)/|' +
+          'src/features/$1/(content|protocol)[.]ts|' +
+          `${SIM_PUBLIC})`,
+      },
+    },
+    {
+      name: 'rules-deps',
+      severity: 'error',
+      comment:
+        'R5: features/<x>/rules may import core, content, the same feature' +
+        " rules/, and any feature's protocol.ts / content.ts / rules/index.ts" +
+        ' (ADR 0007).',
+      from: { path: '^src/features/([^/]+)/rules/' },
+      to: {
+        path: '^src/',
+        pathNot: `^(${CORE}|${CONTENT}|` + 'src/features/$1/rules/|' + `${RULES_PUBLIC})`,
+      },
+    },
+    {
+      name: 'client-not-to-sim',
+      severity: 'error',
+      comment:
+        'R6: client-side code (features render/ui, client, input, render, ui,' +
+        ' host, i18n) must not import sim/, kernel/ or runtime/ (ADR 0007).',
+      from: { path: `^${CLIENT_SIDE}` },
+      to: { path: '^src/(features/[^/]+/sim|kernel|runtime)/' },
+    },
+    {
+      name: 'cross-feature-public-only',
+      severity: 'error',
+      comment:
+        'R7: imports into a different feature may only target its public' +
+        ' files (sim/index.ts, rules/index.ts, render/index.ts(x),' +
+        ' ui/index.ts(x), protocol.ts, content.ts) (ADR 0007).',
+      from: { path: '^src/features/([^/]+)/' },
+      to: {
+        path: '^src/features/',
+        pathNot: `^(src/features/$1/|${CROSS_FEATURE_PUBLIC})`,
+      },
+    },
+    {
+      name: 'not-to-app',
+      severity: 'error',
+      comment: 'R8: only src/app may import src/app; app assembles everything.',
+      from: { path: '^src/', pathNot: '^src/app/' },
+      to: { path: '^src/app/' },
+    },
+    {
+      name: 'no-npm-in-sim-layer',
+      severity: 'error',
+      comment:
+        'R9: core, content, protocol and features sim/rules may not import' +
+        ' npm packages; kernel may only import bitecs (ADR 0007/0009).',
+      from: {
+        path: `^(${CORE}|${CONTENT}|${PROTOCOL}|src/features/[^/]+/(sim|rules)/)`,
+      },
+      to: { dependencyTypes: ['npm'] },
+    },
+    {
+      name: 'kernel-npm-only-bitecs',
+      severity: 'error',
+      comment: 'R9: src/kernel may only import the bitecs npm package (ADR 0009).',
+      from: { path: `^${KERNEL}` },
+      to: { dependencyTypes: ['npm'], pathNot: 'node_modules/bitecs/' },
+    },
+    {
+      name: 'no-node-builtins-in-src',
+      severity: 'error',
+      comment: 'R10: src/ must not import Node.js built-in modules.',
+      from: { path: '^src/' },
+      to: { dependencyTypes: ['core'] },
+    },
+    {
+      name: 'src-not-to-tooling',
+      severity: 'error',
+      comment: 'R11: src/ must not import tooling/.',
+      from: { path: '^src/' },
+      to: { path: '^tooling/' },
+    },
+  ],
+  options: {
+    tsPreCompilationDeps: true,
+    doNotFollow: { path: 'node_modules' },
+    enhancedResolveOptions: {
+      exportsFields: ['exports'],
+      conditionNames: ['import', 'require', 'node', 'default', 'types'],
+      extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+      mainFields: ['module', 'main', 'types'],
+    },
+  },
+};
+
+export default config;

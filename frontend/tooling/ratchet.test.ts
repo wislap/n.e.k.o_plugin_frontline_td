@@ -1,0 +1,70 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { measure, run } from './ratchet.ts';
+
+let root: string;
+
+beforeEach(() => {
+  root = mkdtempSync(path.join(tmpdir(), 'ratchet-'));
+  mkdirSync(path.join(root, 'src'), { recursive: true });
+  mkdirSync(path.join(root, 'tooling'), { recursive: true });
+  writeBaseline({ asAny: 0, tsIgnore: 0, tsExpectError: 0, eslintDisable: 0, longFiles: 0 });
+});
+
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true });
+});
+
+function writeBaseline(metrics: Record<string, number>) {
+  writeFileSync(path.join(root, 'ratchet.json'), JSON.stringify(metrics));
+}
+
+const AS_ANY = 'as' + ' any';
+const TS_IGNORE = '@ts-' + 'ignore';
+const ESLINT_DISABLE_LINE = 'eslint-' + 'disable-line';
+
+describe('measure', () => {
+  it('counts each metric and skips fixtures', () => {
+    writeFileSync(
+      path.join(root, 'src', 'a.ts'),
+      `const x = 1 ${AS_ANY};\n// ${ESLINT_DISABLE_LINE}\n`,
+    );
+    mkdirSync(path.join(root, 'tooling', 'fixtures'), { recursive: true });
+    writeFileSync(path.join(root, 'tooling', 'fixtures', 'f.ts'), `${AS_ANY} ${TS_IGNORE}\n`);
+    const metrics = measure(root);
+    expect(metrics.asAny).toBe(1);
+    expect(metrics.eslintDisable).toBe(1);
+    expect(metrics.tsIgnore).toBe(0);
+  });
+});
+
+describe('run', () => {
+  it('fails when a metric regresses', () => {
+    writeFileSync(path.join(root, 'src', 'a.ts'), `const x = 1 ${AS_ANY};\n`);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(run([], root)).toBe(1);
+    expect(err.mock.calls.flat().join('\n')).toMatch('asAny');
+    err.mockRestore();
+  });
+
+  it('fails when a metric improved but baseline was not updated', () => {
+    writeBaseline({ asAny: 1, tsIgnore: 0, tsExpectError: 0, eslintDisable: 0, longFiles: 0 });
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(run([], root)).toBe(1);
+    expect(err.mock.calls.flat().join('\n')).toMatch('ratchet:update');
+    err.mockRestore();
+  });
+
+  it('update refuses to raise a baseline without --allow-increase', () => {
+    writeFileSync(path.join(root, 'src', 'a.ts'), `const x = 1 ${AS_ANY};\n`);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(run(['--update'], root)).toBe(1);
+    expect(run(['--update', '--allow-increase'], root)).toBe(0);
+    const written = JSON.parse(readFileSync(path.join(root, 'ratchet.json'), 'utf8')) as {
+      asAny: number;
+    };
+    expect(written.asAny).toBe(1);
+  });
+});

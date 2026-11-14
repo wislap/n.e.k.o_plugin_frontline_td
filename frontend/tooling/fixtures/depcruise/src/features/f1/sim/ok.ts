@@ -1,0 +1,10 @@
+import '../../../core/util';
+import '../../../kernel/x';
+import '../../../content/c';
+import '../rules/r';
+import '../protocol';
+import '../content';
+import '../../f2/sim/index';
+import '../../f2/protocol';
+import '../../f2/content';
+export const ok = 1;

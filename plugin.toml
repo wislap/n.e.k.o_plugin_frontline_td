@@ -1,0 +1,21 @@
+[plugin]
+id = "frontline_td"
+name = "frontline_td"
+version = "0.1.0"
+type = "plugin"
+description = "星际开荒塔防原型：建立补给网、修筑防线、指挥机器人小队推进前线，最终攻破敌方要塞。（开发中）"
+short_description = "补给网 + 塔防 + 推进攻坚的策略原型（开发中）"
+entry = "plugin.plugins.frontline_td:FrontlineTdPlugin"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "main"
+title = "frontline_td"
+entry = "static/index.html"
+mode = "static"

@@ -1,0 +1,35 @@
+name: Frontend
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+      - name: generated artifacts are in sync
+        working-directory: .
+        run: |
+          status="$(git status --porcelain -- static docs/generated)"
+          if [ -n "$status" ]; then
+            echo "static/ or docs/generated/ is out of sync with sources:"
+            echo "$status"
+            exit 1
+          fi

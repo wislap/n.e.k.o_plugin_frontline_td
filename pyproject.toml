@@ -1,0 +1,4 @@
+[project]
+name = "frontline_td"
+version = "0.1.0"
+dependencies = []
