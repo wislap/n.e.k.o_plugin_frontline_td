@@ -12,6 +12,7 @@
 | [0003](../adr/0003-tech-stack.md) | 技术栈 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0018](../adr/0018-licenses.md) | 许可证与依赖许可证 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0024](../adr/0024-evaluation-framework.md) | 评估框架：性能基线与数值平衡 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -21,6 +22,8 @@
 | [0008](../adr/0008-module-collaboration.md) | 模块协作模式 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0009](../adr/0009-partial-ecs-boundary.md) | 部分 ECS 的边界 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0014](../adr/0014-data-driven-boundaries.md) | 数据驱动的边界 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0019](../adr/0019-factions-and-pluggable-modes.md) | 阵营模型与玩法可插拔 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0023](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md) | 网格图层、编组、命令 schema、RNG 登记与运行时限制 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 
 ### 模拟
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -28,6 +31,8 @@
 | [0005](../adr/0005-fixed-timestep-speed-pause.md) | 固定步长 20Hz、变速与暂停 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0006](../adr/0006-determinism.md) | 确定性 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0013](../adr/0013-modifier-pipeline.md) | 修正值管线 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -48,6 +53,7 @@
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
 | [0015](../adr/0015-map-format-versioning.md) | 地图格式契约与版本号 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0022](../adr/0022-match-setup-content-ids-packs.md) | 对局启动参数、内容 ID 与内容包 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 
 ### UI
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -79,3 +85,11 @@
 - [0016 多语言策略](../adr/0016-i18n-strategy.md)
 - [0017 防腐化机制](../adr/0017-anti-decay-mechanisms.md)
 - [0018 许可证与依赖许可证](../adr/0018-licenses.md)
+
+### M1 前置（2026-11-15）
+- [0019 阵营模型与玩法可插拔](../adr/0019-factions-and-pluggable-modes.md)
+- [0020 数值、时间与容量约定](../adr/0020-numeric-time-capacity-conventions.md)
+- [0021 延迟效果与实体关系](../adr/0021-scheduled-effects-entity-relations.md)
+- [0022 对局启动参数、内容 ID 与内容包](../adr/0022-match-setup-content-ids-packs.md)
+- [0023 网格图层、编组、命令 schema、RNG 登记与运行时限制](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md)
+- [0024 评估框架：性能基线与数值平衡](../adr/0024-evaluation-framework.md)
