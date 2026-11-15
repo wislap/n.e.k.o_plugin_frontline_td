@@ -2,5 +2,18 @@
   "app": {
     "title": "frontline_td 星际开荒塔防",
     "status": "原型开发中"
+  },
+  "dev": {
+    "tick": "Tick",
+    "speed": "速度",
+    "paused": "已暂停",
+    "speed_value": "×{{n}}",
+    "tick_rate": "Tick 速率",
+    "entities": "实体数",
+    "systems": "系统耗时",
+    "systems_empty": "（无系统）",
+    "error": "错误：",
+    "pause": "暂停",
+    "resume": "继续"
   }
 }

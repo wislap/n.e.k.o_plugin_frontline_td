@@ -39,6 +39,8 @@ describe('dependency rules on the fixture tree', () => {
     ['no-node-builtins-in-src', /client\/bad_node\.ts/],
     ['src-not-to-tooling', /client\/bad_tooling\.ts/],
     ['not-to-unresolvable', /client\/bad_unresolvable\.ts/],
+    ['not-to-modes', /client\/bad_mode\.ts/],
+    ['modes-public-only', /modes\/m1\/leak\.ts/],
   ])('flags %s', (ruleName, fromPattern) => {
     expect(ruleNamesFor(fromPattern)).toContain(ruleName);
   });
@@ -51,6 +53,8 @@ describe('dependency rules on the fixture tree', () => {
     'src/features/f1/rules/r.ts',
     'src/features/f1/render/ok.ts',
     'src/app/x.ts',
+    'src/app/use_mode.ts',
+    'src/modes/m1/ok.ts',
     'src/client/c.ts',
   ])('does not flag allowed imports from %s', (from) => {
     expect(

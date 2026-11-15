@@ -21,13 +21,16 @@
     "check:docs": "node tooling/check-docs.ts",
     "ratchet": "node tooling/ratchet.ts",
     "ratchet:update": "node tooling/ratchet.ts --update",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run knip && npm run test && npm run check:index && npm run check:docs && npm run ratchet && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run knip && npm run test && npm run check:index && npm run check:docs && npm run ratchet && npm run build && npm run check:size",
+    "check:size": "node tooling/check-size.ts"
   },
   "dependencies": {
+    "bitecs": "0.4.0",
     "i18next": "27.0.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-i18next": "17.1.13"
+    "react-i18next": "17.1.13",
+    "zustand": "5.1.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

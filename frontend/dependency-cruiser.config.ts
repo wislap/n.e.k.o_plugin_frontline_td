@@ -125,6 +125,25 @@ const config: IConfiguration = {
       to: { dependencyTypes: ['npm'], pathNot: 'node_modules/bitecs/' },
     },
     {
+      name: 'not-to-modes',
+      severity: 'error',
+      comment:
+        'Modes are gameplay-specific code; only src/app and src/modes itself' +
+        ' may import them (ADR 0019).',
+      from: { path: '^src/', pathNot: '^src/(app|modes)/' },
+      to: { path: '^src/modes/' },
+    },
+    {
+      name: 'modes-public-only',
+      severity: 'error',
+      comment:
+        'Modes may only consume features through the cross-feature public' +
+        ' files (sim/index.ts, rules/index.ts, render/ui index, protocol.ts,' +
+        ' content.ts) (ADR 0019).',
+      from: { path: '^src/modes/' },
+      to: { path: '^src/features/', pathNot: `^${CROSS_FEATURE_PUBLIC}` },
+    },
+    {
       name: 'no-node-builtins-in-src',
       severity: 'error',
       comment: 'R10: src/ must not import Node.js built-in modules.',

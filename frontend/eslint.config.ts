@@ -3,7 +3,12 @@ import { defineConfig } from 'eslint/config';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import { i18nextJsxBlock, purityZoneBlock } from './tooling/eslint-rules';
+import {
+  downloadBanBlock,
+  i18nextJsxBlock,
+  networkGlobalsBlock,
+  purityZoneBlock,
+} from './tooling/eslint-rules';
 
 export default defineConfig(
   {
@@ -40,6 +45,8 @@ export default defineConfig(
     ...reactHooks.configs.flat.recommended,
   },
   purityZoneBlock,
+  downloadBanBlock,
+  networkGlobalsBlock,
   {
     files: ['tooling/**', '*.config.ts'],
     languageOptions: {

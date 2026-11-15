@@ -33,6 +33,7 @@
 | [0013](../adr/0013-modifier-pipeline.md) | 修正值管线 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳 | wislap | M1 模拟核心 | 2026-11-15 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -99,3 +100,6 @@
 - [0023 网格图层、编组、命令 schema、RNG 登记与运行时限制](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md)
 - [0024 评估框架：性能基线与数值平衡](../adr/0024-evaluation-framework.md)
 - [0025 物流模型：运力配额、统一货物与自动路由](../adr/0025-logistics-model.md)
+
+### M1 模拟核心（2026-11-15）
+- [0026 模拟内核的实现约定](../adr/0026-kernel-implementation-conventions.md)

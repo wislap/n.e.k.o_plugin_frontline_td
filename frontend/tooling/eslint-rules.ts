@@ -59,9 +59,44 @@ const FORBIDDEN_GLOBALS = [
   'setInterval',
   'requestAnimationFrame',
   'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'EventSource',
+  'importScripts',
   'localStorage',
   'sessionStorage',
   'crypto',
+];
+
+const ID_LITERAL_MESSAGE =
+  'Branch on components or named behaviours, never on content or mode ids (ADR 0014/0019).';
+const DOWNLOAD_BAN_MESSAGE = 'Runtime code download/execution is forbidden (ADR 0023).';
+
+// Namespaced-id literals ('pack:name') may be defined and compared via
+// helpers, but never branched on directly (ADR 0014/0019).
+const ID_LITERAL_SYNTAX = [
+  {
+    selector:
+      'BinaryExpression[operator=/^(===|!==|==|!=)$/] > Literal[value=/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*$/]',
+    message: ID_LITERAL_MESSAGE,
+  },
+  {
+    selector: 'SwitchCase > Literal[value=/^[a-z][a-z0-9_.]*:[a-z][a-z0-9_.]*$/]',
+    message: ID_LITERAL_MESSAGE,
+  },
+];
+
+// Runtime code download ban (ADR 0023): shared by the purity block and the
+// non-purity src block so both carry the full selector list.
+const DOWNLOAD_BAN_SYNTAX = [
+  {
+    selector: 'ImportExpression[source.type!="Literal"]',
+    message: DOWNLOAD_BAN_MESSAGE,
+  },
+  {
+    selector: 'ImportExpression > Literal[value=/^(https?:)?\\/\\//]',
+    message: DOWNLOAD_BAN_MESSAGE,
+  },
 ];
 
 export const purityZoneBlock: Linter.Config = {
@@ -85,10 +120,50 @@ export const purityZoneBlock: Linter.Config = {
         selector: 'AssignmentExpression[operator="**="]',
         message: DETERMINISTIC_MATH_MESSAGE,
       },
+      ...ID_LITERAL_SYNTAX,
+      ...DOWNLOAD_BAN_SYNTAX,
     ],
     'no-restricted-globals': [
       'error',
       ...FORBIDDEN_GLOBALS.map((name) => ({ name, message: FORBIDDEN_GLOBAL_MESSAGE })),
+    ],
+    'no-eval': 'error',
+    'no-new-func': 'error',
+    'no-implied-eval': 'error',
+  },
+};
+
+// Non-purity src gets the same download ban; purity zones already carry it.
+export const downloadBanBlock: Linter.Config = {
+  files: ['src/**/*.{ts,tsx}'],
+  ignores: [...PURITY_ZONES],
+  rules: {
+    'no-eval': 'error',
+    'no-new-func': 'error',
+    'no-implied-eval': 'error',
+    'no-restricted-syntax': ['error', ...DOWNLOAD_BAN_SYNTAX],
+  },
+};
+
+// Only host/ may talk to the network (ADR 0023); purity zones already ban
+// these globals entirely.
+export const networkGlobalsBlock: Linter.Config = {
+  files: ['src/**/*.{ts,tsx}'],
+  ignores: [...PURITY_ZONES, 'src/host/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-globals': [
+      'error',
+      { name: 'fetch', message: 'Network access is allowed only in src/host/ (ADR 0023).' },
+      {
+        name: 'XMLHttpRequest',
+        message: 'Network access is allowed only in src/host/ (ADR 0023).',
+      },
+      { name: 'WebSocket', message: 'Network access is allowed only in src/host/ (ADR 0023).' },
+      { name: 'EventSource', message: 'Network access is allowed only in src/host/ (ADR 0023).' },
+      {
+        name: 'importScripts',
+        message: 'Network access is allowed only in src/host/ (ADR 0023).',
+      },
     ],
   },
 };
