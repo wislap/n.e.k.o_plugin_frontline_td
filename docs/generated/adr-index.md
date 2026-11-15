@@ -49,6 +49,11 @@
 |---|---|---|---|---|---|
 | [0012](../adr/0012-construction-as-entity.md) | 建造即实体 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 
+### 物流
+| 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
+|---|---|---|---|---|---|
+| [0025](../adr/0025-logistics-model.md) | 物流模型：运力配额、统一货物与自动路由 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+
 ### 内容
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
@@ -93,3 +98,4 @@
 - [0022 对局启动参数、内容 ID 与内容包](../adr/0022-match-setup-content-ids-packs.md)
 - [0023 网格图层、编组、命令 schema、RNG 登记与运行时限制](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md)
 - [0024 评估框架：性能基线与数值平衡](../adr/0024-evaluation-framework.md)
+- [0025 物流模型：运力配额、统一货物与自动路由](../adr/0025-logistics-model.md)

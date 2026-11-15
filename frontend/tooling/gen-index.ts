@@ -33,7 +33,7 @@ export const ADR_DOMAINS = [
   '地形',
   '战斗',
   '建造',
-  '补给',
+  '物流',
   '内容',
   'UI',
 ] as const;
