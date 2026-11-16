@@ -18,3 +18,4 @@ store.db
 frontend/node_modules/
 frontend/coverage/
 .plans/
+frontend/eval/reports/

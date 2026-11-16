@@ -1,7 +1,11 @@
 import { createRoot } from 'react-dom/client';
 import '../i18n';
+import { useCameraStore } from '../client/camera-store';
 import { createSimClient } from '../client/sim-client';
 import { useUiStore } from '../client/ui-store';
+import { loadContent } from '../content/index';
+import { proto01 } from '../content/frontline_td/maps/proto_01';
+import { createPanTracker, installPanTracking } from '../input/pan';
 import { installKeyboard } from '../input/keyboard';
 import { DEFAULT_KEYMAP } from '../input/keymap';
 import type { Intent } from '../input/intents';
@@ -10,7 +14,25 @@ import { createDevSetup } from './dev-setup';
 
 const worker = new Worker(new URL('./sim-worker.ts', import.meta.url), { type: 'module' });
 const client = createSimClient(worker);
-client.start(createDevSetup(Date.now() >>> 0));
+const setup = createDevSetup(Date.now() >>> 0);
+client.start(setup);
+
+const db = loadContent();
+const map = db.maps.byId(proto01.id);
+if (map === undefined) {
+  throw new Error(`dev map '${proto01.id}' is missing from the content db`);
+}
+
+// Initial camera center: the local faction's first start position, else
+// the map center.
+const start = setup.factions[0]?.start?.units[0];
+useCameraStore
+  .getState()
+  .setCenter(
+    start !== undefined ? { x: start.x, y: start.y } : { x: map.width / 2, y: map.height / 2 },
+  );
+
+const panTracker = createPanTracker();
 
 function dispatch(intent: Intent): void {
   switch (intent.kind) {
@@ -22,14 +44,20 @@ function dispatch(intent: Intent): void {
       return;
     case 'dev.toggle_panel':
       useUiStore.getState().toggleDebugPanel();
+      return;
+    case 'camera.toggle_mode':
+      useCameraStore.getState().toggleMode();
+      return;
+    default:
   }
 }
 
 installKeyboard(window, DEFAULT_KEYMAP, dispatch);
+installPanTracking(window, panTracker);
 
 const container = document.getElementById('root');
 if (container === null) {
   throw new Error('missing #root element');
 }
 
-createRoot(container).render(<App client={client} />);
+createRoot(container).render(<App client={client} db={db} map={map} panTracker={panTracker} />);

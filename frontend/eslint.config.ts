@@ -48,7 +48,7 @@ export default defineConfig(
   downloadBanBlock,
   networkGlobalsBlock,
   {
-    files: ['tooling/**', '*.config.ts'],
+    files: ['tooling/**', 'eval/**', '*.config.ts'],
     languageOptions: {
       globals: globals.node,
     },

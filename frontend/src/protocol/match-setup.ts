@@ -19,6 +19,20 @@ const factionSchema = s.object({
   carryIn: s.object({
     unlocks: s.array(s.contentId(), { maxLength: 512 }),
   }),
+  // 开局状态 (ADR 0022): units placed on the map at match start.
+  start: s.optional(
+    s.object({
+      units: s.array(
+        s.object({
+          unit: s.contentId(),
+          x: s.int({ min: 0 }),
+          y: s.int({ min: 0 }),
+          count: s.int({ min: 1, max: 1024 }),
+        }),
+        { maxLength: 64 },
+      ),
+    }),
+  ),
 });
 
 const relationSchema = s.object({

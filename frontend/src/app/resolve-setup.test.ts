@@ -4,7 +4,8 @@ import { CONTROLLER_STREAM_ID } from '../kernel/index';
 import type { MatchSetup } from '../protocol/index';
 import { createDevSetup } from './dev-setup';
 import { resolveSetup } from './resolve-setup';
-import { RNG_STREAMS, SIM_MODULES } from './sim-registry';
+import { loadContent } from '../content/load';
+import { createSimModules, RNG_STREAMS } from './sim-registry';
 
 function devRunHash(): string {
   const setup = createDevSetup(99);
@@ -18,9 +19,21 @@ function devRunHash(): string {
   return resolved.sim.hash();
 }
 
-describe('SIM_MODULES registry', () => {
-  it('is empty until gameplay features land', () => {
-    expect(SIM_MODULES).toEqual([]);
+describe('createSimModules', () => {
+  it('wires terrain, pathing, movement, units in order', () => {
+    const db = loadContent();
+    const map = db.maps.byId('frontline_td:proto_01');
+    expect(map).toBeDefined();
+    if (map === undefined) {
+      return;
+    }
+    const modules = createSimModules(db, map, []);
+    expect(modules.map((m) => m.id)).toEqual([
+      'frontline_td:terrain',
+      'frontline_td:pathing',
+      'frontline_td:movement',
+      'frontline_td:units',
+    ]);
     expect(RNG_STREAMS.map((s) => s.id)).toContain(CONTROLLER_STREAM_ID);
   });
 });
@@ -87,7 +100,7 @@ describe('resolveSetup', () => {
       return;
     }
     expect(resolved.localQueue).toBeNull();
-    expect(resolved.observer).toBe(toFactionId(0));
+    expect(resolved.observer).toBe(toFactionId(1));
   });
 });
 

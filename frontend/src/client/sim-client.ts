@@ -14,6 +14,9 @@ export interface SnapshotPair {
   previous: Snapshot | null;
   latest: Snapshot | null;
   receivedAt: number;
+  // Time between the two most recent snapshot receipts (0 until two
+  // snapshots have arrived) — the interpolation denominator.
+  intervalMs: number;
 }
 
 export interface SimClient {
@@ -31,6 +34,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
   let previous: Snapshot | null = null;
   let latest: Snapshot | null = null;
   let receivedAt = 0;
+  let intervalMs = 0;
 
   worker.addEventListener('message', (event) => {
     const message = event.data;
@@ -40,7 +44,9 @@ export function createSimClient(worker: WorkerLike): SimClient {
       const completed: Snapshot = { ...incoming, layers };
       previous = latest;
       latest = completed;
-      receivedAt = performance.now();
+      const now = performance.now();
+      intervalMs = receivedAt === 0 ? 0 : now - receivedAt;
+      receivedAt = now;
       return;
     }
     if (message.kind === 'stats') {
@@ -64,7 +70,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       worker.postMessage({ kind: 'toggle_pause' });
     },
     snapshots(): SnapshotPair {
-      return { previous, latest, receivedAt };
+      return { previous, latest, receivedAt, intervalMs };
     },
   };
 }

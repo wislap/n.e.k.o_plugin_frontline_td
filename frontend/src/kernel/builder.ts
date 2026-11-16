@@ -175,6 +175,10 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
       i.moduleStates.set(id, hooks);
     },
 
+    onStart(fn: (ctx: SystemContext) => void): void {
+      i.onStartHooks.push({ moduleId, fn });
+    },
+
     probe(id: string, fn: (ctx: SystemContext) => number): void {
       requireRegistryKey(id, 'probe');
       if (i.probes.has(id)) {

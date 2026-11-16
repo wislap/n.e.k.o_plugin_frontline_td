@@ -24,6 +24,7 @@
     "vite.config.ts",
     "eslint.config.ts",
     "dependency-cruiser.config.ts",
-    "knip.config.ts"
+    "knip.config.ts",
+    "eval"
   ]
 }

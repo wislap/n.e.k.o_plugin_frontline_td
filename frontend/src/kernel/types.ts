@@ -41,6 +41,8 @@ export interface SystemContext {
   write<F extends FieldMap>(writer: ComponentWriter<F>): WriteView<F>;
   has<F extends FieldMap>(ref: ComponentRef<F>, id: EntityId): boolean;
   resolve(handle: EntityHandle): EntityId | null;
+  // Inverse of resolve: current handle for a live id, null for a dead one.
+  handleOf(id: EntityId): EntityHandle | null;
   isValid(handle: EntityHandle): boolean;
   spawn(init: SpawnInit): EntityHandle;
   despawn(handle: EntityHandle): void;
@@ -117,6 +119,11 @@ export interface SimBuilder {
   ): void;
   state(id: string, hooks: { save(): Serializable; load(data: Serializable): void }): void;
   probe(id: string, fn: (ctx: SystemContext) => number): void;
+  // Runs once after all modules are installed, in createSimulation only (not
+  // on restore). Queued structural ops are applied after the last hook, so
+  // onStart entities exist before tick 0. emit/read/schedule/reject throw
+  // inside a hook. Hooks run in registration order.
+  onStart(fn: (ctx: SystemContext) => void): void;
 }
 
 export interface SimModule {

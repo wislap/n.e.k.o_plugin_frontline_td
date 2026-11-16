@@ -7,8 +7,8 @@ import { resolveSetup } from './resolve-setup';
 const port = globalThis as unknown as WorkerPort;
 
 const handler = createWorkerHandler({
-  post: (message) => {
-    port.postMessage(message);
+  post: (message, transfer) => {
+    port.postMessage(message, transfer);
   },
   resolve: (setup) => resolveSetup(setup, { timer: () => performance.now() }),
   now: () => performance.now(),

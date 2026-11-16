@@ -73,3 +73,29 @@ describe('schema', () => {
     }
   });
 });
+
+describe('number / nullable / record', () => {
+  it('validates finite numbers with bounds', () => {
+    const schema = s.number({ min: 0.5, max: 2 });
+    expect(s.validate(schema, 1.25).ok).toBe(true);
+    expect(s.validate(schema, Number.NaN).ok).toBe(false);
+    expect(s.validate(schema, Number.POSITIVE_INFINITY).ok).toBe(false);
+    expect(s.validate(schema, 0.1).ok).toBe(false);
+    expect(s.validate(schema, 3).ok).toBe(false);
+    expect(s.validate(schema, 'x').ok).toBe(false);
+  });
+
+  it('accepts null through nullable', () => {
+    const schema = s.object({ v: s.nullable(s.int({ min: 0 })) });
+    expect(s.validate(schema, { v: null }).ok).toBe(true);
+    expect(s.validate(schema, { v: 3 }).ok).toBe(true);
+    expect(s.validate(schema, { v: -1 }).ok).toBe(false);
+  });
+
+  it('validates record values', () => {
+    const schema = s.record(s.int({ min: 0 }));
+    expect(s.validate(schema, { a: 1, b: 2 }).ok).toBe(true);
+    expect(s.validate(schema, { a: -1 }).ok).toBe(false);
+    expect(s.validate(schema, [1, 2]).ok).toBe(false);
+  });
+});

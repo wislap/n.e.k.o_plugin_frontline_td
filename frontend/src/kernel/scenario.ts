@@ -1,6 +1,6 @@
 import type { CommandEnvelope, Tick } from '../core/index';
 import { createSimulation } from './simulation';
-import type { SimConfig, SimModule } from './types';
+import type { SimConfig, SimModule, Simulation } from './types';
 
 // Shared by tests and eval (ADR 0024): run a headless scenario to completion.
 export interface ScenarioSpec {
@@ -9,6 +9,8 @@ export interface ScenarioSpec {
   commands: readonly CommandEnvelope[];
   ticks: number;
   sampleEvery?: number;
+  // Called after each completed tick (e.g. to diff sim.timings() for p95).
+  onTick?: (sim: Simulation) => void;
 }
 
 export interface ScenarioResult {
@@ -30,6 +32,7 @@ export function runScenario(spec: ScenarioSpec): ScenarioResult {
   }
   for (let step = 0; step < spec.ticks; step++) {
     sim.step();
+    spec.onTick?.(sim);
     if (spec.sampleEvery !== undefined && (step + 1) % spec.sampleEvery === 0) {
       samples.push({ tick: sim.tick, probes: sim.probes() });
     }

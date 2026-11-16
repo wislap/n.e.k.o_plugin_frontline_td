@@ -15,5 +15,21 @@
     "error": "Error: ",
     "pause": "Pause",
     "resume": "Resume"
+  },
+  "hud": {
+    "paused": "Paused",
+    "speed": "Speed ×{{n}}",
+    "camera": {
+      "spectate": "Spectate",
+      "tactical": "Tactical"
+    },
+    "selected": "{{count}} units selected",
+    "hints": "Space pause | 1/2/3 speed | V camera | WASD/arrows pan | Right-click move | ` debug",
+    "rejected": "Command rejected: {{reason}}",
+    "reject_reason": {
+      "invalid_target": "target is impassable",
+      "no_units": "no controllable units",
+      "other": "unknown reason"
+    }
   }
 }

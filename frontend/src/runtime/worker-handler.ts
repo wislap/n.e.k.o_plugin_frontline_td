@@ -19,12 +19,12 @@ type ResolveFn = (setup: MatchSetup) => Resolved | { error: string };
 // Minimal worker-scope surface so app/sim-worker.ts can adapt `self` without
 // `any` or ts-ignore.
 export interface WorkerPort {
-  postMessage(message: WorkerToMain): void;
+  postMessage(message: WorkerToMain, transfer?: Transferable[]): void;
   addEventListener(type: 'message', listener: (event: MessageEvent<unknown>) => void): void;
 }
 
 export interface WorkerHandlerOptions {
-  post: (message: WorkerToMain) => void;
+  post: (message: WorkerToMain, transfer?: Transferable[]) => void;
   resolve: ResolveFn;
   now: () => number;
 }
@@ -54,6 +54,7 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     const snapshot = host.latestSnapshot();
     const changed = host.takeChangedLayers();
     const layers: Snapshot['layers'] = {};
+    const transfer: Transferable[] = [];
     if (!firstSnapshotPosted) {
       for (const [key, layer] of Object.entries(snapshot.layers)) {
         layers[key] = layer.slice();
@@ -67,7 +68,48 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
         }
       }
     }
-    post({ kind: 'snapshot', snapshot: { ...snapshot, layers } });
+    for (const layer of Object.values(layers)) {
+      transfer.push(layer.buffer);
+    }
+    // The kernel caches the snapshot and controllers keep reading it, so
+    // channel arrays must NEVER be transferred (the transfer would detach
+    // kernel-held buffers). Every typed array is .slice()d into the posted
+    // snapshot and only the copy's buffer is transferred — same rule as the
+    // layer copies above.
+    const channels: Snapshot['channels'] = {};
+    for (const [key, value] of Object.entries(snapshot.channels)) {
+      channels[key] = copyChannelValue(value, transfer);
+    }
+    post({ kind: 'snapshot', snapshot: { ...snapshot, layers, channels } }, transfer);
+  }
+
+  function copyChannelValue(value: unknown, transfer: Transferable[]): unknown {
+    if (ArrayBuffer.isView(value)) {
+      const copy = copyView(value);
+      transfer.push(copy.buffer);
+      return copy;
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return value;
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, prop] of Object.entries(value)) {
+      if (ArrayBuffer.isView(prop)) {
+        const copy = copyView(prop);
+        transfer.push(copy.buffer);
+        out[key] = copy;
+      } else {
+        out[key] = prop;
+      }
+    }
+    return out;
+  }
+
+  function copyView(view: ArrayBufferView): ArrayBufferView {
+    if (view instanceof DataView) {
+      return new DataView(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+    }
+    return (view as ArrayBufferView & { slice(): ArrayBufferView }).slice();
   }
 
   function onStart(setup: unknown): void {

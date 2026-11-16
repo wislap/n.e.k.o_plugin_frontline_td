@@ -52,6 +52,20 @@ export interface OptionalSchema<I extends AnySchema> extends Schema<Infer<I> | u
   kind: 'optional';
   inner: I;
 }
+export interface NumberSchema extends Schema<number> {
+  kind: 'number';
+  min?: number;
+  max?: number;
+}
+export interface NullableSchema<I extends AnySchema> extends Schema<Infer<I> | null> {
+  kind: 'nullable';
+  inner: I;
+}
+export interface RecordSchema<I extends AnySchema> extends Schema<Record<string, Infer<I>>> {
+  kind: 'record';
+  value: I;
+  maxLength?: number;
+}
 export interface ObjectSchema<F extends Record<string, AnySchema>> extends Schema<InferObject<F>> {
   kind: 'object';
   fields: F;
@@ -68,6 +82,9 @@ export type AnySchema =
   | FactionIdSchema
   | ArraySchema<AnySchema>
   | OptionalSchema<AnySchema>
+  | NumberSchema
+  | NullableSchema<AnySchema>
+  | RecordSchema<AnySchema>
   | ObjectSchema<Record<string, AnySchema>>;
 
 export type Infer<S> = S extends Schema<infer T> ? T : never;
@@ -142,6 +159,34 @@ export function array<I extends AnySchema>(
 // Only meaningful as an object field: the key may be absent entirely.
 export function optional<I extends AnySchema>(inner: I): OptionalSchema<I> {
   return { kind: 'optional', inner };
+}
+
+// Finite float (rejects NaN/Infinity); use int() for integral values.
+export function number(opts: { min?: number; max?: number } = {}): NumberSchema {
+  const schema: NumberSchema = { kind: 'number' };
+  if (opts.min !== undefined) {
+    schema.min = opts.min;
+  }
+  if (opts.max !== undefined) {
+    schema.max = opts.max;
+  }
+  return schema;
+}
+
+export function nullable<I extends AnySchema>(inner: I): NullableSchema<I> {
+  return { kind: 'nullable', inner };
+}
+
+// String-keyed dictionary (legend tables, per-class costs, named points).
+export function record<I extends AnySchema>(
+  value: I,
+  opts: { maxLength?: number } = {},
+): RecordSchema<I> {
+  const schema: RecordSchema<I> = { kind: 'record', value };
+  if (opts.maxLength !== undefined) {
+    schema.maxLength = opts.maxLength;
+  }
+  return schema;
 }
 
 export function object<F extends Record<string, AnySchema>>(fields: F): ObjectSchema<F> {
@@ -242,6 +287,39 @@ function check(schema: AnySchema, value: unknown, path: string): ValidationFailu
           return fail(`${path}.${key}`, 'missing required key');
         }
         const failure = check(field, record[key], `${path}.${key}`);
+        if (failure !== null) {
+          return failure;
+        }
+      }
+      return null;
+    }
+    case 'number': {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return fail(path, 'expected a finite number');
+      }
+      if (schema.min !== undefined && value < schema.min) {
+        return fail(path, `must be >= ${schema.min}`);
+      }
+      if (schema.max !== undefined && value > schema.max) {
+        return fail(path, `must be <= ${schema.max}`);
+      }
+      return null;
+    }
+    case 'nullable':
+      if (value === null) {
+        return null;
+      }
+      return check(schema.inner, value, path);
+    case 'record': {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return fail(path, 'expected a record');
+      }
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (schema.maxLength !== undefined && entries.length > schema.maxLength) {
+        return fail(path, `length must be <= ${schema.maxLength}`);
+      }
+      for (const [key, entry] of entries) {
+        const failure = check(schema.value, entry, `${path}.${key}`);
         if (failure !== null) {
           return failure;
         }

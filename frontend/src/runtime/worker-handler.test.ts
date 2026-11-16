@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defineSnapshotChannel } from '../core/index';
 import { defineGridLayer } from '../kernel/index';
 import type { SimModule } from '../kernel/index';
 import { createQueuedController, createSimulation } from '../kernel/index';
@@ -149,6 +150,80 @@ describe('createWorkerHandler', () => {
     advance(150); // ticks 1,2,3 in one pump; their changes must union
     const second = snapshots()[1]?.snapshot.layers ?? {};
     expect(Object.keys(second).sort()).toEqual([READ_KEY, WRITE_KEY]);
+  });
+
+  it('never transfers kernel-held buffers: channel/layer arrays are copies', () => {
+    // Channel returns the SAME typed array every snapshot (as a shared
+    // live-state channel would); the posted snapshot must carry a copy and
+    // the transfer list must never contain a kernel-held buffer.
+    interface Chan {
+      v: Float32Array;
+    }
+    const CH = defineSnapshotChannel<Chan>('frontline_td:testwh');
+    const shared = new Float32Array(4);
+    const channelModule: SimModule = {
+      id: 'frontline_td:testwh',
+      install(builder) {
+        builder.snapshotChannel(CH, () => ({ v: shared }));
+      },
+    };
+    const simBox: { current: ReturnType<typeof createSimulation> | null } = { current: null };
+    const posts: WorkerToMain[] = [];
+    const transfers: (Transferable[] | undefined)[] = [];
+    let now = 0;
+    const handler = createWorkerHandler({
+      post: (message, transfer) => {
+        posts.push(message);
+        transfers.push(transfer);
+      },
+      resolve: (): Resolved => {
+        const localQueue = createQueuedController(F1);
+        simBox.current = createSimulation(
+          baseConfig({ factions: [{ id: F1 }, { id: toFactionId(2) }], controllers: [localQueue] }),
+          [layerModule(), channelModule],
+        );
+        return { sim: simBox.current, localQueue, observer: F1 };
+      },
+      now: () => now,
+    });
+    handler.onMessage({ kind: 'start', setup: setup() });
+    handler.pump(); // establishes the time baseline
+    now += 50;
+    handler.pump(); // runs tick 0 and posts the snapshot
+    const snapIndex = posts.findIndex((m) => m.kind === 'snapshot');
+    expect(snapIndex).toBeGreaterThanOrEqual(0);
+    const message = posts[snapIndex];
+    const transfer = transfers[snapIndex] ?? [];
+    if (message === undefined || message.kind !== 'snapshot') {
+      throw new Error('no snapshot posted');
+    }
+    const resolvedSim = simBox.current;
+    if (resolvedSim === null) {
+      throw new Error('sim was not created');
+    }
+    // No duplicate buffers in the transfer list.
+    expect(new Set(transfer).size).toBe(transfer.length);
+    // Buffers held by the kernel snapshot must not appear in the transfer.
+    const kernel = resolvedSim.snapshot(F1);
+    const kernelBuffers = new Set<ArrayBufferLike>();
+    for (const layer of Object.values(kernel.layers)) {
+      kernelBuffers.add(layer.buffer);
+    }
+    for (const value of Object.values(kernel.channels)) {
+      for (const prop of Object.values(value as object)) {
+        if (ArrayBuffer.isView(prop)) {
+          kernelBuffers.add(prop.buffer);
+        }
+      }
+    }
+    for (const item of transfer) {
+      expect(kernelBuffers.has(item as ArrayBuffer)).toBe(false);
+    }
+    // Posted channel array is a copy with identical contents.
+    const posted = message.snapshot.channels[CH.id] as Chan | undefined;
+    expect(posted?.v).not.toBe(shared);
+    expect(Array.from(posted?.v ?? [])).toEqual(Array.from(shared));
+    expect(transfer).toContain(posted?.v.buffer);
   });
 
   it('dispatches set_speed and toggle_pause without errors', () => {

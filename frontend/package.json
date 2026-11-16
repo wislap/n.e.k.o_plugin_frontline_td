@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "depcruise": "dependency-cruiser --config dependency-cruiser.config.ts src",
+    "depcruise": "dependency-cruiser --config dependency-cruiser.config.ts src eval",
     "knip": "knip",
     "test": "vitest run",
     "gen:index": "node tooling/gen-index.ts",
@@ -22,14 +22,17 @@
     "ratchet": "node tooling/ratchet.ts",
     "ratchet:update": "node tooling/ratchet.ts --update",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run knip && npm run test && npm run check:index && npm run check:docs && npm run ratchet && npm run build && npm run check:size",
-    "check:size": "node tooling/check-size.ts"
+    "check:size": "node tooling/check-size.ts",
+    "eval:perf": "node eval/run.ts eval/perf/movement.ts"
   },
   "dependencies": {
+    "@react-three/fiber": "9.8.2",
     "bitecs": "0.4.0",
     "i18next": "27.0.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-i18next": "17.1.13",
+    "three": "0.187.0",
     "zustand": "5.1.0"
   },
   "devDependencies": {
@@ -37,6 +40,7 @@
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/three": "0.187.0",
     "@vitejs/plugin-react": "6.2.1",
     "dependency-cruiser": "18.7.2",
     "eslint": "10.14.0",

@@ -318,6 +318,16 @@ function installModules(i: SimInternals, modules: readonly SimModule[]): void {
 export function createSimulation(config: SimConfig, modules: readonly SimModule[]): Simulation {
   const i = createInternals(config);
   installModules(i, modules);
+  // onStart hooks run once here (never on restore), in registration order;
+  // their queued structural ops are applied immediately afterwards so the
+  // entities exist when tick 0 runs.
+  i.inOnStart = true;
+  const startCtx = createContext(i);
+  for (const hook of i.onStartHooks) {
+    hook.fn(startCtx);
+  }
+  i.inOnStart = false;
+  applyStructural(i, structuralDeps(i));
   const sim = createSimulationFrom(i);
   // The initial (pre-tick-0) snapshot represents state before any step.
   i.snapshotCache = { tick: 0, byObserver: new Map() };

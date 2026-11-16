@@ -40,6 +40,7 @@ describe('dependency rules on the fixture tree', () => {
     ['src-not-to-tooling', /client\/bad_tooling\.ts/],
     ['not-to-unresolvable', /client\/bad_unresolvable\.ts/],
     ['not-to-modes', /client\/bad_mode\.ts/],
+    ['three-only-in-render', /client\/bad_three\.ts/],
     ['modes-public-only', /modes\/m1\/leak\.ts/],
   ])('flags %s', (ruleName, fromPattern) => {
     expect(ruleNamesFor(fromPattern)).toContain(ruleName);

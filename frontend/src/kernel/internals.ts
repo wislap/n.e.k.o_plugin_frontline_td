@@ -148,6 +148,11 @@ export interface SimInternals {
     allowedReads: Set<string>;
     allowedEmits: Set<string>;
   } | null;
+
+  // onStart hooks run once after install in createSimulation only (ADR 0026);
+  // inOnStart gates the context methods forbidden inside them.
+  onStartHooks: { moduleId: string; fn: (ctx: SystemContext) => void }[];
+  inOnStart: boolean;
 }
 
 const DEFAULT_CAPACITY = 1024;
@@ -236,6 +241,8 @@ export function createInternals(config: SimConfig): SimInternals {
     pendingSpawns: new Set(),
     cancelledSpawns: new Set(),
     runState: null,
+    onStartHooks: [],
+    inOnStart: false,
   };
 
   // Kernel contract components always exist, and the kernel's own rejection
@@ -308,7 +315,7 @@ export function layerKey(ref: GridLayerRef, faction: number | undefined): string
   return faction === undefined ? ref.id : `${ref.id}#${faction}`;
 }
 
-function isAlive(i: SimInternals, id: number): boolean {
+export function isAlive(i: SimInternals, id: number): boolean {
   const index = i.entityIndex;
   const denseIndex = index.sparse[id];
   return (

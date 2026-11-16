@@ -18,7 +18,7 @@ import type {
   RngState,
   Serializable,
 } from '../core/index';
-import { COMMAND_REJECTED } from '../core/index';
+import { COMMAND_REJECTED, packHandle } from '../core/index';
 import type {
   ComponentRef,
   ComponentWriter,
@@ -31,6 +31,7 @@ import type { SimInternals } from './internals';
 import {
   ensureComponent,
   ensureLayer,
+  isAlive,
   isValid,
   layerArray,
   layerKey,
@@ -107,10 +108,17 @@ function requireIssuedLayerWriter(i: SimInternals, writer: GridLayerWriter): voi
   }
 }
 
+function requireNotOnStart(i: SimInternals, op: string): void {
+  if (i.inOnStart) {
+    throw new Error(`ctx.${op} is not available inside an onStart hook`);
+  }
+}
+
 export function createContext(i: SimInternals): SystemContext {
   function read<F extends FieldMap>(ref: ComponentRef<F>): ReadView<F>;
   function read<P extends Serializable>(def: EventDef<P> | IntentDef<P>): P[];
   function read(arg: ComponentRef | EventDef<never> | IntentDef<never>): unknown {
+    requireNotOnStart(i, 'read');
     const candidate = arg as { kind?: string; type?: string };
     if (candidate.kind === 'event' || candidate.kind === 'intent') {
       return readChannel(i, candidate.type ?? '');
@@ -140,6 +148,13 @@ export function createContext(i: SimInternals): SystemContext {
 
     resolve(handle: EntityHandle): EntityId | null {
       return resolve(i, handle);
+    },
+
+    handleOf(id: EntityId): EntityHandle | null {
+      if (!isAlive(i, id)) {
+        return null;
+      }
+      return packHandle(id, i.generations[id] ?? 0);
     },
 
     isValid(handle: EntityHandle): boolean {
@@ -204,6 +219,7 @@ export function createContext(i: SimInternals): SystemContext {
     },
 
     emit<P extends Serializable>(def: EventDef<P> | IntentDef<P>, payload: P): void {
+      requireNotOnStart(i, 'emit');
       const state = assertRunning(i);
       if (!state.allowedEmits.has(def.type) || i.emitDefs.get(def.type) !== def) {
         throw new Error(
@@ -219,6 +235,7 @@ export function createContext(i: SimInternals): SystemContext {
       params: Serializable,
       handles: readonly EntityHandle[],
     ): void {
+      requireNotOnStart(i, 'schedule');
       if (!i.effects.has(type)) {
         throw new Error(`no effect handler registered for '${type}'`);
       }
@@ -274,6 +291,7 @@ export function createContext(i: SimInternals): SystemContext {
     },
 
     reject(reason: string): void {
+      requireNotOnStart(i, 'reject');
       const issuer = i.commandIssuer;
       if (issuer === undefined) {
         throw new Error('ctx.reject is only available inside a command handler');

@@ -15,5 +15,21 @@
     "error": "错误：",
     "pause": "暂停",
     "resume": "继续"
+  },
+  "hud": {
+    "paused": "已暂停",
+    "speed": "速度 ×{{n}}",
+    "camera": {
+      "spectate": "观战视角",
+      "tactical": "战术视角"
+    },
+    "selected": "已选中 {{count}} 个单位",
+    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD/方向键 移动 | 右键 移动命令 | ` 调试",
+    "rejected": "命令被拒绝：{{reason}}",
+    "reject_reason": {
+      "invalid_target": "目标不可通行",
+      "no_units": "没有可指挥的单位",
+      "other": "未知原因"
+    }
   }
 }

@@ -6,7 +6,8 @@ const CONTENT = 'src/content/';
 const PROTOCOL = 'src/protocol/';
 
 // Feature-relative escape hatches used in the sim / rules rules below.
-const SIM_PUBLIC = 'src/features/[^/]+/(sim/index[.]ts|protocol[.]ts|content[.]ts)';
+const SIM_PUBLIC =
+  'src/features/[^/]+/(sim/index[.]ts|rules/index[.]ts|protocol[.]ts|content[.]ts)';
 const RULES_PUBLIC = 'src/features/[^/]+/(rules/index[.]ts|protocol[.]ts|content[.]ts)';
 const CROSS_FEATURE_PUBLIC =
   'src/features/[^/]+/(sim/index[.]ts|rules/index[.]ts|render/index[.]tsx?|ui/index[.]tsx?|protocol[.]ts|content[.]ts)';
@@ -53,7 +54,7 @@ const config: IConfiguration = {
       comment:
         'R4: features/<x>/sim may import core, kernel, content, the same feature' +
         " (sim/, rules/, content.ts, protocol.ts) and other features' public" +
-        ' sim/index.ts / protocol.ts / content.ts (ADR 0007).',
+        ' sim/index.ts / rules/index.ts / protocol.ts / content.ts (ADR 0007).',
       from: { path: '^src/features/([^/]+)/sim/' },
       to: {
         path: '^src/',
@@ -125,6 +126,18 @@ const config: IConfiguration = {
       to: { dependencyTypes: ['npm'], pathNot: 'node_modules/bitecs/' },
     },
     {
+      name: 'three-only-in-render',
+      severity: 'error',
+      comment:
+        'three/@react-three may only be imported under src/render/,' +
+        ' src/features/*/render/, and src/app/ (M2 C0).',
+      from: {
+        path: '^src/',
+        pathNot: '^(src/render/|src/features/[^/]+/render/|src/app/)',
+      },
+      to: { path: 'node_modules/(three|@react-three)/' },
+    },
+    {
       name: 'not-to-modes',
       severity: 'error',
       comment:
@@ -156,6 +169,27 @@ const config: IConfiguration = {
       comment: 'R11: src/ must not import tooling/.',
       from: { path: '^src/' },
       to: { path: '^tooling/' },
+    },
+    {
+      name: 'src-not-to-eval',
+      severity: 'error',
+      comment: 'eval/ is a Node-side harness; src/ must never import it (ADR 0024).',
+      from: { path: '^src/' },
+      to: { path: '^eval/' },
+    },
+    {
+      name: 'eval-src-public-only',
+      severity: 'error',
+      comment:
+        'eval/ may only import the public barrels: core/kernel/content/' +
+        "protocol index.ts and features' sim/index.ts / content.ts (ADR 0024).",
+      from: { path: '^eval/' },
+      to: {
+        path: '^src/',
+        pathNot:
+          '^src/(core|kernel|content|protocol)/index[.]ts$|' +
+          '^src/features/[^/]+/(sim/index|content)[.]ts$',
+      },
     },
   ],
   options: {

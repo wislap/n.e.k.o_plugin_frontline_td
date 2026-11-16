@@ -1,0 +1,91 @@
+{
+  "machine": {
+    "platform": "win32",
+    "arch": "x64",
+    "node": "v24.19.0"
+  },
+  "runs": {
+    "2000": {
+      "scenario": "perf-movement",
+      "n": 2000,
+      "ticks": 1200,
+      "seed": 20261114,
+      "hash": "2bdf06187d2438e3",
+      "machine": {
+        "platform": "win32",
+        "arch": "x64",
+        "node": "v24.19.0"
+      },
+      "tick": {
+        "avg": 1.0412969999999986,
+        "p95": 1.7561000000000604,
+        "max": 10.828600000000051
+      },
+      "retargetTick": {
+        "avg": 2.9198458333333264,
+        "p95": 8.675099999999816,
+        "max": 10.828600000000051
+      },
+      "ticksPerSecond": 895.0729812673161,
+      "heapUsedBytes": 42208648,
+      "systems": {
+        "frontline_td:movement.steer": {
+          "avg": 0.15157941666666677,
+          "p95": 0.48709999999982756,
+          "max": 4.868099999999913
+        },
+        "frontline_td:movement.separate": {
+          "avg": 0.8517048333333359,
+          "p95": 1.4446000000000367,
+          "max": 6.6071000000000595
+        },
+        "frontline_td:movement.integrate": {
+          "avg": 0.038012749999995966,
+          "p95": 0.08049999999991542,
+          "max": 1.213899999999967
+        }
+      }
+    },
+    "5000": {
+      "scenario": "perf-movement",
+      "n": 5000,
+      "ticks": 1200,
+      "seed": 20261114,
+      "hash": "813d6fb4505c557a",
+      "machine": {
+        "platform": "win32",
+        "arch": "x64",
+        "node": "v24.19.0"
+      },
+      "tick": {
+        "avg": 2.7091159166666774,
+        "p95": 4.373500000000149,
+        "max": 16.0295000000001
+      },
+      "retargetTick": {
+        "avg": 5.009354166666715,
+        "p95": 15.018000000000029,
+        "max": 16.0295000000001
+      },
+      "ticksPerSecond": 354.3704358195274,
+      "heapUsedBytes": 69403912,
+      "systems": {
+        "frontline_td:movement.steer": {
+          "avg": 0.232102750000003,
+          "p95": 0.7318000000000211,
+          "max": 5.889300000000048
+        },
+        "frontline_td:movement.separate": {
+          "avg": 2.3859408333333376,
+          "p95": 3.729000000000269,
+          "max": 9.552699999999959
+        },
+        "frontline_td:movement.integrate": {
+          "avg": 0.091072333333337,
+          "p95": 0.18820000000005166,
+          "max": 2.0060000000000855
+        }
+      }
+    }
+  }
+}
