@@ -138,7 +138,9 @@ describe('budget tree caching', () => {
       [node(1, 4.5, 4.5, 2, 600, true), node(2, 30.5, 4.5, 8, 400, false)],
       w.terrain,
       DB.movementClasses.byId('frontline_td:ground')?.index ?? 0,
-      DB.logistics.roadLevels[0]?.multiplierBp ?? 10000,
+      new Uint8Array(w.terrain.width * w.terrain.height),
+      [DB.logistics.roadLevels[0]?.multiplierBp ?? 10000],
+      0,
     );
     const cell = 4 * w.terrain.width + 50;
     const attached = topo.attach[cell] ?? -1;

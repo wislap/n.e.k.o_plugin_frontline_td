@@ -14,6 +14,7 @@ const REJECT_CODES = [
   'invalid_target',
   'no_units',
   'no_targets',
+  'already_upgraded',
   'not_buildable',
   'units_in_way',
   'invalid_order',

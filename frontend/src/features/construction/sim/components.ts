@@ -31,3 +31,9 @@ export const Blueprint = defineComponent('frontline_td:blueprint', {
 
 // Refund pile shipped home through logistics export slots.
 export const Salvage = defineComponent('frontline_td:salvage', {});
+
+// A live road-build segment; `project` indexes the construction module's
+// serialized road-project list.
+export const RoadSegment = defineComponent('frontline_td:road_segment', {
+  project: 'u32',
+});

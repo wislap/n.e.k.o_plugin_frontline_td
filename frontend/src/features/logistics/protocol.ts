@@ -32,6 +32,9 @@ export const UNMET_REASONS = [
 // Per-faction coverage layer id (u8, perFaction).
 export const SERVICE_LAYER_ID = 'frontline_td:logistics.service';
 
+// Global road-level layer id (u8): 0 = dirt, >=1 paved level.
+export const ROAD_LAYER_ID = 'frontline_td:logistics.road';
+
 // CargoStore slot flag bits.
 export const SLOT_EXPORT = 1;
 export const SLOT_SITE = 2;
@@ -74,6 +77,16 @@ export interface LogisticsNetwork {
     pathOffsets: Uint32Array;
     // Cell indices (y * width + x) along each link's ground path.
     pathCells: Uint32Array;
+    // Effective (road-weighted) multiplier in bp.
+    m: Uint32Array;
+    // Full-budget quota per direction in milli (interception applied).
+    quotaOut: Int32Array;
+    quotaIn: Int32Array;
+    // Cargo milli actually carried last cycle per direction.
+    volOut: Int32Array;
+    volIn: Int32Array;
+    // Interception reduction in bp (0 = clear corridor).
+    intercept: Uint16Array;
   };
   // Demand slots that ended the last cycle unmet, by reason code.
   unmet: number[];

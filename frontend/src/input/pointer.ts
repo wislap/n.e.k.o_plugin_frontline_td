@@ -50,7 +50,7 @@ interface PointerTarget {
   removeEventListener(type: string, listener: EventListener): void;
 }
 
-type PointerMode = 'normal' | 'build';
+type PointerMode = 'normal' | 'build' | 'road';
 
 export interface PointerOptions {
   // Build mode reroutes clicks to build.place / build.cancel.
@@ -115,9 +115,16 @@ export function installPointer(
     }
     const pos = getPos(event);
     const additive = event.shiftKey;
-    if (options.getMode?.() === 'build') {
+    const mode = options.getMode?.();
+    if (mode === 'build') {
       if (downButton === 0) {
         dispatch({ kind: 'build.place', x: pos.x, y: pos.y, blueprint: additive });
+      } else if (downButton === 2) {
+        dispatch({ kind: 'build.cancel' });
+      }
+    } else if (mode === 'road') {
+      if (downButton === 0) {
+        dispatch({ kind: 'road.click', x: pos.x, y: pos.y, additive });
       } else if (downButton === 2) {
         dispatch({ kind: 'build.cancel' });
       }

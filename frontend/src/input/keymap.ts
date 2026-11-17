@@ -12,5 +12,7 @@ export const DEFAULT_KEYMAP: Readonly<Record<string, Intent>> = {
   KeyX: { kind: 'selection.cancel' },
   Delete: { kind: 'selection.cancel' },
   KeyL: { kind: 'overlay.toggle_logistics' },
+  KeyR: { kind: 'road.toggle' },
+  Enter: { kind: 'road.confirm' },
   Escape: { kind: 'build.cancel' },
 };

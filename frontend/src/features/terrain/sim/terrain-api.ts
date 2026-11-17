@@ -31,8 +31,11 @@ export interface TerrainApi {
   blocked(x: number, y: number): boolean;
   setBlocked(cells: readonly { x: number; y: number }[], value: boolean): void;
   // Wiring-time subscription (pathing registers invalidateCells); called
-  // synchronously from setBlocked with the cells that actually changed.
-  onBlockedChange(listener: (cells: readonly { x: number; y: number }[]) => void): void;
+  // synchronously from setBlocked with the cells that actually changed
+  // and the value they were set to.
+  onBlockedChange(
+    listener: (cells: readonly { x: number; y: number }[], blocked: boolean) => void,
+  ): void;
 }
 
 // Module-facing serialization/mirror hooks for the overlay; the terrain
@@ -54,7 +57,7 @@ function buildApi(
 ): { api: TerrainApi; store: TerrainBlockedStore } {
   const { width, height } = grid;
   const blockedCells = new Uint8Array(width * height);
-  const listeners: ((cells: readonly { x: number; y: number }[]) => void)[] = [];
+  const listeners: ((cells: readonly { x: number; y: number }[], blocked: boolean) => void)[] = [];
   let dirty = false;
 
   function idx(x: number, y: number): number {
@@ -163,7 +166,7 @@ function buildApi(
       }
       dirty = true;
       for (const listener of listeners) {
-        listener(changed);
+        listener(changed, value);
       }
     },
     onBlockedChange(listener) {

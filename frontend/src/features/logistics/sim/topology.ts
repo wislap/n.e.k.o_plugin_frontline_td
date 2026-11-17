@@ -3,23 +3,15 @@
 // attachment array. Everything here is derived state — rebuilt lazily when
 // the node set, terrain blockers or a save load make it dirty — so none of
 // it is serialized.
-import { UNREACHABLE, dijkstra } from '../../pathing/sim/index';
-import { DIR_ORDER } from '../../pathing/sim/index';
+import { floorDiv } from '../../../core/index';
+import type { ReadonlyNumberArray } from '../../../kernel/index';
+import { UNREACHABLE } from '../../pathing/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 
-export interface TopoNode {
-  // Entity id; also the deterministic sort key.
-  id: number;
-  x: number;
-  y: number;
-  // Path-cost bound for links (cost units).
-  connect: number;
-  service: number;
-  vehicles: number;
-  warehouse: boolean;
-  w: number;
-  h: number;
-}
+export type { TopoNode } from './ring-search';
+export { ringCells, ringDistances } from './ring-search';
+import { descentPath, ringCells, ringSearch } from './ring-search';
+import type { TopoNode } from './ring-search';
 
 interface TopoLink {
   // Node indices, a < b.
@@ -27,10 +19,14 @@ interface TopoLink {
   b: number;
   // Ground path cost (cost units) — the link length L.
   cost: number;
-  // Length-weighted road multiplier in bp; B1 is dirt-only.
+  // Time-weighted (step-cost harmonic mean) road multiplier in bp
+  // (recomputed on road changes).
   m: number;
   // Path cells from a's ring to b's ring (y * width + x).
   cells: number[];
+  // Step cost into each cell: steps[k] is the cost of the edge
+  // cells[k-1] -> cells[k]; steps[0] = 0 (the a-ring seed).
+  steps: number[];
 }
 
 export interface FactionTopo {
@@ -46,166 +42,124 @@ export interface FactionTopo {
   attachCost: Int32Array;
   // cell -> 1 when covered by some node's service radius.
   covered: Uint8Array;
+  // Road-layer version the link multipliers were computed against.
+  roadV: number;
+  // Cells whose blocking could change this topology (ADR 0030): every
+  // link polyline cell and every node ring cell. Blocking elsewhere can
+  // only lengthen distances, which changes no ring, link or path.
+  sensitive: Uint8Array;
 }
 
-// Passable cells one step outside the footprint, in scan order.
-export function ringCells(node: TopoNode, terrain: TerrainApi, cls: number): number[] {
-  const x0 = Math.floor(node.x - node.w / 2);
-  const y0 = Math.floor(node.y - node.h / 2);
-  const cells: number[] = [];
-  for (let x = x0 - 1; x <= x0 + node.w; x++) {
-    for (const y of [y0 - 1, y0 + node.h]) {
-      if (
-        x >= 0 &&
-        y >= 0 &&
-        x < terrain.width &&
-        y < terrain.height &&
-        terrain.passable(x, y, cls)
-      ) {
-        cells.push(y * terrain.width + x);
-      }
-    }
+// Effective multiplier of one link: floor(cost*10000 / Σ step_k*10000 /
+// m(cell_k)) — the harmonic mean of the per-cell road multipliers weighted
+// by step cost (the step is attributed to its destination cell; the seed
+// cell carries no step). Integer math only.
+export function linkMultiplier(
+  link: { cost: number; cells: readonly number[]; steps: readonly number[] },
+  roads: ReadonlyNumberArray,
+  roadMult: readonly number[],
+): number {
+  let den = 0;
+  for (let k = 1; k < link.cells.length; k++) {
+    const m = roadMult[roads[link.cells[k] ?? 0] ?? 0] ?? 10000;
+    den += floorDiv((link.steps[k] ?? 0) * 10000, m);
   }
-  for (let y = y0; y < y0 + node.h; y++) {
-    for (const x of [x0 - 1, x0 + node.w]) {
-      if (
-        x >= 0 &&
-        y >= 0 &&
-        x < terrain.width &&
-        y < terrain.height &&
-        terrain.passable(x, y, cls)
-      ) {
-        cells.push(y * terrain.width + x);
-      }
-    }
+  if (den <= 0) {
+    return roadMult[0] ?? 10000;
   }
-  return cells;
-}
-
-function groundNeighbors(
-  terrain: TerrainApi,
-  cls: number,
-): (node: number, visit: (to: number, cost: number) => void) => void {
-  const w = terrain.width;
-  return (node, visit) => {
-    const x = node % w;
-    const y = (node / w) | 0;
-    for (const [dx, dy] of DIR_ORDER) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const cost = terrain.stepCost(x, y, nx, ny, cls);
-      if (cost >= 0 && nx >= 0 && ny >= 0 && nx < w && ny < terrain.height) {
-        visit(ny * w + nx, cost);
-      }
-    }
-  };
-}
-
-// Bounded ground Dijkstra seeded from `from`'s ring; returns distances, or
-// null when the ring is empty.
-export function ringDistances(
-  from: TopoNode,
-  terrain: TerrainApi,
-  cls: number,
-  maxCost: number,
-): Int32Array | null {
-  const ring = ringCells(from, terrain, cls);
-  if (ring.length === 0) {
-    return null;
-  }
-  const seeds: [number, number][] = ring.map((c) => [c, 0]);
-  return dijkstra(terrain.width * terrain.height, seeds, groundNeighbors(terrain, cls), maxCost);
-}
-
-// Greedy descent on the distance field from `start` (a cell of b's ring)
-// down to a's seed cells (dist 0). A step is only legal when the neighbour
-// is a true predecessor: the dijkstra edge next -> cur must exist and
-// attain dist[cur], so the polyline never steps across a cliff or a
-// blocked edge. Neighbour order is the fixed DIR_ORDER.
-function descentPath(dist: Int32Array, terrain: TerrainApi, cls: number, start: number): number[] {
-  const w = terrain.width;
-  const cells = [start];
-  let cur = start;
-  let curD = dist[cur] ?? UNREACHABLE;
-  while (curD > 0) {
-    const x = cur % w;
-    const y = (cur / w) | 0;
-    let next = -1;
-    let nextD = curD;
-    for (const [dx, dy] of DIR_ORDER) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= terrain.height) {
-        continue;
-      }
-      const d = dist[ny * w + nx] ?? UNREACHABLE;
-      const step = terrain.stepCost(nx, ny, x, y, cls);
-      if (step < 0 || d + step !== curD) {
-        continue;
-      }
-      if (d < nextD) {
-        nextD = d;
-        next = ny * w + nx;
-        if (d === 0) {
-          break;
-        }
-      }
-    }
-    if (next < 0) {
-      break;
-    }
-    cells.push(next);
-    cur = next;
-    curD = nextD;
-  }
-  return cells.reverse();
+  return floorDiv(link.cost * 10000, den);
 }
 
 // One bounded dijkstra per node (bound = its own connect), seeded from
 // its ring. Node i's distance field then serves every j > i: link i–j
 // exists when the best ring-j distance is <= min(connect_i, connect_j).
 // Identical to a per-pair bounded search because the tighter pair bound
-// only truncates distances that already exceed it.
+// only truncates distances that already exceed it. Roads never affect
+// the search — only the per-link multiplier.
 export function buildFactionTopo(
   nodes: TopoNode[],
   terrain: TerrainApi,
   cls: number,
-  roadMultiplierBp: number,
+  roads: ReadonlyNumberArray,
+  roadMult: readonly number[],
+  roadV: number,
 ): FactionTopo {
   const size = terrain.width * terrain.height;
   const sorted = [...nodes].sort((x, y) => x.id - y.id);
-  const dists = sorted.map((n) => ringDistances(n, terrain, cls, n.connect));
   const rings = sorted.map((n) => ringCells(n, terrain, cls));
+  // Ring membership for the early-exit scans below: cell -> node indices.
+  const ringOf = new Map<number, number[]>();
+  rings.forEach((cells, i) => {
+    for (const c of cells) {
+      const list = ringOf.get(c);
+      if (list === undefined) {
+        ringOf.set(c, [i]);
+      } else {
+        list.push(i);
+      }
+    }
+  });
   const links: TopoLink[] = [];
   const adj: number[][] = sorted.map(() => []);
+  // Directed-edge step cache shared by this rebuild's searches.
+  const edge = new Int16Array(size * 8).fill(-2);
   for (let i = 0; i < sorted.length; i++) {
-    const dist = dists[i];
-    if (dist === null || dist === undefined) {
+    // Node i's distance field serves every j > i; it is only needed for
+    // this row, so the searches share one scratch buffer. The search
+    // stops as soon as every candidate j is settled (its minimum ring
+    // distance pops first, ordered by cost then cell — the same pick
+    // the old full-field scan produced) or proven unreachable.
+    const a = sorted[i] as TopoNode;
+    const ring = rings[i] ?? [];
+    if (ring.length === 0) {
       continue;
     }
-    const a = sorted[i] as TopoNode;
+    const remaining = new Map<number, number>();
+    let maxBound = 0;
     for (let j = i + 1; j < sorted.length; j++) {
-      const b = sorted[j] as TopoNode;
-      const bound = Math.min(a.connect, b.connect);
-      let best = -1;
-      let bestD = UNREACHABLE;
-      for (const c of rings[j] ?? []) {
-        const d = dist[c] ?? UNREACHABLE;
-        if (d < bestD || (d === bestD && c < best)) {
-          bestD = d;
-          best = c;
+      const bound = Math.min(a.connect, (sorted[j] as TopoNode).connect);
+      remaining.set(j, bound);
+      maxBound = Math.max(maxBound, bound);
+    }
+    // j -> the first settled ring cell (its minimum distance).
+    const found = new Map<number, { cell: number; cost: number }>();
+    const search = ringSearch(
+      terrain,
+      cls,
+      ring,
+      a.connect,
+      (cell, cost) => {
+        if (cost > maxBound) {
+          return true;
         }
-      }
-      if (best < 0 || bestD >= UNREACHABLE || bestD > bound) {
-        continue;
-      }
+        for (const j of ringOf.get(cell) ?? []) {
+          const bound = remaining.get(j);
+          if (bound === undefined) {
+            continue;
+          }
+          remaining.delete(j);
+          if (cost <= bound) {
+            found.set(j, { cell, cost });
+          }
+          // j is decided either way: later pops are no nearer.
+        }
+        return remaining.size === 0;
+      },
+      edge,
+    );
+    const dist = search.dist;
+    for (const [j, hit] of [...found.entries()].sort((x, y) => x[0] - y[0])) {
+      const best = hit.cell;
+      const bestD = hit.cost;
       const index = links.length;
+      const path = descentPath(dist, terrain, cls, best);
       links.push({
         a: i,
         b: j,
         cost: bestD,
-        m: roadMultiplierBp,
-        cells: descentPath(dist, terrain, cls, best),
+        m: linkMultiplier({ cost: bestD, cells: path.cells, steps: path.steps }, roads, roadMult),
+        cells: path.cells,
+        steps: path.steps,
       });
       adj[i]?.push(index);
       adj[j]?.push(index);
@@ -261,5 +215,17 @@ export function buildFactionTopo(
     }
   }
 
-  return { nodes: sorted, links, adj, warehouse, attach, attachCost, covered };
+  const sensitive = new Uint8Array(size);
+  for (const cells of rings) {
+    for (const c of cells) {
+      sensitive[c] = 1;
+    }
+  }
+  for (const link of links) {
+    for (const c of link.cells) {
+      sensitive[c] = 1;
+    }
+  }
+
+  return { nodes: sorted, links, adj, warehouse, attach, attachCost, covered, roadV, sensitive };
 }

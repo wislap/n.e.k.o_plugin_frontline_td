@@ -59,9 +59,21 @@ export const logisticsConfigSchema = s.object({
     }),
     { maxLength: 8 },
   ),
-  // Road multiplier levels; level 0 is dirt (B1 has dirt only).
-  roadLevels: s.array(s.object({ multiplierBp: s.int({ min: 1, max: 100_000 }) }), {
-    maxLength: 8,
-  }),
+  // Road multiplier levels; level 0 is dirt (multiplier only). Levels
+  // >= 1 also carry the build profile used by road segments (cost per
+  // paved cell, build seconds per cell, flat segment hit points).
+  roadLevels: s.array(
+    s.object({
+      multiplierBp: s.int({ min: 1, max: 100_000 }),
+      costPerCell: s.optional(s.record(s.int({ min: 0, max: 2_000_000 }), { maxLength: 4 })),
+      secondsPerCell: s.optional(s.number({ min: 0.05, max: 3600 })),
+      segmentHp: s.optional(s.int({ min: 1, max: 2_000_000 })),
+    }),
+    { maxLength: 8 },
+  ),
+  // Cells per road project segment (built upstream -> downstream).
+  segmentCells: s.int({ min: 1, max: 64 }),
+  // Half-width of the interception corridor around link polylines.
+  corridorWidth: s.number({ min: 0.1, max: 8 }),
 });
 export type LogisticsConfigContent = Infer<typeof logisticsConfigSchema>;

@@ -17,7 +17,9 @@ const TICKS = 400;
 // M3-B1 changed the serialized state shape (blocked layer + overlay
 // state); M3-C added ore_field cells to proto_01, which changes the
 // serialized surface layer — same code paths, different content.
-const GOLDEN_HASH = '73a378b0dde0b4d6';
+// M3-E added six raiders to the dev setup plus logistics' serialized
+// road layer — different entities/state, same determinism contract.
+const GOLDEN_HASH = '2c51a89ff8f771ad';
 
 function makeSim() {
   const db = loadContent();

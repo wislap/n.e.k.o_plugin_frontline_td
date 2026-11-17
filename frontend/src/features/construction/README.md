@@ -9,9 +9,10 @@
   { structureParts, starts })`；`Structure`/`Construction`/`Blueprint`/
   `Salvage` 组件；`ConstructionModule`。
 - `protocol.ts`：`PlaceCommand`/`ActivateCommand`/`CancelCommand`
-  （activate/cancel 数组上限 256）、`ConstructionCompleted` 事件
-  （issuer 可见）、`StructuresChannel`/`SalvageChannel`、放置与等待
-  原因码。
+  （activate/cancel 数组上限 256）、`UpgradeLinksCommand`
+  （`links: [{a,b}]` 上限 64、`level`）、`ConstructionCompleted` 事件
+  （issuer 可见）、`StructuresChannel`/`SalvageChannel`/
+  `RoadWorksChannel`、放置与等待原因码（新增 `already_upgraded`）。
 - `rules/placement.ts`：纯函数放置规则 `checkFootprint`/`checkRange`
   与 `PlacementView` 接口（供 sim 适配器与未来客户端预览适配器
   实现，不依赖 sim）。
@@ -21,7 +22,7 @@
 ## 拥有的组件
 - `Structure`（kind、左上角 x/y）；`Construction`（progress/total/
   mode：0 建造、1 拆除）；`Blueprint`（kind、x、y、activated、
-  orderTick）；`Salvage` 标记。
+  orderTick）；`Salvage` 标记；`RoadSegment`（project 索引）。
 - 声明 `UnderConstruction` 的写者；工地与建成建筑立即
   `setBlocked` 其占地。
 
@@ -44,7 +45,12 @@
   废料无 Health、不阻塞地形，export 槽全空后每周期清理。
 - 预订表按阵营隔离并可序列化（`builder.state`）；蓝图仅出现在
   观察者自身快照通道中。
-- `hpBp` 恒为 10000，直到战斗批（C）接入。
+- 道路项目（`upgrade_links`）按上游（仓库侧）→ 下游顺序逐段施工，
+  每段 `segmentCells` 格：段实体带 `Construction`/`RoadSegment` 与
+  注入的物流工地槽 + `FixedAttach`、战斗部件；无 `Structure`、不
+  阻塞地形。完工铺路后 despawn 并接棒下一段；取消退已交付材料为
+  废料，被毁材料损失，已铺格不回滚。项目状态可序列化。
+- `hpBp` 由注入的战斗读数提供（默认满血）。
 
 ## 对应设计章节
-- `.plans/m3.md` 的 M3-B2；docs/adr/0012（命令）、0023（拆除）。
+- docs/adr/0012（命令）、0023（拆除）、0029（建造实现约定）。

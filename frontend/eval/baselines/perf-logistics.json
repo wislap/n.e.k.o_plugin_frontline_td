@@ -1,0 +1,25 @@
+{
+  "scenario": "perf-logistics",
+  "nodes": 210,
+  "consumers": 3000,
+  "ticks": 600,
+  "seed": 20261114,
+  "hash": "824f1ec0c3914bfb",
+  "machine": {
+    "platform": "win32",
+    "arch": "x64",
+    "node": "v24.19.0"
+  },
+  "cycle": {
+    "avg": 1.1505664999999998,
+    "p95": 4.475599999999986,
+    "max": 447.2006000000001
+  },
+  "activeCycle": {
+    "avg": 11.505664999999999,
+    "p95": 12.769600000000082,
+    "max": 447.2006000000001
+  },
+  "topoRebuildMs": 447.2006000000001,
+  "heapUsedBytes": 7235192
+}

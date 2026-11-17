@@ -7,11 +7,17 @@ import type { EntityId } from '../core/index';
 import {
   createCombatModule,
   healthFraction,
+  roadSegmentParts as combatRoadParts,
   structureParts as combatStructureParts,
   unitParts as combatUnitParts,
 } from '../features/combat/sim/index';
 import { createConstructionModule } from '../features/construction/sim/index';
-import { createLogisticsModule, structureParts, unitParts } from '../features/logistics/sim/index';
+import {
+  createLogisticsModule,
+  roadSegmentParts as logisticsRoadParts,
+  structureParts,
+  unitParts,
+} from '../features/logistics/sim/index';
 import { createMovementModule } from '../features/movement/sim/index';
 import { createPathingModule } from '../features/pathing/sim/index';
 import {
@@ -45,14 +51,16 @@ export function createSimModules(
     starts,
     healthBp: healthFraction,
   });
-  terrain.api.onBlockedChange(() => {
-    logistics.markTopologyDirty();
+  terrain.api.onBlockedChange((cells, blocked) => {
+    logistics.blockersChanged(cells, blocked);
   });
   // Construction installs before units so start structures block their
   // footprints (setBlocked is immediate) before units' onStart spiral
   // spawns movers around them.
   const construction = createConstructionModule(db, terrain.api, logistics, {
     structureParts: [structureParts, productionStructureParts, combatStructureParts],
+    // Road segments: logistics site slots + FixedAttach, combat hp/hitbox.
+    segmentParts: [logisticsRoadParts, combatRoadParts],
     starts,
     healthBp: healthFraction,
   });

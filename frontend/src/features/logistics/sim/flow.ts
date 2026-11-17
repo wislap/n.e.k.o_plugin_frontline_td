@@ -14,7 +14,7 @@ import { sget, sset } from './slots';
 import { INF, buildBudgetTree } from './alloc';
 import type { BudgetTree } from './alloc';
 import type { FactionTopo } from './topology';
-import { CargoStore, CARGO_SLOTS, EMPTY_CARGO, SiteStore } from './components';
+import { CargoStore, CARGO_SLOTS, EMPTY_CARGO } from './components';
 
 export interface Demand {
   id: number;
@@ -43,15 +43,11 @@ export function collectDemands(
   const fac = ctx.read(Faction);
   const demands: Demand[] = [];
   const ids = ctx.query([CargoStore, Position, Faction, InWorld]);
-  const siteSet = new Set<number>(ctx.query([CargoStore, Position, Faction, InWorld, SiteStore]));
   for (const id of ids) {
     if ((fac.id[id] ?? 0) !== faction) {
       continue;
     }
-    const isSite = siteSet.has(id);
-    if (ctx.has(UnderConstruction, id as EntityId) && !isSite) {
-      continue;
-    }
+    const uc = ctx.has(UnderConstruction, id as EntityId);
     for (let i = 0; i < CARGO_SLOTS; i++) {
       const cargo = sget(store, 'cargo', i, id);
       if (cargo === EMPTY_CARGO) {
@@ -61,8 +57,8 @@ export function collectDemands(
       if ((flags & SLOT_EXPORT) !== 0) {
         continue;
       }
-      if (isSite && (flags & SLOT_SITE) === 0) {
-        continue; // sites only demand their material slots
+      if (uc && (flags & SLOT_SITE) === 0) {
+        continue; // under-construction entities only demand site slots
       }
       if (sget(store, 'amt', i, id) >= sget(store, 'cap', i, id)) {
         continue;
@@ -129,6 +125,8 @@ export interface DirFlow {
   budgets: number[];
   flows: number[];
   shares: number[];
+  // Cargo milli carried over each link this cycle (snapshot volume).
+  vol: number[];
   tree: BudgetTree | null;
 }
 
@@ -137,6 +135,7 @@ export function newFlow(fullBudgets: readonly number[], linkCount: number): DirF
     budgets: [...fullBudgets],
     flows: new Array<number>(linkCount).fill(0),
     shares: new Array<number>(linkCount).fill(0),
+    vol: new Array<number>(linkCount).fill(0),
     tree: null,
   };
 }
@@ -159,9 +158,11 @@ export function chargeLink(
   payer: number,
   link: number,
   t: number,
+  q: number,
 ): void {
   f.budgets[payer] = (f.budgets[payer] ?? 0) - t;
   f.flows[link] = (f.flows[link] ?? 0) + t;
+  f.vol[link] = (f.vol[link] ?? 0) + q;
   const full = fullBudgets[payer] ?? 0;
   if (full > 0) {
     f.shares[link] = Math.min(10000, (f.shares[link] ?? 0) + floorDiv(t * 10000, full));

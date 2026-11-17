@@ -136,6 +136,7 @@ interface WorldOpts {
   entities?: readonly TestEnt[];
   starts?: readonly LogisticsStart[];
   factions?: readonly number[];
+  relations?: SimConfig['relations'];
   healthBp?: number;
   onTick?: (ctx: SystemContext, handles: readonly EntityHandle[]) => void;
 }
@@ -184,8 +185,8 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     starts: opts.starts ?? [],
     ...(opts.healthBp !== undefined ? { healthBp: () => opts.healthBp as number } : {}),
   });
-  terrain.api.onBlockedChange(() => {
-    logistics.markTopologyDirty();
+  terrain.api.onBlockedChange((cells, blocked) => {
+    logistics.blockersChanged(cells, blocked);
   });
 
   const handles: EntityHandle[] = [];
@@ -214,7 +215,7 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
   const config: SimConfig = {
     seed: 7,
     factions,
-    relations: [],
+    relations: opts.relations ?? [],
     grid: { width: grid.width, height: grid.height },
     rngStreams: [],
     controllers: [],

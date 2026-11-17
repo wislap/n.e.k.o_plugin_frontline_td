@@ -14,5 +14,17 @@ export const logisticsConfig: LogisticsConfigContent = {
     { aboveBp: 2000, factorBp: 2500 },
     { aboveBp: 5000, factorBp: 5000 },
   ],
-  roadLevels: [{ multiplierBp: 10000 }],
+  roadLevels: [
+    { multiplierBp: 10000 },
+    // Paved road: doubles link throughput; 1 material per cell, 0.25 s
+    // per cell of build time, 100 hp per 8-cell segment.
+    {
+      multiplierBp: 20000,
+      costPerCell: { 'frontline_td:material': 1 },
+      secondsPerCell: 0.25,
+      segmentHp: 100,
+    },
+  ],
+  segmentCells: 8,
+  corridorWidth: 1.5,
 };

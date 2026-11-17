@@ -14,11 +14,13 @@ import type { ContentDb, ResolvedMap } from '../content/index';
 import { BeamsLayer } from '../features/combat/render/index';
 import {
   GhostPreview,
+  RoadWorksLayer,
+  roadWorksHpItems,
   StructuresLayer,
   structureKindHeight,
 } from '../features/construction/render/index';
 import { StructuresChannel, type ConstructionStructures } from '../features/construction/protocol';
-import { LogisticsOverlay } from '../features/logistics/render/index';
+import { LogisticsOverlay, RoadLayer, RoadToolLayer } from '../features/logistics/render/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
 import { TerrainMesh } from '../features/terrain/render/index';
 import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
@@ -98,7 +100,15 @@ function InputBridge({
         useBoxStore.getState().setBox(box);
       },
       (event) => ({ x: event.clientX, y: event.clientY }),
-      { getMode: () => (useBuildStore.getState().kind === null ? 'normal' : 'build') },
+      {
+        getMode: () => {
+          const build = useBuildStore.getState();
+          if (build.kind !== null) {
+            return 'build';
+          }
+          return build.roadMode ? 'road' : 'normal';
+        },
+      },
     );
   }, [gl, camera, size, client, db, heights, mapWidth, mapHeight]);
 
@@ -236,7 +246,17 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               mapHeight={grid.height}
               collect={structureHpItems}
             />
+            <RoadLayer client={client} map={map} heights={heights} />
             <LogisticsOverlay client={client} db={db} map={map} heights={heights} />
+            <RoadToolLayer client={client} map={map} heights={heights} />
+            <RoadWorksLayer client={client} map={map} heights={heights} />
+            <HpBars
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+              collect={roadWorksHpItems}
+            />
             <GhostPreview client={client} db={db} map={map} heights={heights} />
             <BeamsLayer
               client={client}

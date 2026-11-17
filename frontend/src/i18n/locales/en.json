@@ -24,7 +24,14 @@
       "tactical": "Tactical"
     },
     "selected": "{{count}} selected",
-    "hints": "Space pause | 1/2/3 speed | V camera | WASD pan | Right-click move | G activate | X demolish | L logistics | Esc cancel | ` debug",
+    "hints": "Space pause | 1/2/3 speed | V camera | WASD pan | Right-click move | G activate | X demolish | L logistics | R roads | Esc cancel | ` debug",
+    "fullscreen": "Fullscreen",
+    "fullscreen_unsupported": "Fullscreen is only available inside the NEKO panel",
+    "display": {
+      "declined": "Fullscreen request declined",
+      "busy": "Display is busy, try again",
+      "failed": "Display request failed"
+    },
     "rejected": "Command rejected: {{reason}}",
     "reject_reason": {
       "invalid_target": "target is impassable",
@@ -48,7 +55,21 @@
     "turret": "Turret"
   },
   "unit": {
-    "robot": "Robot"
+    "robot": "Robot",
+    "raider": "Raider"
+  },
+  "road": {
+    "button": "Roads",
+    "button_hint": "Road tool (R): click a link to auto-extend the main route",
+    "preview_title": "Road works",
+    "cells": "{{n}} cells to pave",
+    "cost": "{{n}} {{cargo}}",
+    "time": "~{{s}} s",
+    "quota_out": "Quota out: {{old}} → ~{{next}}",
+    "quota_in": "Quota in: {{old}} → ~{{next}}",
+    "carried": "Carried volume out/in: {{out}} / {{inn}}",
+    "hint": "Click a selected link or press Enter to order; Shift-click toggles one link",
+    "intercept": "Intercepted −{{pct}}%"
   },
   "reason": {
     "out_of_bounds": "outside the map",
@@ -66,6 +87,7 @@
     "invalid_target": "target is impassable",
     "no_units": "no controllable units",
     "no_targets": "nothing to act on",
+    "already_upgraded": "already upgraded",
     "not_buildable": "not buildable",
     "invalid_order": "invalid priority order",
     "none": "-"

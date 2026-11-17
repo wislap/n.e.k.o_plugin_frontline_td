@@ -6,3 +6,7 @@ export const cursorGround: { x: number; y: number; valid: boolean } = {
   y: 0,
   valid: false,
 };
+
+// Latest cursor position in screen pixels, used by HTML overlays (e.g.
+// the road-tool link tooltip) to anchor themselves to the pointer.
+export const cursorScreen: { x: number; y: number } = { x: 0, y: 0 };

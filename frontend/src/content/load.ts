@@ -60,11 +60,22 @@ export interface ResolvedUnit {
   hp: number;
   stores?: readonly ResolvedStoreProfile[];
   weapon?: ResolvedWeapon;
+  // Logistics interception strength in basis points.
+  interceptor?: { strengthBp: number };
 }
 
 export interface ResolvedCargo {
   id: ContentId;
   index: number;
+}
+
+// One road level; level >= 1 carries the build profile used by road
+// segments (per-cell cost in milli, build ticks per cell, flat hp).
+export interface ResolvedRoadLevel {
+  multiplierBp: number;
+  cost?: readonly { cargo: number; milli: number }[];
+  ticksPerCell?: number;
+  segmentHp?: number;
 }
 
 export interface ResolvedLogisticsConfig {
@@ -76,7 +87,11 @@ export interface ResolvedLogisticsConfig {
   lowThresholdBp: number;
   lowSpeedBp: number;
   hpBandsBp: readonly { aboveBp: number; factorBp: number }[];
-  roadLevels: readonly { multiplierBp: number }[];
+  roadLevels: readonly ResolvedRoadLevel[];
+  // Cells per road project segment.
+  segmentCells: number;
+  // Interception corridor half-width in cells.
+  corridorWidth: number;
 }
 
 export interface ResolvedMap {
@@ -243,8 +258,41 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
         lowSpeedBp: 0,
         hpBandsBp: [],
         roadLevels: [{ multiplierBp: 10000 }],
+        segmentCells: 8,
+        corridorWidth: 1.5,
       };
   const cycleTicks = Math.max(1, Math.round(config.cycleSeconds * TICKS_PER_SECOND));
+  const roadLevels: ResolvedRoadLevel[] = config.roadLevels.map((l, i) => {
+    if (i === 0) {
+      return { multiplierBp: l.multiplierBp };
+    }
+    if (
+      l.costPerCell === undefined ||
+      l.secondsPerCell === undefined ||
+      l.segmentHp === undefined
+    ) {
+      errors.push(
+        `logistics.roadLevels[${i}]: buildable levels need costPerCell, secondsPerCell and segmentHp`,
+      );
+      return { multiplierBp: l.multiplierBp };
+    }
+    const cost: { cargo: number; milli: number }[] = [];
+    for (const [cargoId, units] of Object.entries(l.costPerCell)) {
+      const cargo = cargoIndex.get(cargoId);
+      if (cargo === undefined) {
+        errors.push(`logistics.roadLevels[${i}] costPerCell references unknown cargo '${cargoId}'`);
+        continue;
+      }
+      cost.push({ cargo, milli: units * MILLI });
+    }
+    cost.sort((a, b) => a.cargo - b.cargo);
+    return {
+      multiplierBp: l.multiplierBp,
+      cost,
+      ticksPerCell: Math.max(1, Math.round(l.secondsPerCell * TICKS_PER_SECOND)),
+      segmentHp: l.segmentHp,
+    };
+  });
   const logistics: ResolvedLogisticsConfig = {
     cycleTicks,
     vehicleLoadMilli: Math.round(config.vehicle.load * MILLI),
@@ -256,7 +304,9 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
     lowThresholdBp: config.lowThresholdBp,
     lowSpeedBp: config.lowSpeedBp,
     hpBandsBp: config.hpBandsBp,
-    roadLevels: config.roadLevels,
+    roadLevels,
+    segmentCells: config.segmentCells,
+    corridorWidth: config.corridorWidth,
   };
 
   const resolveStores = createStoreResolver(cargoIndex, cycleTicks, errors);
@@ -279,6 +329,9 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
       hp: entry.hp,
       ...(stores !== undefined ? { stores } : {}),
       ...(weapon !== undefined ? { weapon } : {}),
+      ...(entry.interceptor !== undefined
+        ? { interceptor: { strengthBp: entry.interceptor.strength } }
+        : {}),
     };
   });
 

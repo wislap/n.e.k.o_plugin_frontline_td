@@ -5,7 +5,16 @@ import type { ResolvedStoreProfile, ResolvedStructure, ResolvedUnit } from '../.
 import type { ComponentRef, SpawnInit } from '../../../kernel/index';
 import { Position } from '../../movement/sim/index';
 import { CARGO_CONSTRUCTION, SLOT_EXPORT, SLOT_SITE } from '../protocol';
-import { CARGO_SLOTS, CargoStore, EMPTY_CARGO, LogisticsNode, SiteStore } from './components';
+import {
+  CARGO_SLOTS,
+  CargoStore,
+  EMPTY_CARGO,
+  FixedAttach,
+  Interceptor,
+  LogisticsNode,
+  SiteStore,
+} from './components';
+import { fixedAttachInit } from './roads';
 
 type Part = readonly [ComponentRef, Record<string, number>?];
 
@@ -33,13 +42,19 @@ function cargoStoreInit(
 }
 
 // A unit's declared store profile becomes its CargoStore; the robot's
-// lifeline battery (energy 60, −0.05/s) is defined in the pack.
+// lifeline battery (energy 60, −0.05/s) is defined in the pack. Units
+// with an `interceptor` content block also get the E2 corridor
+// interception component.
 export function unitParts(unit: ResolvedUnit): SpawnInit {
+  const init: Part[] = [];
   const stores = unit.stores ?? [];
-  if (stores.length === 0) {
-    return [];
+  if (stores.length > 0) {
+    init.push([CargoStore, cargoStoreInit(stores, { filled: true, site: false, tick: 0 })]);
   }
-  return [[CargoStore, cargoStoreInit(stores, { filled: true, site: false, tick: 0 })]];
+  if (unit.interceptor !== undefined) {
+    init.push([Interceptor, { strengthBp: unit.interceptor.strengthBp }]);
+  }
+  return init;
 }
 
 // Site-phase store init: one empty slot per build-cost cargo, class
@@ -117,4 +132,30 @@ export function structureParts(
     init.push([SiteStore, { kind: kind.index }]);
   }
   return init;
+}
+
+// Road-segment parts (E1): construction-class site slots for the
+// segment's material cost and a FixedAttach pinning it to the project's
+// upstream node. Structural param type — the full desc lives in
+// construction's protocol (no cross-feature type import).
+export function roadSegmentParts(
+  desc: { cost: readonly { cargo: number; milli: number }[]; node: number; lastMile: number },
+  tick: number,
+): SpawnInit {
+  const values: Record<string, number> = { bottleneck: 0 };
+  for (let i = 0; i < CARGO_SLOTS; i++) {
+    const c = desc.cost[i];
+    values[`cargo${i}`] = c === undefined ? EMPTY_CARGO : c.cargo;
+    values[`cap${i}`] = c?.milli ?? 0;
+    values[`amt${i}`] = 0;
+    values[`cls${i}`] = c === undefined ? 0 : CARGO_CONSTRUCTION;
+    values[`flags${i}`] = c === undefined ? 0 : SLOT_SITE;
+    values[`since${i}`] = c === undefined ? 0 : tick + 1;
+    values[`rate${i}`] = 0;
+    values[`unmet${i}`] = 0;
+  }
+  return [
+    [CargoStore, values],
+    [FixedAttach, fixedAttachInit(desc.node, desc.lastMile)],
+  ];
 }

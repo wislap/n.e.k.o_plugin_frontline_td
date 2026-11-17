@@ -7,6 +7,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- NEKO static-panel display SDK, served by the plugin host; 404s
+         under plain Vite dev and host/display.ts degrades to
+         'unsupported'. -->
+    <script src="/plugin-ui-sdk/display.js"></script>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>
 </html>

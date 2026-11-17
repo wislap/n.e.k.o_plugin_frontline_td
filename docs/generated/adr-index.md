@@ -13,6 +13,8 @@
 | [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0018](../adr/0018-licenses.md) | 许可证与依赖许可证 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0024](../adr/0024-evaluation-framework.md) | 评估框架：性能基线与数值平衡 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0032](../adr/0032-host-display-autopause.md) | 宿主显示模式与自动暂停 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
+| [0033](../adr/0033-design-checklist-referenced-items.md) | 《设计决策清单 v2》被引用条目 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -45,16 +47,19 @@
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
 | [0011](../adr/0011-projectile-effect-composition.md) | 弹道与效果的组合模型 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0031](../adr/0031-combat-modifiers-inspect.md) | 战斗、修正值与检视约定 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 
 ### 建造
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
 | [0012](../adr/0012-construction-as-entity.md) | 建造即实体 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0029](../adr/0029-construction-implementation.md) | 建造实现：蓝图、工地、拆除残骸与道路工程 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 
 ### 物流
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
 | [0025](../adr/0025-logistics-model.md) | 物流模型：运力配额、统一货物与自动路由 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0030](../adr/0030-logistics-implementation.md) | 物流实现约定：付费方、道路倍率、走廊拦截与拓扑增量失效 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 
 ### 内容
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -109,3 +114,10 @@
 ### M2 第一个参考实现（2026-11-16）
 - [0027 地图格式、地形规则、分区流场与移动的实现约定](../adr/0027-map-terrain-flowfield-movement.md)
 - [0028 渲染、镜头与拾取](../adr/0028-rendering-camera-picking.md)
+
+### M3 跨模块参考实现（2026-11-17）
+- [0029 建造实现：蓝图、工地、拆除残骸与道路工程](../adr/0029-construction-implementation.md)
+- [0030 物流实现约定：付费方、道路倍率、走廊拦截与拓扑增量失效](../adr/0030-logistics-implementation.md)
+- [0031 战斗、修正值与检视约定](../adr/0031-combat-modifiers-inspect.md)
+- [0032 宿主显示模式与自动暂停](../adr/0032-host-display-autopause.md)
+- [0033 《设计决策清单 v2》被引用条目](../adr/0033-design-checklist-referenced-items.md)

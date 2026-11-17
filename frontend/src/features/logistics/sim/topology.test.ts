@@ -28,7 +28,14 @@ describe('link polylines on proto_01', () => {
       w: 1,
       h: 1,
     });
-    const topo = buildFactionTopo([node(1, 10, 52), node(2, 27, 52)], terrain, cls, 10000);
+    const topo = buildFactionTopo(
+      [node(1, 10, 52), node(2, 27, 52)],
+      terrain,
+      cls,
+      new Uint8Array(terrain.width * terrain.height),
+      [10000],
+      0,
+    );
     expect(topo.links.length).toBe(1);
     for (const link of topo.links) {
       expect(link.cells.length).toBeGreaterThan(1);

@@ -7,10 +7,18 @@ import type { SimBuilder } from '../../../kernel/index';
 import { Faction, InWorld } from '../../../kernel/index';
 import { ActivateCommand, CancelCommand, PlaceCommand } from '../protocol';
 import { checkFootprint, checkRange } from '../rules/index';
-import { Blueprint, Construction, MODE_BUILD, MODE_DEMOLISH, Structure } from './components';
+import {
+  Blueprint,
+  Construction,
+  MODE_BUILD,
+  MODE_DEMOLISH,
+  RoadSegment,
+  Structure,
+} from './components';
 import type { ConstructionEnv } from './env';
 import { placementRule, placementView } from './env';
 import { cancelSite } from './lifecycle';
+import { cancelRoadSegment } from './roads';
 import { moversInside, removeBlueprint, spawnBlueprint, spawnStructure } from './spawn';
 
 export function registerConstructionCommands(
@@ -80,11 +88,16 @@ export function registerConstructionCommands(
     // Classify first, then mutate: nothing changes while validating.
     const blueprints: { id: number; handle: EntityHandle }[] = [];
     const sites: { id: number; handle: EntityHandle }[] = [];
+    const segments: { id: number; handle: EntityHandle }[] = [];
     const demolish: { id: number; handle: EntityHandle; kind: ResolvedStructure }[] = [];
     for (const h of new Set(payload.targets)) {
       const handle = h as EntityHandle;
       const id = ctx.resolve(handle);
       if (id === null || (fac.id[id] ?? -1) !== issuer) {
+        continue;
+      }
+      if (ctx.has(RoadSegment, id)) {
+        segments.push({ id, handle });
         continue;
       }
       // A demolition already queued this tick: the component lands at
@@ -116,7 +129,7 @@ export function registerConstructionCommands(
         demolish.push({ id, handle, kind });
       }
     }
-    if (blueprints.length + sites.length + demolish.length === 0) {
+    if (blueprints.length + sites.length + segments.length + demolish.length === 0) {
       ctx.reject('no_targets');
       return;
     }
@@ -125,6 +138,9 @@ export function registerConstructionCommands(
     }
     for (const t of sites) {
       cancelSite(env, db, ctx, t.id, t.handle);
+    }
+    for (const t of segments) {
+      cancelRoadSegment(env, ctx, t.id, t.handle);
     }
     for (const t of demolish) {
       env.pendingDemolish.add(t.id);

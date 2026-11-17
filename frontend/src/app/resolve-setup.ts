@@ -100,9 +100,21 @@ export function resolveSetup(
       controllers.push(localQueue);
     } else if (faction.controller === 'dev_raid') {
       // Dev-only raider: sends idle units toward the map's player_start
-      // point every 45 s (m3 batch C). Replaced by M4's director.
+      // point every 45 s; raiders pick the nearest hostile non-warehouse
+      // node instead (m3 batch E). Replaced by M4's director.
       const target = map.points['player_start'] ?? { x: 0, y: 0 };
-      controllers.push(createDevRaidController(faction.id, target));
+      const hostile = new Set<number>();
+      for (const r of setup.relations) {
+        if (r.relation === 'hostile') {
+          if (Number(r.a) === Number(faction.id)) {
+            hostile.add(Number(r.b));
+          }
+          if (Number(r.b) === Number(faction.id)) {
+            hostile.add(Number(r.a));
+          }
+        }
+      }
+      controllers.push(createDevRaidController(faction.id, target, db, hostile));
     }
   }
 

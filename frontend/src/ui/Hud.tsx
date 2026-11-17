@@ -14,7 +14,14 @@ import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb } from '../content/index';
 import { BuildMenu } from '../features/construction/ui/index';
-import { StockPanel } from '../features/logistics/ui/index';
+import { RoadPanel, StockPanel } from '../features/logistics/ui/index';
+import {
+  displayState,
+  exitDisplayMode,
+  onDisplayStateChange,
+  requestDisplayMode,
+  type DisplayState,
+} from '../host/display';
 import { SPEED_STEPS } from '../protocol/index';
 import { EntityPanel } from './EntityPanel';
 
@@ -41,6 +48,14 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
   const buildKind = useBuildStore((s) => s.kind);
   const ghost = useBuildStore((s) => s.ghost);
   const [toast, setToast] = useState<{ reason: string; tick: number } | null>(null);
+  const [display, setDisplay] = useState<DisplayState>(() => displayState());
+  const [displayMsg, setDisplayMsg] = useState<string | null>(null);
+
+  // Track the host display state; the SDK is absent under Vite dev, in
+  // which case supportedModes is empty and the button stays disabled.
+  useEffect(() => {
+    return onDisplayStateChange(setDisplay);
+  }, []);
 
   // Poll the observer snapshot for COMMAND_REJECTED events (events are
   // last-tick only, so we snapshot (tick, reason) pairs).
@@ -82,6 +97,50 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
       <EntityPanel client={client} db={db} />
       <BuildMenu db={db} />
       <StockPanel client={client} db={db} />
+      <RoadPanel client={client} db={db} />
+      <button
+        type="button"
+        disabled={!display.supportedModes.includes('fullscreen')}
+        title={
+          display.supportedModes.includes('fullscreen')
+            ? t('hud.fullscreen')
+            : t('hud.fullscreen_unsupported')
+        }
+        onClick={() => {
+          const op =
+            display.mode === 'fullscreen' ? exitDisplayMode() : requestDisplayMode('fullscreen');
+          void op.then((result) => {
+            if (result.status !== 'applied' && result.status !== 'cancelled') {
+              setDisplayMsg(t(`hud.display.${result.status}`, { defaultValue: result.status }));
+              setTimeout(() => {
+                setDisplayMsg(null);
+              }, TOAST_MS);
+            }
+          });
+        }}
+        style={{
+          position: 'fixed',
+          top: 8,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '3px 10px',
+          background: 'rgba(0,0,0,0.55)',
+          color: display.supportedModes.includes('fullscreen') ? '#fff' : '#777',
+          fontFamily: 'monospace',
+          fontSize: 12,
+          zIndex: 900,
+          border: '1px solid #555',
+          borderRadius: 4,
+          cursor: display.supportedModes.includes('fullscreen') ? 'pointer' : 'default',
+        }}
+      >
+        {t('hud.fullscreen')}
+      </button>
+      {displayMsg !== null && (
+        <div style={{ ...corner, top: 40, left: '50%', transform: 'translateX(-50%)' }}>
+          {displayMsg}
+        </div>
+      )}
       <div style={{ ...corner, bottom: 8, right: 8, textAlign: 'right' }}>
         {buildKind !== null && ghost !== null && ghost.code !== 'ok' && (
           <div style={{ color: '#ff9a7a' }}>

@@ -13,6 +13,7 @@ import {
   exportStoreInit,
   sget,
 } from '../../logistics/sim/index';
+import { SLOT_SITE } from '../../logistics/protocol';
 import { Mover, Position } from '../../movement/sim/index';
 import { Blueprint, Construction, MODE_BUILD, Salvage, Structure } from './components';
 import type { ConstructionEnv } from './env';
@@ -134,6 +135,23 @@ export function buildBlocker(
     return rc;
   }
   return moversInside(ctx, kind, x, y) ? 'units_in_way' : null;
+}
+
+// The delivered-material progress cap shared by structure sites and road
+// segments: total * delivered / required across the site slots.
+export function deliveredAllowed(ctx: SystemContext, id: number, total: number): number {
+  let required = 0;
+  let delivered = 0;
+  if (ctx.has(CargoStore, id as EntityId)) {
+    const store = ctx.read(CargoStore);
+    for (let i = 0; i < CARGO_SLOTS; i++) {
+      if ((sget(store, 'flags', i, id) & SLOT_SITE) !== 0) {
+        required += sget(store, 'cap', i, id);
+        delivered += sget(store, 'amt', i, id);
+      }
+    }
+  }
+  return required > 0 ? floorDiv(total * delivered, required) : total;
 }
 
 // Refund slots for a cancelled site: every delivered site-slot amount.

@@ -4,7 +4,7 @@
 // is derived state, rebuilt lazily when the completed node set changes,
 // when terrain blockers change (wired by the app) or on load.
 import type { ContentDb } from '../../../content/index';
-import type { EntityHandle, EntityId, FactionId, Serializable } from '../../../core/index';
+import type { EntityId, FactionId, Serializable } from '../../../core/index';
 import { MILLI, floorDiv } from '../../../core/index';
 import { defineGridLayer } from '../../../kernel/index';
 import type {
@@ -13,34 +13,39 @@ import type {
   SimModule,
   SystemContext,
 } from '../../../kernel/index';
-import { UnderConstruction } from '../../../kernel/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import {
   ADJUSTABLE_CLASSES,
-  ConsumeIntent,
-  DepositIntent,
   LogisticsNetworkChannel,
   SERVICE_LAYER_ID,
-  SLOT_EXPORT,
   SetPrioritiesCommand,
-  UNMET_NONE,
   UNMET_REASONS,
   cargoClassCode,
 } from '../protocol';
 import type { CargoClassName } from '../protocol';
 import { attachOf, bestSiteLink, collectNodeIds, nodeListOf, rebuildTopo } from './attach';
 import { runCycle } from './cycle';
+import { registerResolve } from './resolve';
+import {
+  RoadLayer,
+  linkPath as linkPathQuery,
+  loadRoads,
+  mirrorRoads,
+  paveRoads,
+  refreshMultipliers,
+  saveRoads,
+} from './roads';
+import type { LinkPath } from './roads';
 import {
   CARGO_SLOTS,
   CargoStore,
-  EMPTY_CARGO,
   EnergyEmptyModifier,
   EnergyLowModifier,
   SiteStore,
 } from './components';
 import type { FactionState, LogisticsEnv } from './env';
 import type { CargoFields, ModWriter } from './slots';
-import { sget, sset } from './slots';
+import { sget } from './slots';
 import type { FactionTopo, TopoNode } from './topology';
 import { inspectLogistics, networkSnapshot } from './views';
 
@@ -63,8 +68,10 @@ export interface LogisticsOptions {
 }
 
 export interface LogisticsModule extends SimModule {
-  // Wired by the app to terrain.onBlockedChange.
-  markTopologyDirty(): void;
+  // Wired by the app to terrain.onBlockedChange (ADR 0030): unblocking
+  // dirties every faction; blocking dirties only factions whose
+  // sensitive set (link polylines + node rings) intersects the cells.
+  blockersChanged(cells: readonly { x: number; y: number }[], blocked: boolean): void;
   // Read-only queries for other features (safe inside commands).
   // True when cell x,y is inside the faction's service coverage.
   covered(ctx: SystemContext, faction: FactionId, x: number, y: number): boolean;
@@ -78,6 +85,11 @@ export interface LogisticsModule extends SimModule {
   ): boolean;
   // Energy fill bp across the entity's CargoStore (−1 = no energy slot).
   energyBp(ctx: SystemContext, id: EntityId): number;
+  // Pave cells at `level` in the road layer (never lowers a level).
+  pave(cells: readonly { x: number; y: number }[], level: number): void;
+  // The link between two node handles, oriented upstream -> downstream
+  // with per-cell cumulative cost (null when not linked).
+  linkPath(ctx: SystemContext, faction: FactionId, a: number, b: number): LinkPath | null;
 }
 
 export function createLogisticsModule(
@@ -99,6 +111,11 @@ export function createLogisticsModule(
         inBp: [],
         outSat: [],
         inSat: [],
+        quotaOut: [],
+        quotaIn: [],
+        volOut: [],
+        volIn: [],
+        intercept: [],
       };
       states.set(faction, s);
     }
@@ -107,14 +124,26 @@ export function createLogisticsModule(
 
   const topos = new Map<number, FactionTopo>();
   const topoNodeIds = new Map<number, number[]>();
-  let topoDirty = true;
+  let topoAllDirty = true;
+  const topoDirtyFactions = new Set<number>();
 
   let env: LogisticsEnv;
 
   return {
     id: 'frontline_td:logistics',
-    markTopologyDirty() {
-      topoDirty = true;
+    blockersChanged(cells, blocked) {
+      if (!blocked) {
+        topoAllDirty = true;
+        return;
+      }
+      for (const [f, topo] of topos) {
+        for (const c of cells) {
+          if ((topo.sensitive[c.y * terrain.width + c.x] ?? 0) !== 0) {
+            topoDirtyFactions.add(f);
+            break;
+          }
+        }
+      }
     },
     covered(ctx, faction, x, y) {
       if (!terrain.inBounds(x, y)) {
@@ -158,12 +187,19 @@ export function createLogisticsModule(
       }
       return Math.min(10000, floorDiv(amt * 10000, cap));
     },
+    pave(cells, level) {
+      paveRoads(env, cells, level);
+    },
+    linkPath(ctx, faction, a, b) {
+      return linkPathQuery(env, ctx, faction, a, b);
+    },
     install(builder) {
       const cargoW: ComponentWriter<CargoFields> = builder.claimWriter(CargoStore);
       const siteW: ComponentWriter<{ kind: 'u16' }> = builder.claimWriter(SiteStore);
       const lowW: ModWriter = builder.claimWriter(EnergyLowModifier);
       const emptyW: ModWriter = builder.claimWriter(EnergyEmptyModifier);
       const layerW: GridLayerWriter = builder.claimLayerWriter(ServiceLayer);
+      const roadW: GridLayerWriter = builder.claimLayerWriter(RoadLayer);
 
       env = {
         db,
@@ -174,6 +210,7 @@ export function createLogisticsModule(
         terrain,
         healthBp: options.healthBp ?? (() => 10000),
         cargoW,
+        siteW,
         lowW,
         emptyW,
         layerW,
@@ -181,6 +218,11 @@ export function createLogisticsModule(
         topoNodeIds,
         stateOf,
         attachOf: (ctx, topo, id, px, py) => attachOf(env, ctx, topo, id, px, py),
+        roads: new Uint8Array(terrain.width * terrain.height),
+        roadVersion: 0,
+        roadDirty: false,
+        roadW,
+        roadMult: db.logistics.roadLevels.map((l) => l.multiplierBp),
       };
 
       builder.onStart(() => {
@@ -205,6 +247,11 @@ export function createLogisticsModule(
               inBp: s.inBp,
               outSat: s.outSat,
               inSat: s.inSat,
+              quotaOut: s.quotaOut,
+              quotaIn: s.quotaIn,
+              volOut: s.volOut,
+              volIn: s.volIn,
+              intercept: s.intercept,
             };
           }
           return out as Serializable;
@@ -222,79 +269,39 @@ export function createLogisticsModule(
               inBp: [...raw.inBp],
               outSat: [...raw.outSat],
               inSat: [...raw.inSat],
+              quotaOut: [...raw.quotaOut],
+              quotaIn: [...raw.quotaIn],
+              volOut: [...raw.volOut],
+              volIn: [...raw.volIn],
+              intercept: [...raw.intercept],
             });
           }
-          topoDirty = true;
+          topoAllDirty = true;
+        },
+      });
+
+      builder.state('frontline_td:logistics.roads', {
+        save: () => saveRoads(env),
+        load: (data) => {
+          loadRoads(env, data);
+          topoAllDirty = true;
+        },
+      });
+
+      // Road changes may land in any phase (construction runs late), so
+      // the layer mirror runs in the last phase — same reason as terrain.
+      builder.system({
+        id: 'frontline_td:logistics.mirror_roads',
+        phase: 'capture_fog',
+        run(ctx) {
+          mirrorRoads(env, ctx);
         },
       });
 
       // Per-tick resolution first: consume/deposit intents, then site
       // conversion. Registered before the cycle system so it runs first in
       // the logistics phase.
-      builder.system({
-        id: 'frontline_td:logistics.resolve',
-        phase: 'logistics',
-        reads: [ConsumeIntent, DepositIntent],
-        run(ctx) {
-          const store = ctx.write(cargoW);
-          for (const p of ctx.read(ConsumeIntent)) {
-            const id = ctx.resolve(p.handle as EntityHandle);
-            if (id === null || !ctx.has(CargoStore, id)) {
-              continue;
-            }
-            for (let i = 0; i < CARGO_SLOTS; i++) {
-              if (sget(store, 'cargo', i, id) === p.cargo && sget(store, 'amt', i, id) > 0) {
-                sset(store, 'amt', i, id, Math.max(0, sget(store, 'amt', i, id) - p.amount));
-                break;
-              }
-            }
-          }
-          for (const p of ctx.read(DepositIntent)) {
-            const id = ctx.resolve(p.handle as EntityHandle);
-            if (id === null || !ctx.has(CargoStore, id)) {
-              continue;
-            }
-            for (let i = 0; i < CARGO_SLOTS; i++) {
-              if (
-                sget(store, 'cargo', i, id) === p.cargo &&
-                (sget(store, 'flags', i, id) & SLOT_EXPORT) !== 0
-              ) {
-                sset(
-                  store,
-                  'amt',
-                  i,
-                  id,
-                  Math.min(sget(store, 'cap', i, id), sget(store, 'amt', i, id) + p.amount),
-                );
-                break;
-              }
-            }
-          }
-          // Site conversion: once UnderConstruction is gone the site slots
-          // become the structure's operational store profile.
-          const site = ctx.read(SiteStore);
-          for (const id of ctx.query([SiteStore], [UnderConstruction])) {
-            const structure = db.structures.byIndex(site.kind[id] ?? 0);
-            const handle = ctx.handleOf(id as EntityId);
-            if (structure === undefined || handle === null) {
-              continue;
-            }
-            const profiles = structure.stores ?? [];
-            for (let i = 0; i < CARGO_SLOTS; i++) {
-              const p = profiles[i];
-              sset(store, 'cargo', i, id, p === undefined ? EMPTY_CARGO : p.cargo);
-              sset(store, 'cap', i, id, p?.capacityMilli ?? 0);
-              sset(store, 'amt', i, id, 0);
-              sset(store, 'cls', i, id, p?.cls ?? 0);
-              sset(store, 'flags', i, id, p?.export === true ? SLOT_EXPORT : 0);
-              sset(store, 'since', i, id, p !== undefined && !p.export ? ctx.tick + 1 : 0);
-              sset(store, 'rate', i, id, p?.rateMilliPerCycle ?? 0);
-              sset(store, 'unmet', i, id, UNMET_NONE);
-            }
-            ctx.removeComponent(siteW, handle);
-          }
-        },
-      });
+      registerResolve(builder, env, db);
 
       builder.system({
         id: 'frontline_td:logistics.allocate',
@@ -306,7 +313,8 @@ export function createLogisticsModule(
             const ids = collectNodeIds(ctx, f);
             const prev = topoNodeIds.get(f);
             const changed =
-              topoDirty ||
+              topoAllDirty ||
+              topoDirtyFactions.has(f) ||
               prev === undefined ||
               prev.length !== ids.length ||
               prev.some((v, i) => v !== ids[i]);
@@ -314,7 +322,11 @@ export function createLogisticsModule(
               rebuildTopo(env, ctx, f, ids);
             }
           }
-          topoDirty = false;
+          topoAllDirty = false;
+          topoDirtyFactions.clear();
+          for (const topo of topos.values()) {
+            refreshMultipliers(env, topo);
+          }
           for (const f of ctx.factions()) {
             runCycle(env, ctx, f);
           }

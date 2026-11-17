@@ -4,26 +4,33 @@
 // UnderConstruction writer — operational systems exclude those entities.
 import type { ContentDb } from '../../../content/index';
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
-import { floorDiv } from '../../../core/index';
 import type { SimModule, SystemContext } from '../../../kernel/index';
 import { Faction, UnderConstruction } from '../../../kernel/index';
 import { CombatDied } from '../../combat/protocol';
 import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
-import { SLOT_SITE } from '../../logistics/protocol';
 import type { TerrainApi } from '../../terrain/sim/index';
 import type { FactionStart } from '../../units/sim/index';
 import { ConstructionCompleted } from '../protocol';
-import { Blueprint, Construction, MODE_BUILD, Structure } from './components';
+import { Blueprint, Construction, MODE_BUILD, RoadSegment, Structure } from './components';
 import { registerConstructionCommands } from './commands';
-import type { ConstructionEnv, LogisticsQueries, StructurePartsFn } from './env';
+import type {
+  ConstructionEnv,
+  LogisticsQueries,
+  RoadSegmentPartsFn,
+  StructurePartsFn,
+} from './env';
 import { loadReservations, saveReservations, setFootprintBlocked } from './env';
 import { finishDemolition, startSite } from './lifecycle';
-import { buildBlocker, spawnStructure } from './spawn';
+import { endProjectOfSegment, registerRoads } from './roads';
+import { buildBlocker, deliveredAllowed, spawnStructure } from './spawn';
 import { Salvage } from './components';
 import { registerConstructionViews } from './views';
 
 export interface ConstructionOptions {
   structureParts: readonly StructurePartsFn[];
+  // Injected road-segment parts (logistics site slots + FixedAttach,
+  // combat Health + Targetable); default none.
+  segmentParts?: readonly RoadSegmentPartsFn[];
   // Injected health readout (combat wires it); default full.
   healthBp?: (ctx: SystemContext, id: number) => number;
   starts?: readonly FactionStart[];
@@ -52,6 +59,9 @@ export function createConstructionModule(
         ucW: builder.claimWriter(UnderConstruction),
         reservations: new Map(),
         pendingDemolish: new Set(),
+        projects: new Map(),
+        nextProjectId: 1,
+        segmentParts: options.segmentParts ?? [],
       };
 
       // Per-tick bookkeeping: commands run before systems in the command
@@ -95,7 +105,6 @@ export function createConstructionModule(
         run(ctx) {
           const cons = ctx.write(env.constructionW);
           const consR = ctx.read(Construction);
-          const store = ctx.read(CargoStore);
           for (const id of ctx.query([Construction, Structure])) {
             const total = consR.total[id] ?? 1;
             const handle = ctx.handleOf(id as EntityId);
@@ -103,18 +112,7 @@ export function createConstructionModule(
               continue;
             }
             if ((consR.mode[id] ?? 0) === MODE_BUILD) {
-              // allowed = total * delivered / required over site slots.
-              let required = 0;
-              let delivered = 0;
-              if (ctx.has(CargoStore, id as EntityId)) {
-                for (let i = 0; i < CARGO_SLOTS; i++) {
-                  if ((sget(store, 'flags', i, id) & SLOT_SITE) !== 0) {
-                    required += sget(store, 'cap', i, id);
-                    delivered += sget(store, 'amt', i, id);
-                  }
-                }
-              }
-              const allowed = required > 0 ? floorDiv(total * delivered, required) : total;
+              const allowed = deliveredAllowed(ctx, id, total);
               const next = Math.min((consR.progress[id] ?? 0) + 1, allowed);
               cons.progress[id] = next;
               if (next >= total) {
@@ -208,7 +206,15 @@ export function createConstructionModule(
           const st = ctx.read(Structure);
           for (const p of ctx.read(CombatDied)) {
             const id = ctx.resolve(p.handle as EntityHandle);
-            if (id === null || !ctx.has(Structure, id)) {
+            if (id === null) {
+              continue;
+            }
+            // Destroyed road segment: its materials are lost and the
+            // project ends; paved cells stay paved.
+            if (ctx.has(RoadSegment, id)) {
+              endProjectOfSegment(env, ctx, id);
+            }
+            if (!ctx.has(Structure, id)) {
               continue;
             }
             const kind = db.structures.byIndex(st.kind[id] ?? 0);
@@ -220,6 +226,7 @@ export function createConstructionModule(
       });
 
       registerConstructionCommands(builder, env, db);
+      registerRoads(builder, env, db, options.healthBp);
       registerConstructionViews(builder, env, db, options.healthBp);
     },
   };

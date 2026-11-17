@@ -62,6 +62,21 @@ export const SiteStore = defineComponent('frontline_td:logistics.site', {
   kind: 'u16',
 });
 
+// Fixed attachment for entities that bind to one specific node (road
+// segments): node entity id + generation at spawn time and the last-mile
+// cost to the attach point. attachOf prefers this over coverage.
+export const FixedAttach = defineComponent('frontline_td:logistics.fixed_attach', {
+  node: 'u32',
+  gen: 'u32',
+  lastMile: 'i32',
+});
+
+// Interception strength (bp) this entity applies to hostile link quotas
+// inside the corridor around link polylines. Injected via unitParts.
+export const Interceptor = defineComponent('frontline_td:logistics.interceptor', {
+  strengthBp: 'i32',
+});
+
 // Supply-state modifiers; the values come from the pack logistics config
 // (lowSpeedBp) and the spec-fixed −10000 for empty.
 export const EnergyLowModifier = defineModifier(

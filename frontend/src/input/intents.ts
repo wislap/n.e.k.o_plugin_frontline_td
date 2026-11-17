@@ -18,4 +18,9 @@ export type Intent =
   | { kind: 'build.place'; x: number; y: number; blueprint: boolean }
   | { kind: 'selection.activate' }
   | { kind: 'selection.cancel' }
-  | { kind: 'overlay.toggle_logistics' };
+  | { kind: 'overlay.toggle_logistics' }
+  // Road tool (E3): R toggles the mode, Enter confirms the selection,
+  // road.click comes from the pointer while road mode is active.
+  | { kind: 'road.toggle' }
+  | { kind: 'road.confirm' }
+  | { kind: 'road.click'; x: number; y: number; additive: boolean };

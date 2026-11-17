@@ -17,10 +17,12 @@ import type { TerrainApi } from '../../terrain/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
 import { Position, createMovementModule, moverComponents } from '../../movement/sim/index';
 import { createLogisticsModule, structureParts } from '../../logistics/sim/index';
+import type { LogisticsModule } from '../../logistics/sim/index';
 import type { FactionStart } from '../../units/sim/index';
-import { SalvageChannel, StructuresChannel } from '../protocol';
-import type { ConstructionSalvage, ConstructionStructures } from '../protocol';
+import { RoadWorksChannel, SalvageChannel, StructuresChannel } from '../protocol';
+import type { ConstructionSalvage, ConstructionStructures, RoadWorks } from '../protocol';
 import { createConstructionModule } from './module';
+import type { RoadSegmentPartsFn } from './env';
 import { Structure } from './components';
 
 const DB: ContentDb = loadContent();
@@ -88,6 +90,10 @@ export interface WorldOpts {
   entities?: readonly TestEnt[];
   starts?: readonly FactionStart[];
   factions?: readonly number[];
+  // Road-segment parts injected like the app does (logistics + combat).
+  segmentParts?: readonly RoadSegmentPartsFn[];
+  // Extra sim modules appended after construction (e.g. combat).
+  extraModules?: readonly SimModule[];
 }
 
 interface InspectConstruction {
@@ -112,6 +118,8 @@ export interface BuiltWorld {
   rejections(issuer?: FactionId): string[];
   structures(observer?: FactionId): ConstructionStructures;
   salvage(observer?: FactionId): ConstructionSalvage;
+  roadworks(observer?: FactionId): RoadWorks;
+  logistics: LogisticsModule;
   inspect(handle: EntityHandle | number, observer?: FactionId): InspectConstruction | null;
   // Live position of entity index i (probe-backed).
   pos(i: number): { x: number; y: number };
@@ -128,11 +136,12 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
   });
   const movement = createMovementModule(terrain.api, pathing.api);
   const logistics = createLogisticsModule(DB, terrain.api, { starts: opts.starts ?? [] });
-  terrain.api.onBlockedChange(() => {
-    logistics.markTopologyDirty();
+  terrain.api.onBlockedChange((cells, blocked) => {
+    logistics.blockersChanged(cells, blocked);
   });
   const construction = createConstructionModule(DB, terrain.api, logistics, {
     structureParts: [structureParts],
+    ...(opts.segmentParts !== undefined ? { segmentParts: opts.segmentParts } : {}),
     starts: opts.starts ?? [],
   });
 
@@ -173,6 +182,7 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     movement,
     logistics,
     construction,
+    ...(opts.extraModules ?? []),
     spawner,
   ];
   let sim: ReturnType<typeof createSimulation> | null = null;
@@ -180,6 +190,7 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     config,
     modules,
     handles,
+    logistics,
     terrain: terrain.api,
     get sim() {
       return sim as ReturnType<typeof createSimulation>;
@@ -208,6 +219,10 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     salvage(observer = F1) {
       const s = sim as ReturnType<typeof createSimulation>;
       return s.snapshot(observer).channels[SalvageChannel.id] as ConstructionSalvage;
+    },
+    roadworks(observer = F1) {
+      const s = sim as ReturnType<typeof createSimulation>;
+      return s.snapshot(observer).channels[RoadWorksChannel.id] as RoadWorks;
     },
     inspect(handle, observer = F1) {
       const s = sim as ReturnType<typeof createSimulation>;

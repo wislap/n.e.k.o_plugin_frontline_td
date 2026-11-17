@@ -5,12 +5,20 @@
 import * as THREE from 'three';
 import { useBuildStore } from '../client/build-store';
 import { useCameraStore } from '../client/camera-store';
-import { cursorGround } from '../client/cursor';
+import { cursorGround, cursorScreen } from '../client/cursor';
 import { pickAt, structuresChannel } from '../client/pick';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb } from '../content/index';
-import { ActivateCommand, CancelCommand, PlaceCommand } from '../features/construction/protocol';
+import {
+  ActivateCommand,
+  CancelCommand,
+  PlaceCommand,
+  UpgradeLinksCommand,
+} from '../features/construction/protocol';
+import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
+import { linkFlow } from '../features/logistics/render/index';
+import { extendRoute, linkPairs, nearestLink } from '../features/logistics/ui/index';
 import { MoveCommand } from '../features/movement/protocol';
 import type { Intent } from '../input/intents';
 import { pickGround, type Ray } from './picking';
@@ -35,6 +43,69 @@ export interface DispatchEnv {
 export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
   const { client, db, mapWidth, mapHeight, heights } = env;
   const raycaster = new THREE.Raycaster();
+
+  const roadNetwork = (): LogisticsNetwork | null => {
+    const latest = client.snapshots().latest;
+    return (latest?.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined) ?? null;
+  };
+
+  const roadLinks = (): LogisticsNetwork['links'] | { a: []; pathOffsets: []; pathCells: [] } => {
+    return roadNetwork()?.links ?? { a: [], pathOffsets: [], pathCells: [] };
+  };
+
+  // Smoothed per-link flow (volOut + volIn) from the shared holder that
+  // also feeds the overlay, updated once per snapshot.
+  const flowedLinks = (): { a: number; b: number; flow: number }[] => {
+    const latest = client.snapshots().latest;
+    const net = roadNetwork();
+    if (latest === null || net === null) {
+      return [];
+    }
+    const vol = linkFlow(latest, net).vol;
+    const out: { a: number; b: number; flow: number }[] = [];
+    for (let i = 0; i < net.links.a.length; i++) {
+      out.push({ a: net.links.a[i] ?? 0, b: net.links.b[i] ?? 0, flow: vol[i] ?? 0 });
+    }
+    return out;
+  };
+
+  // Node indices (into the network's nodes arrays) of the observer's
+  // warehouse structures: extension never continues past them.
+  const warehouseNodes = (): Set<number> => {
+    const net = roadNetwork();
+    const structures = structuresChannel(client.snapshots().latest);
+    if (net === null || structures === null) {
+      return new Set();
+    }
+    const warehouses = new Set<number>();
+    for (let i = 0; i < structures.handles.length; i++) {
+      const kind = db.structures.byIndex(structures.kind[i] ?? 0);
+      if (kind?.node?.warehouse === true) {
+        warehouses.add(structures.handles[i] ?? 0);
+      }
+    }
+    const nodes = new Set<number>();
+    for (let i = 0; i < net.nodes.handles.length; i++) {
+      if (warehouses.has(net.nodes.handles[i] ?? 0)) {
+        nodes.add(i);
+      }
+    }
+    return nodes;
+  };
+
+  const submitRoadOrder = (): void => {
+    const build = useBuildStore.getState();
+    const net = roadNetwork();
+    if (net === null || build.roadSel.length === 0) {
+      return;
+    }
+    const links = linkPairs(net, build.roadSel);
+    if (links.length > 0) {
+      client.submit({ type: UpgradeLinksCommand.type, payload: { links, level: 1 } });
+    }
+    // Stay in road mode after submitting.
+    build.setRoadSel([]);
+  };
 
   const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
     const rect = env.rect();
@@ -83,12 +154,57 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         return;
       }
       case 'cursor.move': {
+        cursorScreen.x = intent.x;
+        cursorScreen.y = intent.y;
         const ground = groundAt(intent.x, intent.y);
         cursorGround.valid = ground !== null;
         if (ground !== null) {
           cursorGround.x = ground.x;
           cursorGround.y = ground.y;
         }
+        const build = useBuildStore.getState();
+        if (build.roadMode) {
+          const link =
+            ground === null ? -1 : nearestLink(roadLinks(), mapWidth, ground.x, ground.y);
+          if (link !== build.roadHover) {
+            build.setRoadHover(link);
+          }
+        }
+        return;
+      }
+      case 'road.toggle': {
+        const build = useBuildStore.getState();
+        if (build.roadMode) {
+          build.cancel();
+        } else {
+          build.enterRoad();
+        }
+        return;
+      }
+      case 'road.confirm': {
+        submitRoadOrder();
+        return;
+      }
+      case 'road.click': {
+        const ground = groundAt(intent.x, intent.y);
+        if (ground === null) {
+          return;
+        }
+        const build = useBuildStore.getState();
+        const link = nearestLink(roadLinks(), mapWidth, ground.x, ground.y);
+        if (link === -1) {
+          return;
+        }
+        if (intent.additive) {
+          build.toggleRoadLink(link);
+          return;
+        }
+        if (build.roadSel.includes(link)) {
+          submitRoadOrder();
+          return;
+        }
+        const route = extendRoute(flowedLinks(), link, warehouseNodes());
+        build.setRoadSel(route.includes(link) ? route : [link]);
         return;
       }
       case 'build.place': {

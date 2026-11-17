@@ -5,6 +5,7 @@ import type { ContentDb, ResolvedStructure } from '../../../content/index';
 import type { FactionId, Serializable } from '../../../core/index';
 import type { ComponentWriter, SpawnInit, SystemContext } from '../../../kernel/index';
 import type { TerrainApi } from '../../terrain/sim/index';
+import type { RoadSegmentDesc } from '../protocol';
 import type { PlacementRule, PlacementView } from '../rules/index';
 
 // Injected structure spawn-part factories (logistics contributes node +
@@ -17,6 +18,22 @@ export type StructurePartsFn = (
   tick: number,
 ) => SpawnInit;
 
+// Injected road-segment spawn parts (logistics site slots + FixedAttach,
+// combat Health + Targetable); same pattern as structureParts.
+export type RoadSegmentPartsFn = (desc: RoadSegmentDesc, tick: number) => SpawnInit;
+
+// The upgrade query result logistics hands back (structural mirror of
+// its public LinkPath).
+interface LinkPathResult {
+  link: number;
+  cells: number[];
+  cum: number[];
+  roads: number[];
+  upstream: number;
+  nodeA: number;
+  nodeB: number;
+}
+
 // Read-only logistics queries used by placement (no internals import).
 export interface LogisticsQueries {
   covered(ctx: SystemContext, faction: FactionId, x: number, y: number): boolean;
@@ -26,6 +43,31 @@ export interface LogisticsQueries {
     footprint: { x: number; y: number; w: number; h: number },
     connect: number,
   ): boolean;
+  // Link polyline between two node handles, upstream -> downstream
+  // (null when not linked).
+  linkPath(ctx: SystemContext, faction: FactionId, a: number, b: number): LinkPathResult | null;
+  // Pave cells at `level` in the road layer (never lowers).
+  pave(cells: readonly { x: number; y: number }[], level: number): void;
+}
+
+// A serialized road project: pave `cells` in segment order, one live
+// segment at a time, from the upstream (warehouse) side.
+export interface RoadProject {
+  faction: number;
+  level: number;
+  // Cells left to pave when the order was accepted (upstream -> down).
+  cells: number[];
+  // Path cost from the upstream node to each cell (parallel to cells).
+  cum: number[];
+  // Index of the next segment to spawn.
+  next: number;
+  // Live segment handle (0 while the next segment is pending).
+  segment: number;
+  // Upstream node handle (FixedAttach target of each segment).
+  upstream: number;
+  // Endpoint node entity ids (lo < hi) for dedupe.
+  a: number;
+  b: number;
 }
 
 export interface ConstructionEnv {
@@ -51,6 +93,12 @@ export interface ConstructionEnv {
   // the building as still finished. Per-tick only: cleared by the
   // command-phase system below and never serialized.
   pendingDemolish: Set<number>;
+  // Serialized road projects keyed by a monotonically increasing id
+  // (referenced by RoadSegment.project); the counter is serialized with
+  // the state and finished projects are deleted so it never grows.
+  projects: Map<number, RoadProject>;
+  nextProjectId: number;
+  segmentParts: readonly RoadSegmentPartsFn[];
 }
 
 export function placementRule(kind: ResolvedStructure): PlacementRule {

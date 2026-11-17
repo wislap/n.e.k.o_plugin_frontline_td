@@ -2,12 +2,20 @@ import { createRoot } from 'react-dom/client';
 import '../i18n';
 import { useBuildStore } from '../client/build-store';
 import { useCameraStore } from '../client/camera-store';
+import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
 import { createSimClient } from '../client/sim-client';
 import { useUiStore } from '../client/ui-store';
 import { loadContent } from '../content/index';
 import { proto01 } from '../content/frontline_td/maps/proto_01';
-import { ActivateCommand, CancelCommand } from '../features/construction/protocol';
+import {
+  ActivateCommand,
+  CancelCommand,
+  UpgradeLinksCommand,
+} from '../features/construction/protocol';
+import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
+import { linkPairs } from '../features/logistics/ui/index';
+import { installVisibilityPause } from '../host/visibility';
 import { createPanTracker, installPanTracking } from '../input/pan';
 import { installKeyboard } from '../input/keyboard';
 import { DEFAULT_KEYMAP } from '../input/keymap';
@@ -60,6 +68,26 @@ function dispatch(intent: Intent): void {
     case 'build.cancel':
       useBuildStore.getState().cancel();
       return;
+    case 'road.toggle': {
+      const build = useBuildStore.getState();
+      if (build.roadMode) {
+        build.cancel();
+      } else {
+        build.enterRoad();
+      }
+      return;
+    }
+    case 'road.confirm': {
+      const build = useBuildStore.getState();
+      const net = client.snapshots().latest?.channels[LogisticsNetworkChannel.id] as
+        LogisticsNetwork | undefined;
+      const links = net !== undefined ? linkPairs(net, build.roadSel) : [];
+      if (links.length > 0) {
+        client.submit({ type: UpgradeLinksCommand.type, payload: { links, level: 1 } });
+      }
+      build.setRoadSel([]);
+      return;
+    }
     case 'selection.activate': {
       const selected = [...useSelectionStore.getState().selected];
       if (selected.length > 0) {
@@ -80,6 +108,12 @@ function dispatch(intent: Intent): void {
 
 installKeyboard(window, DEFAULT_KEYMAP, dispatch);
 installPanTracking(window, panTracker);
+// Auto-pause when the tab hides; never auto-resumes (M3 E5).
+installVisibilityPause(document, () => {
+  if (useRuntimeStore.getState().stats?.paused === false) {
+    client.togglePause();
+  }
+});
 
 const container = document.getElementById('root');
 if (container === null) {

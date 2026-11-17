@@ -11,6 +11,7 @@ export type {
   ResolvedMovementClass,
   ResolvedNodeProfile,
   ResolvedProducer,
+  ResolvedRoadLevel,
   ResolvedStoreProfile,
   ResolvedStructure,
   ResolvedSurface,

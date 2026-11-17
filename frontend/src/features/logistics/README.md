@@ -6,18 +6,26 @@
 
 ## 公开接口
 - `sim/index.ts`：`createLogisticsModule(db, terrain, opts)`（`starts`、
-  可选 `healthBp`）、`LogisticsNode`/`CargoStore`/`SiteStore` 组件、
-  `unitParts`/`structureParts` 生成部件、`LogisticsModule`（`markTopologyDirty`）。
+  可选 `healthBp`）、`LogisticsNode`/`CargoStore`/`SiteStore`/
+  `FixedAttach`/`Interceptor` 组件、`unitParts`/`structureParts`/
+  `roadSegmentParts` 生成部件、`LogisticsModule`
+  （`blockersChanged`、`pave`、`linkPath`、`covered`、
+  `connectsToNetwork`、`energyBp`）。
 - `protocol.ts`：`SetPrioritiesCommand`、`ConsumeIntent`/`DepositIntent`
   （`frontline_td:logistics.consume` / `.deposit`，负载
   `{ handle, cargo, amount }`，cargo 为货物注册表索引）、
-  货类名/码、unmet 原因码、`LogisticsNetworkChannel`。
-- `content.ts`：货物、store、node 与全局物流配置的内容 schema。
+  货类名/码、unmet 原因码、`LogisticsNetworkChannel`、
+  `ROAD_LAYER_ID` 网格层。
+- `content.ts`：货物、store、node 与全局物流配置的内容 schema
+  （含 `roadLevels`、`segmentCells`、`corridorWidth`）。
 
 ## 拥有的组件
 - `LogisticsNode`（footprint、connect、service、vehicles、warehouse）；
 - `CargoStore`（4 槽：cargo/cap/amt/cls/flags/since/rate/unmet）；
-- `SiteStore` 标记；`EnergyLow`/`EnergyEmpty` 修改器组件。
+- `SiteStore` 标记；`EnergyLow`/`EnergyEmpty` 修改器组件；
+- `FixedAttach`（固定挂载 node+gen+lastMile，道路工地用）；
+- `Interceptor`（拦截强度 bp，由单位内容注入）；
+- 全局 u8 道路层 `frontline_td:logistics.road`（0 土路，≥1 等级）。
 
 ## 不变量
 - 分配每 1 秒（cycleTicks）运行一次：先 rate，再 outbound、reserve、
@@ -34,7 +42,16 @@
   该方向有流量时对应 `outSat`/`inSat` 置 1。
 - 派生拓扑不序列化；节点集合变化、地形阻挡变化与读档触发懒重建；
   链路折线只含合法前驱步（不跨越悬崖或阻挡边）。
+- 道路只改链路有效倍率，不改拓扑：搜索与 connect 判定始终用地形
+  步进代价。有效倍率 `m = floor(cost·10000 / Σ step_k·10000/m(cell))`
+  （步进代价记在目标格上），只在道路版本或拓扑变化时重算。
+- 走廊拦截：每周期按敌对 `Interceptor` 单位到链路折线任一格中心
+  距离 ≤ `corridorWidth`（含包围盒预筛）求和 strengthBp，配额系数
+  `max(0, 10000 − Σ)`；unmet 仍为 `no_capacity`，链路在快照中记
+  `intercept` bp。
+- `pave` 只升不降并推路层版本；`linkPath` 返回上游（仓库侧）→ 下游
+  的折线、累计代价、上游节点与 `FixedAttach` 初始值。
 - 数量用整数 milli 单位；运力与原因码用核心整数辅助函数。
 
 ## 对应设计章节
-- `.plans/m3.md` 的 M3-B1；docs/design/architecture.md §6.11（modifiers）。
+- docs/adr/0025（模型）、0030（实现约定）；docs/design/architecture.md §6.11（modifiers）。

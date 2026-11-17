@@ -123,8 +123,8 @@ function buildWorld(opts: WorldOpts): BuiltWorld {
   });
   const movement = createMovementModule(terrain.api, pathing.api);
   const logistics = createLogisticsModule(DB, terrain.api, { starts: opts.starts ?? [] });
-  terrain.api.onBlockedChange(() => {
-    logistics.markTopologyDirty();
+  terrain.api.onBlockedChange((cells, blocked) => {
+    logistics.blockersChanged(cells, blocked);
   });
   const construction = createConstructionModule(DB, terrain.api, logistics, {
     structureParts: [logisticsStructureParts, productionStructureParts],

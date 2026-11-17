@@ -5,10 +5,12 @@
 import type { Snapshot } from '../core/index';
 import type { ContentDb } from '../content/index';
 import {
+  RoadWorksChannel,
   SalvageChannel,
   StructuresChannel,
   type ConstructionSalvage,
   type ConstructionStructures,
+  type RoadWorks,
 } from '../features/construction/protocol';
 
 export function structuresChannel(snapshot: Snapshot | null): ConstructionStructures | null {
@@ -17,6 +19,10 @@ export function structuresChannel(snapshot: Snapshot | null): ConstructionStruct
 
 function salvageChannel(snapshot: Snapshot | null): ConstructionSalvage | null {
   return (snapshot?.channels[SalvageChannel.id] as ConstructionSalvage | undefined) ?? null;
+}
+
+function roadWorksChannel(snapshot: Snapshot | null): RoadWorks | null {
+  return (snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
 }
 
 // Click selection: nearest own unit inside `radius` wins; an own
@@ -84,6 +90,20 @@ function pickStructureAt(
       if (d <= bestDist) {
         bestDist = d;
         best = salvage.handles[i] ?? null;
+      }
+    }
+    return best;
+  }
+  // Road-work segments are small markers: pick within the click radius.
+  const roadWorks = roadWorksChannel(snapshot);
+  if (roadWorks !== null) {
+    let best: number | null = null;
+    let bestDist = radius;
+    for (let i = 0; i < roadWorks.segments.handles.length; i++) {
+      const d = Math.hypot((roadWorks.segments.x[i] ?? 0) - x, (roadWorks.segments.y[i] ?? 0) - y);
+      if (d <= bestDist) {
+        bestDist = d;
+        best = roadWorks.segments.handles[i] ?? null;
       }
     }
     return best;

@@ -24,7 +24,14 @@
       "tactical": "战术视角"
     },
     "selected": "已选中 {{count}} 个",
-    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD 平移 | 右键 移动 | G 开工 | X 拆除 | L 物流 | Esc 取消 | ` 调试",
+    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD 平移 | 右键 移动 | G 开工 | X 拆除 | L 物流 | R 道路 | Esc 取消 | ` 调试",
+    "fullscreen": "全屏",
+    "fullscreen_unsupported": "仅在 NEKO 面板内可用",
+    "display": {
+      "declined": "全屏请求被拒绝",
+      "busy": "显示模式忙，请重试",
+      "failed": "显示模式请求失败"
+    },
     "rejected": "命令被拒绝：{{reason}}",
     "reject_reason": {
       "invalid_target": "目标不可通行",
@@ -40,7 +47,7 @@
   },
   "structure": {
     "main_base": "主基地",
-    "station": "前哨站",
+    "station": "车站",
     "supply_depot": "补给站",
     "miner": "采矿机",
     "power_plant": "发电厂",
@@ -48,7 +55,21 @@
     "turret": "炮塔"
   },
   "unit": {
-    "robot": "机器人"
+    "robot": "机器人",
+    "raider": "袭击者"
+  },
+  "road": {
+    "button": "道路",
+    "button_hint": "道路工具（R）：点击路段自动延伸主线",
+    "preview_title": "道路工程",
+    "cells": "待铺设 {{n}} 格",
+    "cost": "{{n}} {{cargo}}",
+    "time": "约 {{s}} 秒",
+    "quota_out": "流出配额：{{old}} → 约 {{next}}",
+    "quota_in": "流入配额：{{old}} → 约 {{next}}",
+    "carried": "实际运载 出/入：{{out}} / {{inn}}",
+    "hint": "再次点击已选路段或按 Enter 下单；Shift+点击 单选/取消单段",
+    "intercept": "被拦截 −{{pct}}%"
   },
   "reason": {
     "out_of_bounds": "超出地图边界",
@@ -66,6 +87,7 @@
     "invalid_target": "目标不可通行",
     "no_units": "没有可指挥的单位",
     "no_targets": "没有可操作的目标",
+    "already_upgraded": "已是该等级或更高",
     "not_buildable": "不可建造",
     "invalid_order": "优先级无效",
     "none": "-"

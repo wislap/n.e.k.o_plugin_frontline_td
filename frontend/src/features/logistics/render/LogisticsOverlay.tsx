@@ -16,7 +16,7 @@ import {
   type ConstructionStructures,
 } from '../../construction/protocol';
 import { LogisticsNetworkChannel, SERVICE_LAYER_ID, type LogisticsNetwork } from '../protocol';
-import { emaUpdate } from './smoothing';
+import { linkFlow } from './link-flow';
 
 const COVER_COLOR = '#3f7fbf';
 const COVER_OPACITY = 0.18;
@@ -38,7 +38,7 @@ export interface LogisticsOverlayProps {
 
 export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
   const toggled = useUiStore((s) => s.logisticsOverlay);
-  const placing = useBuildStore((s) => s.kind !== null);
+  const placing = useBuildStore((s) => s.kind !== null || s.roadMode);
   const on = toggled || placing;
   const coverRef = useRef<THREE.InstancedMesh>(null);
   const linkRef = useRef<THREE.LineSegments>(null);
@@ -48,12 +48,6 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const linkColRef = useRef<Float32Array | null>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
-  // Smoothed flow per link index (reset when the link set changes).
-  const smoothed = useRef<{ key: string; values: number[]; at: number }>({
-    key: '',
-    values: [],
-    at: 0,
-  });
 
   useFrame(() => {
     const cover = coverRef.current;
@@ -99,20 +93,12 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
 
     // Links: polylines along pathCells, red when saturated, brightness
     // from the smoothed utilization average.
-    const now = performance.now();
     let verts = 0;
     if (network !== undefined) {
       const links = network.links;
-      const key = `${links.a.length}:${links.a[0] ?? 0}:${links.b[0] ?? 0}`;
-      if (smoothed.current.key !== key) {
-        smoothed.current = { key, values: new Array<number>(links.a.length).fill(0), at: now };
-      }
-      const dt = now - smoothed.current.at;
-      smoothed.current.at = now;
+      const smoothed = linkFlow(latest, network);
       for (let i = 0; i < links.a.length && verts < MAX_LINK_VERTS - 2; i++) {
-        const raw = ((links.outBp[i] ?? 0) + (links.inBp[i] ?? 0)) / 20000;
-        smoothed.current.values[i] = emaUpdate(smoothed.current.values[i] ?? 0, raw, dt);
-        const flow = Math.min(1, smoothed.current.values[i] ?? 0);
+        const flow = Math.min(1, (smoothed.bp[i] ?? 0) / 20000);
         const sat = (links.outSat[i] ?? 0) !== 0 || (links.inSat[i] ?? 0) !== 0;
         color.copy(sat ? LINK_SAT_COLOR : LINK_COLOR).multiplyScalar(0.3 + flow * 0.7);
         const from = links.pathOffsets[i] ?? 0;

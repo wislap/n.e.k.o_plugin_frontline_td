@@ -7,6 +7,7 @@ import { contentId, toFactionId } from '../core/index';
 import type { MatchSetup } from '../protocol/index';
 
 const ROBOT = contentId('frontline_td:robot');
+const RAIDER = contentId('frontline_td:raider');
 const MAIN_BASE = contentId('frontline_td:main_base');
 const STOCK = {
   'frontline_td:material': 200,
@@ -18,6 +19,7 @@ const STOCK = {
 export function createDevSetup(seed: number): MatchSetup {
   const playerStart = proto01.points['player_start'] ?? { x: 0, y: 0 };
   const enemyNorth = proto01.points['enemy_north'] ?? { x: 0, y: 0 };
+  const enemyEast = proto01.points['enemy_east'] ?? { x: 0, y: 0 };
   return {
     formatVersion: 1,
     packs: [basePackManifest()],
@@ -43,7 +45,10 @@ export function createDevSetup(seed: number): MatchSetup {
         carryIn: { unlocks: [] },
         start: {
           structures: [{ structure: MAIN_BASE, x: enemyNorth.x, y: enemyNorth.y }],
-          units: [{ unit: ROBOT, x: enemyNorth.x, y: enemyNorth.y, count: 30 }],
+          units: [
+            { unit: ROBOT, x: enemyNorth.x, y: enemyNorth.y, count: 30 },
+            { unit: RAIDER, x: enemyEast.x, y: enemyEast.y, count: 6 },
+          ],
           stock: STOCK,
         },
       },

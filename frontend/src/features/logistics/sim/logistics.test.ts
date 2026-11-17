@@ -6,7 +6,7 @@ import { SetPrioritiesCommand, SLOT_EXPORT } from '../protocol';
 import { CARGO_CONSTRUCTION, CARGO_PRODUCTION, CARGO_RESERVE } from '../protocol';
 import { qMax, travelCost } from './alloc';
 import { structureParts, unitParts } from './parts';
-import { CargoStore, LogisticsNode } from './index';
+import { CargoStore, Interceptor, LogisticsNode } from './index';
 import {
   CYCLE,
   DB,
@@ -311,5 +311,20 @@ describe('logistics allocation', () => {
     expect(refs).toContain(CargoStore.id);
     const store = init.find(([ref]) => ref.id === CargoStore.id);
     expect((store?.[1] as Record<string, number>)['cap0']).toBe(100_000);
+  });
+
+  it('spawn parts: raider carries an Interceptor component (E2)', () => {
+    const raider = DB.units.byId('frontline_td:raider');
+    if (raider === undefined) {
+      throw new Error('raider unit missing from base pack');
+    }
+    const parts = unitParts(raider);
+    const inter = parts.find(([ref]) => ref.id === Interceptor.id);
+    expect((inter?.[1] as Record<string, number>)['strengthBp']).toBe(5000);
+    const robot = DB.units.byId('frontline_td:robot');
+    if (robot === undefined) {
+      throw new Error('robot unit missing from base pack');
+    }
+    expect(unitParts(robot).find(([ref]) => ref.id === Interceptor.id)).toBeUndefined();
   });
 });

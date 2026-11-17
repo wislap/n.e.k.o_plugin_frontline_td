@@ -22,6 +22,13 @@ export interface FactionState {
   inBp: number[];
   outSat: number[];
   inSat: number[];
+  // Last-cycle per-link quota (milli) and carried volume (milli) per
+  // direction, plus the interception reduction in bp.
+  quotaOut: number[];
+  quotaIn: number[];
+  volOut: number[];
+  volIn: number[];
+  intercept: number[];
 }
 
 // Attachment for a store entity: node index + last-mile path cost.
@@ -39,6 +46,7 @@ export interface LogisticsEnv {
   terrain: TerrainApi;
   healthBp: (ctx: SystemContext, id: EntityId) => number;
   cargoW: ComponentWriter<CargoFields>;
+  siteW: ComponentWriter<{ kind: 'u16' }>;
   lowW: ModWriter;
   emptyW: ModWriter;
   layerW: GridLayerWriter;
@@ -54,4 +62,12 @@ export interface LogisticsEnv {
     px: number,
     py: number,
   ): Attach | null;
+  // Road layer state (serialized): level per cell, bumped on each pave;
+  // roadDirty mirrors the array into the layer once per tick.
+  roads: Uint8Array;
+  roadVersion: number;
+  roadDirty: boolean;
+  roadW: GridLayerWriter;
+  // multiplierBp per road level (index = level).
+  roadMult: readonly number[];
 }

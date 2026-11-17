@@ -1,7 +1,7 @@
 // Per-cycle allocation (runs every cfg.cycleTicks ticks, offset 0):
 // rates first, then outbound demands, reserve fallback, inbound exports,
 // supply-state modifiers and link-utilization bookkeeping.
-import type { EntityId } from '../../../core/index';
+import type { EntityId, FactionId } from '../../../core/index';
 import { floorDiv } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
@@ -31,6 +31,7 @@ import {
   CargoStore,
 } from './components';
 import type { LogisticsEnv } from './env';
+import { interceptReductions } from './intercept';
 import {
   chargeLastMile,
   chargeLink,
@@ -88,6 +89,22 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
   const inF = newFlow(fullB, topo.links.length);
   // Full-graph tree: reachability, bottleneck paths, link-payer direction.
   const full = fullTree(topo);
+  // Corridor interception: per-link quota reduction in bp this cycle.
+  const red = interceptReductions(env, ctx, topo, faction as FactionId);
+  // Per-link, per-direction volume caps (full payer budget x the
+  // interception factor). The cap limits the cycle's total carried
+  // volume, not each individual allocation — otherwise many small
+  // demands would drain the payer budget at a geometric discount.
+  const capOut = topo.links.map((l, i) => {
+    const payer = (full.dist[l.a] ?? INF) <= (full.dist[l.b] ?? INF) ? l.a : l.b;
+    const factor = Math.max(0, 10000 - (red[i] ?? 0));
+    return floorDiv(qMax(fullB[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m) * factor, 10000);
+  });
+  const capIn = topo.links.map((l, i) => {
+    const payer = (full.dist[l.a] ?? INF) <= (full.dist[l.b] ?? INF) ? l.b : l.a;
+    const factor = Math.max(0, 10000 - (red[i] ?? 0));
+    return floorDiv(qMax(fullB[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m) * factor, 10000);
+  });
 
   // --- outbound demands ---
   const demands = collectDemands(ctx, store, faction, tick);
@@ -134,7 +151,13 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
         if (l === undefined) {
           continue;
         }
-        const qm = qMax(outF.budgets[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m);
+        // Cap this allocation at the payer's remaining budget share AND
+        // the link's remaining intercepted volume for the cycle.
+        const linkLeft = Math.max(0, (capOut[link] ?? 0) - (outF.vol[link] ?? 0));
+        const qm = Math.min(
+          qMax(outF.budgets[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m),
+          linkLeft,
+        );
         if (qm < capQ) {
           capQ = qm;
           bneck = payer;
@@ -167,7 +190,7 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
           continue;
         }
         const t = travelCost(l.cost, q, cfg.vehicleLoadMilli, l.m);
-        chargeLink(outF, fullB, payer, link, t);
+        chargeLink(outF, fullB, payer, link, t, q);
         if ((outF.budgets[payer] ?? 0) <= 0) {
           bottleneckId = topo.nodes[payer]?.id ?? 0;
         }
@@ -266,7 +289,13 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
         if (l === undefined) {
           continue;
         }
-        const qm = qMax(inF.budgets[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m);
+        // See the outbound loop: payer-budget share AND remaining
+        // intercepted link volume cap the allocation.
+        const linkLeft = Math.max(0, (capIn[link] ?? 0) - (inF.vol[link] ?? 0));
+        const qm = Math.min(
+          qMax(inF.budgets[payer] ?? 0, l.cost, cfg.vehicleLoadMilli, l.m),
+          linkLeft,
+        );
         if (qm < capQ) {
           capQ = qm;
           bneck = payer;
@@ -291,7 +320,7 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
         if (l === undefined) {
           continue;
         }
-        chargeLink(inF, fullB, payer, link, travelCost(l.cost, q, cfg.vehicleLoadMilli, l.m));
+        chargeLink(inF, fullB, payer, link, travelCost(l.cost, q, cfg.vehicleLoadMilli, l.m), q);
       }
       if (attach.lastMile > 0) {
         chargeLastMile(
@@ -353,4 +382,11 @@ export function runCycle(env: LogisticsEnv, ctx: SystemContext, faction: number)
   state.outSat = outU.sat;
   state.inBp = inU.bp;
   state.inSat = inU.sat;
+  // Per-link quota (full-budget capacity, interception applied) and the
+  // volume actually carried this cycle, per direction.
+  state.quotaOut = capOut;
+  state.quotaIn = capIn;
+  state.volOut = outF.vol;
+  state.volIn = inF.vol;
+  state.intercept = red;
 }

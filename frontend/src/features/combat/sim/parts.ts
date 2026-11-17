@@ -31,6 +31,17 @@ export function unitParts(unit: ResolvedUnit): SpawnInit {
   return init;
 }
 
+// Road-segment parts (E1): flat segment hp and a 0.5-cell hit radius.
+// Structural param type — the full desc lives in construction's
+// protocol (no cross-feature type import).
+export function roadSegmentParts(desc: { hp: number }): SpawnInit {
+  const hp = desc.hp * MILLI;
+  return [
+    [Health, { hp, max: hp }],
+    [Targetable, { radius: 0.5 }],
+  ];
+}
+
 export function structureParts(kind: ResolvedStructure): SpawnInit {
   const init: Part[] = [];
   if (kind.hp !== undefined) {

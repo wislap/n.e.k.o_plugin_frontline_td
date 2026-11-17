@@ -16,5 +16,8 @@ export const unitSchema = s.object({
   hp: s.int({ min: 1, max: 2_000_000_000 }),
   stores: s.optional(s.array(storeProfileSchema, { maxLength: 4 })),
   weapon: s.optional(weaponSchema),
+  // Logistics interception strength in basis points applied to hostile
+  // link quotas inside the corridor (E2).
+  interceptor: s.optional(s.object({ strength: s.int({ min: 0, max: 10000 }) })),
 });
 export type UnitContent = Infer<typeof unitSchema>;

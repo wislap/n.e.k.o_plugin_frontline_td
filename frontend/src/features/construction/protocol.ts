@@ -32,6 +32,59 @@ export const CancelCommand = defineCommand(
   }),
 );
 
+// construction.upgrade_links: order road projects on links between own
+// nodes (a/b are node entity handles); level is a roadLevels index.
+export const UpgradeLinksCommand = defineCommand(
+  'frontline_td:construction.upgrade_links',
+  s.object({
+    links: s.array(s.object({ a: s.int({ min: 0 }), b: s.int({ min: 0 }) }), {
+      maxLength: 64,
+    }),
+    level: s.int({ min: 0 }),
+  }),
+);
+
+// Data handed to the injected road-segment parts factories (logistics
+// contributes site slots + FixedAttach, combat Health + Targetable).
+export interface RoadSegmentDesc {
+  // Road level being built (roadLevels index).
+  level: number;
+  // Cells in this segment.
+  cells: number;
+  // Build duration in ticks.
+  totalTicks: number;
+  // Flat segment hit points (units).
+  hp: number;
+  // Site material demand (cargo index -> milli), already x cells.
+  cost: readonly { cargo: number; milli: number }[];
+  // Upstream node entity handle (FixedAttach target).
+  node: number;
+  // Path cost from the upstream node to the segment's far end.
+  lastMile: number;
+}
+
+// Per-observer road-works snapshot: live segments plus planned projects.
+export interface RoadWorks {
+  segments: {
+    handles: Float64Array;
+    x: Float32Array;
+    y: Float32Array;
+    progressBp: Uint16Array;
+    hpBp: Uint16Array;
+  };
+  projects: {
+    // Project i's cells occupy cells[offsets[i]..offsets[i+1]].
+    offsets: Uint32Array;
+    cells: Uint32Array;
+    // Cells already paved by this project.
+    built: Uint16Array;
+    level: Uint8Array;
+  };
+}
+export const RoadWorksChannel = defineSnapshotChannel<RoadWorks>(
+  'frontline_td:construction.roadworks',
+);
+
 export type ConstructionCompletedPayload = {
   handle: number;
   // Structure content index.

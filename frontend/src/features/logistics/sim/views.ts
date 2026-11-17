@@ -89,6 +89,12 @@ export function networkSnapshot(
     inSat: new Uint8Array(0),
     pathOffsets: new Uint32Array(0),
     pathCells: new Uint32Array(0),
+    m: new Uint32Array(0),
+    quotaOut: new Int32Array(0),
+    quotaIn: new Int32Array(0),
+    volOut: new Int32Array(0),
+    volIn: new Int32Array(0),
+    intercept: new Uint16Array(0),
   };
   if (topo === undefined) {
     return {
@@ -123,6 +129,12 @@ export function networkSnapshot(
   links.inSat = new Uint8Array(linkCount);
   links.pathOffsets = new Uint32Array(linkCount + 1);
   links.pathCells = new Uint32Array(topo.links.reduce((n, l) => n + l.cells.length, 0));
+  links.m = new Uint32Array(linkCount);
+  links.quotaOut = new Int32Array(linkCount);
+  links.quotaIn = new Int32Array(linkCount);
+  links.volOut = new Int32Array(linkCount);
+  links.volIn = new Int32Array(linkCount);
+  links.intercept = new Uint16Array(linkCount);
   let off = 0;
   topo.links.forEach((l, i) => {
     links.a[i] = l.a;
@@ -131,6 +143,12 @@ export function networkSnapshot(
     links.inBp[i] = state.inBp[i] ?? 0;
     links.outSat[i] = state.outSat[i] ?? 0;
     links.inSat[i] = state.inSat[i] ?? 0;
+    links.m[i] = l.m;
+    links.quotaOut[i] = state.quotaOut[i] ?? 0;
+    links.quotaIn[i] = state.quotaIn[i] ?? 0;
+    links.volOut[i] = state.volOut[i] ?? 0;
+    links.volIn[i] = state.volIn[i] ?? 0;
+    links.intercept[i] = state.intercept[i] ?? 0;
     links.pathOffsets[i] = off;
     for (const c of l.cells) {
       links.pathCells[off] = c;

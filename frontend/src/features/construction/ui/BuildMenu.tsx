@@ -27,6 +27,7 @@ function cargoName(id: string): string {
 export function BuildMenu({ db }: { db: ContentDb }) {
   const { t } = useTranslation();
   const active = useBuildStore((s) => s.kind);
+  const roadMode = useBuildStore((s) => s.roadMode);
   const buildables = db.structures.list.filter((s) => s.build !== undefined);
 
   return (
@@ -65,6 +66,28 @@ export function BuildMenu({ db }: { db: ContentDb }) {
           </button>
         );
       })}
+      <button
+        type="button"
+        title={t('road.button_hint')}
+        onClick={() => {
+          const store = useBuildStore.getState();
+          if (store.roadMode) {
+            store.cancel();
+          } else {
+            store.enterRoad();
+          }
+        }}
+        style={{
+          cursor: 'pointer',
+          padding: '4px 8px',
+          border: roadMode ? '1px solid #ffd166' : '1px solid #555',
+          background: roadMode ? 'rgba(255,209,102,0.25)' : 'rgba(30,30,30,0.9)',
+          color: '#fff',
+        }}
+      >
+        {t('road.button')}
+        <div style={{ fontSize: 10, color: '#bbb' }}>R</div>
+      </button>
     </div>
   );
 }

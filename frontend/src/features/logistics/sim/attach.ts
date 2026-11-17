@@ -1,11 +1,12 @@
 // Topology derivation helpers: collect the operational node set, rebuild
 // a faction's topology, and attach a store entity to its nearest node.
 import type { EntityId, FactionId } from '../../../core/index';
+import { packHandle } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
 import { Faction, InWorld, OPERATIONAL_EXCLUDE } from '../../../kernel/index';
 import { Position } from '../../movement/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { LogisticsNode, SiteStore } from './components';
+import { FixedAttach, LogisticsNode, SiteStore } from './components';
 import type { Attach, LogisticsEnv } from './env';
 import { buildFactionTopo, ringCells, ringDistances } from './topology';
 import type { FactionTopo, TopoNode } from './topology';
@@ -46,7 +47,14 @@ export function rebuildTopo(
   ids: number[],
 ): void {
   const nodes = nodeListOf(ctx, ids);
-  const topo = buildFactionTopo(nodes, env.terrain, env.groundCls, env.dirt);
+  const topo = buildFactionTopo(
+    nodes,
+    env.terrain,
+    env.groundCls,
+    env.roads,
+    env.roadMult,
+    env.roadVersion,
+  );
   env.topos.set(faction, topo);
   env.topoNodeIds.set(faction, ids);
   ctx.writeLayer(env.layerW, faction as FactionId).set(topo.covered);
@@ -96,6 +104,17 @@ export function attachOf(
   px: number,
   py: number,
 ): Attach | null {
+  if (ctx.has(FixedAttach, id as EntityId)) {
+    // Pinned attachment (road segments): the stored node must still be
+    // alive with the same generation and still be a topo node.
+    const fa = ctx.read(FixedAttach);
+    const target = ctx.resolve(packHandle(fa.node[id] ?? 0, fa.gen[id] ?? 0));
+    if (target === null) {
+      return null;
+    }
+    const idx = topo.nodes.findIndex((n) => n.id === target);
+    return idx < 0 ? null : { node: idx, lastMile: fa.lastMile[id] ?? 0 };
+  }
   const selfIdx = topo.nodes.findIndex((n) => n.id === id);
   if (selfIdx >= 0) {
     // Self-attachment: an operational node entity attaches to itself.
