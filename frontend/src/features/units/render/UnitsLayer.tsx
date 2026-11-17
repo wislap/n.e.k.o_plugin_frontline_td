@@ -7,6 +7,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { pruneSelected, useSelectionStore } from '../../../client/selection-store';
+import {
+  SalvageChannel,
+  StructuresChannel,
+  type ConstructionSalvage,
+  type ConstructionStructures,
+} from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { terrainY } from '../../../render/world';
@@ -51,10 +57,24 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
     }
 
     if (interp.current.prevSnapshotChanged) {
-      // Drop handles that left the snapshot.
+      // Drop handles that left the snapshot (units, structures, salvage —
+      // selection holds every entity kind).
       const valid = new Set<number>();
       for (let i = 0; i < latest.handles.length; i++) {
         valid.add(latest.handles[i] ?? 0);
+      }
+      const structures = pair.latest?.channels[StructuresChannel.id] as
+        ConstructionStructures | undefined;
+      if (structures !== undefined) {
+        for (let i = 0; i < structures.handles.length; i++) {
+          valid.add(structures.handles[i] ?? 0);
+        }
+      }
+      const salvage = pair.latest?.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
+      if (salvage !== undefined) {
+        for (let i = 0; i < salvage.handles.length; i++) {
+          valid.add(salvage.handles[i] ?? 0);
+        }
       }
       const store = useSelectionStore.getState();
       const pruned = pruneSelected(store.selected, valid);

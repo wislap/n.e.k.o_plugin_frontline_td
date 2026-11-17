@@ -18,12 +18,17 @@
 
 ## 不变量
 - 扇区边长固定 16 格；门户是边界上最大可通行邻格对连续段，取中段对。
-- 成本全部为整数；Dijkstra 堆键为 (cost, index)，保证确定性。
+- 成本全部为整数；Dijkstra 堆键为 (cost, index)，保证确定性；
+  `dijkstra` 接受可选 `maxCost` 上界，超出即停止展开。
 - 方向选择只考虑可通行的步（stepCost >= 0），按固定邻序
   N,E,S,W,NE,SE,SW,NW 取「邻格距离 + 步进成本」最小者。
 - `directionAt` 返回内部复用的 scratch 对象，调用方不得长期持有。
 - `invalidateCells` 重算受影响扇区及其 4 邻居的门户与边表，并清空
-  所有派生缓存。
+  所有派生缓存；接线时经 `terrain.onBlockedChange` 注册，阻挡变化
+  自动失效重算。
+- 状态载入时（restore）会重建全部类别的图与节点索引并清空缓存——
+  因为地形阻挡覆盖层先于 pathing 载入（sim-registry 中 terrain 必须
+  排在 pathing 之前）。
 
 ## 对应设计章节
 architecture.md §6（扇区流场）、ADR 0010。

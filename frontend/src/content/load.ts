@@ -4,14 +4,29 @@
 // Every problem is collected and reported in ONE error; the db is returned
 // to the caller — module-level caching is not allowed.
 import type { ContentId } from '../core/index';
-import { TICKS_PER_SECOND } from '../core/index';
+import { MILLI, TICKS_PER_SECOND, floorDiv } from '../core/index';
 import { s } from '../core/index';
 import type { AnySchema, Infer } from '../core/index';
+import { cargoSchema, logisticsConfigSchema } from '../features/logistics/content';
 import { decodeMap } from '../features/terrain/content';
 import type { MapContent, TerrainGrid } from '../features/terrain/content';
 import { mapSchema, movementClassSchema, surfaceSchema } from '../features/terrain/content';
 import { unitSchema } from '../features/units/content';
 import { BASE_PACK_CONTENT } from './packs';
+import {
+  createStoreResolver,
+  resolveStructures,
+  resolveWeapon,
+  structureSchema,
+} from './resolve-structures';
+export type {
+  ResolvedNodeProfile,
+  ResolvedProducer,
+  ResolvedStoreProfile,
+  ResolvedStructure,
+  ResolvedWeapon,
+} from './resolve-structures';
+import type { ResolvedStoreProfile, ResolvedStructure, ResolvedWeapon } from './resolve-structures';
 
 export interface Registry<T> {
   byId(id: string): T | undefined;
@@ -31,6 +46,8 @@ export interface ResolvedSurface {
   costs: readonly number[];
   speedBp: number;
   color: string;
+  // Deposit cargo index on harvestable ground.
+  deposit?: number;
 }
 
 export interface ResolvedUnit {
@@ -40,6 +57,26 @@ export interface ResolvedUnit {
   cellsPerTick: number;
   radius: number;
   movementClass: number;
+  hp: number;
+  stores?: readonly ResolvedStoreProfile[];
+  weapon?: ResolvedWeapon;
+}
+
+export interface ResolvedCargo {
+  id: ContentId;
+  index: number;
+}
+
+export interface ResolvedLogisticsConfig {
+  cycleTicks: number;
+  // Milli a vehicle carries per trip.
+  vehicleLoadMilli: number;
+  // Cost units a single vehicle travels per cycle.
+  vehicleTravelPerCycle: number;
+  lowThresholdBp: number;
+  lowSpeedBp: number;
+  hpBandsBp: readonly { aboveBp: number; factorBp: number }[];
+  roadLevels: readonly { multiplierBp: number }[];
 }
 
 export interface ResolvedMap {
@@ -56,6 +93,9 @@ export interface ContentDb {
   movementClasses: Registry<ResolvedMovementClass>;
   units: Registry<ResolvedUnit>;
   maps: Registry<ResolvedMap>;
+  cargos: Registry<ResolvedCargo>;
+  structures: Registry<ResolvedStructure>;
+  logistics: ResolvedLogisticsConfig;
 }
 
 const BASE_PACK_PREFIX = 'frontline_td:';
@@ -112,6 +152,9 @@ export interface ContentSource {
   movementClasses: readonly unknown[];
   units: readonly unknown[];
   maps: readonly unknown[];
+  cargos: readonly unknown[];
+  structures: readonly unknown[];
+  logistics: unknown;
 }
 
 export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentDb {
@@ -131,12 +174,30 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
   );
   const unitEntries = indexRegistry<typeof unitSchema>('units', unitSchema, source.units, errors);
   const mapEntries = indexRegistry<typeof mapSchema>('maps', mapSchema, source.maps, errors);
+  const cargoEntries = indexRegistry<typeof cargoSchema>(
+    'cargos',
+    cargoSchema,
+    source.cargos,
+    errors,
+  );
+  const structureEntries = indexRegistry<typeof structureSchema>(
+    'structures',
+    structureSchema,
+    source.structures,
+    errors,
+  );
 
   const resolvedClasses: ResolvedMovementClass[] = classEntries.map((entry, index) => ({
     id: entry.id,
     index,
   }));
   const classIndex = new Map<string, number>(resolvedClasses.map((c) => [c.id, c.index]));
+
+  const resolvedCargos: ResolvedCargo[] = cargoEntries.map((entry, index) => ({
+    id: entry.id,
+    index,
+  }));
+  const cargoIndex = new Map<string, number>(resolvedCargos.map((c) => [c.id, c.index]));
 
   const resolvedSurfaces: ResolvedSurface[] = surfaceEntries.map((entry, index) => {
     const costs = new Array<number>(resolvedClasses.length).fill(-1);
@@ -148,9 +209,57 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
       }
       costs[ci] = cost;
     }
-    return { id: entry.id, index, costs, speedBp: entry.speedBp, color: entry.color };
+    let deposit: number | undefined;
+    if (entry.deposit !== undefined) {
+      const cargo = cargoIndex.get(entry.deposit);
+      if (cargo === undefined) {
+        errors.push(`surfaces: '${entry.id}' deposit references unknown cargo '${entry.deposit}'`);
+      } else {
+        deposit = cargo;
+      }
+    }
+    return {
+      id: entry.id,
+      index,
+      costs,
+      speedBp: entry.speedBp,
+      color: entry.color,
+      ...(deposit !== undefined ? { deposit } : {}),
+    };
   });
   const surfaceIdToIndex = new Map<string, number>(resolvedSurfaces.map((s_) => [s_.id, s_.index]));
+
+  // Pack logistics config: cycle length drives every per-cycle conversion.
+  const configResult = s.validate(logisticsConfigSchema, source.logistics);
+  if (!configResult.ok) {
+    errors.push(`logistics${configResult.path.slice(1)}: ${configResult.message}`);
+  }
+  const config = configResult.ok
+    ? configResult.value
+    : {
+        cycleSeconds: 1,
+        vehicle: { load: 1, speed: 1 },
+        lowThresholdBp: 0,
+        lowSpeedBp: 0,
+        hpBandsBp: [],
+        roadLevels: [{ multiplierBp: 10000 }],
+      };
+  const cycleTicks = Math.max(1, Math.round(config.cycleSeconds * TICKS_PER_SECOND));
+  const logistics: ResolvedLogisticsConfig = {
+    cycleTicks,
+    vehicleLoadMilli: Math.round(config.vehicle.load * MILLI),
+    // speed (cells/s) × cycleTicks × 10 cost units / TICKS_PER_SECOND.
+    vehicleTravelPerCycle: floorDiv(
+      Math.round(config.vehicle.speed * MILLI) * cycleTicks * 10,
+      TICKS_PER_SECOND * MILLI,
+    ),
+    lowThresholdBp: config.lowThresholdBp,
+    lowSpeedBp: config.lowSpeedBp,
+    hpBandsBp: config.hpBandsBp,
+    roadLevels: config.roadLevels,
+  };
+
+  const resolveStores = createStoreResolver(cargoIndex, cycleTicks, errors);
 
   const resolvedUnits: ResolvedUnit[] = unitEntries.map((entry, index) => {
     const movementClass = classIndex.get(entry.movementClass);
@@ -159,14 +268,21 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
         `units: '${entry.id}' references unknown movement class '${entry.movementClass}'`,
       );
     }
+    const stores = resolveStores(`units: '${entry.id}'`, entry.stores);
+    const weapon = resolveWeapon(`units: '${entry.id}'`, entry.weapon, cargoIndex, errors);
     return {
       id: entry.id,
       index,
       cellsPerTick: entry.speed / TICKS_PER_SECOND,
       radius: entry.radius,
       movementClass: movementClass ?? -1,
+      hp: entry.hp,
+      ...(stores !== undefined ? { stores } : {}),
+      ...(weapon !== undefined ? { weapon } : {}),
     };
   });
+
+  const resolvedStructures = resolveStructures(structureEntries, cargoIndex, resolveStores, errors);
 
   const resolvedMaps: ResolvedMap[] = mapEntries.map((entry, index) => {
     const decoded = decodeMap(entry, (id) => surfaceIdToIndex.get(id));
@@ -206,5 +322,8 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
     movementClasses: makeRegistry(resolvedClasses),
     units: makeRegistry(resolvedUnits),
     maps: makeRegistry(resolvedMaps),
+    cargos: makeRegistry(resolvedCargos),
+    structures: makeRegistry(resolvedStructures),
+    logistics,
   };
 }

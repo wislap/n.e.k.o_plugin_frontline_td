@@ -14,7 +14,10 @@ import { createMovementModule, MoveCommand } from './index';
 const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
-const GOLDEN_HASH = 'c006e56dd7fd21f5';
+// M3-B1 changed the serialized state shape (blocked layer + overlay
+// state); M3-C added ore_field cells to proto_01, which changes the
+// serialized surface layer — same code paths, different content.
+const GOLDEN_HASH = '73a378b0dde0b4d6';
 
 function makeSim() {
   const db = loadContent();

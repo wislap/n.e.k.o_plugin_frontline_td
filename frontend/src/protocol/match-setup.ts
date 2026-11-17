@@ -15,7 +15,7 @@ const packSchema = s.object({
 const factionSchema = s.object({
   id: s.factionId(),
   archetype: s.optional(s.contentId()),
-  controller: s.enumOf(['local', 'none'] as const),
+  controller: s.enumOf(['local', 'none', 'dev_raid'] as const),
   carryIn: s.object({
     unlocks: s.array(s.contentId(), { maxLength: 512 }),
   }),
@@ -31,6 +31,19 @@ const factionSchema = s.object({
         }),
         { maxLength: 64 },
       ),
+      // Start structures, spawned complete at top-left x,y.
+      structures: s.optional(
+        s.array(
+          s.object({
+            structure: s.contentId(),
+            x: s.int({ min: 0 }),
+            y: s.int({ min: 0 }),
+          }),
+          { maxLength: 64 },
+        ),
+      ),
+      // Initial warehouse stock: cargo id -> units.
+      stock: s.optional(s.record(s.int({ min: 0 }), { maxLength: 64 })),
     }),
   ),
 });

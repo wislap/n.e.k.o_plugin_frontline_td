@@ -9,6 +9,7 @@ export function dijkstra(
   nodeCount: number,
   seeds: readonly [number, number][],
   neighbors: (node: number, visit: (to: number, cost: number) => void) => void,
+  maxCost?: number,
 ): Int32Array {
   const dist = new Int32Array(nodeCount).fill(UNREACHABLE);
   // Flat parallel arrays: heapCost[i], heapNode[i].
@@ -79,9 +80,14 @@ export function dijkstra(
     if (cost !== dist[node]) {
       continue; // stale entry
     }
+    if (maxCost !== undefined && cost > maxCost) {
+      break; // the heap is ordered: every remaining node is at least as far
+    }
     neighbors(node, (to, edgeCost) => {
       const next = cost + edgeCost;
-      if (next < (dist[to] ?? UNREACHABLE)) {
+      // Nodes beyond maxCost are never recorded: distances are exact up to
+      // the bound and UNREACHABLE beyond it.
+      if (next < (dist[to] ?? UNREACHABLE) && (maxCost === undefined || next <= maxCost)) {
         dist[to] = next;
         push(next, to);
       }

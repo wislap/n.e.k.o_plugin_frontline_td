@@ -71,6 +71,10 @@ export function makeWorld(rows: string[], units: SpawnUnit[]): World {
   const grid = makeGrid(rows);
   const terrain = createTerrainApi(grid, SURFACES);
   const pathing = createPathingModule(terrain, 1);
+  // Same wiring as sim-registry: blocked cells invalidate pathing caches.
+  terrain.onBlockedChange((cells) => {
+    pathing.api.invalidateCells(cells);
+  });
   const goals: number[] = [];
   const released: number[] = [];
   const pathingApi: PathingApi = {

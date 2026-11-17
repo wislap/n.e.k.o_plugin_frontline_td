@@ -3,6 +3,8 @@ import { defineSnapshotChannel } from '../core/index';
 import { defineGridLayer } from '../kernel/index';
 import type { SimModule } from '../kernel/index';
 import { createQueuedController, createSimulation } from '../kernel/index';
+import { Faction, InWorld } from '../kernel/index';
+import type { EntityHandle } from '../core/index';
 import { baseConfig, F1 } from '../kernel/testing/helpers';
 import { basePackManifest } from '../content/packs';
 import { toFactionId } from '../core/index';
@@ -224,6 +226,34 @@ describe('createWorkerHandler', () => {
     expect(posted?.v).not.toBe(shared);
     expect(Array.from(posted?.v ?? [])).toEqual(Array.from(shared));
     expect(transfer).toContain(posted?.v.buffer);
+  });
+
+  it('attaches the inspection for the current target to every snapshot', () => {
+    let spawned: EntityHandle | null = null;
+    const inspectModule: SimModule = {
+      id: 'frontline_td:test.wh.inspect',
+      install(builder) {
+        builder.onStart((ctx) => {
+          spawned = ctx.spawn([[Faction, { id: F1 }], [InWorld]]);
+        });
+        builder.inspector('frontline_td:test.wh.inspect.section', () => ({ tag: 'unit' }));
+      },
+    };
+    const { handler, advance, snapshots } = makeHandler([layerModule(), inspectModule]);
+    handler.onMessage({ kind: 'start', setup: setup() });
+    advance(0);
+    advance(50);
+    expect(snapshots()[0]?.inspection).toBeNull();
+    handler.onMessage({ kind: 'inspect', handle: spawned });
+    advance(50);
+    const inspection = snapshots()[1]?.inspection;
+    expect(inspection?.handle).toBe(spawned);
+    expect(inspection?.sections['frontline_td:test.wh.inspect.section']).toEqual({
+      tag: 'unit',
+    });
+    handler.onMessage({ kind: 'inspect', handle: null });
+    advance(50);
+    expect(snapshots()[2]?.inspection).toBeNull();
   });
 
   it('dispatches set_speed and toggle_pause without errors', () => {

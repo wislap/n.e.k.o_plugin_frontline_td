@@ -6,6 +6,7 @@ import type {
   EventDef,
   FactionId,
   FactionRelation,
+  Inspection,
   IntentDef,
   RngState,
   Serializable,
@@ -22,6 +23,7 @@ import type {
 } from './components';
 import type { GridLayerRef, GridLayerWriter } from './layers';
 import type { Phase } from './phases';
+import type { ModifierSource, StatRef } from './stats';
 
 export type ReadView<F extends FieldMap> = {
   readonly [K in keyof F]: ReadonlyNumberArray;
@@ -68,6 +70,12 @@ export interface SystemContext {
   writeLayer(writer: GridLayerWriter, faction?: FactionId): FieldArray;
   reject(reason: string): void;
   ownedBy(handle: EntityHandle, faction: FactionId): boolean;
+  // Effective stat for an entity: base plus the entity's active modifiers
+  // (adds sum, mul_bp sums into one clamped basis-point multiplier).
+  stat(stat: StatRef, id: EntityId, base: number): number;
+  // The entity's active modifiers sorted by (stat id, source id) — the
+  // explanation data behind stat().
+  modifiersOf(id: EntityId): readonly ModifierSource[];
 }
 
 export interface SystemSpec {
@@ -124,6 +132,13 @@ export interface SimBuilder {
   // onStart entities exist before tick 0. emit/read/schedule/reject throw
   // inside a hook. Hooks run in registration order.
   onStart(fn: (ctx: SystemContext) => void): void;
+  // Contributes a section to Simulation.inspect for entities this module
+  // explains (returns null to omit). Runs read-only: emit/read/schedule/
+  // reject/write/spawn/despawn/add/remove throw inside the callback.
+  inspector(
+    id: string,
+    fn: (ctx: SystemContext, entity: EntityId, observer: FactionId) => Serializable | null,
+  ): void;
 }
 
 export interface SimModule {
@@ -155,4 +170,7 @@ export interface Simulation {
   probes(): Record<string, number>;
   serialize(): Serializable;
   hash(): string;
+  // Read-only explanation for the UI: null when the handle is invalid or not
+  // owned by the observer. Does not advance or mutate the sim.
+  inspect(observer: FactionId, handle: EntityHandle): Inspection | null;
 }

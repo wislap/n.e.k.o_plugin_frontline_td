@@ -3,6 +3,7 @@
 // kernel into its bundle.
 import { parseContentId } from './content-id';
 import type { FactionId } from './faction';
+import type { EntityHandle } from './handle';
 import type { Schema } from './schema';
 import type { Tick } from './time';
 
@@ -118,6 +119,19 @@ export type CommandRejectedPayload = {
   issuer: FactionId;
   reason: string;
 };
+
+// Read-only per-entity explanation produced by Simulation.inspect: the
+// entity's active modifiers plus every non-null module inspector section.
+export interface Inspection {
+  handle: EntityHandle;
+  modifiers: {
+    stat: string;
+    source: string;
+    op: 'add' | 'mul_bp';
+    value: number;
+  }[];
+  sections: Record<string, Serializable>;
+}
 
 export const COMMAND_REJECTED: EventDef<CommandRejectedPayload> = defineEvent(
   'frontline_td:kernel.command_rejected',

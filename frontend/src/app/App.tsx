@@ -29,7 +29,7 @@ export function App({
   return (
     <main>
       <GameCanvas client={client} db={db} map={map} panTracker={panTracker} />
-      <Hud client={client} />
+      <Hud client={client} db={db} />
       {panelOpen && <DebugPanel client={client} />}
     </main>
   );

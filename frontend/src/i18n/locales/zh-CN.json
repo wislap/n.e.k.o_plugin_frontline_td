@@ -23,13 +23,96 @@
       "spectate": "观战视角",
       "tactical": "战术视角"
     },
-    "selected": "已选中 {{count}} 个单位",
-    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD/方向键 移动 | 右键 移动命令 | ` 调试",
+    "selected": "已选中 {{count}} 个",
+    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD 平移 | 右键 移动 | G 开工 | X 拆除 | L 物流 | Esc 取消 | ` 调试",
     "rejected": "命令被拒绝：{{reason}}",
     "reject_reason": {
       "invalid_target": "目标不可通行",
       "no_units": "没有可指挥的单位",
       "other": "未知原因"
     }
+  },
+  "cargo": {
+    "ore": "矿石",
+    "material": "材料",
+    "energy": "能量",
+    "ammo": "弹药"
+  },
+  "structure": {
+    "main_base": "主基地",
+    "station": "前哨站",
+    "supply_depot": "补给站",
+    "miner": "采矿机",
+    "power_plant": "发电厂",
+    "ammo_factory": "弹药厂",
+    "turret": "炮塔"
+  },
+  "unit": {
+    "robot": "机器人"
+  },
+  "reason": {
+    "out_of_bounds": "超出地图边界",
+    "terrain": "地形不可通行",
+    "uneven": "地面不平整",
+    "occupied": "格子被占用",
+    "reserved": "已被蓝图预留",
+    "needs_deposit": "需要矿脉",
+    "not_covered": "不在服务范围内",
+    "not_connected": "范围内没有物流节点",
+    "no_stock": "仓库缺货",
+    "disconnected": "未接入物流网络",
+    "no_capacity": "链路运力不足",
+    "units_in_way": "有单位挡路",
+    "invalid_target": "目标不可通行",
+    "no_units": "没有可指挥的单位",
+    "no_targets": "没有可操作的目标",
+    "not_buildable": "不可建造",
+    "invalid_order": "优先级无效",
+    "none": "-"
+  },
+  "suggest": {
+    "not_covered": "建在覆盖范围内或增建节点",
+    "no_stock": "生产或调运更多货物",
+    "disconnected": "放置节点把它接入网络",
+    "no_capacity": "升级链路或另建一条路线",
+    "units_in_way": "把单位移开"
+  },
+  "state": {
+    "blueprint": "蓝图",
+    "waiting": "待开工",
+    "site": "建造中",
+    "operational": "运转中",
+    "demolishing": "拆除中"
+  },
+  "prod": {
+    "ready": "就绪",
+    "producing": "生产中",
+    "waiting_inputs": "等待原料",
+    "output_full": "产物已满"
+  },
+  "class": {
+    "lifeline": "生命线",
+    "construction": "建造",
+    "production": "生产",
+    "reserve": "储备"
+  },
+  "mod": {
+    "energy_low": "能量不足",
+    "energy_empty": "能量耗尽"
+  },
+  "stock": {
+    "title": "仓库",
+    "priorities": "优先级：{{order}}（点击交换）"
+  },
+  "panel": {
+    "selected": "已选中 {{count}} 个",
+    "multi_hint": "G 开工蓝图 | X 拆除/取消",
+    "loading": "正在读取…",
+    "hp": "HP {{hp}}/{{max}}",
+    "weapon_ready": "武器就绪",
+    "weapon_reloading": "武器还需 {{ticks}} tick 就绪",
+    "ammo": "弹药 {{count}}",
+    "production": "生产",
+    "export": "外运"
   }
 }

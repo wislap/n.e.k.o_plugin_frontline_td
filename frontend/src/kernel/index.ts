@@ -10,7 +10,9 @@ export type {
 } from './components';
 export { defineGridLayer } from './layers';
 export type { GridLayerRef, GridLayerType, GridLayerWriter } from './layers';
-export { ContainedIn, Faction, InWorld } from './contracts';
+export { ContainedIn, Faction, InWorld, OPERATIONAL_EXCLUDE, UnderConstruction } from './contracts';
+export { defineModifier, defineStat, statSources } from './stats';
+export type { ModifierOp, ModifierRef, ModifierSource, StatKind, StatRef } from './stats';
 export { PHASES, phaseIndex } from './phases';
 export type { Phase } from './phases';
 export { createQueuedController } from './controllers';

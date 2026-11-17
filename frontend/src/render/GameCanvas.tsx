@@ -1,32 +1,40 @@
-// Game canvas (M2 C2): an R3F <Canvas> filling the viewport behind the
-// HUD, plus the input bridge that turns pointer intents into picks,
-// selections, and commands.
+// Game canvas (M2 C2 + M3 D): an R3F <Canvas> filling the viewport
+// behind the HUD, plus the input bridge that turns pointer intents into
+// picks, selections, and commands. Intent handling lives in
+// render/input-dispatch.ts.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBoxStore } from '../client/box-store';
-import { useCameraStore } from '../client/camera-store';
+import { useBuildStore } from '../client/build-store';
+import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
+import { BeamsLayer } from '../features/combat/render/index';
+import {
+  GhostPreview,
+  StructuresLayer,
+  structureKindHeight,
+} from '../features/construction/render/index';
+import { StructuresChannel, type ConstructionStructures } from '../features/construction/protocol';
+import { LogisticsOverlay } from '../features/logistics/render/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
 import { TerrainMesh } from '../features/terrain/render/index';
-import { MoveCommand } from '../features/movement/protocol';
+import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
-import type { Intent } from '../input/intents';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
-import { visibleGroundHeight } from './camera/math';
-import { pickGround } from './picking';
-import { interpolatedUnits } from './unit-pos';
+import { HpBars, type HpBarItem } from './hp-bars';
+import { makeDispatch } from './input-dispatch';
 import { terrainY } from './world';
 
 const BACKGROUND = '#0b1020';
-const CLICK_RADIUS_CELLS = 0.6;
 const MARKER_COLOR = '#ffe08a';
 const SKY_COLOR = '#bcd4ff';
 const GROUND_LIGHT_COLOR = '#3a2f22';
+const UNIT_BAR_TOP = 0.8;
 
 export interface GameCanvasProps {
   client: SimClient;
@@ -35,14 +43,35 @@ export interface GameCanvasProps {
   panTracker: PanTracker;
 }
 
+// Damaged-unit bars from the dense units channel.
+function unitHpItems(pair: SnapshotPair): HpBarItem[] {
+  const units = pair.latest?.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+  if (units === undefined) {
+    return [];
+  }
+  const items: HpBarItem[] = [];
+  for (let i = 0; i < units.handles.length; i++) {
+    items.push({
+      x: units.x[i] ?? 0,
+      y: units.y[i] ?? 0,
+      top: UNIT_BAR_TOP,
+      w: 0.9,
+      bp: units.hpBp[i] ?? 10000,
+    });
+  }
+  return items;
+}
+
 // Inside <Canvas>: pointer intents need the live camera for ray casting.
 function InputBridge({
   client,
+  db,
   mapWidth,
   mapHeight,
   heights,
 }: {
   client: SimClient;
+  db: ContentDb;
   mapWidth: number;
   mapHeight: number;
   heights: ArrayLike<number>;
@@ -52,129 +81,16 @@ function InputBridge({
   const size = useThree((s) => s.size);
   useEffect(() => {
     const el = gl.domElement;
-    const raycaster = new THREE.Raycaster();
-    const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
-      const rect = el.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((sx - rect.left) / rect.width) * 2 - 1,
-        -((sy - rect.top) / rect.height) * 2 + 1,
-      );
-      raycaster.setFromCamera(ndc, camera);
-      return pickGround(
-        {
-          origin: {
-            x: raycaster.ray.origin.x,
-            y: raycaster.ray.origin.y,
-            z: raycaster.ray.origin.z,
-          },
-          dir: {
-            x: raycaster.ray.direction.x,
-            y: raycaster.ray.direction.y,
-            z: raycaster.ray.direction.z,
-          },
-        },
-        heights,
-        mapWidth,
-        mapHeight,
-      );
-    };
-
-    const dispatch = (intent: Intent): void => {
-      const now = performance.now();
-      switch (intent.kind) {
-        case 'camera.zoom': {
-          useCameraStore.getState().zoomToward(intent.delta, groundAt(intent.x, intent.y));
-          return;
-        }
-        case 'camera.pan_px': {
-          const cam = useCameraStore.getState();
-          // Ground-anchored approximation: convert screen pixels to cells
-          // using the current visible ground extent.
-          const cpp = visibleGroundHeight(cam.mode, cam.zoom) / size.height;
-          cam.panBy(intent.dx * cpp, intent.dy * cpp);
-          return;
-        }
-        case 'select.click': {
-          const ground = groundAt(intent.x, intent.y);
-          const store = useSelectionStore.getState();
-          if (ground === null) {
-            if (!intent.additive) {
-              store.clear();
-            }
-            return;
-          }
-          const observer = client.snapshots().latest?.observer ?? -1;
-          const units = interpolatedUnits(client.snapshots(), now);
-          let best: number | null = null;
-          let bestDist = CLICK_RADIUS_CELLS;
-          for (const [handle, u] of units) {
-            if (u.faction !== observer) {
-              continue;
-            }
-            const d = Math.hypot(u.x - ground.x, u.y - ground.y);
-            if (d <= bestDist) {
-              bestDist = d;
-              best = handle;
-            }
-          }
-          if (best !== null) {
-            store.setSelection(new Set([best]), intent.additive);
-          } else if (!intent.additive) {
-            store.clear();
-          }
-          return;
-        }
-        case 'select.box': {
-          const rect = el.getBoundingClientRect();
-          const observer = client.snapshots().latest?.observer ?? -1;
-          const units = interpolatedUnits(client.snapshots(), now);
-          const picked = new Set<number>();
-          const v = new THREE.Vector3();
-          for (const [handle, u] of units) {
-            if (u.faction !== observer) {
-              continue;
-            }
-            const y = terrainY(heights, mapWidth, mapHeight, u.x, u.y);
-            v.set(u.x, y, u.y).project(camera);
-            const px = ((v.x + 1) / 2) * rect.width + rect.left;
-            const py = ((1 - v.y) / 2) * rect.height + rect.top;
-            const box = {
-              x0: Math.min(intent.x0, intent.x1),
-              y0: Math.min(intent.y0, intent.y1),
-              x1: Math.max(intent.x0, intent.x1),
-              y1: Math.max(intent.y0, intent.y1),
-            };
-            if (px >= box.x0 && px <= box.x1 && py >= box.y0 && py <= box.y1) {
-              picked.add(handle);
-            }
-          }
-          useSelectionStore.getState().setSelection(picked, intent.additive);
-          return;
-        }
-        case 'command.move_to': {
-          const ground = groundAt(intent.x, intent.y);
-          if (ground === null) {
-            return;
-          }
-          const selected = [...useSelectionStore.getState().selected];
-          if (selected.length === 0) {
-            return;
-          }
-          client.submit({
-            type: MoveCommand.type,
-            payload: {
-              units: selected,
-              x: Math.floor(ground.x),
-              y: Math.floor(ground.y),
-            },
-          });
-          useSelectionStore.getState().markMoveTarget(ground.x, ground.y, now);
-          return;
-        }
-        default:
-      }
-    };
-
+    const dispatch = makeDispatch({
+      client,
+      db,
+      mapWidth,
+      mapHeight,
+      heights,
+      camera,
+      size,
+      rect: () => el.getBoundingClientRect(),
+    });
     return installPointer(
       el,
       dispatch,
@@ -182,10 +98,37 @@ function InputBridge({
         useBoxStore.getState().setBox(box);
       },
       (event) => ({ x: event.clientX, y: event.clientY }),
+      { getMode: () => (useBuildStore.getState().kind === null ? 'normal' : 'build') },
     );
-  }, [gl, camera, size, client, heights, mapWidth, mapHeight]);
+  }, [gl, camera, size, client, db, heights, mapWidth, mapHeight]);
 
   return null;
+}
+
+// Damaged-structure bars from the structures channel.
+function makeStructureHpItems(db: ContentDb) {
+  return (pair: SnapshotPair): HpBarItem[] => {
+    const channel = pair.latest?.channels[StructuresChannel.id] as
+      ConstructionStructures | undefined;
+    if (channel === undefined) {
+      return [];
+    }
+    const items: HpBarItem[] = [];
+    for (let i = 0; i < channel.handles.length; i++) {
+      const kind = db.structures.byIndex(channel.kind[i] ?? 0);
+      if (kind === undefined) {
+        continue;
+      }
+      items.push({
+        x: (channel.x[i] ?? 0) + kind.footprint.w / 2,
+        y: (channel.y[i] ?? 0) + kind.footprint.h / 2,
+        top: structureKindHeight(db, channel.kind[i] ?? 0),
+        w: Math.max(kind.footprint.w, kind.footprint.h),
+        bp: channel.hpBp[i] ?? 10000,
+      });
+    }
+    return items;
+  };
 }
 
 // Short-lived ring at the last move-command target.
@@ -249,6 +192,7 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
   const heights = (snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID] ?? grid.heights) as ArrayLike<number>;
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
+  const structureHpItems = useMemo(() => makeStructureHpItems(db), [db]);
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
@@ -264,6 +208,13 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               ramps={grid.ramps}
               surfaceColors={surfaceColors}
             />
+            <StructuresLayer
+              client={client}
+              db={db}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+            />
             <UnitsLayer
               client={client}
               heights={heights}
@@ -271,9 +222,32 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               mapHeight={grid.height}
               radii={radii}
             />
+            <HpBars
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+              collect={unitHpItems}
+            />
+            <HpBars
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+              collect={structureHpItems}
+            />
+            <LogisticsOverlay client={client} db={db} map={map} heights={heights} />
+            <GhostPreview client={client} db={db} map={map} heights={heights} />
+            <BeamsLayer
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+            />
             <MoveMarker heights={heights} mapWidth={grid.width} mapHeight={grid.height} />
             <InputBridge
               client={client}
+              db={db}
               mapWidth={grid.width}
               mapHeight={grid.height}
               heights={heights}

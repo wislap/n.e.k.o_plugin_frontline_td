@@ -1,0 +1,202 @@
+// Base-pack structures: main base is the faction warehouse, the station
+// is a mid-range relay with the largest vehicle pool, the supply depot
+// extends coverage and holds reserves. Miner, power plant and ammo
+// factory are the batch-C producers; the turret is the base defence.
+import { contentId } from '../../core/index';
+
+export const structures = [
+  {
+    id: contentId('frontline_td:main_base'),
+    footprint: { w: 4, h: 4 },
+    hp: 1000,
+    // Not buildable: start structures only (no `build` block).
+    node: { connect: 24, service: 12, vehicles: 20, warehouse: true },
+    stores: [
+      // Energy generation feeds the warehouse for free via self-attach.
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 500,
+        class: 'reserve',
+        export: true,
+        ratePerSecond: 2,
+      },
+    ],
+    // Refines ore into material while it sits in the warehouse.
+    producer: {
+      inputs: { 'frontline_td:ore': 1 },
+      outputs: { 'frontline_td:material': 1 },
+      time: 1,
+    },
+  },
+  {
+    id: contentId('frontline_td:station'),
+    footprint: { w: 2, h: 2 },
+    hp: 200,
+    build: {
+      cost: { 'frontline_td:material': 20 },
+      time: 6,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    node: { connect: 20, service: 4, vehicles: 8 },
+    stores: [
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 400,
+        class: 'reserve',
+      },
+    ],
+  },
+  {
+    id: contentId('frontline_td:supply_depot'),
+    footprint: { w: 2, h: 2 },
+    hp: 300,
+    build: {
+      cost: { 'frontline_td:material': 30 },
+      time: 8,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    node: { connect: 10, service: 10, vehicles: 3 },
+    stores: [
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 100,
+        class: 'reserve',
+      },
+      {
+        cargo: contentId('frontline_td:ammo'),
+        capacity: 100,
+        class: 'reserve',
+      },
+    ],
+  },
+  {
+    id: contentId('frontline_td:miner'),
+    footprint: { w: 2, h: 2 },
+    hp: 250,
+    requiresDeposit: contentId('frontline_td:ore'),
+    build: {
+      cost: { 'frontline_td:material': 15 },
+      time: 5,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    stores: [
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 10,
+        class: 'production',
+      },
+      {
+        cargo: contentId('frontline_td:ore'),
+        capacity: 20,
+        class: 'production',
+        export: true,
+      },
+    ],
+    // 0.2 energy -> 1 ore every 2 s.
+    producer: {
+      inputs: { 'frontline_td:energy': 0.2 },
+      outputs: { 'frontline_td:ore': 1 },
+      time: 2,
+    },
+  },
+  {
+    id: contentId('frontline_td:power_plant'),
+    footprint: { w: 3, h: 3 },
+    hp: 250,
+    build: {
+      cost: { 'frontline_td:material': 30 },
+      time: 8,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    stores: [
+      {
+        cargo: contentId('frontline_td:ore'),
+        capacity: 10,
+        class: 'production',
+      },
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 50,
+        class: 'production',
+        export: true,
+      },
+    ],
+    // 1 ore -> 5 energy every 2 s.
+    producer: {
+      inputs: { 'frontline_td:ore': 1 },
+      outputs: { 'frontline_td:energy': 5 },
+      time: 2,
+    },
+  },
+  {
+    id: contentId('frontline_td:ammo_factory'),
+    footprint: { w: 3, h: 3 },
+    hp: 250,
+    build: {
+      cost: { 'frontline_td:material': 30 },
+      time: 10,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    stores: [
+      {
+        cargo: contentId('frontline_td:material'),
+        capacity: 10,
+        class: 'production',
+      },
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 10,
+        class: 'production',
+      },
+      {
+        cargo: contentId('frontline_td:ammo'),
+        capacity: 40,
+        class: 'production',
+        export: true,
+      },
+    ],
+    // 1 material + 1 energy -> 2 ammo every 2 s.
+    producer: {
+      inputs: { 'frontline_td:material': 1, 'frontline_td:energy': 1 },
+      outputs: { 'frontline_td:ammo': 2 },
+      time: 2,
+    },
+  },
+  {
+    id: contentId('frontline_td:turret'),
+    footprint: { w: 1, h: 1 },
+    hp: 150,
+    build: {
+      cost: { 'frontline_td:material': 25 },
+      time: 6,
+      demolishTime: 3,
+      salvageBp: 5000,
+    },
+    stores: [
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 20,
+        class: 'lifeline',
+        ratePerSecond: -0.1,
+      },
+      {
+        cargo: contentId('frontline_td:ammo'),
+        capacity: 60,
+        class: 'lifeline',
+      },
+    ],
+    // Kinetic: 8-cell reach, 6 damage every 0.4 s, 1 ammo per shot.
+    weapon: {
+      range: 8,
+      damage: 6,
+      cooldown: 0.4,
+      delivery: 'instant',
+      cost: { cargo: contentId('frontline_td:ammo'), amount: 1 },
+    },
+  },
+] as const;

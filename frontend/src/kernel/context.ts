@@ -39,6 +39,8 @@ import {
   resolve,
 } from './internals';
 import type { GridLayerRef, GridLayerWriter } from './layers';
+import { allModifierSources, combineStat, statSources } from './stats';
+import type { ModifierSource, StatRef } from './stats';
 import { queueDespawn, queueSpawn } from './structural';
 import type { FieldValues, ReadView, SpawnInit, SystemContext, WriteView } from './types';
 
@@ -114,6 +116,13 @@ function requireNotOnStart(i: SimInternals, op: string): void {
   }
 }
 
+// Inspector callbacks are read-only: every mutating context method throws.
+function requireNotInspector(i: SimInternals, op: string): void {
+  if (i.inInspector) {
+    throw new Error(`ctx.${op} is not available inside an inspector callback`);
+  }
+}
+
 export function createContext(i: SimInternals): SystemContext {
   function read<F extends FieldMap>(ref: ComponentRef<F>): ReadView<F>;
   function read<P extends Serializable>(def: EventDef<P> | IntentDef<P>): P[];
@@ -121,6 +130,7 @@ export function createContext(i: SimInternals): SystemContext {
     requireNotOnStart(i, 'read');
     const candidate = arg as { kind?: string; type?: string };
     if (candidate.kind === 'event' || candidate.kind === 'intent') {
+      requireNotInspector(i, 'read');
       return readChannel(i, candidate.type ?? '');
     }
     const ref = arg as ComponentRef;
@@ -136,6 +146,7 @@ export function createContext(i: SimInternals): SystemContext {
     read,
 
     write<F extends FieldMap>(writer: ComponentWriter<F>): WriteView<F> {
+      requireNotInspector(i, 'write');
       requireIssuedWriter(i, writer);
       const storage = ensureComponent(i, writer.ref);
       return storage.fields as unknown as WriteView<F>;
@@ -162,10 +173,12 @@ export function createContext(i: SimInternals): SystemContext {
     },
 
     spawn(init: SpawnInit): EntityHandle {
+      requireNotInspector(i, 'spawn');
       return queueSpawn(i, init, () => addEntity(i.world));
     },
 
     despawn(handle: EntityHandle): void {
+      requireNotInspector(i, 'despawn');
       queueDespawn(i, handle);
     },
 
@@ -174,11 +187,13 @@ export function createContext(i: SimInternals): SystemContext {
       handle: EntityHandle,
       values?: Partial<FieldValues<F>>,
     ): void {
+      requireNotInspector(i, 'addComponent');
       requireIssuedWriter(i, writer);
       i.structural.push({ kind: 'add', writer, handle, values });
     },
 
     removeComponent<F extends FieldMap>(writer: ComponentWriter<F>, handle: EntityHandle): void {
+      requireNotInspector(i, 'removeComponent');
       requireIssuedWriter(i, writer);
       i.structural.push({ kind: 'remove', writer, handle });
     },
@@ -220,6 +235,7 @@ export function createContext(i: SimInternals): SystemContext {
 
     emit<P extends Serializable>(def: EventDef<P> | IntentDef<P>, payload: P): void {
       requireNotOnStart(i, 'emit');
+      requireNotInspector(i, 'emit');
       const state = assertRunning(i);
       if (!state.allowedEmits.has(def.type) || i.emitDefs.get(def.type) !== def) {
         throw new Error(
@@ -236,6 +252,7 @@ export function createContext(i: SimInternals): SystemContext {
       handles: readonly EntityHandle[],
     ): void {
       requireNotOnStart(i, 'schedule');
+      requireNotInspector(i, 'schedule');
       if (!i.effects.has(type)) {
         throw new Error(`no effect handler registered for '${type}'`);
       }
@@ -292,6 +309,7 @@ export function createContext(i: SimInternals): SystemContext {
 
     reject(reason: string): void {
       requireNotOnStart(i, 'reject');
+      requireNotInspector(i, 'reject');
       const issuer = i.commandIssuer;
       if (issuer === undefined) {
         throw new Error('ctx.reject is only available inside a command handler');
@@ -317,6 +335,43 @@ export function createContext(i: SimInternals): SystemContext {
         return false;
       }
       return storage.fields['id']?.[id] === faction;
+    },
+
+    stat(stat: StatRef, id: EntityId, base: number): number {
+      requireNotOnStart(i, 'stat');
+      let add = 0;
+      let mul = 0;
+      for (const source of statSources(stat)) {
+        const storage = i.storages.get(source);
+        if (storage === undefined || !hasComponent(i.world, id, source)) {
+          continue;
+        }
+        const value = storage.fields['value']?.[id] ?? 0;
+        if (source.op === 'add') {
+          add += value;
+        } else {
+          mul += value;
+        }
+      }
+      return combineStat(stat.kind, base, add, mul);
+    },
+
+    modifiersOf(id: EntityId): readonly ModifierSource[] {
+      requireNotOnStart(i, 'modifiersOf');
+      const out: ModifierSource[] = [];
+      for (const source of allModifierSources()) {
+        const storage = i.storages.get(source);
+        if (storage === undefined || !hasComponent(i.world, id, source)) {
+          continue;
+        }
+        out.push({
+          stat: source.stat.id,
+          source: source.id,
+          op: source.op,
+          value: storage.fields['value']?.[id] ?? 0,
+        });
+      }
+      return out;
     },
   };
   return ctx;

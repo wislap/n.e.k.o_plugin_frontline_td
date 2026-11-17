@@ -23,4 +23,12 @@ export const surfaces: readonly SurfaceContent[] = [
   },
   { id: contentId('frontline_td:deep_water'), costs: {}, speedBp: 5000, color: '#1f3f7f' },
   { id: contentId('frontline_td:rock'), costs: {}, speedBp: 10000, color: '#7a7a7a' },
+  {
+    // Ore deposit field: ground-like movement, marked for miners.
+    id: contentId('frontline_td:ore_field'),
+    costs: { 'frontline_td:ground': 10 },
+    speedBp: 10000,
+    color: '#8a7a3c',
+    deposit: contentId('frontline_td:ore'),
+  },
 ];

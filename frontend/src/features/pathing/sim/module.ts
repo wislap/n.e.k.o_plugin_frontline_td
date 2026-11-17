@@ -39,11 +39,6 @@ export function createPathingModule(
   terrain: TerrainApi,
   classCount: number,
 ): { module: SimModule; api: PathingApi } {
-  const graphs: ClassGraph[] = [];
-  for (let cls = 0; cls < classCount; cls++) {
-    graphs.push(buildClassGraph(terrain, cls));
-  }
-
   const goals = new Map<number, Goal>();
   const goalByKey = new Map<number, number>();
   const freeIds: number[] = [];
@@ -54,7 +49,10 @@ export function createPathingModule(
   const scratch: Direction = { dx: 0, dy: 0 };
   // Portal node index by cell, per class — used to continue a field across
   // sector borders at portal cells.
-  let nodeIndexByCell = graphs.map(buildNodeIndex);
+  let nodeIndexByCell: Map<number, number>[] = [];
+  // Rebuilt on state load: the terrain blocked overlay is restored before
+  // pathing's load runs, and graphs must reflect it (see sim-registry order).
+  let graphs: ClassGraph[] = [];
   function buildNodeIndex(clsGraph: ClassGraph): Map<number, number> {
     const map = new Map<number, number>();
     for (let n = 0; n < clsGraph.graph.nodeCell.length; n++) {
@@ -62,6 +60,16 @@ export function createPathingModule(
     }
     return map;
   }
+  function rebuildGraphs(): void {
+    graphs = [];
+    for (let cls = 0; cls < classCount; cls++) {
+      graphs.push(buildClassGraph(terrain, cls));
+    }
+    nodeIndexByCell = graphs.map(buildNodeIndex);
+    portalDists.clear();
+    fields.clear();
+  }
+  rebuildGraphs();
 
   function goalKey(x: number, y: number, cls: number): number {
     return (cls * terrain.height + y) * terrain.width + x;
@@ -337,6 +345,9 @@ export function createPathingModule(
             });
             goalByKey.set(goalKey(entry.x, entry.y, entry.cls), entry.id);
           }
+          // The blocked overlay may differ from construction time: rebuild
+          // all class graphs and derived caches against the restored terrain.
+          rebuildGraphs();
         },
       });
     },

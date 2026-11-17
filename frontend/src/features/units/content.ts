@@ -1,8 +1,11 @@
 // Units feature content schema (ADR 0022). The sim module arrives with the
 // movement batch; the content registry already exists so maps and movement
-// classes can validate against it.
+// classes can validate against it. `stores` reuses the logistics store
+// profile (e.g. the robot's energy battery).
 import { s } from '../../core/index';
 import type { Infer } from '../../core/index';
+import { weaponSchema } from '../combat/content';
+import { storeProfileSchema } from '../logistics/content';
 
 export const unitSchema = s.object({
   id: s.contentId(),
@@ -10,5 +13,8 @@ export const unitSchema = s.object({
   speed: s.number({ min: 0.1, max: 20 }),
   radius: s.number({ min: 0.1, max: 2 }),
   movementClass: s.contentId(),
+  hp: s.int({ min: 1, max: 2_000_000_000 }),
+  stores: s.optional(s.array(storeProfileSchema, { maxLength: 4 })),
+  weapon: s.optional(weaponSchema),
 });
 export type UnitContent = Infer<typeof unitSchema>;

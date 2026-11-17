@@ -9,6 +9,7 @@ import type { QueuedController, SimConfig } from '../kernel/index';
 import { createQueuedController, createSimulation } from '../kernel/index';
 import type { MatchSetup } from '../protocol/index';
 import type { Resolved } from '../runtime/worker-handler';
+import { createDevRaidController } from './dev-raid-controller';
 import { createSimModules, RNG_STREAMS } from './sim-registry';
 
 export interface ResolveOptions {
@@ -62,8 +63,32 @@ export function resolveSetup(
       }
       units.push({ kind: unit.index, x: entry.x, y: entry.y, count: entry.count });
     }
-    if (units.length > 0) {
-      starts.push({ faction: faction.id, units });
+    const stock = new Map<number, number>();
+    for (const [cargoId, units_] of Object.entries(faction.start?.stock ?? {})) {
+      const cargo = db.cargos.byId(cargoId);
+      if (cargo === undefined) {
+        return { error: `unknown cargo '${cargoId}' in start stock` };
+      }
+      stock.set(cargo.index, units_);
+    }
+    const structures: { kind: number; x: number; y: number }[] = [];
+    for (const entry of faction.start?.structures ?? []) {
+      const structure = db.structures.byId(entry.structure);
+      if (structure === undefined) {
+        return { error: `unknown structure '${entry.structure}'` };
+      }
+      if (
+        entry.x + structure.footprint.w > map.width ||
+        entry.y + structure.footprint.h > map.height
+      ) {
+        return {
+          error: `start structure ${entry.x},${entry.y} is outside map '${map.id}'`,
+        };
+      }
+      structures.push({ kind: structure.index, x: entry.x, y: entry.y });
+    }
+    if (units.length > 0 || stock.size > 0 || structures.length > 0) {
+      starts.push({ faction: faction.id, units, stock, structures });
     }
   }
 
@@ -73,6 +98,11 @@ export function resolveSetup(
     if (faction.controller === 'local') {
       localQueue = createQueuedController(faction.id);
       controllers.push(localQueue);
+    } else if (faction.controller === 'dev_raid') {
+      // Dev-only raider: sends idle units toward the map's player_start
+      // point every 45 s (m3 batch C). Replaced by M4's director.
+      const target = map.points['player_start'] ?? { x: 0, y: 0 };
+      controllers.push(createDevRaidController(faction.id, target));
     }
   }
 

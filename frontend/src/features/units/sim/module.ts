@@ -2,9 +2,9 @@
 // cells) and the dense per-tick unit snapshot channel. Component ownership
 // per ADR 0019/0020; fog arrives in M5, so all units are visible for now.
 import type { EntityId, FactionId } from '../../../core/index';
-import type { ContentDb } from '../../../content/index';
+import type { ContentDb, ResolvedUnit } from '../../../content/index';
 import { Faction, InWorld } from '../../../kernel/index';
-import type { SimModule, SystemContext } from '../../../kernel/index';
+import type { SimModule, SpawnInit, SystemContext } from '../../../kernel/index';
 import { MoveTarget, moverComponents, Position } from '../../movement/sim/index';
 import { spiralOffsets } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
@@ -20,15 +20,39 @@ export interface StartUnit {
   count: number;
 }
 
+export interface StartStructure {
+  // Structure content index; spawned complete at top-left x,y.
+  kind: number;
+  x: number;
+  y: number;
+}
+
 export interface FactionStart {
   faction: FactionId;
   units: readonly StartUnit[];
+  // cargo index -> units; consumed by logistics' warehouse stock on start.
+  stock?: ReadonlyMap<number, number>;
+  // Consumed by construction: complete structures spawned on start.
+  structures?: readonly StartStructure[];
+}
+
+// Injected snapshot readouts: hp bp (default full) and energy bp
+// (default 0xFFFF = no energy slot).
+export interface UnitReadouts {
+  hpBp?(ctx: SystemContext, id: number): number;
+  energyBp?(ctx: SystemContext, id: number): number;
 }
 
 export function createUnitsModule(
   db: ContentDb,
   terrain: TerrainApi,
   starts: readonly FactionStart[],
+  // Extra spawn parts injected per unit kind (e.g. logistics' CargoStore
+  // battery). Composed after the mover components.
+  unitParts: readonly ((unit: ResolvedUnit) => SpawnInit)[] = [],
+  // Channel readouts injected by the app (combat's healthFraction and
+  // logistics' energy fill) so units stays feature-agnostic.
+  readouts: UnitReadouts = {},
 ): SimModule {
   return {
     id: 'frontline_td:units',
@@ -59,6 +83,7 @@ export function createUnitsModule(
                 [InWorld],
                 [UnitKind, { kind: group.kind }],
                 ...moverComponents(x + 0.5, y + 0.5, unit.cellsPerTick, unit.radius, cls),
+                ...unitParts.flatMap((part) => part(unit)),
               ]);
               placed += 1;
             }
@@ -86,6 +111,8 @@ export function createUnitsModule(
           kind: new Uint16Array(n),
           faction: new Uint16Array(n),
           moving: new Uint8Array(n),
+          hpBp: new Uint16Array(n),
+          energyBp: new Uint16Array(n),
         };
         for (let i = 0; i < n; i++) {
           const id = ids[i] ?? 0;
@@ -96,6 +123,8 @@ export function createUnitsModule(
           out.kind[i] = kind.kind[id] ?? 0;
           out.faction[i] = faction.id[id] ?? 0;
           out.moving[i] = (target.active[id] ?? 0) === 1 ? 1 : 0;
+          out.hpBp[i] = readouts.hpBp?.(ctx, id) ?? 10000;
+          out.energyBp[i] = readouts.energyBp?.(ctx, id) ?? 0xffff;
         }
         return out;
       });

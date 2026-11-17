@@ -23,13 +23,96 @@
       "spectate": "Spectate",
       "tactical": "Tactical"
     },
-    "selected": "{{count}} units selected",
-    "hints": "Space pause | 1/2/3 speed | V camera | WASD/arrows pan | Right-click move | ` debug",
+    "selected": "{{count}} selected",
+    "hints": "Space pause | 1/2/3 speed | V camera | WASD pan | Right-click move | G activate | X demolish | L logistics | Esc cancel | ` debug",
     "rejected": "Command rejected: {{reason}}",
     "reject_reason": {
       "invalid_target": "target is impassable",
       "no_units": "no controllable units",
       "other": "unknown reason"
     }
+  },
+  "cargo": {
+    "ore": "Ore",
+    "material": "Material",
+    "energy": "Energy",
+    "ammo": "Ammo"
+  },
+  "structure": {
+    "main_base": "Main Base",
+    "station": "Station",
+    "supply_depot": "Supply Depot",
+    "miner": "Miner",
+    "power_plant": "Power Plant",
+    "ammo_factory": "Ammo Factory",
+    "turret": "Turret"
+  },
+  "unit": {
+    "robot": "Robot"
+  },
+  "reason": {
+    "out_of_bounds": "outside the map",
+    "terrain": "impassable terrain",
+    "uneven": "uneven ground",
+    "occupied": "cell occupied",
+    "reserved": "reserved by a blueprint",
+    "needs_deposit": "requires an ore deposit",
+    "not_covered": "outside service coverage",
+    "not_connected": "no network node in reach",
+    "no_stock": "warehouse out of stock",
+    "disconnected": "not linked to the network",
+    "no_capacity": "link capacity exhausted",
+    "units_in_way": "units in the way",
+    "invalid_target": "target is impassable",
+    "no_units": "no controllable units",
+    "no_targets": "nothing to act on",
+    "not_buildable": "not buildable",
+    "invalid_order": "invalid priority order",
+    "none": "-"
+  },
+  "suggest": {
+    "not_covered": "build inside coverage or add a node",
+    "no_stock": "produce or deliver more cargo",
+    "disconnected": "place a node to link it",
+    "no_capacity": "upgrade links or add another route",
+    "units_in_way": "move the units away"
+  },
+  "state": {
+    "blueprint": "blueprint",
+    "waiting": "waiting",
+    "site": "under construction",
+    "operational": "operational",
+    "demolishing": "demolishing"
+  },
+  "prod": {
+    "ready": "ready",
+    "producing": "producing",
+    "waiting_inputs": "waiting for inputs",
+    "output_full": "output full"
+  },
+  "class": {
+    "lifeline": "lifeline",
+    "construction": "construction",
+    "production": "production",
+    "reserve": "reserve"
+  },
+  "mod": {
+    "energy_low": "low energy",
+    "energy_empty": "out of energy"
+  },
+  "stock": {
+    "title": "Warehouse",
+    "priorities": "Priority: {{order}} (click to swap)"
+  },
+  "panel": {
+    "selected": "{{count}} selected",
+    "multi_hint": "G activate blueprints | X demolish/cancel",
+    "loading": "Inspecting…",
+    "hp": "HP {{hp}}/{{max}}",
+    "weapon_ready": "Weapon ready",
+    "weapon_reloading": "Weapon ready in {{ticks}} ticks",
+    "ammo": "ammo {{count}}",
+    "production": "Production",
+    "export": "export"
   }
 }

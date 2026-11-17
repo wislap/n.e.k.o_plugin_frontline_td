@@ -32,7 +32,15 @@ describe('createSimModules', () => {
       'frontline_td:terrain',
       'frontline_td:pathing',
       'frontline_td:movement',
+      'frontline_td:logistics',
+      // Construction installs before units so start structures block
+      // their footprints before units spawn around them.
+      'frontline_td:construction',
       'frontline_td:units',
+      'frontline_td:production',
+      // Combat installs last so movement's and construction's died
+      // readers run before its despawn in the cleanup phase.
+      'frontline_td:combat',
     ]);
     expect(RNG_STREAMS.map((s) => s.id)).toContain(CONTROLLER_STREAM_ID);
   });

@@ -9,12 +9,15 @@ export const movementClassSchema = s.object({
 });
 export type MovementClassContent = Infer<typeof movementClassSchema>;
 
-// A class missing from `costs` is impassable on the surface.
+// A class missing from `costs` is impassable on the surface. `deposit`
+// marks harvestable ground (cargo id); requiresDeposit placement rules
+// look for it under the footprint.
 export const surfaceSchema = s.object({
   id: s.contentId(),
   costs: s.record(s.int({ min: 1, max: 1000 }), { maxLength: 16 }),
   speedBp: s.int({ min: 1, max: 20000 }),
   color: s.string({ pattern: /^#[0-9a-f]{6}$/ }),
+  deposit: s.optional(s.contentId()),
 });
 export type SurfaceContent = Infer<typeof surfaceSchema>;
 

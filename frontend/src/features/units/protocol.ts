@@ -9,6 +9,9 @@ export interface DenseUnits {
   kind: Uint16Array;
   faction: Uint16Array;
   moving: Uint8Array;
+  // hp fraction bp (10000 = full); energy bp, 0xFFFF = no energy slot.
+  hpBp: Uint16Array;
+  energyBp: Uint16Array;
 }
 
 export const DenseUnitsChannel = defineSnapshotChannel<DenseUnits>('frontline_td:units.dense');

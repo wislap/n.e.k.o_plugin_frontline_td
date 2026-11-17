@@ -8,4 +8,9 @@ export const DEFAULT_KEYMAP: Readonly<Record<string, Intent>> = {
   Digit3: { kind: 'runtime.set_speed', index: 3 },
   Backquote: { kind: 'dev.toggle_panel' },
   KeyV: { kind: 'camera.toggle_mode' },
+  KeyG: { kind: 'selection.activate' },
+  KeyX: { kind: 'selection.cancel' },
+  Delete: { kind: 'selection.cancel' },
+  KeyL: { kind: 'overlay.toggle_logistics' },
+  Escape: { kind: 'build.cancel' },
 };

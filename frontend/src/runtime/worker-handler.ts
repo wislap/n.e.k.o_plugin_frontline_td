@@ -1,7 +1,7 @@
 // Worker-side message handling and pump (ADR 0004): validates incoming
 // message kinds, builds the sim via an injected resolver, and posts snapshot
 // deltas plus throttled stats back to the main thread.
-import type { FactionId, Snapshot } from '../core/index';
+import type { EntityHandle, FactionId, Snapshot } from '../core/index';
 import type { QueuedController, Simulation } from '../kernel/index';
 import { parseMatchSetup } from '../protocol/index';
 import type { MainToWorker, MatchSetup, WorkerToMain } from '../protocol/index';
@@ -39,6 +39,8 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
   let host: SimHost | null = null;
   let started = false;
   let lastStatsPost = 0;
+  // Current inspect target; attached to every posted snapshot.
+  let inspectHandle: EntityHandle | null = null;
   // First posted snapshot carries every layer; later posts carry only the
   // union of keys changed since the previous post.
   let firstSnapshotPosted = false;
@@ -80,7 +82,14 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     for (const [key, value] of Object.entries(snapshot.channels)) {
       channels[key] = copyChannelValue(value, transfer);
     }
-    post({ kind: 'snapshot', snapshot: { ...snapshot, layers, channels } }, transfer);
+    post(
+      {
+        kind: 'snapshot',
+        snapshot: { ...snapshot, layers, channels },
+        inspection: host.inspect(inspectHandle),
+      },
+      transfer,
+    );
   }
 
   function copyChannelValue(value: unknown, transfer: Transferable[]): unknown {
@@ -174,6 +183,9 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
             return;
           }
           host.togglePause();
+          return;
+        case 'inspect':
+          inspectHandle = message.handle;
           return;
         default:
           postError('unknown worker message kind');

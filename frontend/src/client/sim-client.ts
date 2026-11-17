@@ -1,7 +1,7 @@
 // Main-thread client for the sim worker (ADR 0004). Snapshots are kept
 // outside React/zustand for later interpolation; only stats and errors reach
 // the stores.
-import type { Snapshot } from '../core/index';
+import type { EntityHandle, Inspection, Snapshot } from '../core/index';
 import type { MainToWorker, MatchSetup, WorkerToMain } from '../protocol/index';
 import { useRuntimeStore } from './runtime-store';
 
@@ -25,6 +25,10 @@ export interface SimClient {
   setSpeedIndex(index: number): void;
   togglePause(): void;
   snapshots(): SnapshotPair;
+  // Selects the entity the worker inspects; null clears the target.
+  inspect(handle: EntityHandle | null): void;
+  // Latest inspection attached to the most recent snapshot (null = none).
+  inspection(): Inspection | null;
 }
 
 export function createSimClient(worker: WorkerLike): SimClient {
@@ -35,6 +39,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
   let latest: Snapshot | null = null;
   let receivedAt = 0;
   let intervalMs = 0;
+  let latestInspection: Inspection | null = null;
 
   worker.addEventListener('message', (event) => {
     const message = event.data;
@@ -42,6 +47,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       const incoming = message.snapshot;
       const layers = { ...(latest?.layers ?? {}), ...incoming.layers };
       const completed: Snapshot = { ...incoming, layers };
+      latestInspection = message.inspection ?? null;
       previous = latest;
       latest = completed;
       const now = performance.now();
@@ -71,6 +77,12 @@ export function createSimClient(worker: WorkerLike): SimClient {
     },
     snapshots(): SnapshotPair {
       return { previous, latest, receivedAt, intervalMs };
+    },
+    inspect(handle: EntityHandle | null): void {
+      worker.postMessage({ kind: 'inspect', handle });
+    },
+    inspection(): Inspection | null {
+      return latestInspection;
     },
   };
 }

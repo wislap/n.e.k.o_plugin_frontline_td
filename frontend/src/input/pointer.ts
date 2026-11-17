@@ -50,6 +50,13 @@ interface PointerTarget {
   removeEventListener(type: string, listener: EventListener): void;
 }
 
+type PointerMode = 'normal' | 'build';
+
+export interface PointerOptions {
+  // Build mode reroutes clicks to build.place / build.cancel.
+  getMode?: () => PointerMode;
+}
+
 // The dispatch callback receives fully-formed intents; the live box rect
 // goes to onBox so the HUD can draw the overlay rectangle.
 export function installPointer(
@@ -57,6 +64,7 @@ export function installPointer(
   dispatch: (intent: Intent) => void,
   onBox: (box: { x0: number; y0: number; x1: number; y1: number } | null) => void,
   getPos: (event: PointLike) => { x: number; y: number },
+  options: PointerOptions = {},
 ): () => void {
   let downButton = -1;
   let downX = 0;
@@ -84,10 +92,11 @@ export function installPointer(
   };
 
   const move = (event: PointerEventLike): void => {
+    const pos = getPos(event);
     if (downButton === -1) {
+      dispatch({ kind: 'cursor.move', x: pos.x, y: pos.y });
       return;
     }
-    const pos = getPos(event);
     if (panning) {
       dispatch({ kind: 'camera.pan_px', dx: lastX - pos.x, dy: lastY - pos.y });
       lastX = pos.x;
@@ -106,7 +115,13 @@ export function installPointer(
     }
     const pos = getPos(event);
     const additive = event.shiftKey;
-    if (downButton === 0) {
+    if (options.getMode?.() === 'build') {
+      if (downButton === 0) {
+        dispatch({ kind: 'build.place', x: pos.x, y: pos.y, blueprint: additive });
+      } else if (downButton === 2) {
+        dispatch({ kind: 'build.cancel' });
+      }
+    } else if (downButton === 0) {
       if (boxing) {
         dispatch({ kind: 'select.box', x0: downX, y0: downY, x1: pos.x, y1: pos.y, additive });
       } else {

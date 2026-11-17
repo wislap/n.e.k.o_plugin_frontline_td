@@ -5,8 +5,15 @@ export { loadContent } from './load';
 export type {
   ContentDb,
   Registry,
+  ResolvedCargo,
+  ResolvedLogisticsConfig,
   ResolvedMap,
   ResolvedMovementClass,
+  ResolvedNodeProfile,
+  ResolvedProducer,
+  ResolvedStoreProfile,
+  ResolvedStructure,
   ResolvedSurface,
   ResolvedUnit,
+  ResolvedWeapon,
 } from './load';

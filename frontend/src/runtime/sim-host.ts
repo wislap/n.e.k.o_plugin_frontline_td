@@ -2,7 +2,7 @@
 // speed-multiplied accumulator, catch-up capped so a stalled tab slows the
 // game instead of spiralling, and stats for the debug panel.
 import { TICK_MS, toTick } from '../core/index';
-import type { FactionId, Snapshot } from '../core/index';
+import type { EntityHandle, FactionId, Inspection, Snapshot } from '../core/index';
 import type { QueuedController, Simulation } from '../kernel/index';
 import type { RuntimeStats } from '../protocol/index';
 import { SPEED_STEPS } from '../protocol/index';
@@ -25,6 +25,8 @@ export interface SimHost {
   submitLocal(command: { type: string; payload: unknown }): void;
   stats(nowMs: number): RuntimeStats;
   latestSnapshot(): Snapshot;
+  // Read-only entity inspection for the observer (null when unset/invalid).
+  inspect(handle: EntityHandle | null): Inspection | null;
   // Union of layer keys changed by every tick run since the last call —
   // the worker transport posts only these layers, and skipped ticks must
   // not lose their changes.
@@ -134,6 +136,10 @@ export function createSimHost(options: SimHostOptions): SimHost {
 
     latestSnapshot(): Snapshot {
       return sim.snapshot(observer);
+    },
+
+    inspect(handle: EntityHandle | null): Inspection | null {
+      return handle === null ? null : sim.inspect(observer, handle);
     },
 
     takeChangedLayers(): Set<string> {

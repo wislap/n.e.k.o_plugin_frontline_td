@@ -13,7 +13,7 @@ function sourceWith(overrides: Partial<ContentSource>): ContentSource {
 describe('loadContent', () => {
   it('loads the base pack and exposes registries', () => {
     const db = loadContent();
-    expect(db.surfaces.list.length).toBe(5);
+    expect(db.surfaces.list.length).toBe(6);
     expect(db.movementClasses.list).toHaveLength(1);
     expect(db.movementClasses.byId('frontline_td:ground')?.index).toBe(0);
     expect(db.units.byId('frontline_td:robot')?.cellsPerTick).toBeCloseTo(0.125);
@@ -52,6 +52,7 @@ describe('loadContent', () => {
         speed: 1,
         radius: 0.5,
         movementClass: contentId('frontline_td:flying'),
+        hp: 100,
       },
     ];
     expect(() => loadContent(sourceWith({ units }))).toThrow(/unknown movement class/);
@@ -84,6 +85,7 @@ describe('loadContent', () => {
         speed: 1,
         radius: 0.5,
         movementClass: contentId('frontline_td:flying'),
+        hp: 100,
       },
     ];
     let message = '';

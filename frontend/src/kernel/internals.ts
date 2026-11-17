@@ -19,7 +19,7 @@ import { createStorage } from './components';
 import type { GridLayerRef, GridLayerWriter, LayerStorage } from './layers';
 import { createLayerStorage } from './layers';
 import { COMMAND_REJECTED } from '../core/index';
-import { ContainedIn, Faction, InWorld } from './contracts';
+import { ContainedIn, Faction, InWorld, UnderConstruction } from './contracts';
 import type { CommandHandler, Controller, EffectHandler, SimConfig, SystemContext } from './types';
 
 export const CONTROLLER_STREAM_ID = 'frontline_td:controller';
@@ -153,6 +153,17 @@ export interface SimInternals {
   // inOnStart gates the context methods forbidden inside them.
   onStartHooks: { moduleId: string; fn: (ctx: SystemContext) => void }[];
   inOnStart: boolean;
+
+  // Read-only entity inspectors (Simulation.inspect); inInspector forbids
+  // every mutating context method while a callback runs.
+  inspectors: Map<
+    string,
+    {
+      moduleId: string;
+      fn: (ctx: SystemContext, entity: EntityId, observer: FactionId) => Serializable | null;
+    }
+  >;
+  inInspector: boolean;
 }
 
 const DEFAULT_CAPACITY = 1024;
@@ -243,12 +254,14 @@ export function createInternals(config: SimConfig): SimInternals {
     runState: null,
     onStartHooks: [],
     inOnStart: false,
+    inspectors: new Map(),
+    inInspector: false,
   };
 
   // Kernel contract components always exist, and the kernel's own rejection
   // event is pre-registered so command validation can emit it before any
   // module declares emits.
-  for (const ref of [Faction, InWorld, ContainedIn]) {
+  for (const ref of [Faction, InWorld, ContainedIn, UnderConstruction]) {
     ensureComponent(internals, ref);
   }
   internals.emitDefs.set(COMMAND_REJECTED.type, COMMAND_REJECTED);

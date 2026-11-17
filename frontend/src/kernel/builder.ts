@@ -1,5 +1,6 @@
 import type {
   CommandDef,
+  EntityId,
   EventDef,
   FactionId,
   IntentDef,
@@ -177,6 +178,17 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
 
     onStart(fn: (ctx: SystemContext) => void): void {
       i.onStartHooks.push({ moduleId, fn });
+    },
+
+    inspector(
+      id: string,
+      fn: (ctx: SystemContext, entity: EntityId, observer: FactionId) => Serializable | null,
+    ): void {
+      requireRegistryKey(id, 'inspector');
+      if (i.inspectors.has(id)) {
+        throw new Error(`duplicate inspector '${id}'`);
+      }
+      i.inspectors.set(id, { moduleId, fn });
     },
 
     probe(id: string, fn: (ctx: SystemContext) => number): void {

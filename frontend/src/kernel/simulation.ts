@@ -9,7 +9,7 @@ import { COMMAND_REJECTED, hashCanonical, s, toTick, validate } from '../core/in
 import { createBuilder, finalizeBuilder } from './builder';
 import { createContext, emitChannel, structuralDeps } from './context';
 import type { ChannelState, SimInternals, SystemRecord } from './internals';
-import { createInternals, layerArray } from './internals';
+import { createInternals, layerArray, resolve } from './internals';
 import { PHASES, phaseIndex } from './phases';
 import { restoreState, serializeState } from './serialize';
 import { applyStructural } from './structural';
@@ -302,6 +302,29 @@ function createSimulationFrom(i: SimInternals): Simulation {
     },
     hash() {
       return hashCanonical(serializeState(i));
+    },
+    inspect(observer, handle) {
+      const id = resolve(i, handle);
+      if (id === null || !ctx.ownedBy(handle, observer)) {
+        return null;
+      }
+      const sections: Record<string, Serializable> = {};
+      i.inInspector = true;
+      try {
+        for (const [inspectorId, inspector] of i.inspectors) {
+          const section = inspector.fn(ctx, id, observer);
+          if (section !== null) {
+            sections[inspectorId] = section;
+          }
+        }
+      } finally {
+        i.inInspector = false;
+      }
+      return {
+        handle,
+        modifiers: ctx.modifiersOf(id).map((source) => ({ ...source })),
+        sections,
+      };
     },
   };
 }

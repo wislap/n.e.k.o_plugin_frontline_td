@@ -36,6 +36,7 @@ export type {
   CommandRejectedPayload,
   EventDef,
   EventVisibility,
+  Inspection,
   IntentDef,
   Serializable,
   SerializableTypedArray,
