@@ -8,6 +8,12 @@
 - `sim/index.ts`: `createMovementModule(terrain, pathing) → SimModule`；
   `MoveCommand`（payload `{ units: handle[], x, y }`）；
   组件 `Position` / `Velocity` / `Mover` / `MoveTarget`。
+- `protocol.ts`：`MoveIntent` / `StopIntent`（AI 与小队驱动单位的
+  正式路径，与 `MoveCommand` 共用同一结算函数 `applyMove`）、
+  `MoveOrdered` 事件。意图在 movement 相位开头按发出顺序结算，
+  校验句柄存活与 `Mover`；目标格对该移动类不可通行时吸附到
+  最近的可通行且可达格（出发生成螺旋，环 32），`MoveCommand`
+  仍拒绝不可通行目标。
 
 ## 拥有的组件
 - `Position {x,y:f64}`、`Velocity {x,y:f64}`、`Mover {speed,radius,cls}`、

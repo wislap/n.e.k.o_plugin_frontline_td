@@ -54,13 +54,18 @@ export interface ResolvedWeapon {
 export interface ResolvedProducer {
   inputs: readonly { cargo: number; milli: number }[];
   outputs: readonly { cargo: number; milli: number }[];
+  // Unit content ids produced per cycle (alternative to outputs).
+  unitOutput?: readonly string[];
   timeTicks: number;
+  // Optional ramp: latest entry with atTicks <= match tick wins.
+  ramp?: readonly { atTicks: number; timeTicks: number }[];
 }
 
 export interface ResolvedStructure {
   id: ContentId;
   index: number;
   footprint: { w: number; h: number };
+  core?: boolean;
   hp?: number;
   build?: ResolvedBuild;
   node?: ResolvedNodeProfile;
@@ -79,6 +84,9 @@ export const structureSchema = s.object({
   stores: s.optional(s.array(storeProfileSchema, { maxLength: 4 })),
   producer: s.optional(producerSchema),
   weapon: s.optional(weaponSchema),
+  // Faction core structure flag — modes read it via the Core component,
+  // never by content id.
+  core: s.optional(s.bool()),
 });
 
 export type StoreResolver = (
@@ -177,6 +185,7 @@ function resolveProducer(
   id: string,
   entry: Infer<typeof producerSchema>,
   cargoIndex: ReadonlyMap<string, number>,
+  unitIndex: ReadonlyMap<string, number>,
   errors: string[],
 ): ResolvedProducer {
   const amounts = (
@@ -194,16 +203,36 @@ function resolveProducer(
     }
     return out.sort((a, b) => a.cargo - b.cargo);
   };
+  const outputs = entry.outputs === undefined ? [] : amounts(entry.outputs, 'output');
+  const unitOutput = entry.unitOutput ?? [];
+  for (const unitId of unitOutput) {
+    if (!unitIndex.has(unitId)) {
+      errors.push(`structures: '${id}' producer unitOutput references unknown unit '${unitId}'`);
+    }
+  }
+  if (outputs.length === 0 && unitOutput.length === 0) {
+    errors.push(`structures: '${id}' producer has neither outputs nor unitOutput`);
+  }
+  const ramp =
+    entry.ramp === undefined
+      ? undefined
+      : entry.ramp.map((step) => ({
+          atTicks: step.atSeconds * TICKS_PER_SECOND,
+          timeTicks: Math.max(1, Math.round(step.seconds * TICKS_PER_SECOND)),
+        }));
   return {
     inputs: amounts(entry.inputs, 'input'),
-    outputs: amounts(entry.outputs, 'output'),
+    outputs,
+    ...(unitOutput.length > 0 ? { unitOutput } : {}),
     timeTicks: Math.max(1, Math.round(entry.time * TICKS_PER_SECOND)),
+    ...(ramp !== undefined ? { ramp } : {}),
   };
 }
 
 export function resolveStructures(
   entries: readonly Infer<typeof structureSchema>[],
   cargoIndex: ReadonlyMap<string, number>,
+  unitIndex: ReadonlyMap<string, number>,
   resolveStores: StoreResolver,
   errors: string[],
 ): ResolvedStructure[] {
@@ -228,7 +257,7 @@ export function resolveStructures(
     const producer =
       entry.producer === undefined
         ? undefined
-        : resolveProducer(entry.id, entry.producer, cargoIndex, errors);
+        : resolveProducer(entry.id, entry.producer, cargoIndex, unitIndex, errors);
     const weapon = resolveWeapon(`structures: '${entry.id}'`, entry.weapon, cargoIndex, errors);
     return {
       id: entry.id,
@@ -239,6 +268,7 @@ export function resolveStructures(
       ...(requiresDeposit !== undefined ? { requiresDeposit } : {}),
       ...(producer !== undefined ? { producer } : {}),
       ...(weapon !== undefined ? { weapon } : {}),
+      ...(entry.core === true ? { core: true } : {}),
       ...(node !== undefined
         ? {
             node: {

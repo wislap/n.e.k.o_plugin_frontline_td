@@ -43,14 +43,91 @@ function shotDistance(
   return Math.sqrt(dx * dx + dy * dy) - radius;
 }
 
-export function createCombatModule(): SimModule {
+export interface CombatModule extends SimModule {
+  // Nearest hostile (relation table) Targetable + InWorld entity id
+  // within `radius` of (x, y), ties by entity id. Reads the bucket grid
+  // built by the last combat_intent run — called from `orders` that is
+  // the previous tick's grid (one phase stale).
+  nearestHostile(
+    ctx: SystemContext,
+    faction: FactionId,
+    x: number,
+    y: number,
+    radius: number,
+    filter?: (id: EntityId) => boolean,
+  ): EntityId | null;
+  // The weapon's effective range (0 without a Weapon component).
+  weaponRange(ctx: SystemContext, id: EntityId): number;
+  // True when a hostile targetable is in fire range of the entity's
+  // weapon — the same test the fire system uses (weapon range minus
+  // the target's hit radius). Same bucket-grid staleness as
+  // nearestHostile when called from `orders`.
+  inWeaponReach(ctx: SystemContext, id: EntityId): boolean;
+}
+
+export function createCombatModule(): CombatModule {
+  // Target bucket grid, reused every tick (lists are emptied in place).
+  const buckets = new Map<number, number[]>();
+
   return {
     id: 'frontline_td:combat',
+
+    nearestHostile(ctx, faction, x, y, radius, filter) {
+      const pos = ctx.read(Position);
+      const fac = ctx.read(Faction);
+      const tar = ctx.read(Targetable);
+      const bx = Math.floor(x / BUCKET);
+      const by = Math.floor(y / BUCKET);
+      const reach = Math.ceil(radius / BUCKET) + 1;
+      let best: EntityId | null = null;
+      let bestD = Infinity;
+      for (let gy = by - reach; gy <= by + reach; gy++) {
+        for (let gx = bx - reach; gx <= bx + reach; gx++) {
+          for (const t of buckets.get(gy * 65536 + gx) ?? []) {
+            if (!ctx.isHostile(faction, (fac.id[t] ?? 0) as FactionId)) {
+              continue;
+            }
+            if (filter !== undefined && !filter(t as EntityId)) {
+              continue;
+            }
+            const dx = (pos.x[t] ?? 0) - x;
+            const dy = (pos.y[t] ?? 0) - y;
+            const d = Math.sqrt(dx * dx + dy * dy) - (tar.radius[t] ?? 0);
+            if (d <= radius && (d < bestD || (d === bestD && (best === null || t < best)))) {
+              bestD = d;
+              best = t as EntityId;
+            }
+          }
+        }
+      }
+      return best;
+    },
+
+    weaponRange(ctx, id) {
+      return ctx.read(Weapon).range[id] ?? 0;
+    },
+
+    inWeaponReach(ctx, id) {
+      const range = ctx.read(Weapon).range[id] ?? 0;
+      if (range <= 0) {
+        return false;
+      }
+      const pos = ctx.read(Position);
+      const fac = ctx.read(Faction);
+      return (
+        this.nearestHostile(
+          ctx,
+          (fac.id[id] ?? 0) as FactionId,
+          pos.x[id] ?? 0,
+          pos.y[id] ?? 0,
+          range,
+        ) !== null
+      );
+    },
+
     install(builder) {
       const healthW = builder.claimWriter(Health);
       const weaponW = builder.claimWriter(Weapon);
-      // Target bucket grid, reused every tick (lists are emptied in place).
-      const buckets = new Map<number, number[]>();
 
       // Acquire + fire: uniform bucket grid over hostile targetables,
       // rebuilt every tick. Keeps the current target while it stays

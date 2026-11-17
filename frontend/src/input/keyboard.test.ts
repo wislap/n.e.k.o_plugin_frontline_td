@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { intentForKey } from './keyboard';
 import { DEFAULT_KEYMAP } from './keymap';
 
-function event(overrides: Partial<{ code: string; repeat: boolean; target: EventTarget | null }>) {
+function event(
+  overrides: Partial<{
+    code: string;
+    repeat: boolean;
+    target: EventTarget | null;
+    ctrlKey: boolean;
+    metaKey: boolean;
+  }>,
+) {
   return { code: 'Space', repeat: false, target: null, ...overrides };
 }
 
@@ -11,12 +19,34 @@ describe('intentForKey', () => {
     expect(intentForKey(event({ code: 'Space' }), DEFAULT_KEYMAP)).toEqual({
       kind: 'runtime.toggle_pause',
     });
-    expect(intentForKey(event({ code: 'Digit2' }), DEFAULT_KEYMAP)).toEqual({
-      kind: 'runtime.set_speed',
-      index: 2,
+    expect(intentForKey(event({ code: 'Minus' }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'runtime.speed_step',
+      delta: -1,
+    });
+    expect(intentForKey(event({ code: 'Equal' }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'runtime.speed_step',
+      delta: 1,
     });
     expect(intentForKey(event({ code: 'Backquote' }), DEFAULT_KEYMAP)).toEqual({
       kind: 'dev.toggle_panel',
+    });
+  });
+
+  it('digit keys map to squad intents with the modifier filled in', () => {
+    expect(intentForKey(event({ code: 'Digit3' }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'squad.digit',
+      digit: 3,
+      ctrl: false,
+    });
+    expect(intentForKey(event({ code: 'Digit3', ctrlKey: true }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'squad.digit',
+      digit: 3,
+      ctrl: true,
+    });
+    expect(intentForKey(event({ code: 'Digit3', metaKey: true }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'squad.digit',
+      digit: 3,
+      ctrl: true,
     });
   });
 

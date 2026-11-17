@@ -1,0 +1,39 @@
+# squads
+
+## 职责
+编队指挥：把同类移动单位编成 squad，在 `orders` 阶段按
+`(tick + id) % 10 === 0` 错峰运行 AI，只通过 movement 的
+Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
+
+## 公开接口
+- `protocol.ts`：命令 `squads.create / assign / disband /
+  set_strength / order(guard|advance) / gather`，以及快照通道
+  `SquadsChannel`（己方全量，敌方公开视图：集结点、launchTick、
+  目标与存储路径）。
+- `sim/index.ts`：`createSquadsModule(deps)`、`SquadMember`。
+
+## 拥有的组件与状态
+- `SquadMember { squad }`（本模块写）。
+- 模块状态 `Map<squadId, Squad>` + 单调计数器，随存档序列化。
+- Squad 字段：faction、有序成员句柄、strength、order、phase、
+  engage 目标、lastGoal（≥2 格漂移才换目标）、可选 route。
+
+## 不变量
+- 命令先全部校验再修改；单位被 assign 前先退出原小队；玩家直接
+  下达的 MoveCommand 会把该成员移出小队（读 `MoveOrdered`）。
+- 空小队在下一次更新时删除；集结中小队保留到 launchTick。
+- 警戒（guard）：半径内锁定敌对目标后追击，目标跑出
+  radius + 4（leash）则放弃并返回；到达 advance 目标点自动转
+  guard（半径 6）。
+- 交战拆分：武器射程内有敌的成员停火站桩（StopIntent），其余
+  继续压上（MoveIntent）。
+- 补给：成员均带电池且平均能量 < 3000 bp 时撤向最近的己方覆盖
+  格（物流 `covered`），≥ 8000 bp 后返回原命令。
+- 增援：`units.spawned` 的新单位补进缺口最大
+  （strength − 成员数）的小队，平局取最小 id。
+- 集结（gather）：先走到集结点待命，到 launchTick 转为向目标
+  advance；命令下达时用 pathing 下降沿存储 ≤512 格的路线。
+- advance 目标不可达时改打最近的可达敌对建筑，摧毁后重新评估。
+
+## 对应设计章节
+- docs/adr/0026（意图与组件所有权）、docs/design/game_design.md。

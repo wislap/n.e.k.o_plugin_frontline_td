@@ -25,6 +25,7 @@ import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
 import { TerrainMesh } from '../features/terrain/render/index';
 import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
+import { ThreatsLayer } from '../features/squads/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
@@ -202,6 +203,7 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
   const heights = (snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID] ?? grid.heights) as ArrayLike<number>;
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
+  const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
   const structureHpItems = useMemo(() => makeStructureHpItems(db), [db]);
 
   return (
@@ -231,6 +233,13 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               mapWidth={grid.width}
               mapHeight={grid.height}
               radii={radii}
+              visuals={unitVisuals}
+            />
+            <ThreatsLayer
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
             />
             <HpBars
               client={client}

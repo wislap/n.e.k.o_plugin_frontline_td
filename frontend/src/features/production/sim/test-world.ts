@@ -27,6 +27,8 @@ import { createConstructionModule, Structure } from '../../construction/sim/inde
 import type { FactionStart } from '../../units/sim/index';
 import { structureParts as productionStructureParts } from './parts';
 import { createProductionModule } from './module';
+import { createUnitsModule } from '../../units/sim/index';
+import { unitParts as logisticsUnitParts } from '../../logistics/sim/index';
 
 const DB: ContentDb = loadContent();
 export const F1 = toFactionId(1);
@@ -97,6 +99,9 @@ export interface WorldOpts {
   entities?: readonly TestEnt[];
   starts?: readonly FactionStart[];
   factions?: readonly number[];
+  // Install the units module so units.spawn intents resolve.
+  withUnits?: boolean;
+  extraModules?: readonly SimModule[];
 }
 
 export interface BuiltWorld {
@@ -160,7 +165,11 @@ function buildWorld(opts: WorldOpts): BuiltWorld {
     logistics,
     construction,
     production,
+    ...(opts.withUnits === true
+      ? [createUnitsModule(DB, terrain.api, opts.starts ?? [], [logisticsUnitParts])]
+      : []),
     spawner,
+    ...(opts.extraModules ?? []),
   ];
   let sim: ReturnType<typeof createSimulation> | null = null;
   return {

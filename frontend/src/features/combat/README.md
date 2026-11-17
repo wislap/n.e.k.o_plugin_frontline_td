@@ -6,7 +6,10 @@
 
 ## 公开接口
 - `sim/index.ts`：`createCombatModule()`、`healthFraction(ctx, id)`
-  （bp，供物流运力档位与快照通道）、`unitParts`/`structureParts`
+  （bp，供物流运力档位与快照通道）、`nearestHostile(ctx, x, y,
+  range)` / `inWeaponReach(ctx, id)`（公共查询；后者与开火判定
+  同一公式 = 射程 + 目标半径，小队交战拆分用）、
+  `unitParts`/`structureParts`
   （Health 满血、Targetable、Weapon）、`Health`/`Targetable`/`Weapon`
   组件。
 - `protocol.ts`：`DamageIntent`（`frontline_td:combat.damage`，

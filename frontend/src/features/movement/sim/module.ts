@@ -13,11 +13,10 @@ import type {
 import { defineStat } from '../../../kernel/index';
 import type { PathingApi } from '../../pathing/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { MoveCommand } from '../protocol';
 import { MoveTarget, Mover, Position, Velocity } from './components';
+import { installMovementIntents } from './intents';
 import { lineWalkable } from './line';
 import { makeSeparate } from './separate';
-import { assignSlots, collectSlots } from './slots';
 
 // The movement speed stat: logistics' energy modifiers multiply it (ADR
 // 0025). With no modifiers stat() returns the base unchanged.
@@ -197,6 +196,8 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       posW = builder.claimWriter(Position);
       tgtW = builder.claimWriter(MoveTarget);
 
+      installMovementIntents(builder, terrain, pathing, tgtW);
+
       builder.system({ id: 'frontline_td:movement.steer', phase: 'movement', run: steer });
       builder.system({ id: 'frontline_td:movement.separate', phase: 'movement', run: separate });
       builder.system({ id: 'frontline_td:movement.integrate', phase: 'movement', run: integrate });
@@ -224,72 +225,6 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
             out.active[id] = 0;
           }
         },
-      });
-
-      builder.command(MoveCommand, (ctx, payload, issuer) => {
-        if (!terrain.inBounds(payload.x, payload.y)) {
-          ctx.reject('invalid_target');
-          return;
-        }
-        // Validate before mutating: a mid-loop reject must not leave earlier
-        // units with acquired goals or a half-applied order.
-        const mover = ctx.read(Mover);
-        const target = ctx.read(MoveTarget);
-        const ids: number[] = [];
-        const classes = new Set<number>();
-        for (const handle of payload.units) {
-          const id = ctx.resolve(handle);
-          if (id === null || !ctx.ownedBy(handle, issuer) || !ctx.has(Mover, id)) {
-            continue;
-          }
-          ids.push(id);
-          classes.add(mover.cls[id] ?? 0);
-        }
-        if (ids.length === 0) {
-          ctx.reject('no_units');
-          return;
-        }
-        for (const cls of classes) {
-          if (!terrain.passable(payload.x, payload.y, cls)) {
-            ctx.reject('invalid_target');
-            return;
-          }
-        }
-        const out = ctx.write(tgtW);
-        const pos = ctx.read(Position);
-        // One shared goal per movement class; each unit's slot keeps the
-        // group's formation around the target.
-        for (const cls of classes) {
-          const clsIds = ids.filter((id) => (mover.cls[id] ?? 0) === cls);
-          // Release old goals, then one shared-goal ref per unit (the goal
-          // id is the same for the whole class).
-          let goal = -1;
-          for (const id of clsIds) {
-            if ((target.active[id] ?? 0) !== 0) {
-              pathing.releaseGoal(target.goal[id] ?? 0);
-            }
-            goal = pathing.acquireGoal(payload.x, payload.y, cls);
-          }
-          const slots = collectSlots(
-            terrain,
-            (x, y) => pathing.directionAt(goal, x, y) !== null,
-            cls,
-            payload.x,
-            payload.y,
-            clsIds.length,
-          );
-          const assignment = assignSlots(
-            clsIds.map((id) => ({ id, x: pos.x[id] ?? 0, y: pos.y[id] ?? 0 })),
-            slots,
-          );
-          for (const id of clsIds) {
-            const slot = assignment.get(id) ?? { x: payload.x + 0.5, y: payload.y + 0.5 };
-            out.goal[id] = goal;
-            out.x[id] = slot.x;
-            out.y[id] = slot.y;
-            out.active[id] = 1;
-          }
-        }
       });
     },
   };

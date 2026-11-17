@@ -4,10 +4,12 @@
 import type { ContentDb } from '../../../content/index';
 import type { EntityId } from '../../../core/index';
 import type { SimModule } from '../../../kernel/index';
-import { InWorld, OPERATIONAL_EXCLUDE } from '../../../kernel/index';
+import { Faction, InWorld, OPERATIONAL_EXCLUDE } from '../../../kernel/index';
 import { ConsumeIntent, DepositIntent, SLOT_EXPORT } from '../../logistics/protocol';
 import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import type { CargoRead } from '../../logistics/sim/index';
+import { Position } from '../../movement/sim/index';
+import { SpawnIntent } from '../../units/protocol';
 import { Producer } from './components';
 
 // Total amount of a cargo across the store's slots.
@@ -47,17 +49,29 @@ export function createProductionModule(db: ContentDb): SimModule {
       builder.system({
         id: 'frontline_td:production.craft',
         phase: 'construction',
-        emits: [ConsumeIntent, DepositIntent],
+        emits: [ConsumeIntent, DepositIntent, SpawnIntent],
         run(ctx) {
           const prod = ctx.write(producerW);
           const prodR = ctx.read(Producer);
           const store = ctx.read(CargoStore);
+          const pos = ctx.read(Position);
+          const fac = ctx.read(Faction);
           for (const id of ctx.query([Producer, InWorld, CargoStore], OPERATIONAL_EXCLUDE)) {
             const kind = db.structures.byIndex(prodR.kind[id] ?? 0);
             const recipe = kind?.producer;
             const handle = ctx.handleOf(id as EntityId);
-            if (recipe === undefined || handle === null) {
+            if (recipe === undefined || handle === null || kind === undefined) {
               continue;
+            }
+            // Cycle length: ramp step function on match tick (latest
+            // entry with atTicks <= now wins), else recipe.timeTicks.
+            let timeTicks = recipe.timeTicks;
+            if (recipe.ramp !== undefined) {
+              for (const step of recipe.ramp) {
+                if (step.atTicks <= ctx.tick) {
+                  timeTicks = step.timeTicks;
+                }
+              }
             }
             const progress = prodR.progress[id] ?? 0;
             if (progress === 0) {
@@ -81,13 +95,28 @@ export function createProductionModule(db: ContentDb): SimModule {
               prod.progress[id] = 1;
             } else {
               const next = progress + 1;
-              if (next >= recipe.timeTicks) {
+              if (next >= timeTicks) {
                 for (const output of recipe.outputs) {
                   ctx.emit(DepositIntent, {
                     handle: Number(handle),
                     cargo: output.cargo,
                     amount: output.milli,
                   });
+                }
+                // Unit recipes emit a spawn intent per cycle; the exit
+                // point is the structure's bottom-edge centre and the
+                // units module spirals out from there.
+                const unitOutput = recipe.unitOutput;
+                if (unitOutput !== undefined && unitOutput.length > 0) {
+                  const nextIdx = ((prodR.cycle[id] ?? 0) + 1) % unitOutput.length;
+                  ctx.emit(SpawnIntent, {
+                    faction: fac.id[id] ?? 0,
+                    kind: unitOutput[prodR.cycle[id] ?? 0] as string,
+                    x: pos.x[id] ?? 0,
+                    y: (pos.y[id] ?? 0) + kind.footprint.h / 2 + 0.5,
+                    source: Number(handle),
+                  });
+                  prod.cycle[id] = nextIdx;
                 }
                 prod.progress[id] = 0;
               } else {
@@ -111,6 +140,15 @@ export function createProductionModule(db: ContentDb): SimModule {
           return null;
         }
         const progress = prodR.progress[id] ?? 0;
+        const unitOutput = recipe.unitOutput;
+        let timeTicks = recipe.timeTicks;
+        if (recipe.ramp !== undefined) {
+          for (const step of recipe.ramp) {
+            if (step.atTicks <= ctx.tick) {
+              timeTicks = step.timeTicks;
+            }
+          }
+        }
         const missing = recipe.inputs
           .filter((input) => storeAmount(store, id, input.cargo) < input.milli)
           .map((input) => input.cargo);
@@ -127,9 +165,12 @@ export function createProductionModule(db: ContentDb): SimModule {
                   ? 'output_full'
                   : 'ready',
           progress,
-          total: recipe.timeTicks,
+          total: timeTicks,
           missing,
           full,
+          ...(unitOutput !== undefined && unitOutput.length > 0
+            ? { nextUnit: unitOutput[(prodR.cycle[id] ?? 0) % unitOutput.length] }
+            : {}),
         };
       });
     },

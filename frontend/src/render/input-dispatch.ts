@@ -20,6 +20,8 @@ import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logi
 import { linkFlow } from '../features/logistics/render/index';
 import { extendRoute, linkPairs, nearestLink } from '../features/logistics/ui/index';
 import { MoveCommand } from '../features/movement/protocol';
+import { SquadsChannel, SquadsOrder, type SquadsSnapshot } from '../features/squads/protocol';
+import { routeMoveSelection } from '../client/squad-controls';
 import type { Intent } from '../input/intents';
 import { pickGround, type Ray } from './picking';
 import { interpolatedUnits } from './unit-pos';
@@ -326,14 +328,28 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         if (selected.length === 0) {
           return;
         }
-        client.submit({
-          type: MoveCommand.type,
-          payload: {
-            units: selected,
-            x: Math.floor(ground.x),
-            y: Math.floor(ground.y),
-          },
-        });
+        const x = Math.floor(ground.x);
+        const y = Math.floor(ground.y);
+        // Squad members are ordered through their squad — a plain
+        // MoveCommand on a member removes it from the squad (M4).
+        const latest = client.snapshots().latest;
+        const squads =
+          (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+        const routing = routeMoveSelection(selected, squads, latest?.observer ?? -1);
+        for (const squad of routing.squads) {
+          client.submit({
+            type: SquadsOrder.type,
+            payload: intent.guard
+              ? { squad, kind: 'guard', x, y }
+              : { squad, kind: 'advance', x, y },
+          });
+        }
+        if (routing.plain.length > 0) {
+          client.submit({
+            type: MoveCommand.type,
+            payload: { units: routing.plain, x, y },
+          });
+        }
         useSelectionStore.getState().markMoveTarget(ground.x, ground.y, now);
         return;
       }

@@ -18,6 +18,8 @@ const REJECT_CODES = [
   'not_buildable',
   'units_in_way',
   'invalid_order',
+  'invalid_units',
+  'no_squad',
 ] as const;
 // Waiting-reason codes reported by the construction inspector.
 const WAITING_CODES = [

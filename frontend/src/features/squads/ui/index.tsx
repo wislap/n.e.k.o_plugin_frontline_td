@@ -1,0 +1,1 @@
+export { SquadPanel } from './SquadPanel';

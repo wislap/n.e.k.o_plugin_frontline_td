@@ -230,7 +230,10 @@ export function createPathingModule(
   }
 
   function acquireGoal(x: number, y: number, cls: number): number {
-    const key = goalKey(x, y, cls);
+    // Goals are cells: quantize so callers may pass entity positions.
+    const gx = Math.floor(x);
+    const gy = Math.floor(y);
+    const key = goalKey(gx, gy, cls);
     const existing = goalByKey.get(key);
     if (existing !== undefined) {
       const goal = goals.get(existing);
@@ -240,7 +243,7 @@ export function createPathingModule(
       return existing;
     }
     const id = freeIds.length > 0 ? (freeIds.shift() ?? 0) : nextId++;
-    goals.set(id, { x, y, cls, refcount: 1 });
+    goals.set(id, { x: gx, y: gy, cls, refcount: 1 });
     goalByKey.set(key, id);
     return id;
   }

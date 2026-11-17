@@ -4,6 +4,8 @@ export interface KeyEventLike {
   code: string;
   repeat: boolean;
   target: EventTarget | null;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
 }
 
 // Duck-typed so the module stays testable without a DOM and usable in any
@@ -26,7 +28,15 @@ export function intentForKey(
   if (event.repeat || isTextEntryTarget(event.target)) {
     return null;
   }
-  return keymap[event.code] ?? null;
+  const intent = keymap[event.code];
+  if (intent === undefined) {
+    return null;
+  }
+  // Modifier-sensitive intents get the event's Ctrl/Cmd state filled in.
+  if (intent.kind === 'squad.digit') {
+    return { ...intent, ctrl: event.ctrlKey === true || event.metaKey === true };
+  }
+  return intent;
 }
 
 export function installKeyboard(

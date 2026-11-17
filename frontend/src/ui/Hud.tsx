@@ -15,6 +15,10 @@ import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb } from '../content/index';
 import { BuildMenu } from '../features/construction/ui/index';
 import { RoadPanel, StockPanel } from '../features/logistics/ui/index';
+import { SquadsChannel, type SquadsSnapshot } from '../features/squads/protocol';
+import { bannerThreat } from '../features/squads/render/index';
+import { SquadPanel } from '../features/squads/ui/index';
+import { formatClock } from '../client/match-info';
 import {
   displayState,
   exitDisplayMode,
@@ -39,7 +43,17 @@ const corner = {
 
 const TOAST_MS = 3000;
 
-export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
+export function Hud({
+  client,
+  db,
+  modeUi,
+}: {
+  client: SimClient;
+  db: ContentDb;
+  // Mode-provided overlay content (e.g. the assault end screen); the
+  // generic HUD never reads mode channels itself.
+  modeUi?: React.ReactNode;
+}) {
   const { t } = useTranslation();
   const stats = useRuntimeStore((s) => s.stats);
   const mode = useCameraStore((s) => s.mode);
@@ -50,6 +64,7 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
   const [toast, setToast] = useState<{ reason: string; tick: number } | null>(null);
   const [display, setDisplay] = useState<DisplayState>(() => displayState());
   const [displayMsg, setDisplayMsg] = useState<string | null>(null);
+  const [threat, setThreat] = useState<{ count: number; ticksLeft: number } | null>(null);
 
   // Track the host display state; the SDK is absent under Vite dev, in
   // which case supportedModes is empty and the button stays disabled.
@@ -77,6 +92,11 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
         }
       }
       lastTick = latest.tick;
+      // Director gather warning (M4): visible while any hostile squad
+      // is gathering.
+      const squads =
+        (latest.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+      setThreat(bannerThreat(squads, latest.observer, latest.tick));
     }, 100);
     return () => {
       clearInterval(id);
@@ -95,6 +115,8 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
         {t('hud.selected', { count: selected.size })}
       </div>
       <EntityPanel client={client} db={db} />
+      <SquadPanel client={client} />
+      {modeUi}
       <BuildMenu db={db} />
       <StockPanel client={client} db={db} />
       <RoadPanel client={client} db={db} />
@@ -136,6 +158,20 @@ export function Hud({ client, db }: { client: SimClient; db: ContentDb }) {
       >
         {t('hud.fullscreen')}
       </button>
+      {threat !== null && (
+        <div
+          style={{
+            ...corner,
+            top: 40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: '#ff8a7a',
+            fontWeight: 'bold',
+          }}
+        >
+          {t('hud.threat', { count: threat.count, time: formatClock(threat.ticksLeft) })}
+        </div>
+      )}
       {displayMsg !== null && (
         <div style={{ ...corner, top: 40, left: '50%', transform: 'translateX(-50%)' }}>
           {displayMsg}

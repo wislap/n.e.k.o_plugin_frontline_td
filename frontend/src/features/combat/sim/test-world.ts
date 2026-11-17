@@ -28,6 +28,7 @@ import {
 import type { FactionStart } from '../../units/sim/index';
 import { structureParts as combatStructureParts, unitParts as combatUnitParts } from './parts';
 import { createCombatModule } from './module';
+import { createUnitsModule } from '../../units/sim/index';
 import { Health } from './components';
 
 const DB: ContentDb = loadContent();
@@ -122,6 +123,8 @@ export interface WorldOpts {
   entities?: readonly TestEnt[];
   starts?: readonly FactionStart[];
   factions?: readonly number[];
+  // Install the units module (dense snapshot + spawn intent resolver).
+  withUnits?: boolean;
   // Extra modules appended after the spawner (e.g. test damage emitters).
   extraModules?: readonly SimModule[];
 }
@@ -133,6 +136,8 @@ export interface BuiltWorld {
   handles: EntityHandle[];
   terrain: TerrainApi;
   pathing: PathingApi;
+  logistics: ReturnType<typeof createLogisticsModule>;
+  combat: ReturnType<typeof createCombatModule>;
   issue(type: string, payload: Serializable, issuer?: FactionId): void;
   // Event payloads of `type` accumulated across every stepped tick
   // (snapshot events are per-tick; run() records them).
@@ -218,6 +223,14 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     construction,
     production,
     combat,
+    ...(opts.withUnits === true
+      ? [
+          createUnitsModule(DB, terrain.api, opts.starts ?? [], [
+            logisticsUnitParts,
+            combatUnitParts,
+          ]),
+        ]
+      : []),
     spawner,
     ...(opts.extraModules ?? []),
   ];
@@ -230,6 +243,8 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     handles,
     terrain: terrain.api,
     pathing: pathing.api,
+    logistics,
+    combat,
     get sim() {
       return sim as ReturnType<typeof createSimulation>;
     },

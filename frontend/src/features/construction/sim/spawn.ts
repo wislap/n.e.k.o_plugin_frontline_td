@@ -15,7 +15,7 @@ import {
 } from '../../logistics/sim/index';
 import { SLOT_SITE } from '../../logistics/protocol';
 import { Mover, Position } from '../../movement/sim/index';
-import { Blueprint, Construction, MODE_BUILD, Salvage, Structure } from './components';
+import { Blueprint, Construction, Core, MODE_BUILD, Salvage, Structure } from './components';
 import type { ConstructionEnv } from './env';
 import {
   footprintCells,
@@ -45,6 +45,7 @@ export function spawnStructure(
     [InWorld],
     [Structure, { kind: kind.index, x, y }],
     ...env.parts.flatMap((p) => p(kind, x, y, phase, ctx.tick)),
+    ...(phase === 'complete' && kind.core === true ? ([[Core]] as const) : []),
     ...(phase === 'site'
       ? ([
           [UnderConstruction],

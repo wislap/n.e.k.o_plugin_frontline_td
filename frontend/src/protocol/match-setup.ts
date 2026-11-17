@@ -15,7 +15,7 @@ const packSchema = s.object({
 const factionSchema = s.object({
   id: s.factionId(),
   archetype: s.optional(s.contentId()),
-  controller: s.enumOf(['local', 'none', 'dev_raid'] as const),
+  controller: s.enumOf(['local', 'none', 'director'] as const),
   carryIn: s.object({
     unlocks: s.array(s.contentId(), { maxLength: 512 }),
   }),

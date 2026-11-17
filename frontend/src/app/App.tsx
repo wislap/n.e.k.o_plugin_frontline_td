@@ -7,17 +7,20 @@ import { DebugPanel } from '../dev/DebugPanel';
 import type { PanTracker } from '../input/pan';
 import { GameCanvas } from '../render/GameCanvas';
 import { Hud } from '../ui/Hud';
+import { EndScreen } from '../modes/assault/ui/EndScreen';
 
 export function App({
   client,
   db,
   map,
   panTracker,
+  onRestart,
 }: {
   client: SimClient;
   db: ContentDb;
   map: ResolvedMap;
   panTracker: PanTracker;
+  onRestart: () => void;
 }) {
   const { t } = useTranslation();
   const panelOpen = useUiStore((state) => state.debugPanelOpen);
@@ -29,7 +32,7 @@ export function App({
   return (
     <main>
       <GameCanvas client={client} db={db} map={map} panTracker={panTracker} />
-      <Hud client={client} db={db} />
+      <Hud client={client} db={db} modeUi={<EndScreen client={client} onRestart={onRestart} />} />
       {panelOpen && <DebugPanel client={client} />}
     </main>
   );

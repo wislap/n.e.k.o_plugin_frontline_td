@@ -62,6 +62,8 @@ export interface ResolvedUnit {
   weapon?: ResolvedWeapon;
   // Logistics interception strength in basis points.
   interceptor?: { strengthBp: number };
+  // Render-only shape hint; always resolved (default cylinder ×1).
+  visual: { shape: 'cylinder' | 'cone' | 'box' | 'sphere'; scale: number };
 }
 
 export interface ResolvedCargo {
@@ -332,10 +334,18 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
       ...(entry.interceptor !== undefined
         ? { interceptor: { strengthBp: entry.interceptor.strength } }
         : {}),
+      visual: (entry.visual ?? { shape: 'cylinder', scale: 1 }) as ResolvedUnit['visual'],
     };
   });
 
-  const resolvedStructures = resolveStructures(structureEntries, cargoIndex, resolveStores, errors);
+  const unitIndex = new Map<string, number>(resolvedUnits.map((u) => [u.id, u.index]));
+  const resolvedStructures = resolveStructures(
+    structureEntries,
+    cargoIndex,
+    unitIndex,
+    resolveStores,
+    errors,
+  );
 
   const resolvedMaps: ResolvedMap[] = mapEntries.map((entry, index) => {
     const decoded = decodeMap(entry, (id) => surfaceIdToIndex.get(id));

@@ -32,6 +32,11 @@ export const Blueprint = defineComponent('frontline_td:blueprint', {
 // Refund pile shipped home through logistics export slots.
 export const Salvage = defineComponent('frontline_td:salvage', {});
 
+// Core tag: construction-owned flag present only on operational
+// structures whose content sets `core` (added at spawn-complete or on
+// site completion). Batch B's victory module reads it.
+export const Core = defineComponent('frontline_td:core', {});
+
 // A live road-build segment; `project` indexes the construction module's
 // serialized road-project list.
 export const RoadSegment = defineComponent('frontline_td:road_segment', {

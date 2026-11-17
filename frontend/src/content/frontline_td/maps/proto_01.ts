@@ -93,5 +93,9 @@ export const proto01: MapContent = {
     player_start: { x: 10, y: 52 },
     enemy_north: { x: 30, y: 4 },
     enemy_east: { x: 88, y: 32 },
+    // Rally on the west bank just north of the western ford (shallows
+    // at x≈56–58, y≈13–16): open ground reachable overland from
+    // enemy_north and across the mid-map land bridge from player_start.
+    enemy_rally: { x: 50, y: 14 },
   },
 };

@@ -67,7 +67,7 @@ export function serializeState(i: SimInternals): Serializable {
         seq: entry.seq,
         tick: entry.tick,
         phase: entry.phase,
-        payload: entry.payload,
+        payload: copySerializable(entry.payload),
       })),
     };
   }
@@ -107,7 +107,7 @@ export function serializeState(i: SimInternals): Serializable {
     tickEvents: i.tickEvents.map((event) => ({
       type: event.type,
       tick: event.tick,
-      payload: event.payload,
+      payload: copySerializable(event.payload),
     })),
     scheduled: {
       seq: i.scheduleSeq,
@@ -116,13 +116,24 @@ export function serializeState(i: SimInternals): Serializable {
         phase: effect.phase,
         seq: effect.seq,
         type: effect.type,
-        params: effect.params,
+        params: copySerializable(effect.params),
         handles: [...effect.handles],
       })),
     },
     rng,
     layers,
     changedLayers: [...i.lastChangedLayers],
+    // Controller private states, keyed by faction ascending. Present as
+    // an (often empty) object so the shape is stable for hashing.
+    controllerStates: Object.fromEntries(
+      [...i.controllers]
+        .sort((a, b) => Number(a.faction) - Number(b.faction))
+        .flatMap((controller) =>
+          controller.save === undefined
+            ? []
+            : [[String(controller.faction), copySerializable(controller.save())]],
+        ),
+    ),
     commands: {
       seq: i.commandSeq,
       log: i.commandLogEntries.map(copyEnvelope),
@@ -131,8 +142,30 @@ export function serializeState(i: SimInternals): Serializable {
         envelope: copyEnvelope(pending.envelope),
       })),
     },
-    moduleStates: Object.fromEntries([...i.moduleStates].map(([id, hooks]) => [id, hooks.save()])),
+    moduleStates: Object.fromEntries(
+      [...i.moduleStates].map(([id, hooks]) => [id, copySerializable(hooks.save())]),
+    ),
   };
+}
+
+// The serialized state must be a detached copy: module save hooks and
+// payloads may return live arrays/objects, and the source sim keeps
+// mutating them after serialize() returns.
+function copySerializable<T extends Serializable>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => copySerializable(v)) as T;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return value.slice() as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, Serializable> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = copySerializable(v);
+    }
+    return out as T;
+  }
+  return value;
 }
 
 function copyEnvelope(envelope: CommandEnvelope): {
@@ -145,7 +178,7 @@ function copyEnvelope(envelope: CommandEnvelope): {
     tick: envelope.tick,
     issuer: envelope.issuer,
     type: envelope.type,
-    payload: envelope.payload as Serializable,
+    payload: copySerializable(envelope.payload as Serializable),
   };
 }
 
@@ -174,6 +207,7 @@ export function restoreState(i: SimInternals, raw: Serializable): void {
     changedLayers: string[];
     commands: { seq: number; log: CommandEnvelope[]; pending: PendingCommand[] };
     moduleStates: Record<string, Serializable>;
+    controllerStates?: Record<string, Serializable>;
   };
   if (state.format !== 1) {
     throw new Error(`unsupported save format ${state.format}`);
@@ -295,5 +329,16 @@ export function restoreState(i: SimInternals, raw: Serializable): void {
 
   for (const [id, data] of Object.entries(state.moduleStates)) {
     i.moduleStates.get(id)?.load(data);
+  }
+
+  // Controller private states load before the first post-restore step so
+  // the restored controller decides from the same position the
+  // uninterrupted run's controller had.
+  const savedControllers = state.controllerStates ?? {};
+  for (const controller of i.controllers) {
+    const data = savedControllers[String(controller.faction)];
+    if (data !== undefined) {
+      controller.load?.(data);
+    }
   }
 }

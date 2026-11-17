@@ -21,6 +21,8 @@ export interface SnapshotPair {
 
 export interface SimClient {
   start(setup: MatchSetup): void;
+  // Discards buffered snapshots and restarts the worker sim (play-again).
+  restart(setup: MatchSetup): void;
   submit(command: { type: string; payload: unknown }): void;
   setSpeedIndex(index: number): void;
   togglePause(): void;
@@ -65,6 +67,14 @@ export function createSimClient(worker: WorkerLike): SimClient {
   return {
     start(setup: MatchSetup): void {
       worker.postMessage({ kind: 'start', setup });
+    },
+    restart(setup: MatchSetup): void {
+      previous = null;
+      latest = null;
+      receivedAt = 0;
+      intervalMs = 0;
+      latestInspection = null;
+      worker.postMessage({ kind: 'restart', setup });
     },
     submit(command: { type: string; payload: unknown }): void {
       worker.postMessage({ kind: 'command', command });

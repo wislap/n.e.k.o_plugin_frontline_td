@@ -53,7 +53,9 @@ describe('determinism (architecture §10)', () => {
       ticks: TICKS,
     });
     // Golden hash: update this literal only for intentional state changes.
-    expect(result.hash).toBe('d1202752d6fb108f');
+    // Changed for controllerStates: the save now carries per-controller
+    // serialized state (keyed by faction), so the hashed shape grew.
+    expect(result.hash).toBe('3463df842f13de07');
   });
 
   it('same scenario twice produces identical hash and command log', () => {

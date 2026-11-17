@@ -85,6 +85,8 @@ export interface LogisticsModule extends SimModule {
   ): boolean;
   // Energy fill bp across the entity's CargoStore (−1 = no energy slot).
   energyBp(ctx: SystemContext, id: EntityId): number;
+  // Warehouse stock in milli by cargo index (module state, not a component).
+  stockOf(faction: FactionId): readonly number[];
   // Pave cells at `level` in the road layer (never lowers a level).
   pave(cells: readonly { x: number; y: number }[], level: number): void;
   // The link between two node handles, oriented upstream -> downstream
@@ -149,7 +151,8 @@ export function createLogisticsModule(
       if (!terrain.inBounds(x, y)) {
         return false;
       }
-      return (ctx.layer(env.layerW.layer, faction)[y * terrain.width + x] ?? 0) !== 0;
+      const cell = Math.floor(y) * terrain.width + Math.floor(x);
+      return (ctx.layer(env.layerW.layer, faction)[cell] ?? 0) !== 0;
     },
     connectsToNetwork(ctx, faction, footprint, connect) {
       const ids = collectNodeIds(ctx, faction);
@@ -186,6 +189,9 @@ export function createLogisticsModule(
         return -1;
       }
       return Math.min(10000, floorDiv(amt * 10000, cap));
+    },
+    stockOf(faction) {
+      return stateOf(faction).stock;
     },
     pave(cells, level) {
       paveRoads(env, cells, level);

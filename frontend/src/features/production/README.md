@@ -13,7 +13,15 @@
   字符串分支。
 
 ## 拥有的组件
-- `Producer { kind, progress }`；progress 为 tick 计数，0 = 空闲。
+- `Producer { kind, progress, cycle }`；progress 为 tick 计数，
+  0 = 空闲；cycle 为 `unitOutput` 轮换索引。
+
+## 单位配方
+- `producer.unitOutput`：替代 cargo 输出的单位产出表，按 `cycle`
+  依次产出，产出后在结构下边缘外侧发 `units.spawn`。
+- `producer.ramp`：`[{ atSeconds, seconds }]` 阶梯表，取当前比赛
+  tick 之前最后一档作为生产周期；无 ramp 时用 `time`。
+- 无输入配方不消耗货物，也不要求挂靠/能量（虫巢等怪物建筑用）。
 
 ## 不变量
 - 系统每 tick 运行于 `construction` 阶段，排除 `UnderConstruction`。

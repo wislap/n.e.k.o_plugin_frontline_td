@@ -104,6 +104,12 @@ export interface Controller {
     rng: RngState;
     issue(type: string, payload: unknown): void;
   }): void;
+  // Optional persistence: save() is serialized into the sim state keyed
+  // by controller faction (it enters the state hash) and load() runs on
+  // restore before the first step. A controller that implements these
+  // must keep ALL mutable state inside them — nothing outside save/load.
+  save?(): Serializable;
+  load?(data: Serializable): void;
 }
 
 export interface SimBuilder {

@@ -2,22 +2,22 @@
 // layers, the blocked overlay, own blueprints, the service layer and
 // completed nodes from the latest snapshot.
 import { describe, expect, it } from 'vitest';
-import { toFactionId, toTick, type Snapshot } from '../core/index';
-import { loadContent } from '../content/index';
-import { proto01 } from '../content/frontline_td/maps/proto_01';
+import { toFactionId, toTick, type Snapshot } from '../../../core/index';
+import { loadContent } from '../../../content/index';
+import { proto01 } from '../../../content/frontline_td/maps/proto_01';
 import {
   StructuresChannel,
   STATE_BLUEPRINT,
   STATE_OPERATIONAL,
   type ConstructionStructures,
-} from '../features/construction/protocol';
-import { checkFootprint, checkRange } from '../features/construction/rules/index';
-import { SERVICE_LAYER_ID } from '../features/logistics/protocol';
+} from '../protocol';
+import { checkFootprint, checkRange } from './index';
+import { SERVICE_LAYER_ID } from '../../logistics/protocol';
 import {
   TERRAIN_BLOCKED_LAYER_ID,
   TERRAIN_HEIGHT_LAYER_ID,
   TERRAIN_SURFACE_LAYER_ID,
-} from '../features/terrain/protocol';
+} from '../../terrain/protocol';
 import { makePlacementView } from './placement-view';
 
 const db = loadContent();

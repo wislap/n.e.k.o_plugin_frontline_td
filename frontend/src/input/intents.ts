@@ -2,14 +2,18 @@
 // (ADR: input → intent → command).
 export type Intent =
   | { kind: 'runtime.toggle_pause' }
-  | { kind: 'runtime.set_speed'; index: number }
+  // Steps the speed index by delta over SPEED_STEPS (M4: -/= keys).
+  | { kind: 'runtime.speed_step'; delta: number }
   | { kind: 'dev.toggle_panel' }
   | { kind: 'camera.toggle_mode' }
   | { kind: 'camera.pan_px'; dx: number; dy: number }
   | { kind: 'camera.zoom'; delta: number; x: number; y: number }
   | { kind: 'select.click'; x: number; y: number; additive: boolean }
   | { kind: 'select.box'; x0: number; y0: number; x1: number; y1: number; additive: boolean }
-  | { kind: 'command.move_to'; x: number; y: number }
+  | { kind: 'command.move_to'; x: number; y: number; guard: boolean }
+  // Digit hotkeys (M4): Ctrl+digit creates a squad from the selection,
+  // bare digit selects the bound squad (double-press centres the camera).
+  | { kind: 'squad.digit'; digit: number; ctrl: boolean }
   // Cursor rest position in screen pixels (build ghost tracking).
   | { kind: 'cursor.move'; x: number; y: number }
   | { kind: 'build.select'; kindId: string }

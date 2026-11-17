@@ -207,6 +207,12 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
           {t(`prod.${str(production['state'])}`, { defaultValue: str(production['state']) })}
           {num(production['total']) > 0 &&
             ` (${num(production['progress'])}/${num(production['total'])})`}
+          {str(production['nextUnit']) !== '' &&
+            ` — ${t('panel.next_unit', {
+              name: t(`unit.${str(production['nextUnit']).split(':')[1] ?? ''}`, {
+                defaultValue: str(production['nextUnit']).split(':')[1] ?? '',
+              }),
+            })}`}
           {Array.isArray(production['missing']) &&
             (production['missing'] as number[]).length > 0 &&
             ` — ${(production['missing'] as number[])

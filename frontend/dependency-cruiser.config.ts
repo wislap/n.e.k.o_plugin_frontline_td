@@ -182,13 +182,17 @@ const config: IConfiguration = {
       severity: 'error',
       comment:
         'eval/ may only import the public barrels: core/kernel/content/' +
-        "protocol index.ts and features' sim/index.ts / content.ts (ADR 0024).",
+        "protocol index.ts, features' sim/index.ts / rules/index.ts /" +
+        ' protocol.ts / content.ts, app/resolve-setup.ts (match assembly)' +
+        ' and modes/*/index.ts (mode setups) (ADR 0024).',
       from: { path: '^eval/' },
       to: {
         path: '^src/',
         pathNot:
           '^src/(core|kernel|content|protocol)/index[.]ts$|' +
-          '^src/features/[^/]+/(sim/index|content)[.]ts$',
+          '^src/features/[^/]+/(sim/index|rules/index|protocol|content)[.]ts$|' +
+          '^src/app/resolve-setup[.]ts$|' +
+          '^src/modes/[^/]+/index[.]ts$',
       },
     },
   ],

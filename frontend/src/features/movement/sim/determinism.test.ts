@@ -19,7 +19,11 @@ const TICKS = 400;
 // serialized surface layer — same code paths, different content.
 // M3-E added six raiders to the dev setup plus logistics' serialized
 // road layer — different entities/state, same determinism contract.
-const GOLDEN_HASH = '2c51a89ff8f771ad';
+// M4-A added the squads module (new registered state + snapshot channel)
+// and producer cycle state — different serialized state, same contract.
+// M4-B added controllerStates (per-controller serialized state, keyed by
+// faction) plus the squads `tag` field — different shape, same contract.
+const GOLDEN_HASH = '07d7e364079afcdd';
 
 function makeSim() {
   const db = loadContent();

@@ -5,15 +5,19 @@ import { basePackManifest } from '../content/packs';
 import type { FactionId } from '../core/index';
 import { toFactionId } from '../core/index';
 import type { FactionStart, StartUnit } from '../features/units/sim/index';
-import type { QueuedController, SimConfig } from '../kernel/index';
+import type { Controller, QueuedController, SimConfig } from '../kernel/index';
 import { createQueuedController, createSimulation } from '../kernel/index';
 import type { MatchSetup } from '../protocol/index';
 import type { Resolved } from '../runtime/worker-handler';
-import { createDevRaidController } from './dev-raid-controller';
+import { resolveMode } from './modes';
 import { createSimModules, RNG_STREAMS } from './sim-registry';
 
 export interface ResolveOptions {
   timer?: () => number;
+  // Replaces a faction's configured controller (eval bots inject their
+  // own Controller through this hook; returns undefined = keep the enum
+  // behaviour). Controllers built here still join `config.controllers`.
+  controllerFor?: (faction: FactionId) => Controller | undefined;
 }
 
 export function resolveSetup(
@@ -37,7 +41,8 @@ export function resolveSetup(
   if (!seen.has(base.id)) {
     return { error: `base pack '${base.id}' is missing from the match setup` };
   }
-  if (setup.mode !== undefined) {
+  const mode = resolveMode(setup.mode);
+  if (setup.mode !== undefined && mode === undefined) {
     return { error: `unknown mode '${setup.mode}'` };
   }
   // Content is loaded once per worker; the db resolves the map and the
@@ -95,14 +100,16 @@ export function resolveSetup(
   let localQueue: QueuedController | null = null;
   const controllers = [];
   for (const faction of setup.factions) {
-    if (faction.controller === 'local') {
+    const custom = options.controllerFor?.(faction.id);
+    if (custom !== undefined) {
+      controllers.push(custom);
+    } else if (faction.controller === 'local') {
       localQueue = createQueuedController(faction.id);
       controllers.push(localQueue);
-    } else if (faction.controller === 'dev_raid') {
-      // Dev-only raider: sends idle units toward the map's player_start
-      // point every 45 s; raiders pick the nearest hostile non-warehouse
-      // node instead (m3 batch E). Replaced by M4's director.
-      const target = map.points['player_start'] ?? { x: 0, y: 0 };
+    } else if (faction.controller === 'director') {
+      if (mode === undefined) {
+        return { error: "controller 'director' requires a mode" };
+      }
       const hostile = new Set<number>();
       for (const r of setup.relations) {
         if (r.relation === 'hostile') {
@@ -114,7 +121,7 @@ export function resolveSetup(
           }
         }
       }
-      controllers.push(createDevRaidController(faction.id, target, db, hostile));
+      controllers.push(mode.director(faction.id, { db, map, hostile }));
     }
   }
 
@@ -132,6 +139,28 @@ export function resolveSetup(
     controllers,
     ...(options.timer !== undefined ? { timer: options.timer } : {}),
   };
-  const modules = createSimModules(db, map, starts);
-  return { sim: createSimulation(config, modules), localQueue, observer };
+  const built = createSimModules(db, map, starts);
+  const modules =
+    mode === undefined
+      ? built.modules
+      : [
+          ...built.modules,
+          ...mode.modules({
+            db,
+            map,
+            factions: setup.factions.map((f) => f.id),
+            logistics: built.logistics,
+          }),
+        ];
+  const sim = createSimulation(config, modules);
+  return {
+    sim,
+    localQueue,
+    observer,
+    config,
+    modules,
+    // Generic stop predicate the runtime uses to freeze the clock once
+    // the match ends — the kernel stays free of mode knowledge.
+    ...(mode !== undefined ? { ended: () => mode.ended(sim.snapshot(observer)) } : {}),
+  };
 }

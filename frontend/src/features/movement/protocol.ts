@@ -1,6 +1,8 @@
-// Movement command descriptor: shared by the sim command handler and the
-// client (render/input may import this file but never sim/).
-import { defineCommand, s } from '../../core/index';
+// Movement command + intent descriptors: shared by the sim command
+// handler and the client (render/input may import this file but never
+// sim/). The intent carries the same payload as the command and is
+// resolved by the movement module at the start of the movement phase.
+import { defineCommand, defineEvent, defineIntent, s } from '../../core/index';
 
 export const MoveCommand = defineCommand(
   'frontline_td:movement.move',
@@ -10,3 +12,16 @@ export const MoveCommand = defineCommand(
     y: s.int({ min: 0 }),
   }),
 );
+
+// Sim-internal order channel (ADR 0008): squads/AI emit these; the
+// resolver validates handle liveness and Mover but not faction (the
+// emitter's responsibility). Shares the command's id space on purpose:
+// a command is the player-facing form of the same order.
+export const MoveIntent = defineIntent<{ units: number[]; x: number; y: number }>(
+  'frontline_td:movement.move',
+);
+export const StopIntent = defineIntent<{ units: number[] }>('frontline_td:movement.stop');
+
+// Emitted by the MoveCommand handler with the handles it applied (player
+// override — squads drop these members). Intents do not emit this.
+export const MoveOrdered = defineEvent<{ units: number[] }>('frontline_td:movement.ordered', 'all');

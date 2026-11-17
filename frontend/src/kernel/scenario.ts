@@ -11,6 +11,9 @@ export interface ScenarioSpec {
   sampleEvery?: number;
   // Called after each completed tick (e.g. to diff sim.timings() for p95).
   onTick?: (sim: Simulation) => void;
+  // Optional stop predicate checked after each tick (e.g. a mode's
+  // ended state); the loop exits early and tick reflects the last run.
+  stop?: (sim: Simulation) => boolean;
 }
 
 export interface ScenarioResult {
@@ -31,6 +34,9 @@ export function runScenario(spec: ScenarioSpec): ScenarioResult {
     sim.submit(envelope);
   }
   for (let step = 0; step < spec.ticks; step++) {
+    if (spec.stop?.(sim) === true) {
+      break;
+    }
     sim.step();
     spec.onTick?.(sim);
     if (spec.sampleEvery !== undefined && (step + 1) % spec.sampleEvery === 0) {

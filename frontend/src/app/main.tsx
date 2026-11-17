@@ -21,11 +21,20 @@ import { installKeyboard } from '../input/keyboard';
 import { DEFAULT_KEYMAP } from '../input/keymap';
 import type { Intent } from '../input/intents';
 import { App } from './App';
-import { createDevSetup } from './dev-setup';
+import { defaultSetup } from '../modes/assault/index';
+import { nextSpeedIndex } from '../client/match-info';
+import {
+  digitPress,
+  playerSquadTag,
+  squadForDigit,
+  type DigitPress,
+} from '../client/squad-controls';
+import { SquadsChannel, SquadsCreate, type SquadsSnapshot } from '../features/squads/protocol';
+import { SPEED_STEPS } from '../protocol/index';
 
 const worker = new Worker(new URL('./sim-worker.ts', import.meta.url), { type: 'module' });
 const client = createSimClient(worker);
-const setup = createDevSetup(Date.now() >>> 0);
+const setup = defaultSetup(Date.now() >>> 0);
 client.start(setup);
 
 const db = loadContent();
@@ -44,15 +53,48 @@ useCameraStore
   );
 
 const panTracker = createPanTracker();
+let lastDigit: DigitPress | null = null;
 
 function dispatch(intent: Intent): void {
   switch (intent.kind) {
     case 'runtime.toggle_pause':
       client.togglePause();
       return;
-    case 'runtime.set_speed':
-      client.setSpeedIndex(intent.index);
+    case 'runtime.speed_step': {
+      const stats = useRuntimeStore.getState().stats;
+      const index = nextSpeedIndex(stats?.speedIndex ?? 1, intent.delta, SPEED_STEPS.length);
+      client.setSpeedIndex(index);
       return;
+    }
+    case 'squad.digit': {
+      const latest = client.snapshots().latest;
+      const squads =
+        (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+      const observer = latest?.observer ?? -1;
+      if (intent.ctrl) {
+        // Ctrl+digit: create/re-bind a squad from the current selection.
+        const selected = [...useSelectionStore.getState().selected];
+        if (selected.length > 0) {
+          client.submit({
+            type: SquadsCreate.type,
+            payload: { units: selected, tag: playerSquadTag(intent.digit) },
+          });
+        }
+        return;
+      }
+      const bound = squadForDigit(squads, observer, intent.digit);
+      if (bound?.members === undefined) {
+        return;
+      }
+      const press = digitPress(lastDigit, intent.digit, performance.now());
+      lastDigit = press.last;
+      if (press.action === 'center') {
+        useCameraStore.getState().setCenter(bound.centroid);
+      } else {
+        useSelectionStore.getState().setSelection(new Set(bound.members), false);
+      }
+      return;
+    }
     case 'dev.toggle_panel':
       useUiStore.getState().toggleDebugPanel();
       return;
@@ -120,4 +162,10 @@ if (container === null) {
   throw new Error('missing #root element');
 }
 
-createRoot(container).render(<App client={client} db={db} map={map} panTracker={panTracker} />);
+const restart = (): void => {
+  client.restart(defaultSetup(Date.now() >>> 0));
+};
+
+createRoot(container).render(
+  <App client={client} db={db} map={map} panTracker={panTracker} onRestart={restart} />,
+);

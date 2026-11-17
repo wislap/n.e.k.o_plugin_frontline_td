@@ -25,6 +25,7 @@ function stats(tick: number): RuntimeStats {
     tickRate: 20,
     entityCount: 0,
     systems: [],
+    probes: {},
   };
 }
 

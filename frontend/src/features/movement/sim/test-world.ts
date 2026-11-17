@@ -67,7 +67,11 @@ export interface World {
   slot(i: number): { x: number; y: number };
 }
 
-export function makeWorld(rows: string[], units: SpawnUnit[]): World {
+export function makeWorld(
+  rows: string[],
+  units: SpawnUnit[],
+  extraModules: readonly SimModule[] = [],
+): World {
   const grid = makeGrid(rows);
   const terrain = createTerrainApi(grid, SURFACES);
   const pathing = createPathingModule(terrain, 1);
@@ -170,7 +174,7 @@ export function makeWorld(rows: string[], units: SpawnUnit[]): World {
     rngStreams: [],
     controllers: [],
   };
-  const sim = createSimulation(config, [pathing.module, movement, spawner]);
+  const sim = createSimulation(config, [pathing.module, movement, spawner, ...extraModules]);
   return {
     sim,
     handles,

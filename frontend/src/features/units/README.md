@@ -6,10 +6,14 @@
 
 ## 公开接口
 - `content.ts`: `unitSchema`、`UnitContent`（speed 为格/秒，装载时换算为
-  格/tick）。
+  格/tick）；`visual { shape, scale }` 渲染参数（cylinder|cone|box|
+  sphere，默认 cylinder ×1，渲染层按 shape 索引取实例网格，不按
+  内容 ID 分支）。
 - `sim/index.ts`: `createUnitsModule(db, terrain, starts)`；
   `DenseUnitsChannel`（`frontline_td:units.dense`）；
-  `StartUnit` / `FactionStart` / `DenseUnits`；组件 `UnitKind`。
+  `StartUnit` / `FactionStart` / `DenseUnits`；组件 `UnitKind`；
+  `SpawnIntent` / `UnitsSpawned`（生产等模块经意图出怪，
+  tick 末在结构下缘中心螺旋取第一个可通行空格生成）。
 
 ## 拥有的组件
 - `UnitKind { kind: u16 }`（内容索引）。Position/Velocity/Mover 归

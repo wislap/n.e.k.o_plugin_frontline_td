@@ -7,6 +7,9 @@ export const SPEED_STEPS = [0, 1, 2, 3] as const;
 
 export type MainToWorker =
   | { kind: 'start'; setup: unknown }
+  // Tear down the current sim and resolve a fresh setup in place — the
+  // play-again path (M4) so the page never reloads.
+  | { kind: 'restart'; setup: unknown }
   | { kind: 'command'; command: { type: string; payload: unknown } }
   | { kind: 'set_speed'; index: number }
   | { kind: 'toggle_pause' }
@@ -27,6 +30,8 @@ export interface RuntimeStats {
   tickRate: number;
   entityCount: number;
   systems: SystemTiming[];
+  // Registered sim probes (stock/units/waves/…); feeds the end screen.
+  probes: Record<string, number>;
 }
 
 export type WorkerToMain =

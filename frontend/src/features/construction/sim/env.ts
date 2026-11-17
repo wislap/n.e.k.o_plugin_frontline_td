@@ -86,6 +86,7 @@ export interface ConstructionEnv {
     orderTick: 'u32';
   }>;
   ucW: ComponentWriter<Record<string, never>>;
+  coreW: ComponentWriter<Record<string, never>>;
   // faction -> cell -> blueprint entity id + 1.
   reservations: Map<number, Map<number, number>>;
   // Entities whose demolition started this tick. Construction only lands

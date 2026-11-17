@@ -9,6 +9,7 @@ export const structures = [
     id: contentId('frontline_td:main_base'),
     footprint: { w: 4, h: 4 },
     hp: 1000,
+    core: true,
     // Not buildable: start structures only (no `build` block).
     node: { connect: 24, service: 12, vehicles: 20, warehouse: true },
     stores: [
@@ -197,6 +198,62 @@ export const structures = [
       cooldown: 0.4,
       delivery: 'instant',
       cost: { cargo: contentId('frontline_td:ammo'), amount: 1 },
+    },
+  },
+  {
+    id: contentId('frontline_td:robot_factory'),
+    footprint: { w: 3, h: 3 },
+    hp: 400,
+    build: {
+      cost: { 'frontline_td:material': 40 },
+      time: 10,
+      demolishTime: 5,
+      salvageBp: 5000,
+    },
+    stores: [
+      {
+        cargo: contentId('frontline_td:material'),
+        capacity: 20,
+        class: 'production',
+      },
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 20,
+        class: 'production',
+      },
+    ],
+    // 10 material + 10 energy -> 1 robot every 12 s.
+    producer: {
+      inputs: { 'frontline_td:material': 10, 'frontline_td:energy': 10 },
+      unitOutput: [contentId('frontline_td:robot')],
+      time: 12,
+    },
+  },
+  {
+    id: contentId('frontline_td:hive'),
+    footprint: { w: 4, h: 4 },
+    hp: 3000,
+    core: true,
+    // Not buildable, no logistics node/stores: a free-running monster
+    // spawner (no inputs → no attachment or energy needed).
+    producer: {
+      inputs: {},
+      unitOutput: [
+        contentId('frontline_td:crawler'),
+        contentId('frontline_td:crawler'),
+        contentId('frontline_td:spitter'),
+        contentId('frontline_td:crawler'),
+        contentId('frontline_td:crawler'),
+        contentId('frontline_td:spitter'),
+        contentId('frontline_td:raider'),
+      ],
+      time: 10,
+      ramp: [
+        { atSeconds: 0, seconds: 10 },
+        { atSeconds: 300, seconds: 7 },
+        { atSeconds: 600, seconds: 5 },
+        { atSeconds: 900, seconds: 4 },
+      ],
     },
   },
 ] as const;

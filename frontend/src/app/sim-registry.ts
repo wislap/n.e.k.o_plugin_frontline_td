@@ -24,17 +24,24 @@ import {
   createProductionModule,
   structureParts as productionStructureParts,
 } from '../features/production/sim/index';
+import { createSquadsModule } from '../features/squads/sim/index';
 import { createTerrainModule } from '../features/terrain/sim/index';
 import { createUnitsModule } from '../features/units/sim/index';
 import type { FactionStart } from '../features/units/sim/index';
 import type { SimModule } from '../kernel/index';
 import { CONTROLLER_STREAM_ID } from '../kernel/index';
 
+export interface SimModulesResult {
+  modules: SimModule[];
+  // Exposed so mode modules (assault probes) can use its public queries.
+  logistics: ReturnType<typeof createLogisticsModule>;
+}
+
 export function createSimModules(
   db: ContentDb,
   map: ResolvedMap,
   starts: readonly FactionStart[],
-): SimModule[] {
+): SimModulesResult {
   // Module order matters: terrain must install before pathing so that on
   // restore terrain's blocked overlay loads first — pathing's load rebuilds
   // all class graphs against it. Pathing invalidates on runtime changes.
@@ -74,16 +81,30 @@ export function createSimModules(
   // readers (goal release, footprint free) must run before combat's own
   // despawn.
   const combat = createCombatModule();
-  return [
-    terrain.module,
-    pathing.module,
-    movement,
+  // Squads read combat's public queries, logistics coverage and pathing;
+  // they order units through movement intents only.
+  const squads = createSquadsModule({
+    db,
+    terrain: terrain.api,
+    pathing: pathing.api,
     logistics,
-    construction,
-    units,
-    production,
     combat,
-  ];
+    energyCargo: db.cargos.byId('frontline_td:energy')?.index ?? -1,
+  });
+  return {
+    logistics,
+    modules: [
+      terrain.module,
+      pathing.module,
+      movement,
+      logistics,
+      construction,
+      units,
+      production,
+      combat,
+      squads,
+    ],
+  };
 }
 
 export const RNG_STREAMS = [

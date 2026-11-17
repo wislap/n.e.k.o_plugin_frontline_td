@@ -11,7 +11,7 @@ import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import type { FactionStart } from '../../units/sim/index';
 import { ConstructionCompleted } from '../protocol';
-import { Blueprint, Construction, MODE_BUILD, RoadSegment, Structure } from './components';
+import { Blueprint, Construction, Core, MODE_BUILD, RoadSegment, Structure } from './components';
 import { registerConstructionCommands } from './commands';
 import type {
   ConstructionEnv,
@@ -57,6 +57,7 @@ export function createConstructionModule(
         constructionW: builder.claimWriter(Construction),
         blueprintW: builder.claimWriter(Blueprint),
         ucW: builder.claimWriter(UnderConstruction),
+        coreW: builder.claimWriter(Core),
         reservations: new Map(),
         pendingDemolish: new Set(),
         projects: new Map(),
@@ -119,6 +120,11 @@ export function createConstructionModule(
                 ctx.removeComponent(env.ucW, handle);
                 ctx.removeComponent(env.constructionW, handle);
                 const st = ctx.read(Structure);
+                // Core flags arrive with operational status.
+                const coreKind = db.structures.byIndex(st.kind[id] ?? 0);
+                if (coreKind?.core === true) {
+                  ctx.addComponent(env.coreW, handle);
+                }
                 ctx.emit(ConstructionCompleted, {
                   handle: Number(handle),
                   kind: st.kind[id] ?? 0,

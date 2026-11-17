@@ -8,7 +8,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBuildStore } from '../../../client/build-store';
 import { cursorGround } from '../../../client/cursor';
-import { makePlacementView } from '../../../client/placement-view';
+import { makePlacementView } from '../rules/index';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { terrainY } from '../../../render/world';

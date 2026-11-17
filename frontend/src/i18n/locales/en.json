@@ -24,7 +24,8 @@
       "tactical": "Tactical"
     },
     "selected": "{{count}} selected",
-    "hints": "Space pause | 1/2/3 speed | V camera | WASD pan | Right-click move | G activate | X demolish | L logistics | R roads | Esc cancel | ` debug",
+    "hints": "Space pause | -/= speed | 1-9 squad | Ctrl+1-9 create squad | V camera | WASD pan | Right-click move | Ctrl+right-click guard | G activate | X demolish | L logistics | R roads | Esc cancel | ` debug",
+    "threat": "Enemy gathering · ~{{count}} · attacks in {{time}}",
     "fullscreen": "Fullscreen",
     "fullscreen_unsupported": "Fullscreen is only available inside the NEKO panel",
     "display": {
@@ -52,11 +53,15 @@
     "miner": "Miner",
     "power_plant": "Power Plant",
     "ammo_factory": "Ammo Factory",
-    "turret": "Turret"
+    "turret": "Turret",
+    "robot_factory": "Robot Factory",
+    "hive": "Hive"
   },
   "unit": {
     "robot": "Robot",
-    "raider": "Raider"
+    "raider": "Raider",
+    "crawler": "Crawler",
+    "spitter": "Spitter"
   },
   "road": {
     "button": "Roads",
@@ -90,6 +95,8 @@
     "already_upgraded": "already upgraded",
     "not_buildable": "not buildable",
     "invalid_order": "invalid priority order",
+    "invalid_units": "invalid units",
+    "no_squad": "no such squad",
     "none": "-"
   },
   "suggest": {
@@ -135,6 +142,39 @@
     "weapon_reloading": "Weapon ready in {{ticks}} ticks",
     "ammo": "ammo {{count}}",
     "production": "Production",
+    "next_unit": "next {{name}}",
     "export": "export"
+  },
+  "squad": {
+    "disband": "Disband squad",
+    "phase": {
+      "moving": "moving",
+      "holding": "holding",
+      "engaging": "engaging",
+      "returning": "returning",
+      "resupplying": "resupplying"
+    },
+    "order": {
+      "idle": "idle",
+      "guard": "guard",
+      "advance": "advance",
+      "gather": "gather"
+    }
+  },
+  "end": {
+    "victory": "Victory",
+    "defeat": "Defeat",
+    "draw": "Draw",
+    "duration": "Match time {{time}}",
+    "units": "Units alive: {{count}}",
+    "structures": "Structures: {{count}}",
+    "waves": "Waves launched: {{count}}",
+    "stock": {
+      "material": "Material stock: {{count}}",
+      "ore": "Ore stock: {{count}}",
+      "energy": "Energy stock: {{count}}",
+      "ammo": "Ammo stock: {{count}}"
+    },
+    "restart": "Play again"
   }
 }

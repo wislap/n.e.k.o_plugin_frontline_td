@@ -33,6 +33,8 @@ interface PointLike {
   clientX: number;
   clientY: number;
   shiftKey: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
 }
 
 interface PointerEventLike extends PointLike {
@@ -135,7 +137,12 @@ export function installPointer(
         dispatch({ kind: 'select.click', x: pos.x, y: pos.y, additive });
       }
     } else if (downButton === 2) {
-      dispatch({ kind: 'command.move_to', x: pos.x, y: pos.y });
+      dispatch({
+        kind: 'command.move_to',
+        x: pos.x,
+        y: pos.y,
+        guard: event.ctrlKey === true || event.metaKey === true,
+      });
     }
     downButton = -1;
     boxing = false;

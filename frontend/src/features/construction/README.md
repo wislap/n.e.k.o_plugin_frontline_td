@@ -15,7 +15,10 @@
   `RoadWorksChannel`、放置与等待原因码（新增 `already_upgraded`）。
 - `rules/placement.ts`：纯函数放置规则 `checkFootprint`/`checkRange`
   与 `PlacementView` 接口（供 sim 适配器与未来客户端预览适配器
-  实现，不依赖 sim）。
+  实现，不依赖 sim）；`rules/placement-view.ts` 是快照侧适配器
+  `makePlacementView`，建造幽灵预览与 eval 机器人共用。
+- `Core` 组件：只标在 operational 建筑上（site 期没有），供
+  玩法模块判定胜负（ADR 0035）。
 - `content.ts`：结构基础 schema（`id`、`footprint`）；`build` 等
   复合字段在 `content/` 中组装。
 

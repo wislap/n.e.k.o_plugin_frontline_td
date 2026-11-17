@@ -21,6 +21,20 @@ import { factionColorHex } from './colors';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
 const RING_SCALE = 1.5;
+// Render-only unit shapes (content `visual`, M4); index order matches
+// the instanced-mesh order in the JSX below.
+type UnitShape = 'cylinder' | 'box' | 'cone' | 'sphere';
+const SHAPE_INDEX: Readonly<Record<UnitShape, number>> = {
+  cylinder: 0,
+  box: 1,
+  cone: 2,
+  sphere: 3,
+};
+
+interface UnitVisual {
+  shape: UnitShape;
+  scale: number;
+}
 
 export interface UnitsLayerProps {
   client: SimClient;
@@ -29,11 +43,20 @@ export interface UnitsLayerProps {
   mapHeight: number;
   // Unit radius by content index (kind), from the content db.
   radii: readonly number[];
+  // Render visual by content index (kind), from the content db.
+  visuals: readonly UnitVisual[];
 }
 
-export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: UnitsLayerProps) {
+export function UnitsLayer({
+  client,
+  heights,
+  mapWidth,
+  mapHeight,
+  radii,
+  visuals,
+}: UnitsLayerProps) {
   const [capacity, setCapacity] = useState(256);
-  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const interp = useRef(new UnitInterpolator());
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -41,15 +64,19 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
   const ringColor = useMemo(() => new THREE.Color('#ffffff'), []);
 
   useFrame(() => {
-    const mesh = meshRef.current;
+    const meshes = meshRefs.current;
     const ring = ringRef.current;
-    if (mesh === null) {
+    if (meshes.some((m) => m === null)) {
       return;
     }
     const pair = client.snapshots();
     const latest = interp.current.update(pair);
     if (latest === null) {
-      mesh.count = 0;
+      for (const mesh of meshes) {
+        if (mesh !== null) {
+          mesh.count = 0;
+        }
+      }
       if (ring !== null) {
         ring.count = 0;
       }
@@ -94,6 +121,7 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
     // before the first snapshot, when no local faction is distinguished).
     const localFaction = pair.latest?.observer ?? null;
     const selected = useSelectionStore.getState().selected;
+    const counts = [0, 0, 0, 0];
     let rings = 0;
     for (let i = 0; i < n; i++) {
       const handle = latest.handles[i] ?? 0;
@@ -101,12 +129,22 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
       const groundY = terrainY(heights, mapWidth, mapHeight, x, y);
       const kind = latest.kind[i] ?? 0;
       const radius = radii[kind] ?? 0.35;
+      const visual = visuals[kind] ?? { shape: 'cylinder' as const, scale: 1 };
+      const mesh = meshes[SHAPE_INDEX[visual.shape]];
+      if (mesh === null || mesh === undefined) {
+        continue;
+      }
+      const slot = counts[SHAPE_INDEX[visual.shape]] ?? 0;
+      if (slot >= capacity) {
+        continue;
+      }
 
-      dummy.position.set(x, groundY + UNIT_HEIGHT / 2, y);
-      dummy.scale.set(radius * 2, 1, radius * 2);
+      dummy.position.set(x, groundY + (UNIT_HEIGHT * visual.scale) / 2, y);
+      dummy.scale.set(radius * 2 * visual.scale, visual.scale, radius * 2 * visual.scale);
       dummy.rotation.set(0, 0, 0);
       dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setMatrixAt(slot, dummy.matrix);
+      counts[SHAPE_INDEX[visual.shape]] = slot + 1;
 
       const faction = latest.faction[i] ?? 0;
       color.set(factionColorHex(faction, localFaction));
@@ -122,12 +160,18 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
           rings += 1;
         }
       }
-      mesh.setColorAt(i, color);
+      mesh.setColorAt(slot, color);
     }
-    mesh.count = n;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor !== null) {
-      mesh.instanceColor.needsUpdate = true;
+    for (let s = 0; s < meshes.length; s++) {
+      const mesh = meshes[s];
+      if (mesh === null || mesh === undefined) {
+        continue;
+      }
+      mesh.count = counts[s] ?? 0;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor !== null) {
+        mesh.instanceColor.needsUpdate = true;
+      }
     }
     if (ring !== null) {
       ring.count = rings;
@@ -137,8 +181,44 @@ export function UnitsLayer({ client, heights, mapWidth, mapHeight, radii }: Unit
 
   return (
     <group>
-      <instancedMesh key={capacity} ref={meshRef} args={[undefined, undefined, capacity]}>
+      <instancedMesh
+        key={`cyl-${capacity}`}
+        ref={(m) => {
+          meshRefs.current[0] = m;
+        }}
+        args={[undefined, undefined, capacity]}
+      >
         <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />
+        <meshLambertMaterial />
+      </instancedMesh>
+      <instancedMesh
+        key={`box-${capacity}`}
+        ref={(m) => {
+          meshRefs.current[1] = m;
+        }}
+        args={[undefined, undefined, capacity]}
+      >
+        <boxGeometry args={[1, UNIT_HEIGHT, 1]} />
+        <meshLambertMaterial />
+      </instancedMesh>
+      <instancedMesh
+        key={`cone-${capacity}`}
+        ref={(m) => {
+          meshRefs.current[2] = m;
+        }}
+        args={[undefined, undefined, capacity]}
+      >
+        <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />
+        <meshLambertMaterial />
+      </instancedMesh>
+      <instancedMesh
+        key={`sph-${capacity}`}
+        ref={(m) => {
+          meshRefs.current[3] = m;
+        }}
+        args={[undefined, undefined, capacity]}
+      >
+        <sphereGeometry args={[0.5, 12, 10]} />
         <meshLambertMaterial />
       </instancedMesh>
       <instancedMesh key={`ring-${capacity}`} ref={ringRef} args={[undefined, undefined, capacity]}>

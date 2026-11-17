@@ -63,11 +63,12 @@ function makeHandler(modules: SimModule[] = [layerModule()]) {
     },
     resolve: (): Resolved => {
       const localQueue = createQueuedController(F1);
-      const sim = createSimulation(
-        baseConfig({ factions: [{ id: F1 }, { id: toFactionId(2) }], controllers: [localQueue] }),
-        modules,
-      );
-      return { sim, localQueue, observer: F1 };
+      const config = baseConfig({
+        factions: [{ id: F1 }, { id: toFactionId(2) }],
+        controllers: [localQueue],
+      });
+      const sim = createSimulation(config, modules);
+      return { sim, localQueue, observer: F1, config, modules };
     },
     now: () => now,
   });
@@ -180,11 +181,13 @@ describe('createWorkerHandler', () => {
       },
       resolve: (): Resolved => {
         const localQueue = createQueuedController(F1);
-        simBox.current = createSimulation(
-          baseConfig({ factions: [{ id: F1 }, { id: toFactionId(2) }], controllers: [localQueue] }),
-          [layerModule(), channelModule],
-        );
-        return { sim: simBox.current, localQueue, observer: F1 };
+        const config = baseConfig({
+          factions: [{ id: F1 }, { id: toFactionId(2) }],
+          controllers: [localQueue],
+        });
+        const modules = [layerModule(), channelModule];
+        simBox.current = createSimulation(config, modules);
+        return { sim: simBox.current, localQueue, observer: F1, config, modules };
       },
       now: () => now,
     });

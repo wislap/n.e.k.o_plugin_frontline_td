@@ -15,6 +15,7 @@
 | [0024](../adr/0024-evaluation-framework.md) | 评估框架：性能基线与数值平衡 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0032](../adr/0032-host-display-autopause.md) | 宿主显示模式与自动暂停 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0033](../adr/0033-design-checklist-referenced-items.md) | 《设计决策清单 v2》被引用条目 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
+| [0037](../adr/0037-eval-bots-balance-runner.md) | 策略机器人与对拍 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -36,6 +37,9 @@
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳 | wislap | M1 模拟核心 | 2026-11-15 |
+| [0034](../adr/0034-squads.md) | 小队 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -121,3 +125,9 @@
 - [0031 战斗、修正值与检视约定](../adr/0031-combat-modifiers-inspect.md)
 - [0032 宿主显示模式与自动暂停](../adr/0032-host-display-autopause.md)
 - [0033 《设计决策清单 v2》被引用条目](../adr/0033-design-checklist-referenced-items.md)
+
+### M4 MVP 收尾（2026-11-17）
+- [0034 小队](../adr/0034-squads.md)
+- [0035 攻占模式、导演与胜负](../adr/0035-assault-mode-director-victory.md)
+- [0036 控制者状态与存档](../adr/0036-controller-state-save-load.md)
+- [0037 策略机器人与对拍](../adr/0037-eval-bots-balance-runner.md)

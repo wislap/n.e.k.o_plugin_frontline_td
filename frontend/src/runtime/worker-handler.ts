@@ -2,7 +2,7 @@
 // message kinds, builds the sim via an injected resolver, and posts snapshot
 // deltas plus throttled stats back to the main thread.
 import type { EntityHandle, FactionId, Snapshot } from '../core/index';
-import type { QueuedController, Simulation } from '../kernel/index';
+import type { QueuedController, SimConfig, SimModule, Simulation } from '../kernel/index';
 import { parseMatchSetup } from '../protocol/index';
 import type { MainToWorker, MatchSetup, WorkerToMain } from '../protocol/index';
 import { createSimHost } from './sim-host';
@@ -12,6 +12,13 @@ export interface Resolved {
   sim: Simulation;
   localQueue: QueuedController | null;
   observer: FactionId;
+  // The exact config/modules the sim was built with — needed to restore
+  // a serialized sim (restoreSimulation takes the same pair).
+  config: SimConfig;
+  modules: SimModule[];
+  // When provided, the host stops stepping once this reports true
+  // (clock frozen; pause/speed ignored). Mode-supplied.
+  ended?: () => boolean;
 }
 
 type ResolveFn = (setup: MatchSetup) => Resolved | { error: string };
@@ -121,11 +128,7 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     return (view as ArrayBufferView & { slice(): ArrayBufferView }).slice();
   }
 
-  function onStart(setup: unknown): void {
-    if (started) {
-      postError('received a second start message');
-      return;
-    }
+  function launch(setup: unknown): void {
     const parsed = parseMatchSetup(setup);
     if (!parsed.ok) {
       postError(`invalid match setup: ${parsed.errors.join('; ')}`);
@@ -137,10 +140,12 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
       return;
     }
     started = true;
+    firstSnapshotPosted = false;
     host = createSimHost({
       sim: resolved.sim,
       localQueue: resolved.localQueue,
       observer: resolved.observer,
+      ...(resolved.ended !== undefined ? { ended: resolved.ended } : {}),
     });
   }
 
@@ -153,7 +158,18 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
       const message = msg as MainToWorker;
       switch (message.kind) {
         case 'start':
-          onStart(message.setup);
+          if (started) {
+            postError('received a second start message');
+            return;
+          }
+          launch(message.setup);
+          return;
+        case 'restart':
+          // Replace the sim wholesale (M4 play-again): the old host is
+          // dropped and the next snapshot re-sends every layer.
+          host = null;
+          inspectHandle = null;
+          launch(message.setup);
           return;
         case 'command':
           if (host === null) {

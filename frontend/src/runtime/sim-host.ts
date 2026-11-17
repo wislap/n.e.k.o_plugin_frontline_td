@@ -15,6 +15,9 @@ export interface SimHostOptions {
   sim: Simulation;
   localQueue: QueuedController | null;
   observer: FactionId;
+  // Optional match-end predicate (mode-supplied): once true the host
+  // stops stepping — the clock freezes and pause/speed have no effect.
+  ended?: () => boolean;
 }
 
 export interface SimHost {
@@ -45,8 +48,14 @@ export function createSimHost(options: SimHostOptions): SimHost {
   const changedLayers = new Set<string>();
   let prevTimings: Record<string, { count: number; total: number }> = {};
 
+  let matchEnded = false;
+
   function runTicks(count: number): number {
     for (let k = 0; k < count; k++) {
+      if (matchEnded || options.ended?.() === true) {
+        matchEnded = true;
+        break;
+      }
       sim.step();
       for (const key of sim.changedLayers()) {
         changedLayers.add(key);
@@ -124,13 +133,15 @@ export function createSimHost(options: SimHostOptions): SimHost {
         }
       }
       prevTimings = timings;
+      const probes = sim.probes();
       return {
         tick: toTick(sim.tick),
         speedIndex,
         paused: speedIndex === 0,
         tickRate: tickTimes.length,
-        entityCount: sim.probes()[ENTITIES_PROBE] ?? 0,
+        entityCount: probes[ENTITIES_PROBE] ?? 0,
         systems,
+        probes,
       };
     },
 

@@ -1,26 +1,27 @@
-// Snapshot-backed PlacementView adapter (M3 D): the build ghost previews
+// Snapshot-backed PlacementView adapter (M3 D; moved to rules/ in M4 so
+// eval bots share it): the build ghost previews
 // the shared placement rules against the latest snapshot — terrain
 // height/surface/blocked layers, the observer's service-coverage layer,
 // and own blueprints from the structures channel. `connects` approximates
 // the sim's path-cost check with straight-line edge distance, so the
 // preview may pass where the sim later rejects; the rejection toast then
 // explains the real reason.
-import type { Snapshot } from '../core/index';
-import type { ContentDb, ResolvedMap } from '../content/index';
-import type { PlacementView } from '../features/construction/rules/index';
+import type { Snapshot } from '../../../core/index';
+import type { ContentDb, ResolvedMap } from '../../../content/index';
+import type { PlacementView } from './placement';
 import {
   StructuresChannel,
   STATE_BLUEPRINT,
   STATE_OPERATIONAL,
   STATE_WAITING,
   type ConstructionStructures,
-} from '../features/construction/protocol';
-import { SERVICE_LAYER_ID } from '../features/logistics/protocol';
+} from '../protocol';
+import { SERVICE_LAYER_ID } from '../../logistics/protocol';
 import {
   TERRAIN_BLOCKED_LAYER_ID,
   TERRAIN_HEIGHT_LAYER_ID,
   TERRAIN_SURFACE_LAYER_ID,
-} from '../features/terrain/protocol';
+} from '../../terrain/protocol';
 
 // Conservative edge-to-edge estimate between two footprints: centre
 // distance minus each footprint's half extent along the dominant axis.

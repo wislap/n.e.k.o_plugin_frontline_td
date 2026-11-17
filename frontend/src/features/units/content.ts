@@ -19,5 +19,12 @@ export const unitSchema = s.object({
   // Logistics interception strength in basis points applied to hostile
   // link quotas inside the corridor (E2).
   interceptor: s.optional(s.object({ strength: s.int({ min: 0, max: 10000 }) })),
+  // Render-only shape hint (M4 monster visuals); sim never reads it.
+  visual: s.optional(
+    s.object({
+      shape: s.enumOf(['cylinder', 'cone', 'box', 'sphere']),
+      scale: s.number({ min: 0.2, max: 3 }),
+    }),
+  ),
 });
 export type UnitContent = Infer<typeof unitSchema>;

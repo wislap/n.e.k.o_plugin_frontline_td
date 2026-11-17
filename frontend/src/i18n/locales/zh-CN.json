@@ -24,7 +24,8 @@
       "tactical": "战术视角"
     },
     "selected": "已选中 {{count}} 个",
-    "hints": "Space 暂停 | 1/2/3 速度 | V 视角 | WASD 平移 | 右键 移动 | G 开工 | X 拆除 | L 物流 | R 道路 | Esc 取消 | ` 调试",
+    "hints": "Space 暂停 | -/= 速度 | 1-9 选小队 | Ctrl+1-9 编小队 | V 视角 | WASD 平移 | 右键 移动 | Ctrl+右键 驻守 | G 开工 | X 拆除 | L 物流 | R 道路 | Esc 取消 | ` 调试",
+    "threat": "敌军集结中 · 约 {{count}} · {{time}} 后进攻",
     "fullscreen": "全屏",
     "fullscreen_unsupported": "仅在 NEKO 面板内可用",
     "display": {
@@ -52,11 +53,15 @@
     "miner": "采矿机",
     "power_plant": "发电厂",
     "ammo_factory": "弹药厂",
-    "turret": "炮塔"
+    "turret": "炮塔",
+    "robot_factory": "机器人工厂",
+    "hive": "虫巢"
   },
   "unit": {
     "robot": "机器人",
-    "raider": "袭击者"
+    "raider": "袭击者",
+    "crawler": "爬行者",
+    "spitter": "喷吐者"
   },
   "road": {
     "button": "道路",
@@ -90,6 +95,8 @@
     "already_upgraded": "已是该等级或更高",
     "not_buildable": "不可建造",
     "invalid_order": "优先级无效",
+    "invalid_units": "单位无效",
+    "no_squad": "小队不存在",
     "none": "-"
   },
   "suggest": {
@@ -135,6 +142,39 @@
     "weapon_reloading": "武器还需 {{ticks}} tick 就绪",
     "ammo": "弹药 {{count}}",
     "production": "生产",
+    "next_unit": "下一台 {{name}}",
     "export": "外运"
+  },
+  "squad": {
+    "disband": "解散小队",
+    "phase": {
+      "moving": "移动中",
+      "holding": "驻留中",
+      "engaging": "交战中",
+      "returning": "返回中",
+      "resupplying": "补给中"
+    },
+    "order": {
+      "idle": "待命",
+      "guard": "驻守",
+      "advance": "前进",
+      "gather": "集结"
+    }
+  },
+  "end": {
+    "victory": "胜利",
+    "defeat": "失败",
+    "draw": "平局",
+    "duration": "对局时长 {{time}}",
+    "units": "存活单位：{{count}}",
+    "structures": "建筑数：{{count}}",
+    "waves": "进攻波次：{{count}}",
+    "stock": {
+      "material": "材料库存：{{count}}",
+      "ore": "矿石库存：{{count}}",
+      "energy": "能量库存：{{count}}",
+      "ammo": "弹药库存：{{count}}"
+    },
+    "restart": "再来一局"
   }
 }
