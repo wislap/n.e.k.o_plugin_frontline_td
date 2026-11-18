@@ -11,27 +11,12 @@ import { createTerrainModule } from '../../terrain/sim/index';
 import type { TerrainGrid } from '../../terrain/content';
 import { dijkstra, UNREACHABLE } from './dijkstra';
 import { createPathingModule } from './module';
+import { makeGrid } from '../../../testing/index';
 
 const CLS = 0;
 const SURFACES: ResolvedSurface[] = [
   { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
 ];
-
-function makeGrid(rows: string[]): TerrainGrid {
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const heights = new Uint8Array(width * height);
-  const surfaces = new Uint16Array(width * height);
-  const ramps = new Uint8Array(width * height);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      if (row[x] === '#') {
-        surfaces[y * width + x] = 1;
-      }
-    }
-  });
-  return { width, height, heights, surfaces, ramps };
-}
 
 const ROCK: ResolvedSurface[] = [
   ...SURFACES,

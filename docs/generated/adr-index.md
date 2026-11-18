@@ -8,7 +8,7 @@
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
 | [0001](../adr/0001-adr-process-and-docs.md) | ADR 流程与文档体系 | 已采纳；部分被 0041 取代（ADR 头部字段：新增可选的"部分取代"行） | wislap | M0 架构基线 | 2026-11-14 |
-| [0002](../adr/0002-plugin-form-static-panel.md) | 插件形态：static 面板 + Python 薄壳 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0002](../adr/0002-plugin-form-static-panel.md) | 插件形态：static 面板 + Python 薄壳 | 已采纳；部分被 0032 取代（启动时主动请求显示模式） | wislap | M0 架构基线 | 2026-11-14 |
 | [0003](../adr/0003-tech-stack.md) | 技术栈 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳；部分被 0041 取代（棘轮的超长文件阈值、公共接口清单的形式） | wislap | M0 架构基线 | 2026-11-14 |
 | [0018](../adr/0018-licenses.md) | 许可证与依赖许可证 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
@@ -19,6 +19,7 @@
 | [0040](../adr/0040-entity-id-reuse-component-reads.md) | 实体 ID 复用与组件数组读取 | 已采纳 | wislap | M5 | 2026-11-18 |
 | [0041](../adr/0041-governance-and-indexes-v2.md) | 门禁与索引 v2 | 已采纳；部分被 0042 取代（CI 为单一 job 顺序管道的描述） | wislap | 治理 | 2026-11-18 |
 | [0042](../adr/0042-verification-segmentation-parallel-ci.md) | 验证分段与 CI 并行 | 已采纳 | wislap | 治理 | 2026-11-18 |
+| [0043](../adr/0043-review-remediation.md) | 评审整改约定 | 已采纳 | wislap | 治理 | 2026-11-18 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -28,7 +29,7 @@
 | [0008](../adr/0008-module-collaboration.md) | 模块协作模式 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0009](../adr/0009-partial-ecs-boundary.md) | 部分 ECS 的边界 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0014](../adr/0014-data-driven-boundaries.md) | 数据驱动的边界 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
-| [0019](../adr/0019-factions-and-pluggable-modes.md) | 阵营模型与玩法可插拔 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0019](../adr/0019-factions-and-pluggable-modes.md) | 阵营模型与玩法可插拔 | 已采纳；部分被 0038 取代（归属变更方式：占领后新建实体，不改写 Faction） | wislap | M1 前置 | 2026-11-15 |
 | [0023](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md) | 网格图层、编组、命令 schema、RNG 登记与运行时限制 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 
 ### 模拟
@@ -38,8 +39,8 @@
 | [0006](../adr/0006-determinism.md) | 确定性 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0013](../adr/0013-modifier-pipeline.md) | 修正值管线 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
-| [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
-| [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳 | wislap | M1 模拟核心 | 2026-11-15 |
+| [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳；部分被 0043 取代（容纳关系的 ContainedIn 契约组件设计） | wislap | M1 前置 | 2026-11-15 |
+| [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳；部分被 0043 取代（契约组件清单中的 ContainedIn） | wislap | M1 模拟核心 | 2026-11-15 |
 | [0034](../adr/0034-squads.md) | 小队 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳；部分被 0038 取代（波次目标） | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
@@ -67,7 +68,7 @@
 ### 物流
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
-| [0025](../adr/0025-logistics-model.md) | 物流模型：运力配额、统一货物与自动路由 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
+| [0025](../adr/0025-logistics-model.md) | 物流模型：运力配额、统一货物与自动路由 | 已采纳；部分被 0030 取代（连线沿道路走、倍率按长度加权） | wislap | M1 前置 | 2026-11-15 |
 | [0030](../adr/0030-logistics-implementation.md) | 物流实现约定：付费方、道路倍率、走廊拦截与拓扑增量失效 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 
 ### 内容
@@ -145,3 +146,4 @@
 ### 治理（2026-11-18）
 - [0041 门禁与索引 v2](../adr/0041-governance-and-indexes-v2.md)
 - [0042 验证分段与 CI 并行](../adr/0042-verification-segmentation-parallel-ci.md)
+- [0043 评审整改约定](../adr/0043-review-remediation.md)

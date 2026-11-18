@@ -4,7 +4,6 @@
 // commands only, own snapshot only, all mutable state inside save/load.
 import type { ContentDb, ResolvedMap, ResolvedStructure } from '../../src/content/index';
 import type { FactionId, Snapshot } from '../../src/core/index';
-import type { Controller } from '../../src/kernel/index';
 import type { PlacementRule, PlacementView } from '../../src/features/construction/rules/index';
 import {
   checkFootprint,
@@ -13,7 +12,6 @@ import {
 } from '../../src/features/construction/rules/index';
 import { PlaceCommand } from '../../src/features/construction/protocol';
 import {
-  STATE_OPERATIONAL,
   StructuresChannel,
   type ConstructionStructures,
 } from '../../src/features/construction/protocol';
@@ -27,7 +25,6 @@ import {
   SquadsChannel,
   SquadsCreate,
   SquadsOrder,
-  SquadsSetStrength,
   type SquadsSnapshot,
   type SquadView,
 } from '../../src/features/squads/protocol';
@@ -41,14 +38,14 @@ export interface BotOptions {
   hostile: ReadonlySet<number>;
 }
 
-export interface UnitRow {
+interface UnitRow {
   handle: number;
   kind: number;
   x: number;
   y: number;
 }
 
-export function ownUnits(snapshot: Snapshot, faction: FactionId): UnitRow[] {
+function ownUnits(snapshot: Snapshot, faction: FactionId): UnitRow[] {
   const dense = snapshot.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
   const out: UnitRow[] = [];
   if (dense === undefined) {
@@ -160,19 +157,6 @@ export function nearest<T extends { x: number; y: number; handle: number }>(
   return best;
 }
 
-export function centroid(units: readonly { x: number; y: number }[]): { x: number; y: number } {
-  if (units.length === 0) {
-    return { x: 0, y: 0 };
-  }
-  let x = 0;
-  let y = 0;
-  for (const u of units) {
-    x += u.x;
-    y += u.y;
-  }
-  return { x: x / units.length, y: y / units.length };
-}
-
 // Warehouse stock in whole units for one cargo index (0 without a net).
 export function stockOf(snapshot: Snapshot, cargoIndex: number): number {
   const net = snapshot.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined;
@@ -194,7 +178,7 @@ function ruleOf(kind: ResolvedStructure): PlacementRule {
 
 // Deterministic ring scan around `near` (ascending Chebyshev radius,
 // y-then-x order): first cell where footprint and range checks pass.
-export function findPlacement(
+function findPlacement(
   view: PlacementView,
   rule: PlacementRule,
   near: { x: number; y: number },
@@ -283,5 +267,4 @@ export function orderSquad(
   });
 }
 
-export { SquadsSetStrength, STATE_OPERATIONAL };
-export type { SquadView, Controller };
+export type { SquadView };

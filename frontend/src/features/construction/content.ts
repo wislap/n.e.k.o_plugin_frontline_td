@@ -29,4 +29,10 @@ export const structureBaseFields = {
   // footprint centre while the structure is operational (outposts,
   // hive). Radius in cells.
   exclusion: s.optional(s.int({ min: 1, max: 64 })),
+  // Render-only greybox height in world units (ghost, structure box,
+  // memory silhouettes). Sim never reads it; required so render code
+  // has no per-kind fallback table.
+  visual: s.object({
+    height: s.number({ min: 0.1, max: 20 }),
+  }),
 };

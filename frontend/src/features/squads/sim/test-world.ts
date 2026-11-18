@@ -28,57 +28,31 @@ import {
   createProductionModule,
   structureParts as productionStructureParts,
 } from '../../production/sim/index';
-import type { TerrainGrid } from '../../terrain/content';
 import { createTerrainModule } from '../../terrain/sim/index';
 import { createUnitsModule } from '../../units/sim/index';
 import type { FactionStart } from '../../units/sim/index';
 import { SquadsChannel } from '../protocol';
 import type { SquadsSnapshot } from '../protocol';
 import { createSquadsModule } from './module';
+import { makeGrid, must } from '../../../testing/index';
 
 const F1 = toFactionId(1);
 export const F2 = toFactionId(2);
 const DB = loadContent();
 const ENERGY = DB.cargos.byId('frontline_td:energy')?.index ?? -1;
 const CLS = DB.movementClasses.byId('frontline_td:ground')?.index ?? 0;
-export const ROBOT = must(DB.units.byId('frontline_td:robot'));
-export const BASE = must(DB.structures.byId('frontline_td:main_base'));
-export const DEPOT = must(DB.structures.byId('frontline_td:supply_depot'));
+export const ROBOT = must(DB.units.byId('frontline_td:robot'), 'robot');
+export const BASE = must(DB.structures.byId('frontline_td:main_base'), 'main_base');
+export const DEPOT = must(DB.structures.byId('frontline_td:supply_depot'), 'supply_depot');
 
 const W = 30;
 const H = 20;
 const FLAT = Array.from({ length: H }, () => '.'.repeat(W));
 
-function must<T>(v: T | undefined): T {
-  if (v === undefined) {
-    throw new Error('base pack missing');
-  }
-  return v;
-}
-
 const SURFACES: ResolvedSurface[] = [
   { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
   { id: contentId('a:x'), index: 1, costs: [-1], speedBp: 10000, color: '#000000' },
 ];
-
-function makeGrid(rows: string[]): TerrainGrid {
-  const width = rows[0]?.length ?? 0;
-  const surfaces = new Uint16Array(width * rows.length);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      if (row[x] === '#') {
-        surfaces[y * width + x] = 1;
-      }
-    }
-  });
-  return {
-    width,
-    height: rows.length,
-    heights: new Uint8Array(width * rows.length),
-    surfaces,
-    ramps: new Uint8Array(width * rows.length),
-  };
-}
 
 export type PartPatch = (comp: unknown, init: Record<string, number>) => Record<string, number>;
 

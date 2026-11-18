@@ -5,7 +5,7 @@
 import type { Linter } from 'eslint';
 import i18next from 'eslint-plugin-i18next';
 
-export const PURITY_ZONES = [
+const PURITY_ZONES = [
   'src/core/**/*.{ts,tsx}',
   'src/kernel/**/*.{ts,tsx}',
   'src/content/**/*.{ts,tsx}',

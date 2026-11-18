@@ -1,7 +1,7 @@
 // Deterministic 64-bit hash kept as two 32-bit lanes, murmur3-style mixing
 // built on Math.imul (32-bit ops are IEEE-exact and therefore deterministic).
 
-export interface Hasher {
+interface Hasher {
   u32(n: number): void;
   f64(n: number): void;
   str(s: string): void;
@@ -11,7 +11,7 @@ export interface Hasher {
 const SEED_A = 0x9747b28c;
 const SEED_B = 0x238f1a4d;
 
-export function createHasher(): Hasher {
+function createHasher(): Hasher {
   let h1 = SEED_A;
   let h2 = SEED_B;
   let count = 0;

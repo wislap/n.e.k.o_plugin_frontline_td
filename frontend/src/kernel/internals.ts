@@ -19,7 +19,7 @@ import { createStorage } from './components';
 import type { GridLayerRef, GridLayerWriter, LayerStorage } from './layers';
 import { createLayerStorage } from './layers';
 import { COMMAND_REJECTED } from '../core/index';
-import { ContainedIn, Faction, InWorld, UnderConstruction } from './contracts';
+import { Faction, InWorld, UnderConstruction } from './contracts';
 import type { CommandHandler, Controller, EffectHandler, SimConfig, SystemContext } from './types';
 
 export const CONTROLLER_STREAM_ID = 'frontline_td:controller';
@@ -275,7 +275,7 @@ export function createInternals(config: SimConfig): SimInternals {
   // Kernel contract components always exist, and the kernel's own rejection
   // event is pre-registered so command validation can emit it before any
   // module declares emits.
-  for (const ref of [Faction, InWorld, ContainedIn, UnderConstruction]) {
+  for (const ref of [Faction, InWorld, UnderConstruction]) {
     ensureComponent(internals, ref);
   }
   internals.emitDefs.set(COMMAND_REJECTED.type, COMMAND_REJECTED);

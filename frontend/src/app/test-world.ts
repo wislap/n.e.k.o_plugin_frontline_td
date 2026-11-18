@@ -7,10 +7,10 @@ import { SquadsChannel } from '../features/squads/protocol';
 import type { SquadsSnapshot } from '../features/squads/protocol';
 import { StructuresChannel } from '../features/construction/protocol';
 import type { ConstructionStructures } from '../features/construction/protocol';
-import { DenseUnitsChannel } from '../features/units/protocol';
 import type { DenseUnits } from '../features/units/protocol';
 import { defaultSetup } from '../modes/assault/index';
 import { resolveSetup } from './resolve-setup';
+import { denseUnits } from '../testing/index';
 
 export const F2 = toFactionId(2);
 export const DB = loadContent();
@@ -35,7 +35,7 @@ export function squads(sim: Simulation): SquadsSnapshot {
 }
 
 export function dense(sim: Simulation): DenseUnits {
-  return sim.snapshot(F2).channels[DenseUnitsChannel.id] as DenseUnits;
+  return denseUnits(sim, F2);
 }
 
 export function structures(sim: Simulation): ConstructionStructures {

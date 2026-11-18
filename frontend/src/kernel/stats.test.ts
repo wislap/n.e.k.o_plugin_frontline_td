@@ -9,8 +9,8 @@ import { Faction, InWorld } from './contracts';
 import { defineModifier, defineStat } from './stats';
 import { baseConfig, F1 } from './testing/helpers';
 
-const SpeedStat = defineStat('frontline_td:test.stat.speed', 'quantity');
-const GeomStat = defineStat('frontline_td:test.stat.geom', 'geometry');
+const SpeedStat = defineStat('frontline_td:test.stat.speed');
+const GeomStat = defineStat('frontline_td:test.stat.geom');
 const AddA = defineModifier('frontline_td:test.stat.add_a', SpeedStat, 'add');
 const AddB = defineModifier('frontline_td:test.stat.add_b', SpeedStat, 'add');
 const MulA = defineModifier('frontline_td:test.stat.mul_a', SpeedStat, 'mul_bp');
@@ -84,13 +84,13 @@ describe('stats & modifiers', () => {
     expect(sim.probes()['frontline_td:test.stat.q0']).toBe(0);
   });
 
-  it('floors quantity stats and keeps geometry fractional', () => {
+  it('keeps stat values fractional', () => {
     const handles: (EntityHandle | null)[] = [];
     const sim = makeSim([
       statModule(
         [
           [
-            [MulGeom, { value: 5000 }],
+            [MulGeom, { value: 3333 }],
             [MulA, { value: 5000 }],
           ],
         ],
@@ -98,16 +98,15 @@ describe('stats & modifiers', () => {
       ),
     ]);
     sim.step();
-    // quantity: floor(100 * 1.5) = 150; geometry: 2 * 1.5 = 3
+    // 100 * 1.5 = 150 (exact); 2 * 1.3333 = 2.6666 (fractional, not floored)
     expect(sim.probes()['frontline_td:test.stat.q0']).toBe(150);
-    expect(sim.probes()['frontline_td:test.stat.g0']).toBe(3);
+    expect(sim.probes()['frontline_td:test.stat.g0']).toBeCloseTo(2.6666, 4);
   });
 
-  it('floors negative add results toward -Infinity on quantity stats', () => {
+  it('negative adds lower the stat', () => {
     const handles: (EntityHandle | null)[] = [];
     const sim = makeSim([statModule([[[AddA, { value: -150 }]]], handles)]);
     sim.step();
-    // floor(-50 * 10000 / 10000) = -50
     expect(sim.probes()['frontline_td:test.stat.q0']).toBe(-50);
   });
 

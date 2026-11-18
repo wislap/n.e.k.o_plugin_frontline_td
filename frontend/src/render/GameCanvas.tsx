@@ -1,12 +1,12 @@
 // Game canvas (M2 C2 + M3 D): an R3F <Canvas> filling the viewport
-// behind the HUD, plus the input bridge that turns pointer intents into
-// picks, selections, and commands. Intent handling lives in
-// render/input-dispatch.ts.
+// behind the HUD, plus the input bridge that registers the
+// canvas-dependent half of the app intent router (render/input-dispatch.ts).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBoxStore } from '../client/box-store';
 import { useBuildStore } from '../client/build-store';
+import { useIntentRouter, type IntentRouter } from '../client/intent';
 import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
@@ -70,19 +70,24 @@ function unitHpItems(pair: SnapshotPair): HpBarItem[] {
   return items;
 }
 
-// Inside <Canvas>: pointer intents need the live camera for ray casting.
+// Inside <Canvas>: pointer events feed the app-level router; the router
+// forwards canvas-dependent intents back into the handler registered
+// here (ray casts need the live camera). Register/unregister on mount.
 function InputBridge({
   client,
   db,
   mapWidth,
   mapHeight,
   heights,
+  router,
 }: {
   client: SimClient;
   db: ContentDb;
   mapWidth: number;
   mapHeight: number;
   heights: ArrayLike<number>;
+  // Prop-drilled: React context does not cross the <Canvas> boundary.
+  router: IntentRouter;
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
@@ -99,9 +104,10 @@ function InputBridge({
       size,
       rect: () => el.getBoundingClientRect(),
     });
-    return installPointer(
+    router.setCanvasHandler(dispatch);
+    const uninstall = installPointer(
       el,
-      dispatch,
+      router.dispatch,
       (box) => {
         useBoxStore.getState().setBox(box);
       },
@@ -116,7 +122,11 @@ function InputBridge({
         },
       },
     );
-  }, [gl, camera, size, client, db, heights, mapWidth, mapHeight]);
+    return () => {
+      uninstall();
+      router.setCanvasHandler(null);
+    };
+  }, [gl, camera, size, client, db, heights, mapWidth, mapHeight, router]);
 
   return null;
 }
@@ -184,6 +194,7 @@ function MoveMarker({
 }
 
 export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanvasProps) {
+  const router = useIntentRouter();
   // Wait for the first snapshot (terrain layers + observer) before
   // mounting the scene content.
   const [ready, setReady] = useState(false);
@@ -318,6 +329,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapWidth={grid.width}
               mapHeight={grid.height}
               heights={heights}
+              router={router}
             />
           </>
         )}

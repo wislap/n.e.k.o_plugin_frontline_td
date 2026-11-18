@@ -6,7 +6,7 @@ import type { FactionId } from './faction';
 import { MAX_FACTION_ID } from './faction';
 import type { EntityHandle } from './handle';
 
-export type ValidationFailure = { ok: false; path: string; message: string };
+type ValidationFailure = { ok: false; path: string; message: string };
 export type ValidationResult<T> = { ok: true; value: T } | ValidationFailure;
 
 export interface Schema<T> {

@@ -3,11 +3,12 @@
 // when the shared placement rules pass, red otherwise; the failing reason
 // is mirrored into the build store for the HUD. Node kinds also draw the
 // connect-radius ring and dashed predicted links to own completed nodes.
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBuildStore } from '../../../client/build-store';
 import { cursorGround } from '../../../client/cursor';
+import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { makePlacementView } from '../rules/index';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
@@ -35,8 +36,12 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
   const boxMat = useRef<THREE.MeshBasicMaterial>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const linksRef = useRef<THREE.LineSegments>(null);
-  const linkGeom = useMemo(() => new THREE.BufferGeometry(), []);
-  const linkPositions = useRef<Float32Array | null>(null);
+  const linkBufRef = useRef<LineBuffer | null>(null);
+  useEffect(() => {
+    return () => {
+      linkBufRef.current?.geometry.dispose();
+    };
+  }, []);
   const lastGhost = useRef<string>('');
 
   useFrame(() => {
@@ -44,10 +49,13 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     const material = boxMat.current;
     const ring = ringRef.current;
     const links = linksRef.current;
-    const positions = (linkPositions.current ??= new Float32Array(64 * 6));
     if (box === null || material === null || ring === null || links === null) {
       return;
     }
+    linkBufRef.current ??= createLineBuffer(64 * 2, false);
+    const linkBuf = linkBufRef.current;
+    links.geometry = linkBuf.geometry;
+    const positions = linkBuf.positions;
     const kindId = useBuildStore.getState().kind;
     const kind = kindId === null ? undefined : db.structures.byId(kindId);
     const snapshot = client.snapshots().latest;
@@ -133,8 +141,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           segs += 1;
         }
       }
-      linkGeom.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, segs * 6), 3));
-      linkGeom.computeBoundingSphere();
+      commitLineBuffer(linkBuf, segs * 2);
       // lineDistance attribute required by the dashed material.
       links.computeLineDistances();
       links.visible = segs > 0;
@@ -151,7 +158,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
         <ringGeometry args={[0.96, 1, RING_SEGMENTS]} />
         <meshBasicMaterial color={RING_COLOR} transparent opacity={0.8} side={THREE.DoubleSide} />
       </mesh>
-      <lineSegments ref={linksRef} geometry={linkGeom} visible={false}>
+      <lineSegments ref={linksRef} visible={false}>
         <lineDashedMaterial color={RING_COLOR} dashSize={0.5} gapSize={0.35} />
       </lineSegments>
     </group>

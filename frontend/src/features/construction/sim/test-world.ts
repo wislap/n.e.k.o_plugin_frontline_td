@@ -11,7 +11,6 @@ import type { SimConfig, SimModule, SpawnInit } from '../../../kernel/index';
 import { COMMAND_REJECTED } from '../../../core/index';
 import type { CommandEnvelope, CommandRejectedPayload } from '../../../core/index';
 import type { ResolvedSurface } from '../../../content/index';
-import type { TerrainGrid } from '../../terrain/content';
 import { createTerrainModule } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
@@ -24,6 +23,7 @@ import type { ConstructionSalvage, ConstructionStructures, RoadWorks } from '../
 import { createConstructionModule } from './module';
 import type { RoadSegmentPartsFn, RuinPartsFn, StructurePartsFn } from './env';
 import { Structure } from './components';
+import { makeGrid, must } from '../../../testing/index';
 
 const DB: ContentDb = loadContent();
 export const F1 = toFactionId(1);
@@ -32,12 +32,6 @@ export const CYCLE = DB.logistics.cycleTicks;
 export const MATERIAL = DB.cargos.byId('frontline_td:material')?.index ?? -1;
 const CLS_GROUND = DB.movementClasses.byId('frontline_td:ground')?.index ?? 0;
 
-function must<T>(v: T | undefined, name: string): T {
-  if (v === undefined) {
-    throw new Error(`base pack entry '${name}' missing`);
-  }
-  return v;
-}
 export const STATION = must(DB.structures.byId('frontline_td:station'), 'station');
 export const DEPOT = must(DB.structures.byId('frontline_td:supply_depot'), 'supply_depot');
 export const BASE = must(DB.structures.byId('frontline_td:main_base'), 'main_base');
@@ -48,26 +42,6 @@ const SURFACES: ResolvedSurface[] = [
 ];
 
 // '.': flat ground, '#': impassable rock, '^': ramp cell (flat height).
-function makeGrid(rows: string[]): TerrainGrid {
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const heights = new Uint8Array(width * height);
-  const surfaces = new Uint16Array(width * height);
-  const ramps = new Uint8Array(width * height);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      const c = row[x];
-      if (c === '#') {
-        surfaces[y * width + x] = 1;
-      } else if (c === '^') {
-        ramps[y * width + x] = 1;
-      } else if (c === 'p') {
-        heights[y * width + x] = 1;
-      }
-    }
-  });
-  return { width, height, heights, surfaces, ramps };
-}
 
 // Spawn a completed structure entity raw (as the app would get from
 // start.structures after onStart): parts + the Structure marker.

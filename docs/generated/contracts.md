@@ -154,7 +154,6 @@
 | `frontline_td:combat.targetable` | radius: f64 | — |
 | `frontline_td:combat.weapon` | range: f64、damage: i32、cooldown: u32、readyAt: u32、costCargo: u16、costAmount: i32、target: f64 | frontline_td:combat |
 | `frontline_td:construction_progress` | progress: u32、total: u32、mode: u8 | frontline_td:construction |
-| `frontline_td:contained_in` | container: handle | kernel |
 | `frontline_td:core` | — | frontline_td:construction |
 | `frontline_td:faction` | id: u16 | kernel |
 | `frontline_td:in_world` | — | kernel |

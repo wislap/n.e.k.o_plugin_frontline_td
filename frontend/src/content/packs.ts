@@ -9,8 +9,8 @@ import { structures } from './frontline_td/structures';
 import { surfaces } from './frontline_td/surfaces';
 import { units } from './frontline_td/units';
 
-export const BASE_PACK_ID = 'frontline_td';
-export const BASE_PACK_VERSION = '0.1.0';
+const BASE_PACK_ID = 'frontline_td';
+const BASE_PACK_VERSION = '0.1.0';
 export const BASE_PACK_CONTENT = {
   surfaces,
   movementClasses,

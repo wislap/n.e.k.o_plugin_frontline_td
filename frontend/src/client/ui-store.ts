@@ -7,6 +7,7 @@ export interface UiState {
   logisticsOverlay: boolean;
   toggleDebugPanel(): void;
   toggleLogisticsOverlay(): void;
+  reset(): void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -17,5 +18,8 @@ export const useUiStore = create<UiState>((set) => ({
   },
   toggleLogisticsOverlay: () => {
     set((state) => ({ logisticsOverlay: !state.logisticsOverlay }));
+  },
+  reset: () => {
+    set({ debugPanelOpen: true, logisticsOverlay: false });
   },
 }));

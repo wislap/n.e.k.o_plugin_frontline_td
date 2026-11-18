@@ -23,13 +23,26 @@ const STOCK = {
   'frontline_td:ammo': 50,
 };
 
+// A required named map point: missing entries are content bugs, not
+// (0,0) spawn positions.
+export function requirePoint(
+  map: { id: string; points: Record<string, { x: number; y: number } | undefined> },
+  name: string,
+): { x: number; y: number } {
+  const point = map.points[name];
+  if (point === undefined) {
+    throw new Error(`map '${map.id}' is missing required point '${name}'`);
+  }
+  return point;
+}
+
 export function defaultSetup(seed: number): MatchSetup {
-  const playerStart = proto01.points['player_start'] ?? { x: 0, y: 0 };
-  const enemyNorth = proto01.points['enemy_north'] ?? { x: 0, y: 0 };
-  const enemyEast = proto01.points['enemy_east'] ?? { x: 0, y: 0 };
-  const outpostSouth = proto01.points['outpost_south'] ?? { x: 0, y: 0 };
-  const outpostWest = proto01.points['outpost_west'] ?? { x: 0, y: 0 };
-  const outpostEast = proto01.points['outpost_east'] ?? { x: 0, y: 0 };
+  const playerStart = requirePoint(proto01, 'player_start');
+  const enemyNorth = requirePoint(proto01, 'enemy_north');
+  const enemyEast = requirePoint(proto01, 'enemy_east');
+  const outpostSouth = requirePoint(proto01, 'outpost_south');
+  const outpostWest = requirePoint(proto01, 'outpost_west');
+  const outpostEast = requirePoint(proto01, 'outpost_east');
   return {
     formatVersion: 1,
     packs: [basePackManifest()],

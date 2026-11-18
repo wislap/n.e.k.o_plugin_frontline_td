@@ -15,8 +15,8 @@ import ts from 'typescript';
 import { withViteSsr } from './ssr.ts';
 import type { SsrLoad } from './ssr.ts';
 
-export const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
-export const PLUGIN_ROOT = path.resolve(FRONTEND_ROOT, '..');
+const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
+const PLUGIN_ROOT = path.resolve(FRONTEND_ROOT, '..');
 
 const GENERATED_HEADER = '<!-- 自动生成，勿手改：npm run gen:index -->';
 const ADR_NAME_RE = /^(\d{4})-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$/;
@@ -46,7 +46,7 @@ export const ADR_DOMAINS = [
   'UI',
 ] as const;
 
-export interface AdrPartialSupersession {
+interface AdrPartialSupersession {
   number: string;
   note: string;
 }
@@ -310,7 +310,7 @@ function orEmpty(items: readonly string[]): string {
   return items.length === 0 ? EMPTY : items.map((i) => `\`${i}\``).join(LIST_SEP);
 }
 
-export function renderContracts(manifest: ManifestLike): string {
+function renderContracts(manifest: ManifestLike): string {
   const out: string[] = [
     GENERATED_HEADER,
     '',
@@ -463,7 +463,7 @@ function exportSurfaceFiles(): string[] {
   return [...files].sort();
 }
 
-export function renderExports(files: readonly string[]): string {
+function renderExports(files: readonly string[]): string {
   const program = ts.createProgram(
     files.map((f) => path.join(FRONTEND_ROOT, f)),
     {
@@ -554,7 +554,7 @@ const GENERATORS: Generator[] = [
   },
 ];
 
-export async function runGenerators(check: boolean): Promise<number> {
+async function runGenerators(check: boolean): Promise<number> {
   let failed = false;
   for (const generator of GENERATORS) {
     const { content, errors } = await generator.generate();

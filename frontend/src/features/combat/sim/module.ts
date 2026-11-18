@@ -294,8 +294,9 @@ export function createCombatModule(): CombatModule {
         },
       });
 
-      // Despawn the dead — registered last so movement and construction
-      // cleanup readers observe combat.died first.
+      // Despawn the dead — combat's module registers last so this runs
+      // after the other cleanup-phase combat.died readers; the queued
+      // despawn order is observable through entity-id reuse.
       builder.system({
         id: 'frontline_td:combat.despawn',
         phase: 'cleanup',

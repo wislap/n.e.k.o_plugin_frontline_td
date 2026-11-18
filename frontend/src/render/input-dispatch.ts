@@ -1,31 +1,27 @@
-// Canvas input dispatch (M3 D): turns screen-space intents into picks,
-// selections, build placements, and commands. Split out of GameCanvas to
-// keep it under the file-size ratchet; picking helpers live in
-// client/pick.ts so the priority rules stay unit-testable.
+// Canvas input dispatch (M3 D): the canvas-dependent half of the single
+// intent router — screen-space intents that need the camera/raycaster
+// turn into picks, selections, build placements, and commands. Global
+// intents are handled by app/dispatch.ts, which forwards these here.
 import * as THREE from 'three';
 import { useBuildStore } from '../client/build-store';
 import { useCameraStore } from '../client/camera-store';
 import { cursorGround, cursorScreen } from '../client/cursor';
 import { pickAt, structuresChannel } from '../client/pick';
+import { submitRoadOrder } from '../client/road-order';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb } from '../content/index';
-import {
-  ActivateCommand,
-  CancelCommand,
-  PlaceCommand,
-  UpgradeLinksCommand,
-} from '../features/construction/protocol';
+import { PlaceCommand } from '../features/construction/protocol';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
 import { linkFlow } from '../features/logistics/render/index';
-import { extendRoute, linkPairs, nearestLink } from '../features/logistics/ui/index';
+import { extendRoute, nearestLink } from '../features/logistics/ui/index';
 import { MoveCommand } from '../features/movement/protocol';
 import { SquadsChannel, SquadsOrder, type SquadsSnapshot } from '../features/squads/protocol';
 import { routeMoveSelection } from '../client/squad-controls';
 import type { Intent } from '../input/intents';
 import { pickGround, type Ray } from './picking';
 import { interpolatedUnits } from './unit-pos';
-import { visibleGroundHeight } from './camera/math';
+import { visibleGroundHeight } from '../client/camera-math';
 import { terrainY } from './world';
 
 const CLICK_RADIUS_CELLS = 0.6;
@@ -95,20 +91,6 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
     return nodes;
   };
 
-  const submitRoadOrder = (): void => {
-    const build = useBuildStore.getState();
-    const net = roadNetwork();
-    if (net === null || build.roadSel.length === 0) {
-      return;
-    }
-    const links = linkPairs(net, build.roadSel);
-    if (links.length > 0) {
-      client.submit({ type: UpgradeLinksCommand.type, payload: { links, level: 1 } });
-    }
-    // Stay in road mode after submitting.
-    build.setRoadSel([]);
-  };
-
   const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
     const rect = env.rect();
     const ndc = new THREE.Vector2(
@@ -174,19 +156,6 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         }
         return;
       }
-      case 'road.toggle': {
-        const build = useBuildStore.getState();
-        if (build.roadMode) {
-          build.cancel();
-        } else {
-          build.enterRoad();
-        }
-        return;
-      }
-      case 'road.confirm': {
-        submitRoadOrder();
-        return;
-      }
       case 'road.click': {
         const ground = groundAt(intent.x, intent.y);
         if (ground === null) {
@@ -202,7 +171,7 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
           return;
         }
         if (build.roadSel.includes(link)) {
-          submitRoadOrder();
+          submitRoadOrder(client, db);
           return;
         }
         const route = extendRoute(flowedLinks(), link, warehouseNodes());
@@ -231,24 +200,6 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         // placement ends it.
         if (!intent.blueprint) {
           useBuildStore.getState().cancel();
-        }
-        return;
-      }
-      case 'build.cancel': {
-        useBuildStore.getState().cancel();
-        return;
-      }
-      case 'selection.activate': {
-        const selected = [...useSelectionStore.getState().selected];
-        if (selected.length > 0) {
-          client.submit({ type: ActivateCommand.type, payload: { blueprints: selected } });
-        }
-        return;
-      }
-      case 'selection.cancel': {
-        const selected = [...useSelectionStore.getState().selected];
-        if (selected.length > 0) {
-          client.submit({ type: CancelCommand.type, payload: { targets: selected } });
         }
         return;
       }

@@ -28,7 +28,7 @@
     "verify": "npm run verify:static && npm run test && npm run verify:build",
     "check:size": "node tooling/check-size.ts",
     "e2e": "playwright test",
-    "eval:perf": "node eval/run.ts eval/perf/movement.ts",
+    "eval:perf": "node eval/run.ts eval/perf/movement.ts && node eval/run.ts eval/perf/logistics.ts",
     "eval:balance": "node eval/run.ts eval/balance/matches.ts"
   },
   "dependencies": {

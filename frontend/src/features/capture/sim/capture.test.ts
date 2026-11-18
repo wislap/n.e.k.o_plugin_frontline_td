@@ -14,17 +14,12 @@ import { CaptureCompleted, CapturePointsChannel } from '../protocol';
 import type { CapturePoints } from '../protocol';
 import { Capture } from './components';
 import { createCaptureModule } from './module';
+import { must } from '../../../testing/index';
 
 const DB = loadContent();
 const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 
-function must<T>(v: T | undefined, name: string): T {
-  if (v === undefined) {
-    throw new Error(`base pack entry '${name}' missing`);
-  }
-  return v;
-}
 const OUTPOST: ResolvedStructure = must(DB.structures.byId('frontline_td:outpost'), 'outpost');
 const CAPTURE = must(OUTPOST.capture, 'outpost.capture');
 

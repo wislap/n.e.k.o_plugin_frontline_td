@@ -2,9 +2,9 @@
 // auto-tactical-on-pause behavior. Zoom means "spectate distance" in
 // spectate and "visible ground height" in tactical.
 import { create } from 'zustand';
-import { clampSpectateDist, clampTacticalHeight, matchZoomForMode } from '../render/camera/math';
+import { clampSpectateDist, clampTacticalHeight, matchZoomForMode } from './camera-math';
 
-export type CameraMode = 'spectate' | 'tactical';
+type CameraMode = 'spectate' | 'tactical';
 
 export interface CameraState {
   mode: CameraMode;
@@ -22,6 +22,7 @@ export interface CameraState {
   toggleMode(): void;
   setMode(mode: CameraMode, auto: boolean): void;
   setAutoTacticalOnPause(on: boolean): void;
+  reset(): void;
 }
 
 export const useCameraStore = create<CameraState>((set, get) => ({
@@ -80,5 +81,14 @@ export const useCameraStore = create<CameraState>((set, get) => ({
   },
   setAutoTacticalOnPause: (on) => {
     set({ autoTacticalOnPause: on });
+  },
+  reset: () => {
+    set({
+      mode: 'spectate',
+      center: { x: 0, y: 0 },
+      zoom: 30,
+      autoTacticalOnPause: true,
+      autoSwitch: false,
+    });
   },
 }));

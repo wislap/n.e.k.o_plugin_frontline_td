@@ -3,7 +3,7 @@
 ## 职责
 基于扇区流场（sector flowfield，ADR 0010）为各移动类别提供寻路：
 扇区边界提取门户（portal）、扇区内边表、目标距离查询与按扇区惰性
-计算的流向场。M2 仅为寻路服务，不做单位移动。
+计算的流向场。单位移动的结算在 movement，本模块只提供方向查询。
 
 ## 公开接口
 `sim/index.ts`:
@@ -30,5 +30,5 @@
   因为地形阻挡覆盖层先于 pathing 载入（sim-registry 中 terrain 必须
   排在 pathing 之前）。
 
-## 对应设计章节
+## 对应设计
 architecture.md §6（扇区流场）、ADR 0010。

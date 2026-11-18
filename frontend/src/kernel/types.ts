@@ -32,8 +32,8 @@ export type WriteView<F extends FieldMap> = { [K in keyof F]: FieldArray };
 export type FieldValues<F extends FieldMap> = { [K in keyof F]: number };
 export type SpawnInit = readonly (readonly [ComponentRef, Partial<FieldValues<FieldMap>>?])[];
 
-export type AnyChannelDef = EventDef<never> | IntentDef<never>;
-export type ReadonlyUint32Array = Readonly<Uint32Array>;
+type AnyChannelDef = EventDef<never> | IntentDef<never>;
+type ReadonlyUint32Array = Readonly<Uint32Array>;
 
 // The context a system / effect / command handler / snapshot builder sees.
 export interface SystemContext {

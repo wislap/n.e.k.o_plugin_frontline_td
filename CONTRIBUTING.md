@@ -7,7 +7,7 @@
 ## 协作方式
 
 - 共享计划走 GitHub issue + 开发群通知，不进仓库。
-- 个人 / agent 的施工计划、调研记录放在 `.plans/`（已被 gitignore），做完即删；删除前把有长期价值的结论提炼到 ADR、设计文档或 `docs/guides/`。
+- 个人 / agent 的施工计划、调研记录放在 `.plans/`（已被 gitignore），做完即删；删除前把有长期价值的结论提炼到 ADR 或设计文档。
 
 ## PR 流程
 

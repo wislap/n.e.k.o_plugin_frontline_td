@@ -8,7 +8,7 @@ import type { LogisticsModule } from '../../features/logistics/sim/index';
 import type { Controller, SimModule } from '../../kernel/index';
 import { AssaultChannel } from './protocol';
 import type { AssaultState } from './protocol';
-import { ASSAULT_MODE_ID, defaultSetup } from './setup';
+import { ASSAULT_MODE_ID, defaultSetup, requirePoint } from './setup';
 import { createDirectorController } from './director';
 import type { VictoryOptions } from './victory';
 import { createVictoryModule } from './victory';
@@ -35,7 +35,7 @@ export function assaultDirector(
   return createDirectorController({
     faction,
     db: ctx.db,
-    rally: ctx.map.points['enemy_rally'] ?? { x: 0, y: 0 },
+    rally: requirePoint(ctx.map, 'enemy_rally'),
     hostile: ctx.hostile,
   });
 }

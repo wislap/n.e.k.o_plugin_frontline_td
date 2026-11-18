@@ -269,4 +269,33 @@ describe('createWorkerHandler', () => {
     advance(100);
     expect(errors()).toHaveLength(0);
   });
+
+  it('a pump exception posts one error and stops advancing', () => {
+    const crashing: SimModule = {
+      id: 'frontline_td:test.wh.crash',
+      install(builder) {
+        builder.system({
+          id: 'frontline_td:test.wh.boom',
+          phase: 'command',
+          run(ctx) {
+            if (ctx.tick >= 2) {
+              throw new Error('boom');
+            }
+          },
+        });
+      },
+    };
+    const { handler, advance, errors, snapshots } = makeHandler([layerModule(), crashing]);
+    handler.onMessage({ kind: 'start', setup: setup() });
+    advance(0);
+    advance(50);
+    advance(50);
+    advance(50); // tick 2 throws here
+    const before = snapshots().length;
+    advance(50);
+    advance(50); // crashed: no more snapshots, no more errors
+    expect(errors()).toHaveLength(1);
+    expect(errors()[0]?.message).toContain('boom');
+    expect(snapshots()).toHaveLength(before);
+  });
 });

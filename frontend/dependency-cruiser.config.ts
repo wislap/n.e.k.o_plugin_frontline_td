@@ -59,7 +59,7 @@ const config: IConfiguration = {
       to: {
         path: '^src/',
         pathNot:
-          `^(${CORE}|${KERNEL}|${CONTENT}|` +
+          `^(${CORE}|${KERNEL}|${CONTENT}|src/testing/|` +
           'src/features/$1/(sim|rules)/|' +
           'src/features/$1/(content|protocol)[.]ts|' +
           `${SIM_PUBLIC})`,
@@ -176,6 +176,33 @@ const config: IConfiguration = {
       comment: 'eval/ is a Node-side harness; src/ must never import it (ADR 0024).',
       from: { path: '^src/' },
       to: { path: '^eval/' },
+    },
+    {
+      name: 'testing-imports',
+      severity: 'error',
+      comment:
+        'R12: src/testing/ is test-only: importers must be *.test.ts(x)' +
+        ' or **/test-world.ts (ADR 0043).',
+      from: {
+        path: '^src/',
+        pathNot: '(\\.test\\.tsx?$|test-world\\.ts$|^src/testing/)',
+      },
+      to: { path: '^src/testing/' },
+    },
+    {
+      name: 'testing-deps',
+      severity: 'error',
+      comment:
+        'R12: src/testing/ may only import the public entry points tests' +
+        ' use: core/kernel/content/protocol index.ts, features sim/index.ts' +
+        ' / rules/index.ts / protocol.ts / content.ts (ADR 0043).',
+      from: { path: '^src/testing/' },
+      to: {
+        path: '^src/',
+        pathNot:
+          '^src/(core|kernel|content|protocol)/index[.]ts$|' +
+          '^src/features/[^/]+/(sim/index|rules/index|protocol|content)[.]ts$',
+      },
     },
     {
       name: 'eval-src-public-only',

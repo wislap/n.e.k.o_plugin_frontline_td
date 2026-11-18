@@ -61,6 +61,9 @@ export function createSimClient(worker: WorkerLike): SimClient {
       useRuntimeStore.getState().setStats(message.stats);
       return;
     }
+    // Reported on the console too: the runtime store is UI-optional but
+    // a worker crash must never pass silently.
+    console.error('sim worker error:', message.message);
     useRuntimeStore.getState().setError(message.message);
   });
 

@@ -5,11 +5,15 @@ import { create } from 'zustand';
 export interface BoxState {
   box: { x0: number; y0: number; x1: number; y1: number } | null;
   setBox(box: BoxState['box']): void;
+  reset(): void;
 }
 
 export const useBoxStore = create<BoxState>((set) => ({
   box: null,
   setBox: (box) => {
     set({ box });
+  },
+  reset: () => {
+    set({ box: null });
   },
 }));

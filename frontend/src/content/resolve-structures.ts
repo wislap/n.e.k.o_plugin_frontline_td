@@ -28,7 +28,7 @@ export interface ResolvedStoreProfile {
   rateMilliPerCycle: number;
 }
 
-export interface ResolvedNodeProfile {
+interface ResolvedNodeProfile {
   // x10 cost units (ground orthogonal step cost).
   connect: number;
   service: number;
@@ -57,7 +57,7 @@ export interface ResolvedWeapon {
 
 // Inputs/outputs resolved to cargo indices and sorted by index
 // (deterministic intent order); time in ticks, amounts in milli.
-export interface ResolvedProducer {
+interface ResolvedProducer {
   inputs: readonly { cargo: number; milli: number }[];
   outputs: readonly { cargo: number; milli: number }[];
   // Unit content ids produced per cycle (alternative to outputs).
@@ -85,6 +85,8 @@ export interface ResolvedStructure {
   capture?: ResolvedCapture;
   // Sight radius in cells while operational (M5 fog; default 4).
   vision: number;
+  // Render-only greybox height (required in content; sim never reads).
+  visual: { height: number };
   // Seeded into every other faction's structure memory on the first
   // vision tick (outpost, hive).
   visionLandmark?: boolean;
@@ -92,7 +94,7 @@ export interface ResolvedStructure {
 
 // Capture profile resolved to ticks and squared radius (cells²) for
 // integer distance checks.
-export interface ResolvedCapture {
+interface ResolvedCapture {
   radius: number;
   radiusSq: number;
   ticks: number;
@@ -289,6 +291,7 @@ export function resolveStructures(
       id: entry.id,
       index,
       footprint: entry.footprint,
+      visual: { height: entry.visual.height },
       ...(entry.hp !== undefined ? { hp: entry.hp } : {}),
       ...(build !== undefined ? { build } : {}),
       ...(requiresDeposit !== undefined ? { requiresDeposit } : {}),

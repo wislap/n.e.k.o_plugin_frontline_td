@@ -33,7 +33,6 @@ export const nodeProfileSchema = s.object({
 
 export const cargoSchema = s.object({
   id: s.contentId(),
-  color: s.optional(s.string({ maxLength: 16 })),
 });
 export type CargoContent = Infer<typeof cargoSchema>;
 

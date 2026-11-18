@@ -3,7 +3,8 @@
 // into the build store; Esc or right-click leaves build mode.
 import { useTranslation } from 'react-i18next';
 import { useBuildStore } from '../../../client/build-store';
-import type { ContentDb } from '../../../content/index';
+import { useIntentRouter } from '../../../client/intent';
+import { localName, type ContentDb } from '../../../content/index';
 
 const menu = {
   position: 'fixed',
@@ -20,12 +21,9 @@ const menu = {
   borderRadius: 4,
 } as const;
 
-function cargoName(id: string): string {
-  return id.split(':')[1] ?? id;
-}
-
 export function BuildMenu({ db }: { db: ContentDb }) {
   const { t } = useTranslation();
+  const router = useIntentRouter();
   const active = useBuildStore((s) => s.kind);
   const roadMode = useBuildStore((s) => s.roadMode);
   const buildables = db.structures.list.filter((s) => s.build !== undefined);
@@ -33,11 +31,11 @@ export function BuildMenu({ db }: { db: ContentDb }) {
   return (
     <div style={menu}>
       {buildables.map((kind) => {
-        const name = kind.id.split(':')[1] ?? kind.id;
+        const name = localName(kind.id);
         const cost = (kind.build?.cost ?? [])
           .map((c) => {
             const cargoId = db.cargos.byIndex(c.cargo)?.id ?? String(c.cargo);
-            return `${Math.floor(c.milli / 1000)} ${t(`cargo.${cargoName(cargoId)}`, { defaultValue: cargoName(cargoId) })}`;
+            return `${Math.floor(c.milli / 1000)} ${t(`cargo.${localName(cargoId)}`, { defaultValue: localName(cargoId) })}`;
           })
           .join(', ');
         const selected = active === kind.id;
@@ -47,11 +45,9 @@ export function BuildMenu({ db }: { db: ContentDb }) {
             type="button"
             title={cost}
             onClick={() => {
-              if (selected) {
-                useBuildStore.getState().cancel();
-              } else {
-                useBuildStore.getState().select(kind.id);
-              }
+              router.dispatch(
+                selected ? { kind: 'build.cancel' } : { kind: 'build.select', kindId: kind.id },
+              );
             }}
             style={{
               cursor: 'pointer',
@@ -70,12 +66,7 @@ export function BuildMenu({ db }: { db: ContentDb }) {
         type="button"
         title={t('road.button_hint')}
         onClick={() => {
-          const store = useBuildStore.getState();
-          if (store.roadMode) {
-            store.cancel();
-          } else {
-            store.enterRoad();
-          }
+          router.dispatch({ kind: 'road.toggle' });
         }}
         style={{
           cursor: 'pointer',

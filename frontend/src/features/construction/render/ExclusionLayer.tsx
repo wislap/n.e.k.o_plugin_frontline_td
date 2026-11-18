@@ -2,12 +2,13 @@
 // draw the exclusion radius of every operational hostile structure that
 // carries `exclusion` — live rows from the structures channel plus
 // remembered rows from vision memory (same columns, never duplicated).
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBuildStore } from '../../../client/build-store';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
+import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { VisionMemoryChannel } from '../../vision/protocol';
 import type { VisionMemory } from '../../vision/protocol';
 import { hostileExcluders } from '../../vision/rules/index';
@@ -39,9 +40,12 @@ export function ExclusionLayer({
   mapHeight,
   isHostile,
 }: ExclusionLayerProps) {
-  const geom = useMemo(() => new THREE.BufferGeometry(), []);
-  const positionsRef = useRef<Float32Array | null>(null);
-  const colorsRef = useRef<Float32Array | null>(null);
+  const bufRef = useRef<LineBuffer | null>(null);
+  useEffect(() => {
+    return () => {
+      bufRef.current?.geometry.dispose();
+    };
+  }, []);
   const segsRef = useRef<THREE.LineSegments>(null);
 
   useFrame(() => {
@@ -49,6 +53,9 @@ export function ExclusionLayer({
     if (segs === null) {
       return;
     }
+    bufRef.current ??= createLineBuffer(MAX_CIRCLES * SEGMENTS * 2, true);
+    const buf = bufRef.current;
+    segs.geometry = buf.geometry;
     const building = useBuildStore.getState().kind !== null;
     const latest = client.snapshots().latest;
     if (!building || latest === null) {
@@ -59,8 +66,11 @@ export function ExclusionLayer({
     const structures = latest.channels[StructuresChannel.id] as ConstructionStructures | undefined;
     const memory = latest.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
     const circles = hostileExcluders(db, (f) => isHostile(observer, f), [structures, memory]);
-    const positions = (positionsRef.current ??= new Float32Array(MAX_CIRCLES * SEGMENTS * 6));
-    const colors = (colorsRef.current ??= new Float32Array(MAX_CIRCLES * SEGMENTS * 6));
+    const positions = buf.positions;
+    const colors = buf.colors;
+    if (colors === null) {
+      return;
+    }
     let cursor = 0;
     for (const c of circles.slice(0, MAX_CIRCLES)) {
       const y = terrainY(heights, mapWidth, mapHeight, c.cx, c.cy) + LIFT;
@@ -72,14 +82,12 @@ export function ExclusionLayer({
         cursor += 1;
       }
     }
-    geom.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, cursor), 3));
-    geom.setAttribute('color', new THREE.BufferAttribute(colors.slice(0, cursor), 3));
-    geom.computeBoundingSphere();
+    commitLineBuffer(buf, cursor / 3);
     segs.visible = cursor > 0;
   });
 
   return (
-    <lineSegments ref={segsRef} geometry={geom} visible={false} renderOrder={4}>
+    <lineSegments ref={segsRef} visible={false} renderOrder={4}>
       <lineBasicMaterial vertexColors transparent opacity={0.85} depthWrite={false} />
     </lineSegments>
   );

@@ -12,3 +12,4 @@
 *.woff binary
 *.woff2 binary
 *.ico binary
+static/** linguist-generated=true -diff

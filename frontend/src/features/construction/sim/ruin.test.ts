@@ -21,14 +21,9 @@ import {
 import type { ConstructionStructures } from '../protocol';
 import { Structure } from './components';
 import { F1, F2, makeWorld, moverInit, run } from './test-world';
+import { must } from '../../../testing/index';
 
 const DB = loadContent();
-function must<T>(v: T | undefined, name: string): T {
-  if (v === undefined) {
-    throw new Error(`base pack entry '${name}' missing`);
-  }
-  return v;
-}
 const OUTPOST = must(DB.structures.byId('frontline_td:outpost'), 'outpost');
 const DEPOT = must(DB.structures.byId('frontline_td:supply_depot'), 'supply_depot');
 const REBUILD = must(OUTPOST.capture, 'outpost.capture').rebuildTicks;

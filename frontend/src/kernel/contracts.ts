@@ -4,9 +4,6 @@ import { defineComponent } from './components';
 // Faction is set at spawn (creation is a kernel op, not a write).
 export const Faction = defineComponent('frontline_td:faction', { id: 'u16' });
 export const InWorld = defineComponent('frontline_td:in_world', {});
-export const ContainedIn = defineComponent('frontline_td:contained_in', {
-  container: 'handle',
-});
 // Set by construction while a structure is being built (claimed there).
 // Operational systems (logistics demand, production, weapons) exclude it.
 export const UnderConstruction = defineComponent('frontline_td:under_construction', {});

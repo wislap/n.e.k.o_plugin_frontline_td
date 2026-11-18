@@ -6,54 +6,33 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `BASE_PACK_CONTENT` | const |  |
-| `BASE_PACK_ID` | const |  |
-| `BASE_PACK_VERSION` | const |  |
-| `basePackManifest` | function |  |
 | `ContentDb` | interface |  |
 | `loadContent` | function |  |
-| `PackManifest` | interface |  |
-| `perSecondToPerTick` | function |  |
-| `Registry` | interface |  |
-| `ResolvedCapture` | interface | Capture profile resolved to ticks and squared radius (cells²) for integer distance checks. |
-| `ResolvedCargo` | interface |  |
-| `ResolvedLogisticsConfig` | interface |  |
+| `localName` | function | Local name of a content id ('pack:name' → 'name'); |
 | `ResolvedMap` | interface |  |
-| `ResolvedMovementClass` | interface |  |
-| `ResolvedNodeProfile` | interface |  |
-| `ResolvedProducer` | interface | Inputs/outputs resolved to cargo indices and sorted by index (deterministic intent order); |
-| `ResolvedRoadLevel` | interface | One road level; |
 | `ResolvedStoreProfile` | interface |  |
 | `ResolvedStructure` | interface |  |
 | `ResolvedSurface` | interface |  |
 | `ResolvedUnit` | interface |  |
 | `ResolvedWeapon` | interface | Damage in milli units, cooldown in ticks, cost amount in milli. |
-| `secondsToTicks` | function |  |
-| `unitsToMilli` | function |  |
 
 ## src/core/index.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `AnySchema` | type |  |
-| `applyBasisPoints` | function |  |
-| `assertSafeInteger` | function |  |
-| `BASIS_POINTS_ONE` | const |  |
-| `Brand` | type |  |
 | `COMMAND_REJECTED` | event def |  |
 | `CommandDef` | interface |  |
 | `CommandEnvelope` | interface |  |
 | `CommandRejectedPayload` | type |  |
 | `contentId` | function | For static definitions: throws immediately on an invalid id so typos fail at module load, not at runtime. |
 | `ContentId` | type | ADR 0022: content ids and registry keys are 'pack:name'. |
-| `createHasher` | function |  |
 | `createRngState` | function |  |
 | `defineCommand` | function |  |
 | `defineEvent` | function |  |
 | `defineIntent` | function |  |
 | `defineSnapshotChannel` | function |  |
 | `distance` | function | Math.sqrt is IEEE correctly-rounded and therefore deterministic (ADR 0006). |
-| `distanceSquared` | function |  |
 | `EntityHandle` | type |  |
 | `EntityId` | type |  |
 | `EventDef` | interface |  |
@@ -64,24 +43,19 @@
 | `handleGeneration` | function |  |
 | `handleId` | function |  |
 | `hashCanonical` | function | Hashes plain data only: null, boolean, number (as f64 bits), string, arrays, TypedArrays (tagged by type), and plain objects (keys sorted). |
-| `Hasher` | interface | Deterministic 64-bit hash kept as two 32-bit lanes, murmur3-style mixing built on Math.imul (32-bit ops are IEEE-exact and therefore deterministic). |
 | `Infer` | type |  |
 | `Inspection` | interface | Read-only per-entity explanation produced by Simulation.inspect: the entity's active modifiers plus every non-null module inspector section. |
 | `IntentDef` | interface | Intents are like events but always invisible to snapshots and allow exactly one reader. |
 | `isPackId` | function |  |
 | `lnMilli` | function | round(ln(2) * 1e6) round(1000 * ln(valueMilli / 1000)) for valueMilli >= 1000, integer-only (no Math.log — ADR 0006): the mantissa is range-reduced to [1, 2) in micro units by repeated halving, then ln(y) = 2·atanh((y−1)/(y+1)) is summed as a fixed-point series. |
 | `MILLI` | const |  |
-| `mulDiv` | function | floor(a * b / c); |
 | `NULL_HANDLE` | const |  |
 | `packHandle` | function |  |
 | `parseContentId` | function |  |
 | `rngNextIntBelow` | function | Unbiased integer in [0, n) via rejection sampling; |
-| `rngNextUint32` | function |  |
 | `RngState` | type | Seeded, serializable RNG: sfc32 over a Uint32Array(4) state. |
 | `s` | export | A tiny schema DSL deriving both the TS type and the runtime validator. |
-| `Schema` | interface |  |
 | `Serializable` | type | JSON-like data plus TypedArrays. |
-| `SerializableTypedArray` | type |  |
 | `Snapshot` | interface |  |
 | `SnapshotChannelDef` | interface |  |
 | `SnapshotEventEntry` | interface |  |
@@ -91,8 +65,6 @@
 | `toFactionId` | function |  |
 | `toTick` | function |  |
 | `validate` | function |  |
-| `ValidationFailure` | type |  |
-| `ValidationResult` | type |  |
 
 ## src/features/capture/protocol.ts
 
@@ -108,13 +80,11 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `CaptureLayer` | function |  |
-| `CaptureLayerProps` | interface |  |
 
 ## src/features/capture/sim/index.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `Capture` | component def |  |
 | `captureRuinParts` | function | Injected into construction as a ruin part factory (wired in app): every ruin carries Capture; |
 | `createCaptureModule` | function |  |
 
@@ -133,11 +103,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `Beam` | interface |  |
-| `BEAM_LIFE_MS` | const |  |
 | `BeamsLayer` | function |  |
-| `BeamsLayerProps` | interface |  |
-| `collectBeams` | function | Extract the beam geometry from one tick's events. |
 
 ## src/features/combat/sim/index.ts
 
@@ -145,14 +111,11 @@
 |---|---|---|
 | `CombatModule` | interface |  |
 | `createCombatModule` | function |  |
-| `FREE_COST_CARGO` | const |  |
 | `Health` | component def |  |
 | `healthFraction` | function | hp fraction in basis points; |
 | `roadSegmentParts` | function | Road-segment parts (E1): flat segment hp and a 0.5-cell hit radius. |
 | `structureParts` | function |  |
-| `Targetable` | component def |  |
 | `unitParts` | function |  |
-| `Weapon` | component def |  |
 
 ## src/features/construction/protocol.ts
 
@@ -184,15 +147,11 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `ExclusionLayer` | function |  |
-| `ExclusionLayerProps` | interface |  |
 | `GhostPreview` | function |  |
-| `GhostPreviewProps` | interface |  |
 | `roadWorksHpItems` | function | HP-bar collector for road segments (only damaged ones render). |
 | `RoadWorksLayer` | function |  |
-| `RoadWorksLayerProps` | interface |  |
-| `structureKindHeight` | function |  |
+| `structureKindHeight` | function | Greybox height from content (`visual.height`, required per kind); |
 | `StructuresLayer` | function |  |
-| `StructuresLayerProps` | interface |  |
 
 ## src/features/construction/rules/index.ts
 
@@ -210,17 +169,8 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `Blueprint` | component def |  |
-| `Construction` | component def |  |
-| `ConstructionOptions` | interface |  |
 | `Core` | component def |  |
 | `createConstructionModule` | function |  |
-| `LogisticsQueries` | interface | Read-only logistics queries used by placement (no internals import). |
-| `MODE_BUILD` | const |  |
-| `MODE_DEMOLISH` | const |  |
-| `Ruin` | component def |  |
-| `RuinPartsFn` | type | Injected ruin spawn parts (capture contributes its progress component); |
-| `Salvage` | component def |  |
 | `Structure` | component def |  |
 | `StructurePartsFn` | type | Injected structure spawn-part factories (logistics contributes node + store parts; |
 | `structureStateOf` | function | Structures-channel state for a Structure entity (blueprints have their own rows). |
@@ -263,15 +213,10 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `emaUpdate` | function | EMA update with the standard exponential alpha; |
-| `FLOW_WINDOW_MS` | const |  |
 | `linkFlow` | function |  |
 | `LogisticsOverlay` | function |  |
-| `LogisticsOverlayProps` | interface |  |
 | `RoadLayer` | function |  |
-| `RoadLayerProps` | interface |  |
 | `RoadToolLayer` | function |  |
-| `RoadToolLayerProps` | interface |  |
 
 ## src/features/logistics/sim/index.ts
 
@@ -285,17 +230,12 @@
 | `EnergyEmptyModifier` | modifier def |  |
 | `EnergyLowModifier` | modifier def |  |
 | `exportStoreInit` | function | A CargoStore whose filled slots are pure export buffers (cargo, amt = cap = refund, export flag, since = tick + 1). |
-| `FixedAttach` | component def |  |
 | `Interceptor` | component def |  |
 | `LinkPath` | interface | The upgrade query for construction: the link polyline oriented upstream (warehouse side per the budget-free full tree) -> downstream, per-cell cumulative path cost, the upstream node's handle and the link index. |
 | `LogisticsModule` | interface |  |
 | `LogisticsNode` | component def |  |
-| `LogisticsOptions` | interface |  |
-| `LogisticsStart` | interface |  |
 | `roadSegmentParts` | function | Road-segment parts (E1): construction-class site slots for the segment's material cost and a FixedAttach pinning it to the project's upstream node. |
 | `sget` | function |  |
-| `SiteStore` | component def |  |
-| `SlotGroup` | type |  |
 | `structureParts` | function | Structure spawn parts for the two phases. |
 | `unitParts` | function | A unit's declared store profile becomes its CargoStore; |
 
@@ -323,15 +263,12 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `createMovementModule` | function |  |
-| `lineWalkable` | function |  |
 | `MoveCommand` | command def |  |
 | `Mover` | component def |  |
 | `moverComponents` | function | Spawn tuples for a movable entity: callers add Faction/InWorld/UnitKind. |
 | `MoveSpeed` | stat def |  |
 | `MoveTarget` | component def |  |
 | `Position` | component def |  |
-| `SEPARATION_GAP` | const |  |
-| `Velocity` | component def |  |
 
 ## src/features/pathing/sim/index.ts
 
@@ -340,9 +277,7 @@
 | `createPathingModule` | function |  |
 | `dijkstra` | function | neighbors(node, visit) must call visit(to, cost) for every outgoing edge. |
 | `DIR_ORDER` | const |  |
-| `Direction` | interface |  |
 | `PathingApi` | interface |  |
-| `SECTOR_SIZE` | const |  |
 | `UNREACHABLE` | const |  |
 
 ## src/features/production/sim/index.ts
@@ -350,7 +285,6 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `createProductionModule` | function |  |
-| `Producer` | component def |  |
 | `structureParts` | function |  |
 
 ## src/features/squads/protocol.ts
@@ -372,11 +306,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `arrowSpots` | function | Arrowhead positions every `every` waypoints, pointing at the next one. |
 | `bannerThreat` | function | Banner summary while any gather is visible: biggest gathering squad's member count and the soonest launch. |
-| `gatheringThreats` | function | Hostile squads currently gathering (visible marker + countdown). |
-| `routedThreats` | function | Hostile squads with a stored route — gathering waves plus launched waves still en route (order advance until they arrive). |
-| `routePoints` | function | Flat [x,y,x,y,…] route → waypoint pairs. |
 | `ThreatsLayer` | function |  |
 
 ## src/features/squads/sim/index.ts
@@ -384,10 +314,6 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `createSquadsModule` | function |  |
-| `SQUAD_PERIOD` | const |  |
-| `SquadMember` | component def |  |
-| `SquadsDeps` | interface |  |
-| `traceRoute` | function | Trace the pathing descent from (sx, sy) toward the goal at (gx, gy) for `cls`; |
 
 ## src/features/squads/ui/index.tsx
 
@@ -407,10 +333,6 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `buildTerrainGeometry` | function |  |
-| `parseHexColor` | function |  |
-| `Rgb` | interface |  |
-| `TerrainGeometryData` | interface |  |
 | `TerrainMesh` | function |  |
 
 ## src/features/terrain/rules/index.ts
@@ -424,11 +346,8 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `BlockedLayer` | layer def |  |
 | `createTerrainApi` | function |  |
 | `createTerrainModule` | function |  |
-| `HeightLayer` | layer def |  |
-| `SurfaceLayer` | layer def |  |
 | `TerrainApi` | interface |  |
 
 ## src/features/units/protocol.ts
@@ -446,7 +365,6 @@
 |---|---|---|
 | `factionColorHex` | function |  |
 | `UnitsLayer` | function |  |
-| `UnitsLayerProps` | interface |  |
 
 ## src/features/units/sim/index.ts
 
@@ -456,7 +374,6 @@
 | `DenseUnits` | interface |  |
 | `DenseUnitsChannel` | channel def |  |
 | `FactionStart` | interface |  |
-| `StartStructure` | interface |  |
 | `StartUnit` | interface |  |
 | `UnitKind` | component def |  |
 
@@ -473,9 +390,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `FogLayer` | function |  |
-| `FogLayerProps` | interface |  |
 | `MemoryLayer` | function |  |
-| `MemoryLayerProps` | interface |  |
 
 ## src/features/vision/rules/index.ts
 
@@ -495,66 +410,36 @@
 | `createVisionModule` | function |  |
 | `structureVisionParts` | const |  |
 | `unitVisionParts` | function | Injected into units' unitParts (wired in app/). |
-| `Vision` | component def |  |
-| `VisionApi` | interface |  |
 | `VisionLayer` | layer def |  |
-| `VisionOptions` | interface |  |
 
 ## src/kernel/index.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `AnyChannelDef` | type |  |
-| `CommandHandler` | type |  |
 | `ComponentRef` | interface |  |
-| `ComponentStorage` | interface |  |
 | `ComponentWriter` | interface | A writer token: only the module that claimed the component can write or structurally change it. |
-| `ContainedIn` | component def |  |
 | `Controller` | interface |  |
 | `CONTROLLER_STREAM_ID` | const |  |
-| `createFieldArray` | function |  |
 | `createQueuedController` | function |  |
 | `createSimulation` | function |  |
 | `defineComponent` | function | Components are static, module-level constants. |
 | `defineGridLayer` | function |  |
 | `defineModifier` | function |  |
 | `defineStat` | function |  |
-| `EffectHandler` | type |  |
 | `Faction` | component def |  |
-| `FieldArray` | type |  |
-| `FieldMap` | type |  |
-| `FieldType` | type |  |
-| `FieldValues` | type |  |
-| `GridLayerRef` | interface |  |
-| `GridLayerType` | type |  |
 | `GridLayerWriter` | interface |  |
 | `InWorld` | component def |  |
-| `ModifierOp` | type |  |
-| `ModifierRef` | interface | A ModifierRef IS a ComponentRef with fields {value: 'i32'}; |
-| `ModifierSource` | interface | One active modifier's contribution to an entity, for ctx.modifiersOf. |
 | `OPERATIONAL_EXCLUDE` | const |  |
-| `Phase` | type |  |
-| `phaseIndex` | function |  |
-| `PHASES` | const |  |
 | `QueuedController` | interface | A controller whose commands are pushed from outside (e.g. |
 | `ReadonlyNumberArray` | type |  |
-| `ReadonlyUint32Array` | type |  |
-| `ReadView` | type |  |
 | `restoreSimulation` | function |  |
 | `runScenario` | function |  |
-| `ScenarioResult` | interface |  |
-| `ScenarioSpec` | interface | Shared by tests and eval (ADR 0024): run a headless scenario to completion. |
 | `SimBuilder` | interface |  |
 | `SimConfig` | interface |  |
-| `SimManifest` | interface | Read-only structural manifest of a built simulation: what was registered, by whom, in which order. |
 | `SimModule` | interface |  |
 | `Simulation` | interface |  |
 | `SpawnInit` | type |  |
-| `StatKind` | type |  |
-| `StatRef` | interface |  |
-| `statSources` | function | The stat's modifier refs in ascending source-id order (deterministic). |
 | `SystemContext` | interface | The context a system / effect / command handler / snapshot builder sees. |
-| `SystemSpec` | interface |  |
 | `UnderConstruction` | component def |  |
 | `VisibilityQuery` | type | Per-observer visibility predicate injected into snapshot channel builders (M5 fog): vision wires its layer query in app/; |
 | `WriteView` | type |  |
@@ -566,8 +451,6 @@
 | `MainToWorker` | type |  |
 | `MatchSetup` | type |  |
 | `parseMatchSetup` | function |  |
-| `ParseMatchSetupResult` | type |  |
 | `RuntimeStats` | interface |  |
 | `SPEED_STEPS` | const |  |
-| `SystemTiming` | interface |  |
 | `WorkerToMain` | type |  |

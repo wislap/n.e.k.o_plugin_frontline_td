@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { EntityHandle, Inspection } from '../core/index';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
-import type { ContentDb } from '../content/index';
+import { localName, type ContentDb } from '../content/index';
 import { StructuresChannel, type ConstructionStructures } from '../features/construction/protocol';
 import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
 
@@ -117,7 +117,7 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
         kind === 'unit'
           ? db.units.byIndex(Number(index))?.id
           : db.structures.byIndex(Number(index))?.id;
-      const name = contentId?.split(':')[1] ?? key;
+      const name = contentId === undefined ? key : localName(contentId);
       return `${count}× ${t(`${kind}.${name}`, { defaultValue: name })}`;
     });
     return (
@@ -145,7 +145,7 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
   const production = inspection.sections['frontline_td:production'] as
     Record<string, unknown> | undefined;
   const combat = inspection.sections['frontline_td:combat'] as Record<string, unknown> | undefined;
-  const kindName = str(construction?.['kind']).split(':')[1];
+  const kindName = localName(str(construction?.['kind']));
   const isRuin = str(construction?.['state']) === 'ruin';
 
   return (
@@ -174,7 +174,7 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
           {Array.isArray(construction['slots']) &&
             (construction['slots'] as Record<string, unknown>[]).map((slot, i) => {
               const cargoId = db.cargos.byIndex(num(slot['cargo']))?.id ?? '?';
-              const name = cargoId.split(':')[1] ?? cargoId;
+              const name = localName(cargoId);
               return (
                 <div key={i}>
                   {t(`cargo.${name}`, { defaultValue: name })}:{' '}
@@ -215,8 +215,8 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
             ` (${num(production['progress'])}/${num(production['total'])})`}
           {str(production['nextUnit']) !== '' &&
             ` — ${t('panel.next_unit', {
-              name: t(`unit.${str(production['nextUnit']).split(':')[1] ?? ''}`, {
-                defaultValue: str(production['nextUnit']).split(':')[1] ?? '',
+              name: t(`unit.${localName(str(production['nextUnit']))}`, {
+                defaultValue: localName(str(production['nextUnit'])),
               }),
             })}`}
           {Array.isArray(production['missing']) &&
@@ -224,7 +224,7 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
             ` — ${(production['missing'] as number[])
               .map((c) => {
                 const id = db.cargos.byIndex(c)?.id ?? String(c);
-                const name = id.split(':')[1] ?? id;
+                const name = localName(id);
                 return t(`cargo.${name}`, { defaultValue: name });
               })
               .join(', ')}`}
@@ -234,7 +234,7 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
         <div>
           {(logistics['slots'] as Record<string, unknown>[]).map((slot, i) => {
             const cargoId = str(slot['cargo']);
-            const name = cargoId.split(':')[1] ?? cargoId;
+            const name = localName(cargoId);
             const unmet = str(slot['unmet']);
             return (
               <div key={i}>

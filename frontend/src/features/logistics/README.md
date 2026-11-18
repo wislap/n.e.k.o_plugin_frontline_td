@@ -31,7 +31,9 @@
 - 分配每 1 秒（cycleTicks）运行一次：先 rate，再 outbound、reserve、
   inbound、供应状态与利用率记账。
 - 路径付费方为上游节点（outbound 近端、inbound 远端）；带宽
-  `qMax(B,L,load,m)=B·load·m/(2L·m)`。
+  `qMax(R,L,load,m)=floor(R·load·m/(2L·10000))`——R 为剩余预算，
+  L 为链路长度，load 为车辆载货量（milli），m 为有效道路倍率
+  （10000 bp = 1×），10000 同样为 bp 定点分母。
 - 预算树每周期每方向各一棵，仅当付费节点预算归零时重建，与逐次
   重建结果一致（测试覆盖）。
 - `since` 存 `tick + 1`，0 表示"无"；生成时未满的非 export 槽从
@@ -53,5 +55,5 @@
   的折线、累计代价、上游节点与 `FixedAttach` 初始值。
 - 数量用整数 milli 单位；运力与原因码用核心整数辅助函数。
 
-## 对应设计章节
+## 对应设计
 - docs/adr/0025（模型）、0030（实现约定）；docs/design/architecture.md §6.11（modifiers）。

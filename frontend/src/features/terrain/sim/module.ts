@@ -14,13 +14,13 @@ import {
 import { createTerrainApiWithStore } from './terrain-api';
 import type { TerrainApi } from './terrain-api';
 
-export const HeightLayer = defineGridLayer(TERRAIN_HEIGHT_LAYER_ID, 'u8', {
+const HeightLayer = defineGridLayer(TERRAIN_HEIGHT_LAYER_ID, 'u8', {
   perFaction: false,
 });
-export const SurfaceLayer = defineGridLayer(TERRAIN_SURFACE_LAYER_ID, 'u16', {
+const SurfaceLayer = defineGridLayer(TERRAIN_SURFACE_LAYER_ID, 'u16', {
   perFaction: false,
 });
-export const BlockedLayer = defineGridLayer(TERRAIN_BLOCKED_LAYER_ID, 'u8', {
+const BlockedLayer = defineGridLayer(TERRAIN_BLOCKED_LAYER_ID, 'u8', {
   perFaction: false,
 });
 

@@ -17,26 +17,21 @@ import type { AssaultState } from '../modes/assault/protocol';
 import { assaultModules, defaultSetup } from '../modes/assault/index';
 import { resolveSetup } from './resolve-setup';
 import { createSimModules, RNG_STREAMS } from './sim-registry';
+import { must } from '../testing/index';
 
 const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const DB = loadContent();
 
-function must<T>(v: T | undefined): T {
-  if (v === undefined) {
-    throw new Error('base pack missing');
-  }
-  return v;
-}
-const ROBOT = must(DB.units.byId('frontline_td:robot'));
-const BASE = must(DB.structures.byId('frontline_td:main_base'));
-const HIVE = must(DB.structures.byId('frontline_td:hive'));
+const ROBOT = must(DB.units.byId('frontline_td:robot'), 'robot');
+const BASE = must(DB.structures.byId('frontline_td:main_base'), 'main_base');
+const HIVE = must(DB.structures.byId('frontline_td:hive'), 'hive');
 
 // Small flat symmetric map for the victory tests: a base on the west
 // half and a hive on the east half, mirrored across the centre line.
 const MW = 40;
 const MH = 20;
-const GROUND = must(DB.surfaces.byId('frontline_td:ground')).index;
+const GROUND = must(DB.surfaces.byId('frontline_td:ground'), 'ground').index;
 const TEST_MAP: ResolvedMap = {
   id: 'frontline_td:test.assault' as ResolvedMap['id'],
   index: 999,

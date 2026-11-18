@@ -45,6 +45,9 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
   const { post, resolve, now } = options;
   let host: SimHost | null = null;
   let started = false;
+  // A pump exception crashes the match: stop advancing and report once
+  // instead of throwing on every interval tick.
+  let crashed = false;
   let lastStatsPost = 0;
   // Current inspect target; attached to every posted snapshot.
   let inspectHandle: EntityHandle | null = null;
@@ -140,6 +143,7 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
       return;
     }
     started = true;
+    crashed = false;
     firstSnapshotPosted = false;
     host = createSimHost({
       sim: resolved.sim,
@@ -209,12 +213,18 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     },
 
     pump(): void {
-      if (host === null) {
+      if (host === null || crashed) {
         return;
       }
-      const ran = host.advance(now());
-      if (ran > 0) {
-        postSnapshot();
+      try {
+        const ran = host.advance(now());
+        if (ran > 0) {
+          postSnapshot();
+        }
+      } catch (error) {
+        crashed = true;
+        postError(error instanceof Error ? error.message : String(error));
+        return;
       }
       const nowMs = now();
       if (nowMs - lastStatsPost >= STATS_INTERVAL_MS) {

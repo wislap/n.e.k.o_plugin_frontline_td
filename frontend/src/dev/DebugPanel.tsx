@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import { useRuntimeStore } from '../client/runtime-store';
 import type { SimClient } from '../client/sim-client';
+import { localName } from '../content/index';
 import { SPEED_STEPS } from '../protocol/index';
 
 const overlayStyle = {
@@ -58,7 +59,7 @@ export function DebugPanel({ client }: { client: SimClient }) {
       ) : (
         systems.map((system) => (
           <div key={system.id} style={rowStyle}>
-            <span>{system.id.split(':')[1] ?? system.id}</span>
+            <span>{localName(system.id)}</span>
             <span>{system.avgMs.toFixed(3)}</span>
           </div>
         ))

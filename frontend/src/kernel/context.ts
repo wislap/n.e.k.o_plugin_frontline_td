@@ -353,7 +353,7 @@ export function createContext(i: SimInternals): SystemContext {
           mul += value;
         }
       }
-      return combineStat(stat.kind, base, add, mul);
+      return combineStat(base, add, mul);
     },
 
     modifiersOf(id: EntityId): readonly ModifierSource[] {

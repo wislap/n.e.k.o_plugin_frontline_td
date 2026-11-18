@@ -2,10 +2,11 @@
 // plus a progress arc in the owner's faction colour. Contested points
 // pulse in a neutral colour. Line geometry is rebuilt each frame from
 // the capture channel (a handful of points at most).
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
+import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { factionColorHex } from '../../units/render/index';
 import { terrainY } from '../../../render/world';
 import { CapturePointsChannel } from '../protocol';
@@ -26,9 +27,14 @@ export interface CaptureLayerProps {
 }
 
 export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLayerProps) {
-  const geom = useMemo(() => new THREE.BufferGeometry(), []);
-  const positionsRef = useRef<Float32Array | null>(null);
-  const colorsRef = useRef<Float32Array | null>(null);
+  // Mutable GPU-side state lives behind a ref: created lazily inside
+  // useFrame, attached to the object imperatively, disposed on unmount.
+  const bufRef = useRef<LineBuffer | null>(null);
+  useEffect(() => {
+    return () => {
+      bufRef.current?.geometry.dispose();
+    };
+  }, []);
   const segsRef = useRef<THREE.LineSegments>(null);
 
   useFrame(() => {
@@ -36,11 +42,17 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
     if (segs === null) {
       return;
     }
+    bufRef.current ??= createLineBuffer(MAX_POINTS * SEGMENTS * 4, true);
+    const buf = bufRef.current;
+    segs.geometry = buf.geometry;
+    const positions = buf.positions;
+    const colors = buf.colors;
+    if (colors === null) {
+      return;
+    }
     const latest = client.snapshots().latest;
     const points = latest?.channels[CapturePointsChannel.id] as CapturePoints | undefined;
     const observer = latest?.observer ?? null;
-    const positions = (positionsRef.current ??= new Float32Array(MAX_POINTS * SEGMENTS * 4 * 3));
-    const colors = (colorsRef.current ??= new Float32Array(MAX_POINTS * SEGMENTS * 4 * 3));
     let cursor = 0;
     const color = new THREE.Color();
     const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 200);
@@ -79,14 +91,12 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
         }
       }
     }
-    geom.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, cursor), 3));
-    geom.setAttribute('color', new THREE.BufferAttribute(colors.slice(0, cursor), 3));
-    geom.computeBoundingSphere();
+    commitLineBuffer(buf, cursor / 3);
     segs.visible = cursor > 0;
   });
 
   return (
-    <lineSegments ref={segsRef} geometry={geom} visible={false} renderOrder={4}>
+    <lineSegments ref={segsRef} visible={false} renderOrder={4}>
       <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
     </lineSegments>
   );

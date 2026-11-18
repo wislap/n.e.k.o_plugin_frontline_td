@@ -5,7 +5,8 @@ import { createTerrainApi } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { lineWalkable } from './line';
 import { assignSlots, collectSlots, formationDesired } from './slots';
-import { CLS, makeGrid, makeWorld, move, rejections, run, SURFACES } from './test-world';
+import { CLS, makeWorld, move, rejections, run, SURFACES } from './test-world';
+import { makeGrid } from '../../../testing/index';
 import type { SpawnUnit } from './test-world';
 
 describe('movement slots', () => {

@@ -20,23 +20,16 @@ import {
   resolveWeapon,
   structureSchema,
 } from './resolve-structures';
-export type {
-  ResolvedCapture,
-  ResolvedNodeProfile,
-  ResolvedProducer,
-  ResolvedStoreProfile,
-  ResolvedStructure,
-  ResolvedWeapon,
-} from './resolve-structures';
+export type { ResolvedStoreProfile, ResolvedStructure, ResolvedWeapon } from './resolve-structures';
 import type { ResolvedStoreProfile, ResolvedStructure, ResolvedWeapon } from './resolve-structures';
 
-export interface Registry<T> {
+interface Registry<T> {
   byId(id: string): T | undefined;
   byIndex(index: number): T | undefined;
   readonly list: readonly T[];
 }
 
-export interface ResolvedMovementClass {
+interface ResolvedMovementClass {
   id: ContentId;
   index: number;
 }
@@ -70,21 +63,21 @@ export interface ResolvedUnit {
   vision: number;
 }
 
-export interface ResolvedCargo {
+interface ResolvedCargo {
   id: ContentId;
   index: number;
 }
 
 // One road level; level >= 1 carries the build profile used by road
 // segments (per-cell cost in milli, build ticks per cell, flat hp).
-export interface ResolvedRoadLevel {
+interface ResolvedRoadLevel {
   multiplierBp: number;
   cost?: readonly { cargo: number; milli: number }[];
   ticksPerCell?: number;
   segmentHp?: number;
 }
 
-export interface ResolvedLogisticsConfig {
+interface ResolvedLogisticsConfig {
   cycleTicks: number;
   // Milli a vehicle carries per trip.
   vehicleLoadMilli: number;

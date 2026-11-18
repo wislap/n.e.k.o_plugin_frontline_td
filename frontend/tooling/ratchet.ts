@@ -12,8 +12,8 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
-export const BASELINE_PATH = path.join(FRONTEND_ROOT, 'ratchet.json');
+const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
+const BASELINE_PATH = path.join(FRONTEND_ROOT, 'ratchet.json');
 const SCANNED_DIRS = ['src', 'tooling'];
 // File-length policy (replaces ADR 0017's flat 400-line limit): files
 // over LONG_FILE_RED_LINES count into the ratcheted `longFiles` metric;
@@ -36,7 +36,7 @@ export interface Metrics {
   longFiles: number;
 }
 
-export const METRIC_NAMES = Object.keys({
+const METRIC_NAMES = Object.keys({
   asAny: 0,
   tsIgnore: 0,
   tsExpectError: 0,
@@ -58,7 +58,7 @@ function* sourceFiles(root: string): Generator<string> {
   }
 }
 
-export function countInText(text: string, pattern: RegExp): number {
+function countInText(text: string, pattern: RegExp): number {
   return [...text.matchAll(pattern)].length;
 }
 
@@ -110,11 +110,11 @@ export function longFileWarnings(frontendRoot: string = FRONTEND_ROOT): string[]
   return warnings.sort();
 }
 
-export function readBaseline(baselinePath: string = BASELINE_PATH): Metrics {
+function readBaseline(baselinePath: string = BASELINE_PATH): Metrics {
   return JSON.parse(readFileSync(baselinePath, 'utf8')) as Metrics;
 }
 
-export function compare(current: Metrics, baseline: Metrics): string[] {
+function compare(current: Metrics, baseline: Metrics): string[] {
   const problems: string[] = [];
   for (const name of METRIC_NAMES) {
     if (current[name] > baseline[name]) {

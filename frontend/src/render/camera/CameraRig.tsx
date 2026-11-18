@@ -20,7 +20,7 @@ import {
   perspectiveDistAtPitch,
   spectateCameraPosition,
   visibleGroundHeight,
-} from './math';
+} from '../../client/camera-math';
 
 const FAR = 500;
 const ORTHO_HEIGHT = 200;

@@ -21,7 +21,7 @@
   玩法模块判定胜负（ADR 0035）。
 - `content.ts`：结构基础 schema（`id`、`footprint`、`exclusion`）；
   `build` 等复合字段在 `content/` 中组装。
-- 废墟与禁建区（M5，ADR 0038）：带 `capture` 档案的结构死亡时
+- 废墟与禁建区（ADR 0038）：带 `capture` 档案的结构死亡时
   生成 `Ruin` 实体（`Structure + Ruin + InWorld + Position(中心)`，
   无 `Faction`，占地保持封锁，通道 `STATE_RUIN`）；`capture.completed`
   事件触发下一 tick 的重建工地（工期 = `rebuildTicks`，纯时间）。
@@ -64,5 +64,6 @@
   废料，被毁材料损失，已铺格不回滚。项目状态可序列化。
 - `hpBp` 由注入的战斗读数提供（默认满血）。
 
-## 对应设计章节
-- docs/adr/0012（命令）、0023（拆除）、0029（建造实现约定）。
+## 对应设计
+- docs/adr/0012（命令）、0023（拆除）、0029（建造实现约定）、
+  0035（Core 与胜负判定）、0038（废墟与禁建区）。

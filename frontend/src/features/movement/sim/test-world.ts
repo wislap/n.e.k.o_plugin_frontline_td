@@ -8,12 +8,12 @@ import { createSimulation } from '../../../kernel/index';
 import type { SimConfig, SimModule } from '../../../kernel/index';
 import type { PathingApi } from '../../pathing/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
-import type { TerrainGrid } from '../../terrain/content';
 import { createTerrainApi } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { MoveTarget, Mover, Position } from './components';
 import { createMovementModule, moverComponents } from './module';
 import { MoveCommand } from '../protocol';
+import { makeGrid } from '../../../testing/index';
 
 export const CLS = 0;
 export const F1 = toFactionId(1);
@@ -26,27 +26,6 @@ const SPEED = 0.125; // cells/tick (robot: 2.5 cells/s)
 const RADIUS = 0.35;
 
 // '.': ground h0, '#': impassable, 'r': ramp h0, digit: ground at height.
-export function makeGrid(rows: string[]): TerrainGrid {
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const heights = new Uint8Array(width * height);
-  const surfaces = new Uint16Array(width * height);
-  const ramps = new Uint8Array(width * height);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      const ch = row[x];
-      const idx = y * width + x;
-      if (ch === '#') {
-        surfaces[idx] = 1;
-      } else if (ch === 'r') {
-        ramps[idx] = 1;
-      } else if (ch !== undefined && ch >= '1' && ch <= '9') {
-        heights[idx] = ch.charCodeAt(0) - 48;
-      }
-    }
-  });
-  return { width, height, heights, surfaces, ramps };
-}
 
 export interface SpawnUnit {
   x: number;

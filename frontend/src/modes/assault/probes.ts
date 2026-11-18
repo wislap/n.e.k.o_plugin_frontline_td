@@ -3,7 +3,7 @@
 // faction, and the lowest core hp bp per faction. All probes read
 // serialized sim state or component queries — controllers never write.
 import type { EntityId, FactionId } from '../../core/index';
-import type { ContentDb } from '../../content/index';
+import { localName, type ContentDb } from '../../content/index';
 import { healthFraction } from '../../features/combat/sim/index';
 import { Core, Structure } from '../../features/construction/sim/index';
 import type { LogisticsModule } from '../../features/logistics/sim/index';
@@ -49,7 +49,7 @@ export function createAssaultProbesModule(
 
       for (const f of factions) {
         for (const cargo of db.cargos.list) {
-          builder.probe(`frontline_td:assault.stock.f${f}.${cargo.id.split(':')[1]}`, () => {
+          builder.probe(`frontline_td:assault.stock.f${f}.${localName(cargo.id)}`, () => {
             const stock = logistics.stockOf(f);
             return Math.floor((stock[cargo.index] ?? 0) / 1000);
           });

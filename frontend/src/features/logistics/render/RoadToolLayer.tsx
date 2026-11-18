@@ -2,13 +2,14 @@
 // mode, plus a dashed red overlay on intercepted links whenever the
 // logistics overlay is on. Selection/hover indices live in the build
 // store; geometry is rebuilt each frame (link counts are small).
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBuildStore } from '../../../client/build-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ResolvedMap } from '../../../content/index';
+import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { terrainY } from '../../../render/world';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
 
@@ -64,25 +65,17 @@ export interface RoadToolLayerProps {
 }
 
 export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
-  const roadMode = useBuildStore((s) => s.roadMode);
-  const selected = useBuildStore((s) => s.roadSel);
-  const hovered = useBuildStore((s) => s.roadHover);
-  const toggled = useUiStore((s) => s.logisticsOverlay);
-  const placing = useBuildStore((s) => s.kind !== null);
-  const overlayOn = toggled || roadMode || placing;
-
   const selRef = useRef<THREE.LineSegments>(null);
   const hovRef = useRef<THREE.LineSegments>(null);
   const intRef = useRef<THREE.LineSegments>(null);
-  const geoms = useMemo(
-    () => ({
-      sel: new THREE.BufferGeometry(),
-      hov: new THREE.BufferGeometry(),
-      int: new THREE.BufferGeometry(),
-      pos: new Float32Array(MAX_VERTS * 3),
-    }),
-    [],
-  );
+  const bufsRef = useRef<{ sel: LineBuffer; hov: LineBuffer; int: LineBuffer } | null>(null);
+  useEffect(() => {
+    return () => {
+      bufsRef.current?.sel.geometry.dispose();
+      bufsRef.current?.hov.geometry.dispose();
+      bufsRef.current?.int.geometry.dispose();
+    };
+  }, []);
 
   useFrame(() => {
     const sel = selRef.current;
@@ -91,12 +84,18 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
     if (sel === null || hov === null || int === null) {
       return;
     }
+    bufsRef.current ??= {
+      sel: createLineBuffer(MAX_VERTS, false),
+      hov: createLineBuffer(MAX_VERTS, false),
+      int: createLineBuffer(MAX_VERTS, false),
+    };
+    const bufs = bufsRef.current;
     const network = client.snapshots().latest?.channels[LogisticsNetworkChannel.id] as
       LogisticsNetwork | undefined;
     const { width, height } = map.grid;
     const draw = (
       lines: THREE.LineSegments,
-      geom: THREE.BufferGeometry,
+      buf: LineBuffer,
       links: readonly number[],
       visible: boolean,
     ): void => {
@@ -104,15 +103,20 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
         lines.visible = false;
         return;
       }
-      const n = fillLines(geoms.pos, network, links, width, height, heights, LIFT);
-      geom.setAttribute('position', new THREE.BufferAttribute(geoms.pos.slice(0, n), 3));
-      geom.computeBoundingSphere();
+      const n = fillLines(buf.positions, network, links, width, height, heights, LIFT);
+      commitLineBuffer(buf, n / 3);
+      lines.geometry = buf.geometry;
       (lines.material as THREE.LineDashedMaterial).needsUpdate = true;
       lines.computeLineDistances();
       lines.visible = true;
     };
-    draw(sel, geoms.sel, selected, roadMode);
-    draw(hov, geoms.hov, hovered >= 0 ? [hovered] : [], roadMode);
+    // Store reads happen per frame via getState — the visuals are
+    // imperative, so subscribing would only add React re-renders.
+    const build = useBuildStore.getState();
+    const roadMode = build.roadMode;
+    const overlayOn = useUiStore.getState().logisticsOverlay || roadMode || build.kind !== null;
+    draw(sel, bufs.sel, build.roadSel, roadMode);
+    draw(hov, bufs.hov, build.roadHover >= 0 ? [build.roadHover] : [], roadMode);
     const intercepted: number[] = [];
     if (network !== undefined) {
       for (let i = 0; i < network.links.a.length; i++) {
@@ -121,19 +125,19 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
         }
       }
     }
-    draw(int, geoms.int, intercepted, overlayOn);
+    draw(int, bufs.int, intercepted, overlayOn);
   });
 
   const dashed = { dashSize: 0.4, gapSize: 0.25 };
   return (
     <>
-      <lineSegments ref={selRef} geometry={geoms.sel} frustumCulled={false}>
+      <lineSegments ref={selRef} frustumCulled={false}>
         <lineBasicMaterial color={SELECT_COLOR} />
       </lineSegments>
-      <lineSegments ref={hovRef} geometry={geoms.hov} frustumCulled={false}>
+      <lineSegments ref={hovRef} frustumCulled={false}>
         <lineBasicMaterial color={HOVER_COLOR} />
       </lineSegments>
-      <lineSegments ref={intRef} geometry={geoms.int} frustumCulled={false}>
+      <lineSegments ref={intRef} frustumCulled={false}>
         <lineDashedMaterial color={INTERCEPT_COLOR} {...dashed} />
       </lineSegments>
     </>

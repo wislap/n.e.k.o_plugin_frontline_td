@@ -216,10 +216,10 @@ export function createConstructionModule(
         },
       });
 
-      // Dead structures free their footprint before combat's despawn
-      // runs (construction installs before combat, so this cleanup-phase
-      // system observes combat.died first). Nothing else is dropped:
-      // ruins and salvage-on-death are deferred.
+      // Dead structures free their footprint in the same cleanup phase,
+      // before combat's despawn runs — module order fixes the structural
+      // queue (despawn order is observable through entity-id reuse).
+      // Nothing else is dropped: ruins and salvage-on-death are deferred.
       builder.system({
         id: 'frontline_td:construction.free_dead',
         phase: 'cleanup',

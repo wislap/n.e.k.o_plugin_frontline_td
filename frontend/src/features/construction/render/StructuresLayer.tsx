@@ -22,18 +22,6 @@ import {
   type ConstructionStructures,
 } from '../protocol';
 
-// Greybox heights per structure content id (visual table, render-only).
-const KIND_HEIGHT: Record<string, number> = {
-  'frontline_td:main_base': 1.6,
-  'frontline_td:station': 0.9,
-  'frontline_td:supply_depot': 1.0,
-  'frontline_td:miner': 1.1,
-  'frontline_td:power_plant': 1.4,
-  'frontline_td:ammo_factory': 1.3,
-  'frontline_td:turret': 1.2,
-  'frontline_td:outpost': 1.5,
-};
-const DEFAULT_HEIGHT = 1.0;
 const SALVAGE_SIZE = 0.3;
 const SALVAGE_COLOR = '#8a6a3f';
 const SITE_DARKEN = 0.45;
@@ -43,9 +31,10 @@ const OUTPOST_TINT = 0.8;
 const RUIN_COLOR = '#3a3430';
 const RUIN_HEIGHT = 0.3;
 
+// Greybox height from content (`visual.height`, required per kind);
+// unknown indices fall back to a unit-height box.
 export function structureKindHeight(db: ContentDb, kindIndex: number): number {
-  const id = db.structures.byIndex(kindIndex)?.id ?? '';
-  return KIND_HEIGHT[id] ?? DEFAULT_HEIGHT;
+  return db.structures.byIndex(kindIndex)?.visual.height ?? 1;
 }
 
 export interface StructuresLayerProps {

@@ -24,6 +24,7 @@ export interface BuildState {
   setRoadSel(links: number[]): void;
   toggleRoadLink(index: number): void;
   setRoadHover(index: number): void;
+  reset(): void;
 }
 
 export const useBuildStore = create<BuildState>((set) => ({
@@ -56,5 +57,8 @@ export const useBuildStore = create<BuildState>((set) => ({
   },
   setRoadHover: (index) => {
     set((s) => (s.roadHover === index ? s : { roadHover: index }));
+  },
+  reset: () => {
+    set({ kind: null, ghost: null, roadMode: false, roadSel: [], roadHover: -1 });
   },
 }));

@@ -2,13 +2,14 @@
 // mode is active: service-coverage tint on the ground, link polylines
 // from pathCells (brightness ∝ the 30 s EMA of outBp + inBp, red when
 // either direction saturates), and service-radius rings on nodes.
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBuildStore } from '../../../client/build-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
+import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { terrainY } from '../../../render/world';
 import {
   StructuresChannel,
@@ -43,9 +44,12 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const coverRef = useRef<THREE.InstancedMesh>(null);
   const linkRef = useRef<THREE.LineSegments>(null);
   const ringRef = useRef<THREE.InstancedMesh>(null);
-  const linkGeom = useMemo(() => new THREE.BufferGeometry(), []);
-  const linkPosRef = useRef<Float32Array | null>(null);
-  const linkColRef = useRef<Float32Array | null>(null);
+  const linkBufRef = useRef<LineBuffer | null>(null);
+  useEffect(() => {
+    return () => {
+      linkBufRef.current?.geometry.dispose();
+    };
+  }, []);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
@@ -53,9 +57,15 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
     const cover = coverRef.current;
     const linkLines = linkRef.current;
     const rings = ringRef.current;
-    const linkPos = (linkPosRef.current ??= new Float32Array(MAX_LINK_VERTS * 3));
-    const linkCol = (linkColRef.current ??= new Float32Array(MAX_LINK_VERTS * 3));
     if (cover === null || linkLines === null || rings === null) {
+      return;
+    }
+    linkBufRef.current ??= createLineBuffer(MAX_LINK_VERTS, true);
+    const linkBuf = linkBufRef.current;
+    linkLines.geometry = linkBuf.geometry;
+    const linkPos = linkBuf.positions;
+    const linkCol = linkBuf.colors;
+    if (linkCol === null) {
       return;
     }
     const latest = client.snapshots().latest;
@@ -127,9 +137,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
         }
       }
     }
-    linkGeom.setAttribute('position', new THREE.BufferAttribute(linkPos.slice(0, verts * 3), 3));
-    linkGeom.setAttribute('color', new THREE.BufferAttribute(linkCol.slice(0, verts * 3), 3));
-    linkGeom.computeBoundingSphere();
+    commitLineBuffer(linkBuf, verts);
     linkLines.visible = verts > 0;
 
     // Node rings: service radius around each own completed node (joined
@@ -172,7 +180,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
           depthWrite={false}
         />
       </instancedMesh>
-      <lineSegments ref={linkRef} geometry={linkGeom} visible={false}>
+      <lineSegments ref={linkRef} visible={false}>
         <lineBasicMaterial vertexColors transparent opacity={0.9} />
       </lineSegments>
       <instancedMesh ref={ringRef} args={[undefined, undefined, RING_CAP]}>

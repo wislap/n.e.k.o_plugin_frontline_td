@@ -1,21 +1,17 @@
-export { perSecondToPerTick, secondsToTicks, unitsToMilli } from './time';
-export { BASE_PACK_CONTENT, BASE_PACK_ID, BASE_PACK_VERSION, basePackManifest } from './packs';
-export type { PackManifest } from './packs';
 export { loadContent } from './load';
 export type {
   ContentDb,
-  Registry,
-  ResolvedCapture,
-  ResolvedCargo,
-  ResolvedLogisticsConfig,
   ResolvedMap,
-  ResolvedMovementClass,
-  ResolvedNodeProfile,
-  ResolvedProducer,
-  ResolvedRoadLevel,
   ResolvedStoreProfile,
   ResolvedStructure,
   ResolvedSurface,
   ResolvedUnit,
   ResolvedWeapon,
 } from './load';
+
+// Local name of a content id ('pack:name' → 'name'); ids without a
+// namespace pass through unchanged. UI display only — never match
+// behaviour by local name.
+export function localName(id: string): string {
+  return id.split(':')[1] ?? id;
+}

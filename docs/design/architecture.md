@@ -21,7 +21,7 @@
 | 里程碑 | 内容 | 验收 |
 |---|---|---|
 | **M0 工具链与治理** | 前端脚手架；TS strict / ESLint / Prettier / Vitest / dependency-cruiser / knip；纯度 lint；i18n；棘轮、gen-index、文档检查脚本（生成器随数据源出现逐步加入，M0 只有 ADR 索引）；CI（新增 `frontend.yml`，插件市场托管的 verify / release 模板不改）；AGENTS.md；初始 ADR；Python 薄壳声明 static 面板 | 空白游戏页面能在 NEKO 插件面板中打开；CI 全绿 |
-| **M1 模拟核心** | `core`、`kernel`、`runtime`（Worker、时钟、变速、暂停）、协议骨架、确定性测试框架、场景构造器、最简调试面板；阵营表与 `Faction` 组件、命令发出者校验、按观察者阵营生成快照、控制者接口、`modes/` 依赖规则与玩法 ID lint、最小注册表测试（ADR 0019）；整数数量运算与秒 → tick 换算、按需扩容的组件存储（ADR 0020）；调度队列、`ContainedIn` / `InWorld`（ADR 0021）；MatchSetup（ADR 0022）；网格图层机制、命令 schema 与运行时校验、RNG 用途登记、包体积检查与禁止运行时下载代码的 lint（ADR 0023）；按系统计时与探针钩子（ADR 0024） | 三类确定性测试可运行；变速与暂停行为正确；不注册任何玩法时模拟核心可运行 |
+| **M1 模拟核心** | `core`、`kernel`、`runtime`（Worker、时钟、变速、暂停）、协议骨架、确定性测试框架、场景构造器、最简调试面板；阵营表与 `Faction` 组件、命令发出者校验、按观察者阵营生成快照、控制者接口、`modes/` 依赖规则与玩法 ID lint、最小注册表测试（ADR 0019）；整数数量运算与秒 → tick 换算、按需扩容的组件存储（ADR 0020）；调度队列、`InWorld` 标记（ADR 0021）；MatchSetup（ADR 0022）；网格图层机制、命令 schema 与运行时校验、RNG 用途登记、包体积检查与禁止运行时下载代码的 lint（ADR 0023）；按系统计时与探针钩子（ADR 0024） | 三类确定性测试可运行；变速与暂停行为正确；不注册任何玩法时模拟核心可运行 |
 | **M2 第一个参考实现** | 地形（地图格式 + 一张网格地图）、地面分区流场、单位移动；**单摄像机 3D 观战 / 正交指挥切换**（灰盒）；UI 外壳与 i18n；`eval/` 骨架与第一个性能场景（大量单位移动），建立性能基线 | 大量单位按流场移动；两种视角可切换；作为"新功能怎么写"的示范代码 |
 | **M3 跨模块参考实现**（已完成） | 战斗（意图 → 结算）、一种基础炮塔；建造（材料经物流网送达）与拆除；矿机、发电厂、弹药厂；物流网（车站 / 补给站、自动连接与路由、线路配额、能量与弹药、单位电池、一档道路升级、物流视图、走廊拦截，ADR 0025） | 契约组件、单一写者、意图 → 结算模式得到验证；作为跨模块协作的示范代码 |
 | **M4 MVP 收尾**（已完成） | 小队驻守 / 推进 / 集结三种指令与错开结算的小队 AI（[ADR 0034](../adr/0034-squads.md)）；导演（一个敌方集结点 + 逐波反攻 + 路线箭头）；攻占模式装配与胜负条件（`modes/assault/`，[ADR 0035](../adr/0035-assault-mode-director-victory.md)）；控制者存档（[ADR 0036](../adr/0036-controller-state-save-load.md)）；无界面对拍工具 + 4 个策略机器人（`eval/`）+ 状态哈希测试（[ADR 0037](../adr/0037-eval-bots-balance-runner.md)） | A6 全部条目可演示；机器人可无头对局；胜负可判定、可重开 |
@@ -126,8 +126,8 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 | 地形模型 | 格子属性 + 边属性 + 移动类别；分区流场 |
 | 建造 | 下令即创建实体 + 建造状态 |
 | 数值与时间 | 时间用整数 tick；几何量用 Float64（单位：格）；数量用千分单位整数，百分比用万分比整数；组件存储按需扩容，不设实体上限或性能保险丝（ADR 0020） |
-| 延迟效果与关系 | kernel 调度队列（只存数据、可序列化）；冷却用 `readyAtTick`；容纳关系 `ContainedIn` + `InWorld` 标记（ADR 0021） |
-| 网格图层、编组、命令 schema | 统一网格图层（每层单一写者）；编组可嵌套；命令 schema 唯一来源 + 运行时校验；RNG 流集中登记；包体积 ≤ 32MiB、禁止运行时下载代码（ADR 0023） |
+| 延迟效果与关系 | kernel 调度队列（只存数据、可序列化）；冷却用 `readyAtTick`；`InWorld` 标记（ADR 0021） |
+| 网格图层、编组、命令 schema | 统一网格图层（每层单一写者）；编组当前单层（嵌套以后再加，见 §13）；命令 schema 唯一来源 + 运行时校验；RNG 流集中登记；包体积 ≤ 32MiB、禁止运行时下载代码（ADR 0023） |
 | 评估框架 | `frontend/eval/`：性能基线与数值平衡，与代码测试分离，不作 CI 门槛；与测试共用 `runScenario`（ADR 0024） |
 | 物流 | 运输车（计数）为运力单位；车站 / 补给站 / 主基地是同一 `LogisticsNode` 组件的不同参数（连接距离 + 服务距离）；所有货物瞬时传输、按线路配额每秒结算；按地面路径自动连接、自动路由；消耗品统一用 `CargoStore`（ADR 0025） |
 | 内容 ID 与内容包 | `包ID:名字`；本体是包 `frontline_td`，与 mod 同一管线；ID 发布后不改；所有注册表键同一规则；MatchSetup 列出启用的包（ADR 0022） |
@@ -161,7 +161,7 @@ frontline_td/
 ├── i18n/                          插件元数据 zh-CN / en（有需要时再加）
 ├── frontend/                      Vite 工程（游戏本体）；tooling/ 仓库检查脚本，eval/ 评估框架
 ├── static/                        构建产物（入库，CI 校验与源码一致）
-├── docs/{design,adr,guides,generated}/
+├── docs/{design,adr,generated}/
 ├── AGENTS.md                      CLAUDE.md 等只有一行，指向 AGENTS.md
 ├── README.md / CONTRIBUTING.md / LICENSE
 ├── .gitattributes / .gitignore    gitignore 含 node_modules/、.plans/
@@ -181,7 +181,7 @@ frontend/src/
 │   ├── ui/         面板
 │   ├── content.ts  本功能负责的内容 schema 片段
 │   ├── protocol.ts 本功能的命令、事件、快照通道
-│   ├── README.md   固定章节：职责 / 公开接口 / 拥有的组件 / 不变量 / 对应设计章节
+│   ├── README.md   固定章节：职责 / 公开接口 / 拥有的组件 / 不变量 / 对应设计
 │   └── *.test.ts   场景测试
 ├── modes/<mode>/  玩法装配：参与阵营、控制者、开局状态、胜负条件（当前只有 assault）
 ├── content/     内容数据（建筑、怪物、地图）+ 拼装 schema + 校验
@@ -194,7 +194,7 @@ frontend/src/
 ├── i18n/        zh-CN / en 文案与类型化取词
 ├── host/        NEKO 桥接（显示模式；以后接解说）
 ├── dev/         调试面板
-└── app/         装配入口：sim-registry（Worker 端）、client-registry（主线程）
+└── app/         装配入口：main/App（主线程）、sim-registry + sim-worker（Worker 端）、dispatch（意图路由）、resolve-setup、assault 场景测试
 ```
 
 ### 6.4 依赖规则（dependency-cruiser 强制）
@@ -378,7 +378,7 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟，仅 Chromium）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
 
 ### 11.2 CI
-`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估框架不进 CI 门槛。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
+`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估运行器（`eval:perf`/`eval:balance`）不进 CI 门槛；`eval/` 下的 `*.scenario.test.ts` 是普通测试，随 `npm run test` 进 CI。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
 
 ### 11.3 防腐化机制
 腐化的根源是 AI 追求完成眼前任务，单次合理的改动不断累积。防线设在"累积"这一层：
@@ -396,15 +396,14 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 | 类别 | 位置 | 读者 | 生命周期 | 保鲜手段 |
 |---|---|---|---|---|
 | 入口守则 | `AGENTS.md`（其他工具的守则文件只有一行指向它） | 人与 agent，动手前必读 | 长期 | 长度上限（约 150 行），超出拆分为链接 |
-| 功能说明 | `features/<x>/README.md` | 改该功能的人与 agent | 长期 | 固定章节检查；公开接口清单变化而 README 未改时 CI 报错 |
+| 功能说明 | `features/<x>/README.md` | 改该功能的人与 agent | 长期 | 固定章节检查（check-docs） |
 | 设计文档 | `docs/design/` | 所有人 | 长期，随设计演进 | 评审：玩法改动的 PR 必须同时更新 |
 | 架构决策 | `docs/adr/NNNN-*.md`（扁平编号，不按轮次分目录） | 想知道"为什么"的人 | 写好后不改正文；被推翻则新写一篇取代 | 头部元数据：状态、日期、决策者（GitHub ID）、批次、领域；ADR 索引自动生成，按领域分组列出当前有效的 ADR，已取代 / 已废弃单列，附批次时间线；只允许改状态 |
-| 操作指南 | `docs/guides/` | 新人与 agent | 长期 | 指向参考实现而非复制代码；引用路径由 CI 检查存在 |
 | 生成索引 | `docs/generated/` | agent 查询、评审 | 随代码生成 | 文件头"自动生成，勿手改"；CI diff 为空 |
 | 施工计划 | 不进主分支：个人 / agent 草稿放 `.plans/`（gitignore）；共享计划走 GitHub issue | 当次执行者 | 做完即扔 | Markdown 白名单 |
 
-- **Markdown 白名单**：只允许根目录的 `AGENTS.md`、`CLAUDE.md`、`README.md`、`CONTRIBUTING.md`，以及 `docs/{design,adr,guides,generated}/`、`frontend/src/features/*/README.md`、`.github/**/*.md`。其他位置的 `.md`（如 agent 顺手生成的 `PLAN.md`、`NOTES.md`）由 CI 拦截。
-- **删除计划前先提炼**：决策 → ADR；玩法变化 → 设计文档；"以后怎么加 X" → 操作指南。PR 模板含勾选项。
+- **Markdown 白名单**：只允许根目录的 `AGENTS.md`、`CLAUDE.md`、`README.md`、`CONTRIBUTING.md`，以及 `docs/{design,adr,generated}/`、`frontend/src/features/*/README.md`、`.github/**/*.md`。其他位置的 `.md`（如 agent 顺手生成的 `PLAN.md`、`NOTES.md`）由 CI 拦截。
+- **删除计划前先提炼**：决策 → ADR；玩法变化 → 设计文档。PR 模板含勾选项。
 - **agent 阅读顺序**：`AGENTS.md` → 要改的功能的 `README.md` → `docs/generated/` 相关索引 → 按 ADR 索引查对应 ADR。给 agent 的文档要短、用祈使句、多放链接。
 - NEKO 宿主的通用插件文档只放链接，不复制。
 
@@ -447,6 +446,7 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 | 机器人攻占据点 | 以后；对拍机器人尚不占点，平衡数据主要量机器人短板（ADR 0038） |
 | 局外科技占位 | 待讨论；M5 未做（用户决定），接入方式仍按 MatchSetup 设想 |
 | 嵌套编组（小队套小队） | 以后；M4 小队是单层（ADR 0034） |
+| 延迟效果队列（ADR 0021） | 已实现但尚无生产使用方；首个使用方出现前保留 |
 | 平衡：开局 rush 过快（24 机器人约 1 分钟破 hive，eval 数据见 ADR 0037） | M4 用户决定不调数值；M5 数据（ADR 0038）显示据点驻军已让该缺口消失，整体数值仍有意未调 |
 | 模组与非程序员编辑数据：JSON / 表格导入 + schema 校验 | 以后 |
 | 多地图的资源与代码分包、加载界面、插件包体积上限 | 以后 |

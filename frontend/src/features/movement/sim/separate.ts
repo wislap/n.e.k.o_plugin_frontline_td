@@ -9,7 +9,7 @@ import { Mover, Position } from './components';
 const BUCKET = 2;
 // Extra breathing room between units on top of both radii. Adjacent slot
 // cells are 1 apart, so 0.35+0.35+0.2 still fits.
-export const SEPARATION_GAP = 0.2;
+const SEPARATION_GAP = 0.2;
 // Fixed neighbour-bucket order for pair iteration (deterministic).
 const NB_ORDER = [
   [-1, -1],

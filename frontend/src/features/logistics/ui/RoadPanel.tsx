@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useBuildStore } from '../../../client/build-store';
 import { cursorScreen } from '../../../client/cursor';
 import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb } from '../../../content/index';
+import { localName, type ContentDb } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
 import { LogisticsNetworkChannel, ROAD_LAYER_ID, type LogisticsNetwork } from '../protocol';
 import { roadPreview, type RoadPreviewLink } from './road-preview';
@@ -98,7 +98,7 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
         ...p,
         material: Math.ceil((p.cellsToPave * materialPerCell) / 1000),
         seconds: (p.cellsToPave * ticksPerCell) / TICKS_PER_SECOND,
-        cargoName: cargoId.split(':')[1] ?? '',
+        cargoName: localName(cargoId),
       });
     }, 200);
     return () => {

@@ -9,7 +9,7 @@ const MIB = 1024 * 1024;
 export const WARN_BYTES = 24 * MIB;
 export const FAIL_BYTES = 32 * MIB;
 
-export function totalBytes(dir: string): number {
+function totalBytes(dir: string): number {
   let total = 0;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);

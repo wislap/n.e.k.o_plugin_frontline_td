@@ -119,6 +119,7 @@ function nodeParts(
   ];
 }
 
+/** @public eval runner entry: eval/run.ts loads it dynamically. */
 export function main(): void {
   const db = loadContent();
   const energy = db.cargos.byId('frontline_td:energy')?.index ?? 0;

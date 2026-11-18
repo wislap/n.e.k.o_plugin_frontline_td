@@ -10,7 +10,6 @@ import type { SimConfig, SimModule, SpawnInit, SystemContext } from '../../../ke
 import { Position, createMovementModule, moverComponents } from '../../movement/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
 import type { ResolvedSurface } from '../../../content/index';
-import type { TerrainGrid } from '../../terrain/content';
 import { createTerrainModule } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { LogisticsNetworkChannel } from '../protocol';
@@ -18,6 +17,7 @@ import type { LogisticsNetwork } from '../protocol';
 import { CARGO_SLOTS, CargoStore, EMPTY_CARGO, LogisticsNode } from './components';
 import type { LogisticsModule, LogisticsStart } from './module';
 import { createLogisticsModule } from './module';
+import { makeGrid } from '../../../testing/index';
 
 export const DB: ContentDb = loadContent();
 export const ENERGY = DB.cargos.byId('frontline_td:energy')?.index ?? -1;
@@ -31,21 +31,6 @@ const SURFACES: ResolvedSurface[] = [
 ];
 
 // '.': ground, '#': impassable.
-function makeGrid(rows: string[]): TerrainGrid {
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const heights = new Uint8Array(width * height);
-  const surfaces = new Uint16Array(width * height);
-  const ramps = new Uint8Array(width * height);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      if (row[x] === '#') {
-        surfaces[y * width + x] = 1;
-      }
-    }
-  });
-  return { width, height, heights, surfaces, ramps };
-}
 
 export interface SlotSpec {
   cargo: number;

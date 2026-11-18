@@ -7,6 +7,7 @@ export interface RuntimeState {
   error: string | null;
   setStats(stats: RuntimeStats): void;
   setError(message: string): void;
+  reset(): void;
 }
 
 export const useRuntimeStore = create<RuntimeState>((set) => ({
@@ -17,5 +18,8 @@ export const useRuntimeStore = create<RuntimeState>((set) => ({
   },
   setError: (message) => {
     set({ error: message });
+  },
+  reset: () => {
+    set({ stats: null, error: null });
   },
 }));

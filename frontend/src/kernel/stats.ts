@@ -2,16 +2,14 @@
 // modifier is a component ({value: i32}) registered under a stat. Membership
 // means the modifier is active, so claimWriter/addComponent/removeComponent/
 // serialization/despawn cleanup all come from the component machinery.
-import { floorDiv, parseContentId } from '../core/index';
+import { parseContentId } from '../core/index';
 import { defineComponent } from './components';
 import type { ComponentRef } from './components';
 
-export type StatKind = 'quantity' | 'geometry';
 export type ModifierOp = 'add' | 'mul_bp';
 
 export interface StatRef {
   readonly id: string;
-  readonly kind: StatKind;
 }
 
 // A ModifierRef IS a ComponentRef with fields {value: 'i32'}; the stat/op
@@ -35,18 +33,15 @@ const STAT_REGISTRY = new Map<string, StatRef>();
 const MODIFIERS_BY_STAT = new Map<string, ModifierRef[]>();
 const MODIFIER_REGISTRY = new Map<string, ModifierRef>();
 
-export function defineStat(id: string, kind: StatKind): StatRef {
+export function defineStat(id: string): StatRef {
   if (parseContentId(id) === null) {
     throw new Error(`invalid stat id '${id}'`);
   }
   const existing = STAT_REGISTRY.get(id);
   if (existing !== undefined) {
-    if (existing.kind !== kind) {
-      throw new Error(`stat '${id}' already defined with kind '${existing.kind}'`);
-    }
     return existing;
   }
-  const stat: StatRef = { id, kind };
+  const stat: StatRef = { id };
   STAT_REGISTRY.set(id, stat);
   return stat;
 }
@@ -88,11 +83,9 @@ export function allModifierSources(): readonly ModifierRef[] {
 }
 
 // combine(base, adds, mulBp): the shared stacking rule. mul_bp values sum
-// into one basis-point multiplier clamped at -100%.
-export function combineStat(kind: StatKind, base: number, add: number, mulBp: number): number {
+// into one basis-point multiplier clamped at -100%. Stats are fractional
+// (geometry); callers needing integer quantities floor themselves.
+export function combineStat(base: number, add: number, mulBp: number): number {
   const bp = Math.max(0, 10000 + mulBp);
-  if (kind === 'quantity') {
-    return floorDiv((base + add) * bp, 10000);
-  }
   return ((base + add) * bp) / 10000;
 }

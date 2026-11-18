@@ -11,7 +11,7 @@ import { createContext, emitChannel, structuralDeps } from './context';
 import type { ChannelState, SimInternals, SystemRecord } from './internals';
 import { createInternals, layerArray, resolve } from './internals';
 import { PHASES, phaseIndex } from './phases';
-import { ContainedIn, Faction, InWorld, UnderConstruction } from './contracts';
+import { Faction, InWorld, UnderConstruction } from './contracts';
 import { restoreState, serializeState } from './serialize';
 import { applyStructural } from './structural';
 import type { SimConfig, SimManifest, SimModule, Simulation, SystemContext } from './types';
@@ -273,7 +273,7 @@ function stepOnce(i: SimInternals, ctx: SystemContext): void {
 
 // Kernel-owned contract components report writer 'kernel' when no
 // module claimed them (UnderConstruction is claimed by construction).
-const KERNEL_COMPONENTS = new Set([Faction, InWorld, ContainedIn, UnderConstruction]);
+const KERNEL_COMPONENTS = new Set([Faction, InWorld, UnderConstruction]);
 
 function describeManifest(i: SimInternals): SimManifest {
   const modules: SimManifest['modules'] = i.moduleIds.map((moduleId) => {

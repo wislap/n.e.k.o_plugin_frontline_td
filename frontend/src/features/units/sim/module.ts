@@ -20,7 +20,7 @@ export interface StartUnit {
   count: number;
 }
 
-export interface StartStructure {
+interface StartStructure {
   // Structure content index; spawned complete at top-left x,y.
   kind: number;
   x: number;

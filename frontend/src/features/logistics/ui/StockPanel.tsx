@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb } from '../../../content/index';
+import { localName, type ContentDb } from '../../../content/index';
 import {
   ADJUSTABLE_CLASSES,
   LogisticsNetworkChannel,
@@ -30,10 +30,6 @@ const panel = {
   borderRadius: 4,
   minWidth: 180,
 } as const;
-
-function cargoName(id: string): string {
-  return id.split(':')[1] ?? id;
-}
 
 export function StockPanel({ client, db }: { client: SimClient; db: ContentDb }) {
   const { t } = useTranslation();
@@ -63,7 +59,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
         const id = db.cargos.byIndex(cargo)?.id ?? String(cargo);
         return (
           <div key={id}>
-            {t(`cargo.${cargoName(id)}`, { defaultValue: cargoName(id) })}:{' '}
+            {t(`cargo.${localName(id)}`, { defaultValue: localName(id) })}:{' '}
             {Math.floor(milli / 1000)}
           </div>
         );

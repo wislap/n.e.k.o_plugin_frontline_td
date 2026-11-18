@@ -12,7 +12,7 @@ import type { SquadsDeps } from './deps';
 import { updateSquad } from './orders';
 import type { Squad, SquadsEnv } from './state';
 
-export const SQUAD_PERIOD = 10;
+const SQUAD_PERIOD = 10;
 
 type MemberFields = { squad: 'u16' };
 

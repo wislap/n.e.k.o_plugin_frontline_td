@@ -112,6 +112,7 @@ function makeMap(rng: RngState): { grid: TerrainGrid; passable: number[] } {
   };
 }
 
+/** @public eval runner entry: eval/run.ts loads it dynamically. */
 export function main(args: string[]): void {
   const updateBaseline = args.includes('--update-baseline');
   const nArg = args.find((a) => /^\d+$/.test(a));

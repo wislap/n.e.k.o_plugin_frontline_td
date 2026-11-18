@@ -1,6 +1,6 @@
 // Module and RNG-stream registry assembled by the app (ADR 0019/0023).
-// createSimModules wires the M2 feature set; modes will contribute their
-// own registries later.
+// createSimModules wires the full feature set; modes add their own
+// modules (victory, probes) on top via their registry entries.
 import type { ContentDb } from '../content/index';
 import type { ResolvedMap } from '../content/index';
 import type { EntityId } from '../core/index';
@@ -36,6 +36,16 @@ import {
 import type { FactionStart } from '../features/units/sim/index';
 import type { SimModule } from '../kernel/index';
 import { CONTROLLER_STREAM_ID } from '../kernel/index';
+
+// Content integrity: a missing cargo id is a pack bug, not a value to
+// default — squads' resupply reads would silently degrade on -1.
+function requireCargoIndex(db: ContentDb, id: string): number {
+  const cargo = db.cargos.byId(id);
+  if (cargo === undefined) {
+    throw new Error(`content db is missing required cargo '${id}'`);
+  }
+  return cargo.index;
+}
 
 export interface SimModulesResult {
   modules: SimModule[];
@@ -112,10 +122,13 @@ export function createSimModules(
     },
   );
   const production = createProductionModule(db);
-  // Combat installs last: within the cleanup phase systems run in module
-  // registration order, so movement's and construction's combat.died
-  // readers (goal release, footprint free) must run before combat's own
-  // despawn.
+  // Combat installs last: within a phase systems run in module
+  // registration order, and the order is load-bearing — moving combat
+  // earlier changes the match hash because the cleanup systems that read
+  // combat.died (movement's goal release, construction's footprint free,
+  // which itself despawns emptied structures) enqueue their structural
+  // ops before combat's mass despawn. Despawn order sets the entity
+  // free-list, which sets which ids later spawns reuse.
   const combat = createCombatModule();
   const capture = createCaptureModule(db, { visible: vision.api.visible });
   // Squads read combat's public queries, logistics coverage and pathing;
@@ -126,7 +139,7 @@ export function createSimModules(
     pathing: pathing.api,
     logistics,
     combat,
-    energyCargo: db.cargos.byId('frontline_td:energy')?.index ?? -1,
+    energyCargo: requireCargoIndex(db, 'frontline_td:energy'),
     visible: vision.api.visible,
   });
   return {

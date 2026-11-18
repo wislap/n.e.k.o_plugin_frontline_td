@@ -9,7 +9,7 @@ import { UNREACHABLE } from './dijkstra';
 import { buildClassGraph, DIR_ORDER, sectorBounds, sectorDijkstra, sectorOfCell } from './graph';
 import type { ClassGraph } from './graph';
 
-export interface Direction {
+interface Direction {
   dx: number;
   dy: number;
 }

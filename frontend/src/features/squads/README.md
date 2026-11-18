@@ -12,7 +12,7 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   目标与存储路径）。
 - `sim/index.ts`：`createSquadsModule(deps)`、`SquadMember`。
 
-## 拥有的组件与状态
+## 拥有的组件
 - `SquadMember { squad }`（本模块写）。
 - 模块状态 `Map<squadId, Squad>` + 单调计数器，随存档序列化。
 - Squad 字段：faction、有序成员句柄、strength、order、phase、
@@ -41,5 +41,6 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   advance；命令下达时用 pathing 下降沿存储 ≤512 格的路线。
 - advance 目标不可达时改打最近的可达敌对建筑，摧毁后重新评估。
 
-## 对应设计章节
-- docs/adr/0026（意图与组件所有权）、docs/design/game_design.md。
+## 对应设计
+- docs/adr/0026（意图与组件所有权）、0034（移动意图驱动）、
+  docs/design/game_design.md。

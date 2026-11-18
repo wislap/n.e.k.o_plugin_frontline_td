@@ -9,8 +9,8 @@ import type { SimConfig } from '../../../kernel/index';
 import { createPathingModule } from '../../pathing/sim/index';
 import { createTerrainModule } from '../../terrain/sim/index';
 import { createMovementModule, MoveCommand } from '../../movement/sim/index';
-import type { DenseUnits } from './index';
-import { createUnitsModule, DenseUnitsChannel } from './index';
+import { createUnitsModule } from './index';
+import { denseUnits } from '../../../testing/index';
 
 const F1 = toFactionId(1);
 const F2 = toFactionId(2);
@@ -37,17 +37,13 @@ function makeSim(starts: Parameters<typeof createUnitsModule>[2]) {
   return { sim, db, terrain: terrain.api };
 }
 
-function dense(sim: ReturnType<typeof createSimulation>): DenseUnits {
-  return sim.snapshot(F1).channels[DenseUnitsChannel.id] as DenseUnits;
-}
-
 describe('units', () => {
   it('spawns start-state units on passable cells', () => {
     const robot = 0;
     const { sim, terrain } = makeSim([
       { faction: F1, units: [{ kind: robot, x: 10, y: 52, count: 25 }] },
     ]);
-    const d = dense(sim);
+    const d = denseUnits(sim, F1);
     expect(d.handles.length).toBe(25);
     const seen = new Set<string>();
     for (let i = 0; i < 25; i++) {
@@ -67,7 +63,7 @@ describe('units', () => {
       { faction: F1, units: [{ kind: 0, x: 10, y: 52, count: 10 }] },
       { faction: F2, units: [{ kind: 0, x: 30, y: 4, count: 5 }] },
     ]);
-    const d = dense(sim);
+    const d = denseUnits(sim, F1);
     expect(d.handles.length).toBe(15);
     for (const arr of [d.x, d.y, d.kind, d.faction, d.moving]) {
       expect(arr.length).toBe(15);
@@ -107,7 +103,7 @@ describe('units', () => {
       },
       [terrain.module, pathing.module, movement, units],
     );
-    const before = dense(sim);
+    const before = denseUnits(sim, F1);
     const handles = [...before.handles].map((h) => h as EntityHandle);
     sim.submit({
       tick: toTick(1),
@@ -117,7 +113,7 @@ describe('units', () => {
     });
     sim.step();
     sim.step();
-    const after = dense(sim);
+    const after = denseUnits(sim, F1);
     const moving = [...after.moving].filter((m) => m === 1).length;
     expect(moving).toBe(2);
   });

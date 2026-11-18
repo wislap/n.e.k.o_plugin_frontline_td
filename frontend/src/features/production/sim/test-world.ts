@@ -15,7 +15,6 @@ import type {
 import { Faction, InWorld, createSimulation } from '../../../kernel/index';
 import type { SimConfig, SimModule, SpawnInit } from '../../../kernel/index';
 import type { ResolvedSurface } from '../../../content/index';
-import type { TerrainGrid } from '../../terrain/content';
 import { createTerrainModule } from '../../terrain/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
 import { createMovementModule } from '../../movement/sim/index';
@@ -29,6 +28,7 @@ import { structureParts as productionStructureParts } from './parts';
 import { createProductionModule } from './module';
 import { createUnitsModule } from '../../units/sim/index';
 import { unitParts as logisticsUnitParts } from '../../logistics/sim/index';
+import { makeGrid, must } from '../../../testing/index';
 
 const DB: ContentDb = loadContent();
 export const F1 = toFactionId(1);
@@ -37,34 +37,12 @@ export const MATERIAL = DB.cargos.byId('frontline_td:material')?.index ?? -1;
 export const ENERGY = DB.cargos.byId('frontline_td:energy')?.index ?? -1;
 export const ORE = DB.cargos.byId('frontline_td:ore')?.index ?? -1;
 
-function must<T>(v: T | undefined, name: string): T {
-  if (v === undefined) {
-    throw new Error(`base pack entry '${name}' missing`);
-  }
-  return v;
-}
 export const MINER = must(DB.structures.byId('frontline_td:miner'), 'miner');
 export const FACTORY = must(DB.structures.byId('frontline_td:ammo_factory'), 'ammo_factory');
 
 const SURFACES: ResolvedSurface[] = [
   { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
 ];
-
-function makeGrid(rows: string[]): TerrainGrid {
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const surfaces = new Uint16Array(width * height);
-  const heights = new Uint8Array(width * height);
-  const ramps = new Uint8Array(width * height);
-  rows.forEach((row, y) => {
-    for (let x = 0; x < width; x++) {
-      if (row[x] === 'p') {
-        heights[y * width + x] = 1;
-      }
-    }
-  });
-  return { width, height, heights, surfaces, ramps };
-}
 
 type PartPatch = (comp: unknown, init: Record<string, number>) => Record<string, number>;
 

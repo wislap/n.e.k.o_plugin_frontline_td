@@ -20,7 +20,7 @@ import { makeSeparate } from './separate';
 
 // The movement speed stat: logistics' energy modifiers multiply it (ADR
 // 0025). With no modifiers stat() returns the base unchanged.
-export const MoveSpeed = defineStat('frontline_td:movement.speed', 'geometry');
+export const MoveSpeed = defineStat('frontline_td:movement.speed');
 
 // A unit has arrived when this close to its slot point.
 const ARRIVAL_DIST = 0.3;
@@ -202,10 +202,10 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       builder.system({ id: 'frontline_td:movement.separate', phase: 'movement', run: separate });
       builder.system({ id: 'frontline_td:movement.integrate', phase: 'movement', run: integrate });
 
-      // Dead movers release their shared goal before combat's despawn
-      // runs (movement installs before combat, so this cleanup-phase
-      // system observes combat.died first). Only active===1 still owns
-      // a goal: hold/stop already released theirs.
+      // Dead movers release their shared goal in the same cleanup phase,
+      // before combat's despawn runs — module order fixes the structural
+      // queue (despawn order is observable through entity-id reuse).
+      // Only active===1 still owns a goal: hold/stop already released.
       builder.system({
         id: 'frontline_td:movement.release_dead',
         phase: 'cleanup',

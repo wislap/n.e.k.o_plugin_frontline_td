@@ -14,15 +14,12 @@ import { createMovementModule, MoveCommand } from './index';
 const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
-// M3-B1 changed the serialized state shape (blocked layer + overlay
-// state); M3-C added ore_field cells to proto_01, which changes the
-// serialized surface layer — same code paths, different content.
-// M3-E added six raiders to the dev setup plus logistics' serialized
-// road layer — different entities/state, same determinism contract.
-// M4-A added the squads module (new registered state + snapshot channel)
-// and producer cycle state — different serialized state, same contract.
-// M4-B added controllerStates (per-controller serialized state, keyed by
-// faction) plus the squads `tag` field — different shape, same contract.
+// This world installs terrain + pathing + movement + units only. The
+// golden was last re-derived when the terrain module gained its
+// serialized blocked overlay + blocked layer and proto_01 gained
+// ore_field surface cells — same code paths, different content. Any
+// further change to those serialized inputs legitimately changes the
+// hash; update it in the same commit with the reason.
 const GOLDEN_HASH = '07d7e364079afcdd';
 
 function makeSim() {

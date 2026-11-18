@@ -51,6 +51,7 @@ function stats(samples: number[]): { avg: number; p95: number } {
   };
 }
 
+/** @public eval runner entry: eval/run.ts loads it dynamically. */
 export function main(args: string[]): void {
   const seedsArg = args.find((a) => a.startsWith('seeds='));
   const seeds = seedsArg !== undefined ? Number(seedsArg.slice(6)) : 8;

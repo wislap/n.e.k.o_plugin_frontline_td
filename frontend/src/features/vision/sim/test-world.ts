@@ -28,6 +28,7 @@ import type { ReadonlyNumberArray } from '../../../kernel/index';
 import { VisionMemoryChannel } from '../protocol';
 import type { VisionMemory } from '../protocol';
 import { createVisionModule, structureVisionParts, unitVisionParts, VisionLayer } from './index';
+import { must } from '../../../testing/index';
 
 const DB: ContentDb = loadContent();
 export const F1 = toFactionId(1);
@@ -35,12 +36,6 @@ export const F2 = toFactionId(2);
 export const W = 40;
 const H = 40;
 
-function must<T>(v: T | undefined, name: string): T {
-  if (v === undefined) {
-    throw new Error(`base pack entry '${name}' missing`);
-  }
-  return v;
-}
 const ROBOT = must(DB.units.byId('frontline_td:robot'), 'robot');
 export const DEPOT = must(DB.structures.byId('frontline_td:supply_depot'), 'supply_depot');
 export const OUTPOST = must(DB.structures.byId('frontline_td:outpost'), 'outpost');

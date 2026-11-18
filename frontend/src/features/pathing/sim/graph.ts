@@ -4,7 +4,7 @@
 import type { TerrainApi } from '../../terrain/sim/index';
 import { UNREACHABLE, dijkstra } from './dijkstra';
 
-export const SECTOR_SIZE = 16;
+const SECTOR_SIZE = 16;
 
 // Neighbour order for direction pick: N, E, S, W, NE, SE, SW, NW.
 export const DIR_ORDER = [

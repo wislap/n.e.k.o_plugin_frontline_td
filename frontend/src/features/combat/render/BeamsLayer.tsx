@@ -1,10 +1,16 @@
 // Shot tracers (M3 D): line segments from combat.shot events, fading
 // over ~150 ms. Events are last-tick only; collectBeams dedupes by
 // snapshot tick so each burst is appended once.
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
+import {
+  commitLineBuffer,
+  createLineBuffer,
+  ensureLineCapacity,
+  type LineBuffer,
+} from '../../../render/line-buffer';
 import { terrainY } from '../../../render/world';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
 import { isCellVisible } from '../../vision/rules/index';
@@ -22,18 +28,29 @@ export interface BeamsLayerProps {
 }
 
 export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerProps) {
-  const geom = useMemo(() => new THREE.BufferGeometry(), []);
-  const positionsRef = useRef<Float32Array | null>(null);
-  const colorsRef = useRef<Float32Array | null>(null);
+  // Mutable GPU-side state lives behind a ref: created lazily inside
+  // useFrame, attached to the object imperatively, disposed on unmount.
+  const bufRef = useRef<LineBuffer | null>(null);
+  useEffect(() => {
+    return () => {
+      bufRef.current?.geometry.dispose();
+    };
+  }, []);
   const active = useRef<Beam[]>([]);
   const lastTick = useRef(-1);
   const segsRef = useRef<THREE.LineSegments>(null);
 
   useFrame(() => {
     const segs = segsRef.current;
-    const positions = (positionsRef.current ??= new Float32Array(MAX_BEAMS * 6));
-    const colors = (colorsRef.current ??= new Float32Array(MAX_BEAMS * 6));
     if (segs === null) {
+      return;
+    }
+    bufRef.current ??= createLineBuffer(MAX_BEAMS * 2, true);
+    const buf = bufRef.current;
+    segs.geometry = buf.geometry;
+    const positions = buf.positions;
+    const colors = buf.colors;
+    if (colors === null) {
       return;
     }
     const now = performance.now();
@@ -80,14 +97,13 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
       colors[base + 5] = color.b;
       count += 1;
     }
-    geom.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, count * 6), 3));
-    geom.setAttribute('color', new THREE.BufferAttribute(colors.slice(0, count * 6), 3));
-    geom.computeBoundingSphere();
+    ensureLineCapacity(buf, count * 2);
+    commitLineBuffer(buf, count * 2);
     segs.visible = count > 0;
   });
 
   return (
-    <lineSegments ref={segsRef} geometry={geom} visible={false}>
+    <lineSegments ref={segsRef} visible={false}>
       <lineBasicMaterial vertexColors transparent opacity={0.9} />
     </lineSegments>
   );

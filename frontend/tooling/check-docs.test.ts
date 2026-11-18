@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { checkDocs } from './check-docs.ts';
+import { checkDocs, checkFeatureReadme, FEATURE_README_HEADINGS } from './check-docs.ts';
 
 let root: string;
 
@@ -53,5 +53,34 @@ describe('checkDocs', () => {
     writeFileSync(path.join(root, 'AGENTS.md'), 'x\n'.repeat(151));
     execFileSync('git', ['add', 'AGENTS.md'], { cwd: root });
     expect(checkDocs(root).join('\n')).toMatch('150');
+  });
+
+  it('flags a feature directory without a README', () => {
+    mkdirSync(path.join(root, 'frontend', 'src', 'features', 'demo'), { recursive: true });
+    expect(checkDocs(root).join('\n')).toMatch('features/demo: missing README.md');
+  });
+
+  it('flags a feature README with wrong or missing sections', () => {
+    mkdirSync(path.join(root, 'frontend', 'src', 'features', 'demo'), { recursive: true });
+    writeFileSync(
+      path.join(root, 'frontend', 'src', 'features', 'demo', 'README.md'),
+      '# demo\n\n## 职责\n\nx\n\n## 规则\n',
+    );
+    const errors = checkDocs(root).join('\n');
+    expect(errors).toMatch('features/demo/README.md');
+    expect(errors).toMatch('## 公开接口');
+  });
+});
+
+describe('checkFeatureReadme', () => {
+  it('accepts the exact five sections in order', () => {
+    const text = `# f\n\n${FEATURE_README_HEADINGS.join('\n\nx\n\n')}\n`;
+    expect(checkFeatureReadme(text)).toBeNull();
+  });
+
+  it('rejects an extra section and an out-of-order section', () => {
+    expect(checkFeatureReadme('# f\n\n## 职责\n\n## 公开接口\n')).toMatch('expected 5');
+    const wrongOrder = `# f\n\n## 职责\n\n## 拥有的组件\n\n## 公开接口\n\n## 不变量\n\n## 对应设计\n`;
+    expect(checkFeatureReadme(wrongOrder)).toMatch('## 公开接口');
   });
 });

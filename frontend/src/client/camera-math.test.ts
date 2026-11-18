@@ -18,7 +18,7 @@ import {
   spectateCameraPosition,
   spectateViewDir,
   visibleGroundHeight,
-} from './math';
+} from './camera-math';
 
 describe('camera math', () => {
   it('perspective dist ↔ ortho height are inverses at pitch 90°', () => {

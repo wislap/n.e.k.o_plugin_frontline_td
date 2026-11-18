@@ -11,8 +11,8 @@ import { createMovementModule } from '../../movement/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
 import { createTerrainModule } from '../../terrain/sim/index';
 import { SpawnIntent, UnitsSpawned } from '../protocol';
-import type { DenseUnits } from './index';
-import { createUnitsModule, DenseUnitsChannel } from './index';
+import { createUnitsModule } from './index';
+import { denseUnits } from '../../../testing/index';
 
 const F1 = toFactionId(1);
 
@@ -56,24 +56,20 @@ function emitter(queue: Serializable[]): SimModule {
   };
 }
 
-function dense(sim: ReturnType<typeof createSimulation>): DenseUnits {
-  return sim.snapshot(F1).channels[DenseUnitsChannel.id] as DenseUnits;
-}
-
 describe('units.spawn', () => {
   it('spawns a unit next tick at the nearest free cell and emits spawned', () => {
     const queue: Serializable[] = [
       { faction: 1, kind: 'frontline_td:robot', x: 30.5, y: 30.5, source: 0 },
     ];
     const { sim } = makeSim([emitter(queue)]);
-    const before = dense(sim).handles.length;
+    const before = denseUnits(sim, F1).handles.length;
     sim.step();
     // The spawn lands structurally at tick end: visible from tick 1.
     const events = sim.snapshot(F1).events;
-    expect(dense(sim).handles.length).toBe(before + 1);
+    expect(denseUnits(sim, F1).handles.length).toBe(before + 1);
     expect(events.some((e) => e.type === UnitsSpawned.type)).toBe(true);
-    const x = dense(sim).x[before] ?? -1;
-    const y = dense(sim).y[before] ?? -1;
+    const x = denseUnits(sim, F1).x[before] ?? -1;
+    const y = denseUnits(sim, F1).y[before] ?? -1;
     // Nearest passable free cell around the requested point.
     expect(Math.abs(x - 30.5)).toBeLessThan(3);
     expect(Math.abs(y - 30.5)).toBeLessThan(3);
@@ -84,9 +80,9 @@ describe('units.spawn', () => {
       { faction: 1, kind: 'frontline_td:nope', x: 30.5, y: 30.5, source: 0 },
     ];
     const { sim } = makeSim([emitter(queue)]);
-    const before = dense(sim).handles.length;
+    const before = denseUnits(sim, F1).handles.length;
     sim.step();
-    expect(dense(sim).handles.length).toBe(before);
+    expect(denseUnits(sim, F1).handles.length).toBe(before);
     expect(sim.snapshot(F1).events.some((e) => e.type === UnitsSpawned.type)).toBe(false);
   });
 
@@ -96,9 +92,9 @@ describe('units.spawn', () => {
       { faction: 1, kind: 'frontline_td:robot', x: 30.5, y: 30.5, source: 0 },
     ];
     const { sim } = makeSim([emitter(queue)]);
-    const before = dense(sim).handles.length;
+    const before = denseUnits(sim, F1).handles.length;
     sim.step();
-    const d = dense(sim);
+    const d = denseUnits(sim, F1);
     expect(d.handles.length).toBe(before + 2);
     const c0 = `${d.x[before]},${d.y[before]}`;
     const c1 = `${d.x[before + 1]},${d.y[before + 1]}`;

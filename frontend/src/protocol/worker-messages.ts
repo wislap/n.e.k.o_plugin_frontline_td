@@ -16,7 +16,7 @@ export type MainToWorker =
   // Selects the entity the worker inspects; null clears the target.
   | { kind: 'inspect'; handle: EntityHandle | null };
 
-export interface SystemTiming {
+interface SystemTiming {
   id: string;
   avgMs: number;
   calls: number;

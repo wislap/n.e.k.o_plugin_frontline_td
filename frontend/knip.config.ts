@@ -6,15 +6,15 @@ const config: KnipConfig = {
     'src/kernel/index.ts',
     'src/content/index.ts',
     'src/protocol/index.ts',
-    'src/client/index.ts',
     'src/features/*/sim/index.ts',
     'src/features/*/render/index.ts',
     'eval/**/*.ts',
     'tooling/*.ts',
     '!tooling/**/*.test.ts',
   ],
-  project: ['src/**/*.{ts,tsx}', 'tooling/**/*.ts'],
+  project: ['src/**/*.{ts,tsx}', 'tooling/**/*.ts', 'eval/**/*.ts'],
   ignore: ['tooling/fixtures/**'],
+  includeEntryExports: true,
 };
 
 export default config;

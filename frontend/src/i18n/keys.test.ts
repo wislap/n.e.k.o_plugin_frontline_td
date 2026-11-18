@@ -7,7 +7,7 @@ import zhCN from './locales/zh-CN.json';
 import { FOOTPRINT_CODES, RANGE_CODES } from '../features/construction/rules/index';
 import { STATE_NAMES } from '../features/construction/protocol';
 import { CARGO_CLASSES, UNMET_REASONS } from '../features/logistics/protocol';
-import { loadContent } from '../content/index';
+import { loadContent, localName } from '../content/index';
 
 // Command reject reasons emitted by sim command handlers.
 const REJECT_CODES = [
@@ -59,9 +59,9 @@ const reasonCodes = new Set<string>([
 ]);
 
 const db = loadContent();
-const cargoNames = db.cargos.list.map((c) => c.id.split(':')[1] ?? c.id);
-const structureNames = db.structures.list.map((s) => s.id.split(':')[1] ?? s.id);
-const unitNames = db.units.list.map((u) => u.id.split(':')[1] ?? u.id);
+const cargoNames = db.cargos.list.map((c) => localName(c.id));
+const structureNames = db.structures.list.map((s) => localName(s.id));
+const unitNames = db.units.list.map((u) => localName(u.id));
 
 describe('i18n protocol-code coverage', () => {
   it('covers every code/name key in English and Chinese', () => {

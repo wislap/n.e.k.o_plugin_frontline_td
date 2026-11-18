@@ -100,6 +100,17 @@ export function createLogisticsModule(
   options: LogisticsOptions = {},
 ): LogisticsModule {
   const cargoCount = db.cargos.list.length;
+  // Content integrity: the ground class and the energy cargo are load-
+  // bearing for movement costing and resupply — fail at module creation
+  // instead of degrading silently on a bogus index.
+  const groundCls = db.movementClasses.byId(GROUND_CLASS_ID)?.index;
+  if (groundCls === undefined) {
+    throw new Error(`logistics: content db is missing movement class '${GROUND_CLASS_ID}'`);
+  }
+  const energyIdx = db.cargos.byId(ENERGY_ID)?.index;
+  if (energyIdx === undefined) {
+    throw new Error(`logistics: content db is missing cargo '${ENERGY_ID}'`);
+  }
   const states = new Map<number, FactionState>();
   function stateOf(faction: number): FactionState {
     let s = states.get(faction);
@@ -210,8 +221,8 @@ export function createLogisticsModule(
       env = {
         db,
         cfg: db.logistics,
-        groundCls: db.movementClasses.byId(GROUND_CLASS_ID)?.index ?? 0,
-        energyIdx: db.cargos.byId(ENERGY_ID)?.index ?? -1,
+        groundCls,
+        energyIdx,
         dirt: db.logistics.roadLevels[0]?.multiplierBp ?? 10000,
         terrain,
         healthBp: options.healthBp ?? (() => 10000),

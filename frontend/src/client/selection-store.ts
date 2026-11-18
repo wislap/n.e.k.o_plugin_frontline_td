@@ -9,6 +9,7 @@ export interface SelectionState {
   setSelection(handles: ReadonlySet<number>, additive: boolean): void;
   clear(): void;
   markMoveTarget(x: number, y: number, at: number): void;
+  reset(): void;
 }
 
 // Drop handles that no longer appear in the latest snapshot channel.
@@ -45,5 +46,8 @@ export const useSelectionStore = create<SelectionState>((set) => ({
   },
   markMoveTarget: (x, y, at) => {
     set({ moveMarker: { x, y, at } });
+  },
+  reset: () => {
+    set({ selected: new Set<number>(), moveMarker: null });
   },
 }));

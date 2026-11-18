@@ -6,10 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { loadContent } from '../../../content/index';
 import { restoreSimulation } from '../../../kernel/index';
 import { CargoStore } from '../../logistics/sim/index';
-import { DenseUnitsChannel } from '../../units/sim/index';
-import type { DenseUnits } from '../../units/sim/index';
 import { ENERGY, F1, makeWorld, MATERIAL, run, structureInit } from './test-world';
 import type { BuiltWorld } from './test-world';
+import { denseUnits } from '../../../testing/index';
 
 const DB = loadContent();
 const HIVE = DB.structures.byId('frontline_td:hive');
@@ -23,12 +22,8 @@ if (HIVE === undefined || ROBOT_FACTORY === undefined) {
   throw new Error('M4 content missing');
 }
 
-function dense(w: BuiltWorld): DenseUnits {
-  return w.sim.snapshot(F1).channels[DenseUnitsChannel.id] as DenseUnits;
-}
-
 function unitCount(w: BuiltWorld): number {
-  return dense(w).handles.length;
+  return denseUnits(w.sim, F1).handles.length;
 }
 
 // Preload production-class store slots: robot_factory stores are
@@ -50,7 +45,7 @@ describe('unit recipes', () => {
     run(w, 201);
     expect(unitCount(w)).toBe(1);
     // Spawned near the hive's bottom edge (footprint 4 cells from 10,10).
-    const d = dense(w);
+    const d = denseUnits(w.sim, F1);
     expect(d.y[0] ?? 0).toBeGreaterThan(12);
     expect(d.y[0] ?? 99).toBeLessThan(18);
   });
@@ -64,14 +59,14 @@ describe('unit recipes', () => {
     // cycle order: crawler, crawler, spitter, ...
     run(w, 602);
     expect(unitCount(w)).toBe(3);
-    expect(DB.units.byIndex(dense(w).kind[2] ?? -1)?.id).toBe('frontline_td:spitter');
+    expect(DB.units.byIndex(denseUnits(w.sim, F1).kind[2] ?? -1)?.id).toBe('frontline_td:spitter');
     const saved = w.sim.serialize();
     const restored = restoreSimulation(w.config, w.modules, saved);
     w.attach(restored);
     run(w, 200);
     // Next cycle index is 3 → crawler, and the restore did not respawn.
     expect(unitCount(w)).toBe(4);
-    expect(DB.units.byIndex(dense(w).kind[3] ?? -1)?.id).toBe('frontline_td:crawler');
+    expect(DB.units.byIndex(denseUnits(w.sim, F1).kind[3] ?? -1)?.id).toBe('frontline_td:crawler');
   });
 
   it('ramp shortens the cycle when its step tick passes', () => {
@@ -110,7 +105,7 @@ describe('unit recipes', () => {
     // 12 s = 240 ticks.
     run(w, 241);
     expect(unitCount(w)).toBe(1);
-    expect(DB.units.byIndex(dense(w).kind[0] ?? -1)?.id).toBe('frontline_td:robot');
+    expect(DB.units.byIndex(denseUnits(w.sim, F1).kind[0] ?? -1)?.id).toBe('frontline_td:robot');
     // Inputs were consumed by the cycle start.
     expect(w.storeAmount(0, MATERIAL)).toBe(0);
     expect(w.storeAmount(0, ENERGY)).toBe(0);

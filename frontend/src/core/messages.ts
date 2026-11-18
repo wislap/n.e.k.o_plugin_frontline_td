@@ -7,7 +7,7 @@ import type { EntityHandle } from './handle';
 import type { Schema } from './schema';
 import type { Tick } from './time';
 
-export type SerializableTypedArray =
+type SerializableTypedArray =
   | Int8Array
   | Uint8Array
   | Int16Array

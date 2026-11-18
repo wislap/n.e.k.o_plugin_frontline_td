@@ -5,15 +5,18 @@
  *    run at the plugin root.
  * b) Every relative markdown link target in whitelisted files must exist.
  * c) AGENTS.md must stay under 150 lines.
+ * d) Every `frontend/src/features/<name>/` directory must contain a
+ *    README.md whose `##` headings are exactly FEATURE_README_HEADINGS
+ *    in order.
  *
  * Usage: node tooling/check-docs.ts
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const PLUGIN_ROOT = path.resolve(import.meta.dirname, '..', '..');
+const PLUGIN_ROOT = path.resolve(import.meta.dirname, '..', '..');
 
 const WHITELIST: RegExp[] = [
   /^(AGENTS|CLAUDE|README|CONTRIBUTING)\.md$/,
@@ -27,12 +30,37 @@ const WHITELIST: RegExp[] = [
 
 const AGENTS_MAX_LINES = 150;
 const LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
+const H2_RE = /^## .+$/gm;
 
-export function isWhitelisted(repoRelativePath: string): boolean {
+export const FEATURE_README_HEADINGS = [
+  '## 职责',
+  '## 公开接口',
+  '## 拥有的组件',
+  '## 不变量',
+  '## 对应设计',
+];
+
+// Returns an error string when the README's `##` headings differ from
+// FEATURE_README_HEADINGS (missing, extra, or out of order).
+export function checkFeatureReadme(readmeText: string): string | null {
+  const headings = readmeText.match(H2_RE) ?? [];
+  const expected = FEATURE_README_HEADINGS.join(' → ');
+  if (headings.length !== FEATURE_README_HEADINGS.length) {
+    return `expected ${FEATURE_README_HEADINGS.length} sections (${expected}), found ${headings.length}`;
+  }
+  for (let i = 0; i < FEATURE_README_HEADINGS.length; i++) {
+    if (headings[i] !== FEATURE_README_HEADINGS[i]) {
+      return `section ${i + 1} is '${headings[i]}', expected '${FEATURE_README_HEADINGS[i]}' (order: ${expected})`;
+    }
+  }
+  return null;
+}
+
+function isWhitelisted(repoRelativePath: string): boolean {
   return WHITELIST.some((pattern) => pattern.test(repoRelativePath));
 }
 
-export function listFiles(root: string): string[] {
+function listFiles(root: string): string[] {
   const output = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
     cwd: root,
     encoding: 'utf8',
@@ -47,7 +75,7 @@ function isExternalTarget(target: string): boolean {
   return /^(https?:|mailto:)/i.test(target) || target.startsWith('#');
 }
 
-export function findBrokenLinks(root: string, repoRelativePath: string): string[] {
+function findBrokenLinks(root: string, repoRelativePath: string): string[] {
   const filePath = path.join(root, repoRelativePath);
   const text = readFileSync(filePath, 'utf8');
   const broken: string[] = [];
@@ -87,6 +115,24 @@ export function checkDocs(root: string = PLUGIN_ROOT): string[] {
     const lineCount = readFileSync(agentsPath, 'utf8').split('\n').length;
     if (lineCount > AGENTS_MAX_LINES) {
       errors.push(`AGENTS.md: ${lineCount} lines exceeds the ${AGENTS_MAX_LINES}-line limit`);
+    }
+  }
+
+  const featuresDir = path.join(root, 'frontend', 'src', 'features');
+  if (existsSync(featuresDir)) {
+    for (const entry of readdirSync(featuresDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const readmePath = path.join(featuresDir, entry.name, 'README.md');
+      if (!existsSync(readmePath)) {
+        errors.push(`frontend/src/features/${entry.name}: missing README.md`);
+        continue;
+      }
+      const problem = checkFeatureReadme(readFileSync(readmePath, 'utf8'));
+      if (problem !== null) {
+        errors.push(`frontend/src/features/${entry.name}/README.md: ${problem}`);
+      }
     }
   }
 

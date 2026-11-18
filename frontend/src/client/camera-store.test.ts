@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useCameraStore } from './camera-store';
-import { visibleGroundHeight } from '../render/camera/math';
+import { visibleGroundHeight } from './camera-math';
 
 describe('camera store', () => {
   beforeEach(() => {
