@@ -32,6 +32,9 @@ const ADR_DOMAIN_LINE_RE = /^- 领域：(.+)$/;
 // full-width parens). Old ADRs are never edited — the index derives
 // the supersession note from this line.
 const ADR_PARTIAL_RE = /^- 部分取代：(\d{4})（(.+)）$/;
+// Required header line: implementation status (ADR 0044). 已实现 may
+// carry an optional （注：…）; 部分/未实现 must carry a concrete （缺：…）.
+const ADR_IMPL_RE = /^- 实现：(已实现|部分|未实现)(?:（(缺|注)：(.+)）)?$/;
 const REQUIRED_SECTIONS = ['## 背景', '## 决策', '## 后果'];
 
 export const ADR_DOMAINS = [
@@ -51,10 +54,17 @@ interface AdrPartialSupersession {
   note: string;
 }
 
+interface AdrImplementation {
+  value: '已实现' | '部分' | '未实现';
+  // 缺：… for 部分/未实现, 注：… for 已实现, '' when absent.
+  note: string;
+}
+
 export interface AdrEntry {
   number: string;
   title: string;
   status: string;
+  implementation: AdrImplementation;
   date: string;
   deciders: string;
   batch: string;
@@ -111,6 +121,34 @@ export function scanAdrs(adrDir: string): AdrScanResult {
       continue;
     }
 
+    const implLine = lines.map((line) => ADR_IMPL_RE.exec(line)).find((m) => m !== null);
+    let implementation: AdrImplementation;
+    if (implLine === undefined) {
+      const present = lines.some((line) => line.startsWith('- 实现：'));
+      errors.push(
+        present
+          ? `${fileName}: invalid '实现' value (expected 已实现[（注：…）] / 部分|未实现（缺：…）)`
+          : `${fileName}: missing '- 实现：' line`,
+      );
+      continue;
+    }
+    const implValue = implLine[1] ?? '';
+    const implKind = implLine[2] ?? '';
+    const implNote = implLine[3] ?? '';
+    if (implValue === '已实现') {
+      if (implKind !== '' && implKind !== '注') {
+        errors.push(`${fileName}: '实现：已实现' may only carry （注：…）, not （${implKind}：…）`);
+        continue;
+      }
+      implementation = { value: '已实现', note: implKind === '注' ? implNote : '' };
+    } else {
+      if (implKind !== '缺' || implNote.trim() === '') {
+        errors.push(`${fileName}: '实现：${implValue}' requires a non-empty （缺：…）`);
+        continue;
+      }
+      implementation = { value: implValue as AdrImplementation['value'], note: implNote };
+    }
+
     let headerOk = true;
     const readField = (field: string, strict: RegExp, hint: string): string => {
       const match = lines.map((line) => strict.exec(line)).find((m) => m !== null);
@@ -158,6 +196,7 @@ export function scanAdrs(adrDir: string): AdrScanResult {
       number,
       title,
       status: statusLine[1] ?? '',
+      implementation,
       date,
       deciders,
       batch,
@@ -191,13 +230,20 @@ export function scanAdrs(adrDir: string): AdrScanResult {
 }
 
 const ACTIVE_STATUSES = new Set(['已采纳', '待定']);
-const TABLE_HEADER = ['| 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |', '|---|---|---|---|---|---|'];
+const TABLE_HEADER = [
+  '| 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |',
+  '|---|---|---|---|---|---|---|',
+];
 
 function renderRow(entry: AdrEntry, supersededBy: AdrPartialSupersession[]): string {
   const notes = supersededBy.map((s) => `部分被 ${s.number} 取代（${s.note}）`).join('、');
   const status = notes === '' ? entry.status : `${entry.status}；${notes}`;
+  const impl =
+    entry.implementation.note === ''
+      ? entry.implementation.value
+      : `${entry.implementation.value}（${entry.implementation.note}）`;
   return (
-    `| [${entry.number}](../adr/${entry.fileName}) | ${entry.title} | ${status} | ` +
+    `| [${entry.number}](../adr/${entry.fileName}) | ${entry.title} | ${status} | ${impl} | ` +
     `${entry.deciders} | ${entry.batch} | ${entry.date} |`
   );
 }

@@ -9,6 +9,7 @@ let dir: string;
 let adrDir: string;
 
 const HEADER = `- 状态：已采纳
+- 实现：已实现
 - 日期：2026-11-14
 - 决策者：wislap
 - 批次：M0 架构基线
@@ -37,6 +38,7 @@ function entry(partial: Partial<AdrEntry> & Pick<AdrEntry, 'number' | 'fileName'
   return {
     title: 'T',
     status: '已采纳',
+    implementation: { value: '已实现', note: '' },
     date: '2026-11-14',
     deciders: 'wislap',
     batch: 'M0 架构基线',
@@ -91,6 +93,35 @@ describe('scanAdrs', () => {
   it('flags a missing status line', () => {
     writeAdr('0001-x.md', VALID_ADR.replace('- 状态：已采纳\n', ''));
     expect(scanAdrs(adrDir).errors.join('\n')).toMatch('状态');
+  });
+
+  it('flags a missing 实现 line', () => {
+    writeAdr('0001-x.md', VALID_ADR.replace('- 实现：已实现\n', ''));
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/0001-x\.md.*实现/);
+  });
+
+  it('flags an invalid 实现 value', () => {
+    writeAdr('0001-x.md', VALID_ADR.replace('- 实现：已实现', '- 实现：基本完成'));
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/0001-x\.md.*实现/);
+  });
+
+  it('flags 部分/未实现 without a non-empty 缺 note', () => {
+    writeAdr('0001-x.md', VALID_ADR.replace('- 实现：已实现', '- 实现：部分'));
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/0001-x\.md.*缺/);
+    writeAdr('0001-y.md', VALID_ADR.replace('- 实现：已实现', '- 实现：未实现（缺：）'));
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/缺/);
+  });
+
+  it('accepts 部分（缺：…）and 已实现（注：…）', () => {
+    writeAdr('0001-x.md', VALID_ADR.replace('- 实现：已实现', '- 实现：部分（缺：别名表未做）'));
+    const result = scanAdrs(adrDir);
+    expect(result.errors).toEqual([]);
+    expect(result.entries[0]?.implementation).toEqual({ value: '部分', note: '别名表未做' });
+  });
+
+  it('flags 已实现 carrying a 缺 note', () => {
+    writeAdr('0001-x.md', VALID_ADR.replace('- 实现：已实现', '- 实现：已实现（缺：x）'));
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/0001-x\.md.*实现/);
   });
 
   it('flags a missing required section', () => {
@@ -214,6 +245,19 @@ describe('renderAdrIndex', () => {
     expect(activeSection).not.toContain('[0004]');
     expect(retiredSection).toContain('[0002]');
     expect(retiredSection).toContain('[0004]');
+  });
+
+  it('renders the 实现 column with its note', () => {
+    const content = renderAdrIndex([
+      entry({ number: '0001', fileName: '0001-a.md' }),
+      entry({
+        number: '0002',
+        fileName: '0002-b.md',
+        implementation: { value: '部分', note: '嵌套编组未做' },
+      }),
+    ]);
+    const row0002 = content.split('\n').find((l) => l.includes('[0002]')) ?? '';
+    expect(row0002).toContain('部分（嵌套编组未做）');
   });
 
   it('shows the partial-supersession note on the referenced ADR row', () => {
