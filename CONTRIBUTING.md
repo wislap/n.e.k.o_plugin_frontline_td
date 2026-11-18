@@ -12,7 +12,7 @@
 ## PR 流程
 
 1. 从 `main` 切功能分支，提交信息用英文。
-2. 提交前在 `frontend/` 下跑 `npm ci && npm run verify`，必须全绿。
+2. 提交前在 `frontend/` 下跑 `npm ci && npm run verify && npm run e2e`，必须全绿（e2e 首次需 `npx playwright install chromium`）。
 3. 生成物一并提交：`npm run build` 更新的 `static/`、`npm run gen:index` 更新的 `docs/generated/`。不要手改这两处。
 4. 填写 PR 模板（`.github/PULL_REQUEST_TEMPLATE.md`）中的勾选项，特别是：是否改了公共接口 / kernel / protocol / 依赖规则、复用了哪些已有抽象、是否新增依赖、是否放宽棘轮基线。
 5. 改动公共接口、kernel、protocol 或依赖规则属于架构级改动，需要先写 ADR 再在 PR 中说明。
@@ -37,4 +37,4 @@
 
 ## 验证
 
-`npm run verify` 覆盖：类型检查、lint（含模拟层纯度与 i18n 字面量）、格式、依赖规则、knip、测试、索引新鲜度、文档检查、棘轮指标、构建。任何一项不通过都不要提交。
+`npm run verify` 覆盖：类型检查、lint（含模拟层纯度与 i18n 字面量）、格式、依赖规则、knip、测试、索引新鲜度、文档检查、棘轮指标、构建。`npm run e2e` 是额外的 Playwright 浏览器冒烟（不进 verify）。任何一项不通过都不要提交。

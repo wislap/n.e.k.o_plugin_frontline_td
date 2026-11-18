@@ -10,7 +10,7 @@
 ## 动手前的阅读顺序
 1. 本文件。
 2. 要改的功能的 `frontend/src/features/<x>/README.md`。
-3. `docs/generated/` 下的相关索引：先确认有没有现成的组件、事件、接口可以复用。
+3. `docs/generated/` 下的相关索引：`contracts.md`（模拟契约：系统、组件写者、事件 / 意图 / 命令、通道）、`exports.md`（各功能公共导出）先确认有没有现成的组件、事件、接口可以复用。
 4. 需要理解"为什么"时，按 ADR 索引查对应的 ADR。
 
 ## 分层与依赖（工具强制，见 ADR 0007）
@@ -60,7 +60,7 @@
 ## 禁止事项
 - 不要留死代码、被注释掉的代码、未使用的导入、临时调试输出、没有意义的 TODO。
 - 不要手改 `docs/generated/` 和 `static/`，它们由脚本生成。
-- 不要为了让检查通过去放宽棘轮基线（`frontend/ratchet.json`）。确实需要放宽时，在 PR 里写明理由。
+- 不要为了让检查通过去放宽棘轮基线（`frontend/ratchet.json`）。确实需要放宽时，在 PR 里写明理由。超长文件：>800 行计入棘轮、(600, 800] 仅警告；`*.test.ts(x)`、`test-world.ts`、`src/kernel/testing/` 豁免。
 - 不要在白名单以外的位置新建 `.md` 文件。施工计划、调研记录写在 `.plans/`（已被 gitignore），做完即删。删除前把有长期价值的结论提炼到 ADR、设计文档或 `docs/guides/`。
 - 不要修改已有 ADR 的正文。决策被推翻时，新写一篇 ADR 来取代它。
 - 不要修改 `.github/workflows/verify.yml` 和 `release.yml`。它们是插件市场托管的模板。
@@ -75,8 +75,10 @@
 ```bash
 npm ci
 npm run verify   # 类型检查、lint、格式、依赖规则、knip、测试、索引、文档、棘轮、构建
+npm run e2e      # 浏览器冒烟（首次需 npx playwright install chromium）；不进 verify
 ```
-`npm run build` 会更新 `static/`，`npm run gen:index` 会更新 `docs/generated/`，这两处的变更都要一起提交。
+- 黄金哈希（kernel determinism、`eval/match-smoke.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。
+- `npm run build` 会更新 `static/`，`npm run gen:index` 会更新 `docs/generated/`，这两处的变更都要一起提交。
 
 Python 薄壳在 N.E.K.O 仓库根目录下检查：
 ```bash

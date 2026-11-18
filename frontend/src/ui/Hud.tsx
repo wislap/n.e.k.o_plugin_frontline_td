@@ -107,7 +107,7 @@ export function Hud({
 
   return (
     <>
-      <div style={{ ...corner, top: 8, left: 8 }}>
+      <div style={{ ...corner, top: 8, left: 8 }} data-sim-tick={stats?.tick ?? -1}>
         <div>{stats?.paused === true ? t('hud.paused') : t('hud.speed', { n: speed ?? 1 })}</div>
         <div>{t(`hud.camera.${mode}`)}</div>
       </div>

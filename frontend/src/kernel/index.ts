@@ -31,6 +31,7 @@ export type {
   ReadView,
   SimBuilder,
   SimConfig,
+  SimManifest,
   Simulation,
   SimModule,
   SpawnInit,

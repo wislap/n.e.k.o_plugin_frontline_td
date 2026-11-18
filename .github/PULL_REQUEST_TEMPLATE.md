@@ -37,3 +37,4 @@
 - [ ] `npm run verify` 已通过
 - [ ] `static/` 与 `docs/generated/` 的生成变更已一并提交
 - [ ] i18n 键 zh-CN 与 en 齐全，JSX 中无字面量
+- [ ] 改动涉及性能热点（模拟系统、物流、寻路、渲染循环）时，已运行 `npm run eval:perf` 并对比 `eval/baselines/`

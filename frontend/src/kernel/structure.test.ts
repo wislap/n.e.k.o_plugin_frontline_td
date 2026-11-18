@@ -8,6 +8,7 @@ import { baseConfig } from './testing/helpers';
 
 const Pos = defineComponent('frontline_td:test.pos', { x: 'f64', y: 'f64' });
 const Tag = defineComponent('frontline_td:test.tag', {});
+const Mix = defineComponent('frontline_td:test.mix', { n: 'u16', p: 'f64' });
 
 // Captures what a system observes each tick so tests can assert it.
 function recordingModule(
@@ -96,6 +97,53 @@ describe('kernel structure', () => {
     expect(last).toHaveLength(4);
     const sorted = [...last].sort((a, b) => a - b);
     expect(last).toEqual(sorted);
+  });
+
+  it('poisons detached/despawned fields in DEV and zeroes on re-attach', () => {
+    // id is recycled across remove/despawn; DEV poison makes stale
+    // component-array reads explode instead of silently passing.
+    let handle = 0 as EntityHandle;
+    const snapshots: { n: number | undefined; p: number | undefined }[] = [];
+    const { module } = recordingModule('frontline_td:test.poison', (builder) => {
+      const writer = builder.claimWriter(Mix);
+      builder.system({
+        id: 'frontline_td:test.poison.go',
+        phase: 'orders',
+        run(ctx) {
+          if (ctx.tick === 0) {
+            handle = ctx.spawn([[Mix, { n: 7, p: 2.5 }]]);
+          } else if (ctx.tick === 1) {
+            ctx.removeComponent(writer, handle);
+          } else if (ctx.tick === 3) {
+            ctx.addComponent(writer, handle, { n: 9 });
+          } else if (ctx.tick === 4) {
+            ctx.despawn(handle);
+          }
+        },
+      });
+      builder.system({
+        id: 'frontline_td:test.poison.read',
+        phase: 'capture_fog',
+        run(ctx) {
+          const id = handleId(handle);
+          const fields = ctx.read(Mix);
+          snapshots.push({ n: fields.n[id], p: fields.p[id] });
+        },
+      });
+    });
+    const sim = createSimulation(baseConfig(), [module]);
+    for (let t = 0; t < 6; t++) {
+      sim.step();
+    }
+    // Structural ops apply at tick end: t0 spawn is live from t1; the
+    // t1 remove poisons from t2; the t3 add re-attaches (n=9, p zeroed)
+    // from t4; the t4 despawn poisons from t5.
+    expect(snapshots[1]).toEqual({ n: 7, p: 2.5 });
+    expect(snapshots[2]?.n).toBe(65535);
+    expect(Number.isNaN(snapshots[2]?.p)).toBe(true);
+    expect(snapshots[4]).toEqual({ n: 9, p: 0 });
+    expect(snapshots[5]?.n).toBe(65535);
+    expect(Number.isNaN(snapshots[5]?.p)).toBe(true);
   });
 
   it('generation guards: a stale handle fails after despawn and id reuse', () => {

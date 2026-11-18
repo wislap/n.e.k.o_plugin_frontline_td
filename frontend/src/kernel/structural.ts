@@ -32,6 +32,39 @@ function clearFields(storage: ComponentStorage, id: number): void {
   }
 }
 
+// DEV-only stale-data poisoning (backs ADR 0040): when a component is
+// detached or its entity despawns, overwrite that id's fields — integer
+// arrays to the type's max, float arrays to NaN. Attach-time zeroing
+// stays, so live data, determinism and save/hash are unaffected; only
+// a reader that skips ctx.has sees the poison. Off in production.
+function poisonFields(ref: ComponentRef, storage: ComponentStorage, id: number): void {
+  for (const [name, type] of Object.entries(ref.fields)) {
+    const array = storage.fields[name];
+    if (array === undefined) {
+      continue;
+    }
+    switch (type) {
+      case 'f64':
+      case 'f32':
+      case 'handle':
+        array[id] = Number.NaN;
+        break;
+      case 'i32':
+        array[id] = 2147483647;
+        break;
+      case 'u32':
+        array[id] = 4294967295;
+        break;
+      case 'u16':
+        array[id] = 65535;
+        break;
+      case 'u8':
+        array[id] = 255;
+        break;
+    }
+  }
+}
+
 function writeFieldValues(
   storage: ComponentStorage,
   id: number,
@@ -98,6 +131,9 @@ export function applyStructural(
           const storage = ensureComponent(i, ref);
           ensureCapacity(ref, storage, op.id + 1);
           deps.addMembership(op.id, ref);
+          // Same zeroing as 'add': a recycled id can carry stale (in
+          // DEV, poisoned) fields from its previous life.
+          clearFields(storage, op.id);
           if (values !== undefined) {
             writeFieldValues(storage, op.id, values);
           }
@@ -121,6 +157,12 @@ export function applyStructural(
         }
         for (const ref of i.componentDefs.values()) {
           deps.removeMembership(id, ref);
+          if (import.meta.env.DEV) {
+            const storage = i.storages.get(ref);
+            if (storage !== undefined) {
+              poisonFields(ref, storage, id);
+            }
+          }
         }
         i.generations[id] = (i.generations[id] ?? 0) + 1;
         deps.removeEntityFromIndex(id);
@@ -146,6 +188,12 @@ export function applyStructural(
           break;
         }
         deps.removeMembership(id, op.writer.ref);
+        if (import.meta.env.DEV) {
+          const storage = i.storages.get(op.writer.ref);
+          if (storage !== undefined) {
+            poisonFields(op.writer.ref, storage, id);
+          }
+        }
         break;
       }
     }

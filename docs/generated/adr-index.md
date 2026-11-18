@@ -7,16 +7,17 @@
 ### 工程
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|
-| [0001](../adr/0001-adr-process-and-docs.md) | ADR 流程与文档体系 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0001](../adr/0001-adr-process-and-docs.md) | ADR 流程与文档体系 | 已采纳；部分被 0041 取代（ADR 头部字段：新增可选的"部分取代"行） | wislap | M0 架构基线 | 2026-11-14 |
 | [0002](../adr/0002-plugin-form-static-panel.md) | 插件形态：static 面板 + Python 薄壳 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0003](../adr/0003-tech-stack.md) | 技术栈 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
-| [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
+| [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳；部分被 0041 取代（棘轮的超长文件阈值、公共接口清单的形式） | wislap | M0 架构基线 | 2026-11-14 |
 | [0018](../adr/0018-licenses.md) | 许可证与依赖许可证 | 已采纳 | wislap | M0 架构基线 | 2026-11-14 |
 | [0024](../adr/0024-evaluation-framework.md) | 评估框架：性能基线与数值平衡 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0032](../adr/0032-host-display-autopause.md) | 宿主显示模式与自动暂停 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0033](../adr/0033-design-checklist-referenced-items.md) | 《设计决策清单 v2》被引用条目 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0037](../adr/0037-eval-bots-balance-runner.md) | 策略机器人与对拍 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0040](../adr/0040-entity-id-reuse-component-reads.md) | 实体 ID 复用与组件数组读取 | 已采纳 | wislap | M5 | 2026-11-18 |
+| [0041](../adr/0041-governance-and-indexes-v2.md) | 门禁与索引 v2 | 已采纳 | wislap | 治理 | 2026-11-18 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -39,7 +40,7 @@
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳 | wislap | M1 前置 | 2026-11-15 |
 | [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳 | wislap | M1 模拟核心 | 2026-11-15 |
 | [0034](../adr/0034-squads.md) | 小队 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
-| [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳；部分被 0038 取代（波次目标） | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0038](../adr/0038-outposts-ruins-capture-exclusion.md) | 据点、废墟、占领与禁建区 | 已采纳 | wislap | M5 | 2026-11-18 |
 | [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | wislap | M5 | 2026-11-18 |
@@ -139,3 +140,6 @@
 - [0038 据点、废墟、占领与禁建区](../adr/0038-outposts-ruins-capture-exclusion.md)
 - [0039 视野与战争迷雾](../adr/0039-vision-fog-of-war.md)
 - [0040 实体 ID 复用与组件数组读取](../adr/0040-entity-id-reuse-component-reads.md)
+
+### 治理（2026-11-18）
+- [0041 门禁与索引 v2](../adr/0041-governance-and-indexes-v2.md)

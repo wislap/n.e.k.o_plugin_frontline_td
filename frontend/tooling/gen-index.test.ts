@@ -41,6 +41,7 @@ function entry(partial: Partial<AdrEntry> & Pick<AdrEntry, 'number' | 'fileName'
     deciders: 'wislap',
     batch: 'M0 架构基线',
     domain: '工程',
+    partialSupersedes: [],
     ...partial,
   };
 }
@@ -136,6 +137,35 @@ describe('scanAdrs', () => {
     writeAdr('0001-x.md', VALID_ADR.replace('领域：工程', '领域：营销'));
     expect(scanAdrs(adrDir).errors.join('\n')).toMatch(/0001-x\.md.*领域/);
   });
+
+  it('accepts a 部分取代 line referencing an older ADR', () => {
+    writeAdr('0001-x.md');
+    writeAdr(
+      '0002-y.md',
+      adr('0002', 'Y').replace('- 领域：工程', '- 领域：工程\n- 部分取代：0001（波次目标）'),
+    );
+    const result = scanAdrs(adrDir);
+    expect(result.errors).toEqual([]);
+    expect(result.entries[1]?.partialSupersedes).toEqual([{ number: '0001', note: '波次目标' }]);
+  });
+
+  it('flags a 部分取代 target that does not exist', () => {
+    writeAdr('0001-x.md');
+    writeAdr(
+      '0002-y.md',
+      adr('0002', 'Y').replace('- 领域：工程', '- 领域：工程\n- 部分取代：0003（不存在的目标）'),
+    );
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch('does not exist');
+  });
+
+  it('flags a 部分取代 target that is not older', () => {
+    writeAdr('0001-x.md');
+    writeAdr(
+      '0002-y.md',
+      adr('0002', 'Y').replace('- 领域：工程', '- 领域：工程\n- 部分取代：0002（自己）'),
+    );
+    expect(scanAdrs(adrDir).errors.join('\n')).toMatch('not an older ADR');
+  });
 });
 
 describe('renderAdrIndex', () => {
@@ -184,6 +214,21 @@ describe('renderAdrIndex', () => {
     expect(activeSection).not.toContain('[0004]');
     expect(retiredSection).toContain('[0002]');
     expect(retiredSection).toContain('[0004]');
+  });
+
+  it('shows the partial-supersession note on the referenced ADR row', () => {
+    const content = renderAdrIndex([
+      entry({ number: '0001', fileName: '0001-a.md' }),
+      entry({
+        number: '0002',
+        fileName: '0002-b.md',
+        partialSupersedes: [{ number: '0001', note: '波次目标' }],
+      }),
+    ]);
+    const row0001 = content.split('\n').find((l) => l.includes('[0001]')) ?? '';
+    const row0002 = content.split('\n').find((l) => l.includes('[0002]')) ?? '';
+    expect(row0001).toContain('部分被 0002 取代（波次目标）');
+    expect(row0002).not.toContain('部分被');
   });
 
   it('renders 无 when there are no retired ADRs', () => {

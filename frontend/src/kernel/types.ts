@@ -173,11 +173,40 @@ export interface SimConfig {
   initialEntityCapacity?: number;
 }
 
+// Read-only structural manifest of a built simulation: what was
+// registered, by whom, in which order. Plain data in deterministic
+// order (phases, then registration order); no functions.
+export interface SimManifest {
+  phases: readonly string[];
+  modules: {
+    id: string;
+    systems: {
+      id: string;
+      phase: string;
+      everyTicks: number;
+      offset: number;
+      reads: string[];
+      emits: string[];
+    }[];
+    commands: string[];
+    effects: string[];
+    channels: string[];
+    states: string[];
+    inspectors: string[];
+    probes: string[];
+  }[];
+  components: { id: string; fields: Record<string, string>; writer: string | null }[];
+  layers: { id: string; type: string; perFaction: boolean; writer: string | null }[];
+  messages: { type: string; kind: 'event' | 'intent' | 'command'; visibility?: string }[];
+}
+
 export interface Simulation {
   readonly tick: Tick;
   step(): void;
   submit(envelope: CommandEnvelope): void;
   snapshot(observer: FactionId): Snapshot;
+  // Static registration manifest: does not advance or mutate the sim.
+  describe(): SimManifest;
   // Layer keys written during the last completed tick, without building a
   // snapshot (used by the runtime's delta transport).
   changedLayers(): readonly string[];

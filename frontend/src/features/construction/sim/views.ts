@@ -91,7 +91,10 @@ export function registerConstructionViews(
       }
     }
     for (const id of ctx.query([Structure, InWorld])) {
-      if ((fac.id[id] ?? -1) !== observer && visible !== undefined) {
+      // Ruins carry no Faction — treat them as non-own (never bypass
+      // the visibility gate on a recycled faction slot).
+      const owner = ctx.has(Faction, id as EntityId) ? (fac.id[id] ?? -1) : -1;
+      if (owner !== observer && visible !== undefined) {
         const kind = db.structures.byIndex(st.kind[id] ?? -1);
         const fp = kind?.footprint;
         const seen =
@@ -126,7 +129,7 @@ export function registerConstructionViews(
       out.kind[i] = r.kind;
       out.x[i] = r.x;
       out.y[i] = r.y;
-      out.faction[i] = fac.id[r.id] ?? 0;
+      out.faction[i] = ctx.has(Faction, r.id as EntityId) ? (fac.id[r.id] ?? 0) : 0;
       out.state[i] = r.state;
       const total = cons.total[r.id] ?? 0;
       out.progressBp[i] =

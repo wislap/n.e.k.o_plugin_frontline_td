@@ -25,6 +25,8 @@
     "eslint.config.ts",
     "dependency-cruiser.config.ts",
     "knip.config.ts",
+    "playwright.config.ts",
+    "e2e",
     "eval"
   ]
 }

@@ -100,6 +100,8 @@ export interface SimInternals {
   changedLayers: Set<string>; // accumulating during the current tick
   lastChangedLayers: Set<string>; // captured at tick end; what snapshots report
 
+  // Installed module ids in install order (for Simulation.describe).
+  moduleIds: string[];
   systems: SystemRecord[];
   effects: Map<
     string,
@@ -107,7 +109,12 @@ export interface SimInternals {
   >;
   commandDefs: Map<
     string,
-    { def: CommandDef<unknown>; handler: CommandHandler<never>; emits: Set<string> }
+    {
+      def: CommandDef<unknown>;
+      handler: CommandHandler<never>;
+      moduleId: string;
+      emits: Set<string>;
+    }
   >;
   pendingCommands: PendingCommand[];
   commandLogEntries: CommandEnvelope[];
@@ -130,12 +137,18 @@ export interface SimInternals {
   controllerRng: Map<number, RngState>;
   controllers: Controller[];
 
-  snapshotChannels: Map<string, { build: (ctx: SystemContext, observer: FactionId) => unknown }>;
+  snapshotChannels: Map<
+    string,
+    { moduleId: string; build: (ctx: SystemContext, observer: FactionId) => unknown }
+  >;
   snapshotCache: { tick: number; byObserver: Map<number, Snapshot> };
 
-  probes: Map<string, (ctx: SystemContext) => number>;
+  probes: Map<string, { moduleId: string; fn: (ctx: SystemContext) => number }>;
   timings: Map<string, { count: number; total: number }>;
-  moduleStates: Map<string, { save(): Serializable; load(data: Serializable): void }>;
+  moduleStates: Map<
+    string,
+    { moduleId: string; save(): Serializable; load(data: Serializable): void }
+  >;
 
   queryCache: Map<string, Uint32Array>;
   structural: StructuralOp[];
@@ -224,6 +237,7 @@ export function createInternals(config: SimConfig): SimInternals {
     layerWriters: new Map(),
     changedLayers: new Set(),
     lastChangedLayers: new Set(),
+    moduleIds: [],
     systems: [],
     effects: new Map(),
     commandDefs: new Map(),

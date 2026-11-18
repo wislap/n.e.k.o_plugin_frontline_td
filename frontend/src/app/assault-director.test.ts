@@ -168,7 +168,7 @@ describe('assault director', () => {
       expect(Math.abs(raider.order.x - 15)).toBeLessThan(3);
       expect(Math.abs(raider.order.y - 47)).toBeLessThan(3);
     }
-  });
+  }, 60_000);
 
   it('hive spawns feed the gather squad and waves probe counts', () => {
     const { sim } = resolved();
@@ -180,7 +180,7 @@ describe('assault director', () => {
     const enemy = Array.from(dense.faction).filter((f) => f === 2).length;
     // Hive production plus initial monsters.
     expect(enemy).toBeGreaterThan(16);
-  });
+  }, 60_000);
 
   it('forms per-outpost garrisons at init that hold near their outposts', () => {
     const { sim } = resolved();

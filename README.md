@@ -37,6 +37,7 @@ cd frontend
 npm ci            # 安装依赖
 npm run dev       # 浏览器热更新开发
 npm run verify    # 提交前必须通过：类型 / lint / 格式 / 依赖规则 / knip / 测试 / 索引 / 文档 / 棘轮 / 构建
+npm run e2e       # Playwright 浏览器冒烟（首次需 npx playwright install chromium）
 npm run build     # 构建到 ../static/
 ```
 

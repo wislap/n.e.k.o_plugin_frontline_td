@@ -368,23 +368,23 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 - **代码测试只管正确性**：确定性与状态哈希、场景行为、内容 schema 与引用完整性、运行时不变量（无 NaN、无悬空句柄）、阵营对称性。性能与平衡不写成代码测试，由评估框架负责（ADR 0024）。
 - **无头运行器** `runScenario(地图, 种子, 命令序列, tick 数, 探针) → 统计` 由测试与评估框架共用，不为评估另写模拟逻辑。
 - 测试直接调用 sim，不经 Worker。
-- 以后再加：浏览器 E2E、视觉回归。
+- 浏览器冒烟由 Playwright 覆盖（ADR 0041）；以后再加：视觉回归。
 
 ---
 
 ## 11. 工程与防腐化
 
 ### 11.1 工具链
-TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
+TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟，仅 Chromium）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
 
 ### 11.2 CI
-`frontend.yml`：类型检查 → lint（含纯度、i18n 字面量）→ 格式检查 → 依赖规则 → knip → 测试 → 索引新鲜度（`gen:index` 后 `git diff --exit-code`）→ 棘轮 → 文档检查 → 构建并校验 `static/` 无差异 → 包体积检查（≤ 32MiB，超过 24MiB 预警）。评估框架不进 CI 门槛。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
+`frontend.yml`：类型检查 → lint（含纯度、i18n 字面量）→ 格式检查 → 依赖规则 → knip → 测试 → 索引新鲜度（`gen:index` 后 `git diff --exit-code`）→ 棘轮 → 文档检查 → 构建并校验 `static/` 无差异 → 包体积检查（≤ 32MiB，超过 24MiB 预警）→ Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）。评估框架不进 CI 门槛。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
 
 ### 11.3 防腐化机制
 腐化的根源是 AI 追求完成眼前任务，单次合理的改动不断累积。防线设在"累积"这一层：
 1. **参考实现**：M2、M3 写成示范代码，AGENTS.md 明确"新功能参照 `features/xxx`"。仓库已有代码是最强的提示词。
-2. **棘轮指标**（基线文件入库，只许变好）：`as any`、`@ts-ignore`、`eslint-disable` 次数（所有逃生口必须附理由）；超长文件数；未使用的导出 / 文件 / 依赖（knip）。变差即 CI 失败，放宽基线必须在 diff 中显式出现。
-3. **公共接口清单**：每个功能的导出生成清单入库；PR 改动接口、kernel、protocol、依赖规则时在 diff 中显形，单独评审（以后配 CODEOWNERS）。
+2. **棘轮指标**（基线文件入库，只许变好）：`as any`、`@ts-ignore`、`eslint-disable` 次数（所有逃生口必须附理由）；超长文件数（>800 行计入，(600, 800] 仅警告；测试与 `test-world.ts`、`kernel/testing/` 豁免）；未使用的导出 / 文件 / 依赖（knip）。变差即 CI 失败，放宽基线必须在 diff 中显式出现。
+3. **公共接口清单**：`docs/generated/exports.md`（各公共桶的导出名、种类、注释首句）与 `docs/generated/contracts.md`（`Simulation.describe()` 清单：系统、组件写者、消息、通道）自动生成入库；PR 改动接口、kernel、protocol、依赖规则时在 diff 中显形，单独评审（以后配 CODEOWNERS，见 [ADR 0041](../adr/0041-governance-and-indexes-v2.md)）。
 4. **场景测试**作为客观验收标准。
 5. **先查索引再动手**：AGENTS.md 第一条；PR 模板含"复用了哪些已有抽象，为什么没有复用"。
 6. **人工评审聚焦边界**：工具拦得住越界，拦不住"抽象本身错了"。目标是让需要人判断的改动变少且显眼。每个里程碑回顾 ADR，预留重构时间。
@@ -420,6 +420,7 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、棘轮脚�
 | 关闭 / 切换面板时 iframe 是否销毁 | 原型不处理；以后做存档时一并解决 |
 | 具体规模数值（地图格数、预期单位数） | 随地图设计确定；全局单位按千级以上考虑（设计清单 D16，见 [ADR 0033](../adr/0033-design-checklist-referenced-items.md)），不设上限 |
 | 重复代码检测（jscpd）、许可证白名单检查、CODEOWNERS | 出现实际需要时引入 |
+| React 组件测试 | 未覆盖；目前只有无头 sim / 纯函数测试与 Playwright 浏览器冒烟（ADR 0041） |
 | 平衡调试工具 | 只留 `runScenario` 接口 |
 | 物流后续：铁路（第二档道路）、线路剪枝与手动关闭、手动指派车辆、突袭怪破坏道路或车辆、多仓库与产地直供、道路同时加速单位移动 | 以后 |
 | 物流拓扑的节点集合增量重建：阻挡变化已按敏感集跳过（ADR 0030），节点增减仍整阵营重建 | 以后 |

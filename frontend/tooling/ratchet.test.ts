@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { measure, run } from './ratchet.ts';
+import { longFileWarnings, measure, run } from './ratchet.ts';
 
 let root: string;
 
@@ -37,6 +37,44 @@ describe('measure', () => {
     expect(metrics.asAny).toBe(1);
     expect(metrics.eslintDisable).toBe(1);
     expect(metrics.tsIgnore).toBe(0);
+  });
+
+  const lines = (n: number): string => new Array(n).fill('// x').join('\n');
+
+  it('counts only files over the 800-line red line', () => {
+    writeFileSync(path.join(root, 'src', 'red.ts'), lines(801));
+    writeFileSync(path.join(root, 'src', 'yellow.ts'), lines(700));
+    const metrics = measure(root);
+    expect(metrics.longFiles).toBe(1);
+  });
+
+  it('exempts tests, test-world, and kernel testing scaffolding', () => {
+    writeFileSync(path.join(root, 'src', 'a.test.ts'), lines(900));
+    writeFileSync(path.join(root, 'src', 'test-world.ts'), lines(900));
+    mkdirSync(path.join(root, 'src', 'kernel', 'testing'), { recursive: true });
+    writeFileSync(path.join(root, 'src', 'kernel', 'testing', 'harness.ts'), lines(900));
+    const metrics = measure(root);
+    expect(metrics.longFiles).toBe(0);
+    expect(longFileWarnings(root)).toEqual([]);
+  });
+});
+
+describe('longFileWarnings', () => {
+  const lines = (n: number): string => new Array(n).fill('// x').join('\n');
+
+  it('lists files in the yellow band without failing the run', () => {
+    writeFileSync(path.join(root, 'src', 'yellow.ts'), lines(700));
+    expect(longFileWarnings(root)).toEqual([`${path.join('src', 'yellow.ts')}: 700 lines`]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(run([], root)).toBe(0);
+    expect(warn.mock.calls.flat().join('\n')).toMatch('yellow.ts');
+    warn.mockRestore();
+  });
+
+  it('ignores exempt files and red-line files in warnings', () => {
+    writeFileSync(path.join(root, 'src', 'a.test.ts'), lines(700));
+    writeFileSync(path.join(root, 'src', 'red.ts'), lines(900));
+    expect(longFileWarnings(root)).toEqual([]);
   });
 });
 

@@ -8,7 +8,7 @@ import type {
   SnapshotChannelDef,
 } from '../core/index';
 import { parseContentId } from '../core/index';
-import { ensureLayer } from './internals';
+import { ensureComponent, ensureLayer } from './internals';
 import type { ChannelState, SimInternals } from './internals';
 import type { GridLayerRef, GridLayerWriter } from './layers';
 import { phaseIndex } from './phases';
@@ -63,6 +63,7 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
         );
       }
       i.writers.set(ref, moduleId);
+      ensureComponent(i, ref);
       const writer: ComponentWriter<F> = { ref, ownerId: moduleId };
       i.issuedWriters.add(writer);
       return writer;
@@ -153,6 +154,7 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
       i.commandDefs.set(def.type, {
         def: def,
         handler: handler,
+        moduleId,
         emits: registerChannelUse(i, opts?.emits),
       });
     },
@@ -165,7 +167,7 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
       if (i.snapshotChannels.has(def.id)) {
         throw new Error(`duplicate snapshot channel '${def.id}'`);
       }
-      i.snapshotChannels.set(def.id, { build });
+      i.snapshotChannels.set(def.id, { moduleId, build });
     },
 
     state(id: string, hooks: { save(): Serializable; load(data: Serializable): void }): void {
@@ -173,7 +175,7 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
       if (i.moduleStates.has(id)) {
         throw new Error(`duplicate module state '${id}'`);
       }
-      i.moduleStates.set(id, hooks);
+      i.moduleStates.set(id, { moduleId, ...hooks });
     },
 
     onStart(fn: (ctx: SystemContext) => void): void {
@@ -196,7 +198,7 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
       if (i.probes.has(id)) {
         throw new Error(`duplicate probe '${id}'`);
       }
-      i.probes.set(id, fn);
+      i.probes.set(id, { moduleId, fn });
     },
   };
 }

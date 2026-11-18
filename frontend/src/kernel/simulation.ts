@@ -11,9 +11,10 @@ import { createContext, emitChannel, structuralDeps } from './context';
 import type { ChannelState, SimInternals, SystemRecord } from './internals';
 import { createInternals, layerArray, resolve } from './internals';
 import { PHASES, phaseIndex } from './phases';
+import { ContainedIn, Faction, InWorld, UnderConstruction } from './contracts';
 import { restoreState, serializeState } from './serialize';
 import { applyStructural } from './structural';
-import type { SimConfig, SimModule, Simulation, SystemContext } from './types';
+import type { SimConfig, SimManifest, SimModule, Simulation, SystemContext } from './types';
 
 const COMMAND_PHASE = phaseIndex('command');
 
@@ -270,6 +271,73 @@ function stepOnce(i: SimInternals, ctx: SystemContext): void {
   i.tick += 1;
 }
 
+// Kernel-owned contract components report writer 'kernel' when no
+// module claimed them (UnderConstruction is claimed by construction).
+const KERNEL_COMPONENTS = new Set([Faction, InWorld, ContainedIn, UnderConstruction]);
+
+function describeManifest(i: SimInternals): SimManifest {
+  const modules: SimManifest['modules'] = i.moduleIds.map((moduleId) => {
+    const systems = i.systems
+      .map((system, index) => ({ system, index }))
+      .filter(({ system }) => system.moduleId === moduleId)
+      .sort((a, b) => a.system.phase - b.system.phase || a.index - b.index)
+      .map(({ system }) => ({
+        id: system.id,
+        phase: PHASES[system.phase] ?? String(system.phase),
+        everyTicks: system.everyTicks,
+        offset: system.offset,
+        reads: [...system.reads].sort(),
+        emits: [...system.emits].sort(),
+      }));
+    const pick = <V>(map: Map<string, V>, owner: (v: V) => string): string[] =>
+      [...map]
+        .filter(([, v]) => owner(v) === moduleId)
+        .map(([k]) => k)
+        .sort();
+    return {
+      id: moduleId,
+      systems,
+      commands: pick(i.commandDefs, (v) => v.moduleId),
+      effects: pick(i.effects, (v) => v.moduleId),
+      channels: pick(i.snapshotChannels, (v) => v.moduleId),
+      states: pick(i.moduleStates, (v) => v.moduleId),
+      inspectors: pick(i.inspectors, (v) => v.moduleId),
+      probes: pick(i.probes, (v) => v.moduleId),
+    };
+  });
+  const components: SimManifest['components'] = [...i.componentDefs.values()]
+    .map((ref) => ({
+      id: ref.id,
+      fields: { ...ref.fields },
+      writer: i.writers.get(ref) ?? (KERNEL_COMPONENTS.has(ref) ? 'kernel' : null),
+    }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const layers: SimManifest['layers'] = [...i.layerDefs.values()]
+    .map((ref) => ({
+      id: ref.id,
+      type: ref.type,
+      perFaction: ref.perFaction,
+      writer: i.layerWriters.get(ref) ?? null,
+    }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const messages: SimManifest['messages'] = [
+    ...[...i.emitDefs.values()].map((def) => ({
+      type: def.type,
+      kind: def.kind,
+      ...(def.kind === 'event'
+        ? {
+            visibility: typeof def.visibility === 'function' ? 'predicate' : def.visibility,
+          }
+        : {}),
+    })),
+    ...[...i.commandDefs.keys()].map((type) => ({
+      type,
+      kind: 'command' as const,
+    })),
+  ].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
+  return { phases: PHASES, modules, components, layers, messages };
+}
+
 function createSimulationFrom(i: SimInternals): Simulation {
   const ctx = createContext(i);
   return {
@@ -285,6 +353,9 @@ function createSimulationFrom(i: SimInternals): Simulation {
     snapshot(observer: FactionId) {
       return snapshotFor(i, ctx, observer);
     },
+    describe() {
+      return describeManifest(i);
+    },
     changedLayers() {
       return [...i.lastChangedLayers].sort();
     },
@@ -295,7 +366,7 @@ function createSimulationFrom(i: SimInternals): Simulation {
       return Object.fromEntries([...i.timings].map(([id, record]) => [id, { ...record }]));
     },
     probes() {
-      return Object.fromEntries([...i.probes].map(([id, fn]) => [id, fn(ctx)]));
+      return Object.fromEntries([...i.probes].map(([id, entry]) => [id, entry.fn(ctx)]));
     },
     serialize() {
       return serializeState(i);
@@ -332,10 +403,14 @@ function createSimulationFrom(i: SimInternals): Simulation {
 function installModules(i: SimInternals, modules: readonly SimModule[]): void {
   for (const module of modules) {
     module.install(createBuilder(i, module.id));
+    i.moduleIds.push(module.id);
   }
   finalizeBuilder(i);
-  i.probes.set('frontline_td:kernel.tick', (ctx) => ctx.tick);
-  i.probes.set('frontline_td:kernel.entities', () => i.entityIndex.aliveCount);
+  i.probes.set('frontline_td:kernel.tick', { moduleId: 'kernel', fn: (ctx) => ctx.tick });
+  i.probes.set('frontline_td:kernel.entities', {
+    moduleId: 'kernel',
+    fn: () => i.entityIndex.aliveCount,
+  });
 }
 
 export function createSimulation(config: SimConfig, modules: readonly SimModule[]): Simulation {
