@@ -82,4 +82,39 @@ describe('createSimClient', () => {
     worker.emit({ kind: 'error', message: 'boom' });
     expect(useRuntimeStore.getState().error).toBe('boom');
   });
+
+  it('surfaces worker onerror and messageerror through the runtime store', () => {
+    const worker = fakeWorker();
+    createSimClient(worker);
+    worker.onerror?.({ message: 'worker exploded' } as ErrorEvent);
+    expect(useRuntimeStore.getState().error).toBe('worker exploded');
+    worker.onmessageerror?.({} as MessageEvent);
+    expect(useRuntimeStore.getState().error).toContain('undeliverable');
+  });
+
+  it('eventsSince delivers each event exactly once per cursor', () => {
+    const worker = fakeWorker();
+    const client = createSimClient(worker);
+    const snap = (tick: number, events: Snapshot['events']) => ({
+      ...snapshot(tick, {}),
+      events,
+    });
+    const ev = (n: number) => ({ type: 'frontline_td:test.ev', payload: { n } });
+    worker.emit({ kind: 'snapshot', snapshot: snap(1, [ev(1), ev(2)]) });
+    worker.emit({ kind: 'snapshot', snapshot: snap(2, [ev(3)]) });
+
+    let cursor = 0;
+    const first = client.eventsSince(cursor);
+    cursor = first.cursor;
+    expect(first.events.map((e) => (e.payload as { n: number }).n)).toEqual([1, 2, 3]);
+    // Same cursor again: nothing redelivered.
+    expect(client.eventsSince(cursor).events).toHaveLength(0);
+    // A second consumer with its own cursor sees them independently.
+    const other = client.eventsSince(0);
+    expect(other.events).toHaveLength(3);
+
+    worker.emit({ kind: 'snapshot', snapshot: snap(3, [ev(4)]) });
+    const next = client.eventsSince(cursor);
+    expect(next.events.map((e) => (e.payload as { n: number }).n)).toEqual([4]);
+  });
 });

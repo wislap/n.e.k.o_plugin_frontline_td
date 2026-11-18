@@ -2,7 +2,13 @@
 // speed-multiplied accumulator, catch-up capped so a stalled tab slows the
 // game instead of spiralling, and stats for the debug panel.
 import { TICK_MS, toTick } from '../core/index';
-import type { EntityHandle, FactionId, Inspection, Snapshot } from '../core/index';
+import type {
+  EntityHandle,
+  FactionId,
+  Inspection,
+  Snapshot,
+  SnapshotEventEntry,
+} from '../core/index';
 import type { QueuedController, Simulation } from '../kernel/index';
 import type { RuntimeStats } from '../protocol/index';
 import { SPEED_STEPS } from '../protocol/index';
@@ -34,6 +40,9 @@ export interface SimHost {
   // the worker transport posts only these layers, and skipped ticks must
   // not lose their changes.
   takeChangedLayers(): Set<string>;
+  // Observer-visible events from every tick run since the last call —
+  // returned and cleared (same multi-tick guarantee as takeChangedLayers).
+  takeEvents(): SnapshotEventEntry[];
   readonly speedIndex: number;
   readonly paused: boolean;
 }
@@ -46,22 +55,31 @@ export function createSimHost(options: SimHostOptions): SimHost {
   let lastNow: number | null = null;
   const tickTimes: number[] = [];
   const changedLayers = new Set<string>();
+  const pendingEvents: SnapshotEventEntry[] = [];
   let prevTimings: Record<string, { count: number; total: number }> = {};
 
   let matchEnded = false;
 
+  // Steps up to `count` ticks and returns how many actually ran — an
+  // ended match stops the loop early, so callers must use the return
+  // value, not `count`.
   function runTicks(count: number): number {
+    let stepped = 0;
     for (let k = 0; k < count; k++) {
       if (matchEnded || options.ended?.() === true) {
         matchEnded = true;
         break;
       }
       sim.step();
+      stepped += 1;
       for (const key of sim.changedLayers()) {
         changedLayers.add(key);
       }
+      for (const event of sim.tickEvents(observer)) {
+        pendingEvents.push(event);
+      }
     }
-    return count;
+    return stepped;
   }
 
   return {
@@ -90,11 +108,11 @@ export function createSimHost(options: SimHostOptions): SimHost {
       // Drop the remainder when capped: the game slows down rather than
       // entering a catch-up spiral.
       accumulator = ran >= MAX_CATCHUP_TICKS ? 0 : accumulator - ran * TICK_MS;
-      runTicks(ran);
-      for (let k = 0; k < ran; k++) {
+      const stepped = runTicks(ran);
+      for (let k = 0; k < stepped; k++) {
         tickTimes.push(nowMs);
       }
-      return ran;
+      return stepped;
     },
 
     setSpeedIndex(index: number): void {
@@ -156,6 +174,12 @@ export function createSimHost(options: SimHostOptions): SimHost {
     takeChangedLayers(): Set<string> {
       const out = new Set(changedLayers);
       changedLayers.clear();
+      return out;
+    },
+
+    takeEvents(): SnapshotEventEntry[] {
+      const out = pendingEvents.slice();
+      pendingEvents.length = 0;
       return out;
     },
   };

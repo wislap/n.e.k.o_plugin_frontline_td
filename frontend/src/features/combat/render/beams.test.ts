@@ -1,5 +1,6 @@
-// Beam dedupe (M3 D): each snapshot tick contributes its shot events
-// once; re-reading the same tick yields nothing.
+// Beam collection (M3 D): each shot event delivered to the consumer
+// becomes one beam; non-shot events are ignored. Delivery dedupe is the
+// client event log's job (eventsSince cursor).
 import { describe, expect, it } from 'vitest';
 import { CombatShot } from '../protocol';
 import { collectBeams } from './beams';
@@ -10,22 +11,14 @@ const shot = {
 };
 
 describe('collectBeams', () => {
-  it("returns each tick's beams exactly once", () => {
-    const first = collectBeams([shot], 10, -1, 1000);
-    expect(first.tick).toBe(10);
-    expect(first.beams).toHaveLength(1);
-    expect(first.beams[0]).toMatchObject({ x0: 1, y0: 2, x1: 3, y1: 4, born: 1000 });
-    // Same tick again: nothing new.
-    const dup = collectBeams([shot], 10, first.tick, 1010);
-    expect(dup.beams).toHaveLength(0);
-    expect(dup.tick).toBe(10);
-    // Next tick produces again.
-    const next = collectBeams([shot], 11, dup.tick, 1020);
-    expect(next.beams).toHaveLength(1);
+  it('turns each delivered shot event into a beam', () => {
+    const beams = collectBeams([shot, shot], 1000);
+    expect(beams).toHaveLength(2);
+    expect(beams[0]).toMatchObject({ x0: 1, y0: 2, x1: 3, y1: 4, born: 1000 });
   });
 
   it('ignores non-shot events', () => {
     const other = { type: 'frontline_td:combat.died', payload: { handle: 1, faction: 1 } };
-    expect(collectBeams([other], 5, -1, 0).beams).toHaveLength(0);
+    expect(collectBeams([other], 0)).toHaveLength(0);
   });
 });

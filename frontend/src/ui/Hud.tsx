@@ -72,26 +72,27 @@ export function Hud({
     return onDisplayStateChange(setDisplay);
   }, []);
 
-  // Poll the observer snapshot for COMMAND_REJECTED events (events are
-  // last-tick only, so we snapshot (tick, reason) pairs).
+  // Poll the client event log for COMMAND_REJECTED events — the cursor
+  // delivers each event exactly once, across multi-tick advances.
   useEffect(() => {
-    let lastTick = -1;
+    let cursor = 0;
     const id = setInterval(() => {
+      const delivered = client.eventsSince(cursor);
+      cursor = delivered.cursor;
       const latest = client.snapshots().latest;
-      if (latest === null || latest.tick === lastTick) {
-        return;
-      }
-      for (const event of latest.events) {
+      for (const event of delivered.events) {
         if (event.type === COMMAND_REJECTED.type) {
           const reason = (event.payload as { reason?: string }).reason ?? 'unknown';
-          lastTick = latest.tick;
-          setToast({ reason, tick: latest.tick });
+          const at = latest?.tick ?? 0;
+          setToast({ reason, tick: at });
           setTimeout(() => {
-            setToast((cur) => (cur !== null && cur.tick === latest.tick ? null : cur));
+            setToast((cur) => (cur !== null && cur.tick === at ? null : cur));
           }, TOAST_MS);
         }
       }
-      lastTick = latest.tick;
+      if (latest === null) {
+        return;
+      }
       // Director gather warning (M4): visible while any hostile squad
       // is gathering.
       const squads =

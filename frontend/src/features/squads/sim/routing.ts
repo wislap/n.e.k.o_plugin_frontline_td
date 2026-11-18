@@ -112,7 +112,9 @@ export function retargetStructure(
   const width = terrain.width;
   // Hostile structure footprint cells.
   const foot = new Set<number>();
-  for (const id of ctx.query([Structure, InWorld])) {
+  // Ruins carry no Faction: requiring it here keeps recycled-id faction
+  // reads safe (ADR 0040) and keeps ruins out of the hostile set.
+  for (const id of ctx.query([Structure, Faction, InWorld])) {
     if (!ctx.isHostile(faction, (fac.id[id] ?? 0) as FactionId)) {
       continue;
     }

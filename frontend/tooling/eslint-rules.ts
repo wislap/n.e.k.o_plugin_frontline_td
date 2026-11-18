@@ -12,6 +12,7 @@ const PURITY_ZONES = [
   'src/protocol/**/*.{ts,tsx}',
   'src/features/*/sim/**/*.{ts,tsx}',
   'src/features/*/rules/**/*.{ts,tsx}',
+  'src/modes/*/**/*.{ts,tsx}',
   'src/features/*/content.ts',
   'src/features/*/protocol.ts',
 ];
@@ -99,8 +100,13 @@ const DOWNLOAD_BAN_SYNTAX = [
   },
 ];
 
+// Mode UI is client-side: excluded from the purity zone but still under
+// the download/network bans (the bans re-include it via a negated ignore).
+const MODE_UI = 'src/modes/*/ui/**/*.{ts,tsx}';
+
 export const purityZoneBlock: Linter.Config = {
   files: PURITY_ZONES,
+  ignores: [MODE_UI],
   rules: {
     'no-restricted-properties': [
       'error',
@@ -136,7 +142,7 @@ export const purityZoneBlock: Linter.Config = {
 // Non-purity src gets the same download ban; purity zones already carry it.
 export const downloadBanBlock: Linter.Config = {
   files: ['src/**/*.{ts,tsx}'],
-  ignores: [...PURITY_ZONES],
+  ignores: [...PURITY_ZONES, `!${MODE_UI}`],
   rules: {
     'no-eval': 'error',
     'no-new-func': 'error',
@@ -149,7 +155,7 @@ export const downloadBanBlock: Linter.Config = {
 // these globals entirely.
 export const networkGlobalsBlock: Linter.Config = {
   files: ['src/**/*.{ts,tsx}'],
-  ignores: [...PURITY_ZONES, 'src/host/**/*.{ts,tsx}'],
+  ignores: [...PURITY_ZONES, `!${MODE_UI}`, 'src/host/**/*.{ts,tsx}'],
   rules: {
     'no-restricted-globals': [
       'error',

@@ -65,6 +65,9 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     }
     const snapshot = host.latestSnapshot();
     const changed = host.takeChangedLayers();
+    // Events since the previous post (the kernel snapshot only carries
+    // the last tick's; multi-tick runs must not lose the earlier ones).
+    const events = host.takeEvents();
     const layers: Snapshot['layers'] = {};
     const transfer: Transferable[] = [];
     if (!firstSnapshotPosted) {
@@ -95,7 +98,7 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
     post(
       {
         kind: 'snapshot',
-        snapshot: { ...snapshot, layers, channels },
+        snapshot: { ...snapshot, layers, channels, events },
         inspection: host.inspect(inspectHandle),
       },
       transfer,
@@ -137,20 +140,27 @@ export function createWorkerHandler(options: WorkerHandlerOptions): {
       postError(`invalid match setup: ${parsed.errors.join('; ')}`);
       return;
     }
-    const resolved = resolve(parsed.setup);
-    if ('error' in resolved) {
-      postError(resolved.error);
-      return;
+    try {
+      const resolved = resolve(parsed.setup);
+      if ('error' in resolved) {
+        postError(resolved.error);
+        return;
+      }
+      started = true;
+      crashed = false;
+      firstSnapshotPosted = false;
+      host = createSimHost({
+        sim: resolved.sim,
+        localQueue: resolved.localQueue,
+        observer: resolved.observer,
+        ...(resolved.ended !== undefined ? { ended: resolved.ended } : {}),
+      });
+    } catch (error) {
+      // Content/setup failures (bad map id, missing content) must reach
+      // the main thread as an error message, not an uncaught throw.
+      host = null;
+      postError(error instanceof Error ? error.message : String(error));
     }
-    started = true;
-    crashed = false;
-    firstSnapshotPosted = false;
-    host = createSimHost({
-      sim: resolved.sim,
-      localQueue: resolved.localQueue,
-      observer: resolved.observer,
-      ...(resolved.ended !== undefined ? { ended: resolved.ended } : {}),
-    });
   }
 
   return {

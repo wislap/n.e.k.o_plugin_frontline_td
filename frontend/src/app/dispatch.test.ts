@@ -27,6 +27,7 @@ function fakeClient(latest: Snapshot | null): SimClient & { submitted: { type: s
     snapshots: (): SnapshotPair => ({ previous: null, latest, receivedAt: 0, intervalMs: 0 }),
     inspect: vi.fn(),
     inspection: () => null,
+    eventsSince: () => ({ events: [], cursor: 0 }),
   };
 }
 
@@ -82,7 +83,7 @@ describe('intent router', () => {
     const client = fakeClient(latest);
     const router = createIntentRouter({ client, db });
     useBuildStore.getState().enterRoad();
-    useBuildStore.getState().setRoadSel([0]);
+    useBuildStore.getState().setRoadSel([{ a: 10, b: 20 }]);
     router.dispatch({ kind: 'road.confirm' });
     expect(client.submitted).toHaveLength(1);
     const command = client.submitted[0];

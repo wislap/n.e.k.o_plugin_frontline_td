@@ -14,7 +14,7 @@ import { defineStat } from '../../../kernel/index';
 import type { PathingApi } from '../../pathing/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { MoveTarget, Mover, Position, Velocity } from './components';
-import { installMovementIntents } from './intents';
+import { installMovementIntents, releaseHeldGoal } from './intents';
 import { lineWalkable } from './line';
 import { makeSeparate } from './separate';
 
@@ -50,7 +50,7 @@ type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
 // Release the shared goal and hold the slot: the unit steers back to its
 // slot point if separation later pushes it off.
 function holdUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): void {
-  pathing.releaseGoal(tgt.goal[id] ?? 0);
+  releaseHeldGoal(pathing, tgt, id);
   tgt.active[id] = 2;
   vel.x[id] = 0;
   vel.y[id] = 0;
@@ -58,7 +58,7 @@ function holdUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): 
 
 // Release the shared goal and stop the unit for good (unreachable target).
 function stopUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): void {
-  pathing.releaseGoal(tgt.goal[id] ?? 0);
+  releaseHeldGoal(pathing, tgt, id);
   tgt.active[id] = 0;
   vel.x[id] = 0;
   vel.y[id] = 0;
@@ -218,9 +218,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
             if (id === null || !ctx.has(Mover, id)) {
               continue;
             }
-            if ((target.active[id] ?? 0) === 1) {
-              pathing.releaseGoal(target.goal[id] ?? 0);
-            }
+            releaseHeldGoal(pathing, target, id);
             out.goal[id] = 0;
             out.active[id] = 0;
           }

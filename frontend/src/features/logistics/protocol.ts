@@ -56,6 +56,14 @@ export const SetPrioritiesCommand = defineCommand(
   }),
 );
 
+// Stable link identity: the normalized pair of endpoint node handles
+// (smaller first). Link indices drift whenever the network channel
+// rebuilds, so selections and the upgrade_links payload use these.
+export interface RoadLinkKey {
+  a: number;
+  b: number;
+}
+
 export interface LogisticsNetwork {
   // Warehouse stock in milli, by cargo index.
   stock: number[];

@@ -24,7 +24,7 @@ const RESUPPLY_LIMIT = 120 * TPS; // continuous resupplying budget
 
 // Golden hash: rule changes may legitimately change it — update the
 // constant in the same commit and say why in the commit message.
-const GOLDEN_HASH = 'e13f13e48c33b6b8';
+const GOLDEN_HASH = 'c918982105751a6e';
 
 describe('match smoke (proto_01, balanced bot vs director)', () => {
   it('plays 5 minutes: hash golden, waves launch, sane unit state', () => {

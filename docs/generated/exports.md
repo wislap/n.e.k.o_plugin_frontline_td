@@ -197,6 +197,7 @@
 | `LogisticsNetwork` | interface |  |
 | `LogisticsNetworkChannel` | channel def |  |
 | `ROAD_LAYER_ID` | const |  |
+| `RoadLinkKey` | interface | Stable link identity: the normalized pair of endpoint node handles (smaller first). |
 | `SERVICE_LAYER_ID` | const |  |
 | `SetPrioritiesCommand` | command def |  |
 | `SLOT_EXPORT` | const |  |
@@ -244,9 +245,10 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `extendRoute` | function | Extends a clicked link into a route: from each endpoint greedily pick the incident unselected link with the highest flow (ties by link index), continuing while the candidate flow is >= half the clicked link's flow and the far node is neither a warehouse nor a leaf. |
-| `linkPairs` | function | Converts selected link indices to the node-handle pairs the upgrade_links command expects (dropping dangling indices). |
+| `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); |
 | `RoadPanel` | function |  |
+| `sameKey` | function |  |
 | `StockPanel` | function |  |
 
 ## src/features/movement/protocol.ts
@@ -333,6 +335,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `buildTerrainGeometry` | function |  |
 | `TerrainMesh` | function |  |
 
 ## src/features/terrain/rules/index.ts

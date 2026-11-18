@@ -96,6 +96,26 @@ describe('createWorkerHandler', () => {
     expect(errors()[0]?.message).toContain('invalid match setup');
   });
 
+  it('a throwing resolve posts an error instead of crashing the handler', () => {
+    const posted: WorkerToMain[] = [];
+    const handler = createWorkerHandler({
+      post: (message) => {
+        posted.push(message);
+      },
+      resolve: (): Resolved => {
+        throw new Error('missing content: frontline_td:hive');
+      },
+      now: () => 0,
+    });
+    handler.onMessage({ kind: 'start', setup: setup() });
+    const errors = posted.filter((m) => m.kind === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain('missing content');
+    // The handler stays usable: a pump after the failed launch is a no-op.
+    handler.pump();
+    expect(posted.filter((m) => m.kind === 'error')).toHaveLength(1);
+  });
+
   it('posts an error on a second start', () => {
     const { handler, errors } = makeHandler();
     handler.onMessage({ kind: 'start', setup: setup() });

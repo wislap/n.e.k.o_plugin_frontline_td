@@ -32,6 +32,7 @@ describe('dependency rules on the fixture tree', () => {
     ['sim-deps', /features\/f1\/sim\/leak\.ts/],
     ['rules-deps', /features\/f1\/rules\/leak\.ts/],
     ['client-not-to-sim', /features\/f1\/render\/leak_sim\.ts/],
+    ['client-not-to-sim', /modes\/m1\/ui\/leak_sim\.ts/],
     ['cross-feature-public-only', /features\/f1\/render\/leak_private\.ts/],
     ['not-to-app', /client\/bad_app\.ts/],
     ['no-npm-in-sim-layer', /core\/npm\.ts/],

@@ -8,6 +8,10 @@ import { useRuntimeStore } from './runtime-store';
 export interface WorkerLike {
   postMessage(message: MainToWorker): void;
   addEventListener(type: 'message', listener: (event: MessageEvent<WorkerToMain>) => void): void;
+  // Uncaught exception / deserialization failure inside the worker —
+  // real Workers surface these on handler properties, not as messages.
+  onerror?: ((event: ErrorEvent) => void) | null;
+  onmessageerror?: ((event: MessageEvent) => void) | null;
 }
 
 export interface SnapshotPair {
@@ -31,7 +35,20 @@ export interface SimClient {
   inspect(handle: EntityHandle | null): void;
   // Latest inspection attached to the most recent snapshot (null = none).
   inspection(): Inspection | null;
+  // Events appended since `cursor` (a previous return's cursor, or 0 for
+  // the whole retained log). Each consumer keeps its own cursor, so
+  // multiple readers can't steal events from each other.
+  eventsSince(cursor: number): { events: ClientEvent[]; cursor: number };
 }
+
+interface ClientEvent {
+  seq: number;
+  type: string;
+  payload: Snapshot['events'][number]['payload'];
+}
+
+// Retained event log cap — oldest entries are dropped past it.
+const EVENT_LOG_CAP = 4096;
 
 export function createSimClient(worker: WorkerLike): SimClient {
   // The worker posts layer DELTAS (only changed layers); the client
@@ -42,6 +59,22 @@ export function createSimClient(worker: WorkerLike): SimClient {
   let receivedAt = 0;
   let intervalMs = 0;
   let latestInspection: Inspection | null = null;
+  let eventSeq = 0;
+  const eventLog: ClientEvent[] = [];
+
+  // Reported on the console too: the runtime store is UI-optional but
+  // a worker crash must never pass silently.
+  const report = (message: string): void => {
+    console.error('sim worker error:', message);
+    useRuntimeStore.getState().setError(message);
+  };
+
+  worker.onerror = (event) => {
+    report(event.message === '' ? 'sim worker threw an uncaught error' : event.message);
+  };
+  worker.onmessageerror = () => {
+    report('sim worker posted an undeliverable message');
+  };
 
   worker.addEventListener('message', (event) => {
     const message = event.data;
@@ -49,6 +82,13 @@ export function createSimClient(worker: WorkerLike): SimClient {
       const incoming = message.snapshot;
       const layers = { ...(latest?.layers ?? {}), ...incoming.layers };
       const completed: Snapshot = { ...incoming, layers };
+      for (const e of incoming.events) {
+        eventSeq += 1;
+        eventLog.push({ seq: eventSeq, type: e.type, payload: e.payload });
+      }
+      if (eventLog.length > EVENT_LOG_CAP) {
+        eventLog.splice(0, eventLog.length - EVENT_LOG_CAP);
+      }
       latestInspection = message.inspection ?? null;
       previous = latest;
       latest = completed;
@@ -61,10 +101,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       useRuntimeStore.getState().setStats(message.stats);
       return;
     }
-    // Reported on the console too: the runtime store is UI-optional but
-    // a worker crash must never pass silently.
-    console.error('sim worker error:', message.message);
-    useRuntimeStore.getState().setError(message.message);
+    report(message.message);
   });
 
   return {
@@ -77,6 +114,8 @@ export function createSimClient(worker: WorkerLike): SimClient {
       receivedAt = 0;
       intervalMs = 0;
       latestInspection = null;
+      eventSeq = 0;
+      eventLog.length = 0;
       worker.postMessage({ kind: 'restart', setup });
     },
     submit(command: { type: string; payload: unknown }): void {
@@ -96,6 +135,11 @@ export function createSimClient(worker: WorkerLike): SimClient {
     },
     inspection(): Inspection | null {
       return latestInspection;
+    },
+    eventsSince(cursor: number): { events: ClientEvent[]; cursor: number } {
+      const first = eventLog.findIndex((e) => e.seq > cursor);
+      const events = first === -1 ? [] : eventLog.slice(first);
+      return { events, cursor: eventSeq };
     },
   };
 }

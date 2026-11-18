@@ -266,7 +266,11 @@ export function updateSquad(
   }
 
   // Strays (>10 cells from the centroid, e.g. reinforcements) get
-  // a move to the squad's current goal.
+  // a move to the squad's current goal. An idle squad has no goal —
+  // lastGoal is still the (0,0) placeholder, so skip the recall.
+  if (order.kind === 'idle') {
+    return;
+  }
   const strays = ids.filter(
     (id) => distance(0, 0, (pos.x[id] ?? 0) - c.x, (pos.y[id] ?? 0) - c.y) > STRAY_DIST,
   );

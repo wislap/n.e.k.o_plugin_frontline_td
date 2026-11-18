@@ -1,3 +1,3 @@
 export { StockPanel } from './StockPanel';
 export { RoadPanel } from './RoadPanel';
-export { extendRoute, linkPairs, nearestLink } from './road-select';
+export { extendRoute, linkKey, nearestLink, sameKey } from './road-select';

@@ -4,7 +4,7 @@
 
 ## 影响范围
 
-- 涉及的功能 / 层：<!-- 例：features/supply/sim、kernel、ui -->
+- 涉及的功能 / 层：<!-- 例：features/logistics/sim、kernel、ui -->
 
 ## 架构级改动
 

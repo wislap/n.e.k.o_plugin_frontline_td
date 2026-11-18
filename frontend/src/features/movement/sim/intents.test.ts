@@ -72,6 +72,15 @@ describe('movement intents', () => {
     expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
   });
 
+  it('a duplicated handle in one intent acquires its goal share once', () => {
+    const { world, emit } = build(ROWS, [{ x: 2, y: 0 }]);
+    const h = Number(world.handles[0]);
+    emit(MoveIntent as never, { units: [h, h], x: 10, y: 0 });
+    run(world, 1);
+    expect(world.active(0)).toBe(1);
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(1);
+  });
+
   it('skips dead handles and non-movers without throwing', () => {
     const { world, emit } = build(ROWS, [{ x: 2, y: 0 }]);
     emit(MoveIntent as never, { units: [0, Number(world.handles[0])], x: 8, y: 0 });

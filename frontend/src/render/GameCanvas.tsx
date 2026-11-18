@@ -317,12 +317,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapHeight={grid.height}
             />
             <MoveMarker heights={heights} mapWidth={grid.width} mapHeight={grid.height} />
-            <FogLayer
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-            />
+            <FogLayer client={client} map={map} />
             <InputBridge
               client={client}
               db={db}

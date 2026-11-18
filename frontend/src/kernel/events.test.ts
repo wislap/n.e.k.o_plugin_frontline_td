@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defineEvent, defineIntent } from '../core/index';
 import { createSimulation } from './simulation';
 import type { SimModule } from './types';
-import { baseConfig } from './testing/helpers';
+import { baseConfig, F1 } from './testing/helpers';
 
 type Ping = { n: number };
 const Ping = defineEvent<Ping>('frontline_td:test.ping', 'all');
@@ -209,6 +209,26 @@ describe('kernel events and intents', () => {
     sim.step();
     // resolve (index 5) runs before cleanup (index 6) in the same tick.
     expect(order).toEqual(['a:2', 'b:1']);
+  });
+
+  it('tickEvents returns only the last completed tick, visibility-filtered', () => {
+    const mod = moduleWith((builder) => {
+      builder.system({
+        id: 'frontline_td:test.tick_emitter',
+        phase: 'orders',
+        emits: [Ping],
+        run(ctx) {
+          ctx.emit(Ping, { n: ctx.tick });
+        },
+      });
+    });
+    const sim = createSimulation(baseConfig(), [mod]);
+    expect(sim.tickEvents(F1)).toHaveLength(0);
+    sim.step();
+    expect(sim.tickEvents(F1)).toEqual([{ type: Ping.type, payload: { n: 0 } }]);
+    sim.step();
+    // Only the last completed tick — no accumulation across ticks.
+    expect(sim.tickEvents(F1)).toEqual([{ type: Ping.type, payload: { n: 1 } }]);
   });
 
   it('unregistered effect type throws on schedule', () => {

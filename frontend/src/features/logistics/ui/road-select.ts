@@ -2,6 +2,9 @@
 // cursor hover picking over the logistics network channel. Links are
 // indexed into the channel's links arrays; a/b are node indices into the
 // nodes arrays. Pure so the extension rules are unit-testable.
+import type { RoadLinkKey } from '../protocol';
+
+export type { RoadLinkKey };
 
 export interface RoadLinkInfo {
   a: number;
@@ -146,21 +149,41 @@ export function nearestLink(
   return best;
 }
 
-// Converts selected link indices to the node-handle pairs the
-// upgrade_links command expects (dropping dangling indices).
-export function linkPairs(
-  network: {
-    nodes: { handles: ArrayLike<number> };
-    links: { a: ArrayLike<number>; b: ArrayLike<number> };
-  },
-  selected: readonly number[],
-): { a: number; b: number }[] {
-  const out: { a: number; b: number }[] = [];
-  for (const i of selected) {
-    const a = network.nodes.handles[network.links.a[i] ?? 0] ?? 0;
-    const b = network.nodes.handles[network.links.b[i] ?? 0] ?? 0;
-    if (a !== 0 && b !== 0) {
-      out.push({ a, b });
+interface KeyedNetwork {
+  nodes: { handles: ArrayLike<number> };
+  links: { a: ArrayLike<number>; b: ArrayLike<number> };
+}
+
+// Node-handle pair of link `index` (smaller handle first), or null when
+// either endpoint handle is unset.
+export function linkKey(network: KeyedNetwork, index: number): RoadLinkKey | null {
+  const a = network.nodes.handles[network.links.a[index] ?? 0] ?? 0;
+  const b = network.nodes.handles[network.links.b[index] ?? 0] ?? 0;
+  if (a === 0 || b === 0) {
+    return null;
+  }
+  return a < b ? { a, b } : { a: b, b: a };
+}
+
+export function sameKey(key: RoadLinkKey, a: number, b: number): boolean {
+  return (key.a === a && key.b === b) || (key.a === b && key.b === a);
+}
+
+// Resolves stored handle pairs to current link indices, dropping keys
+// whose link no longer exists.
+export function linkIndices(network: KeyedNetwork, keys: readonly RoadLinkKey[]): number[] {
+  const index = new Map<string, number>();
+  for (let i = 0; i < network.links.a.length; i++) {
+    const key = linkKey(network, i);
+    if (key !== null) {
+      index.set(`${key.a}:${key.b}`, i);
+    }
+  }
+  const out: number[] = [];
+  for (const key of keys) {
+    const i = index.get(`${key.a}:${key.b}`);
+    if (i !== undefined) {
+      out.push(i);
     }
   }
   return out;

@@ -6,6 +6,7 @@ export interface KeyEventLike {
   target: EventTarget | null;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  altKey?: boolean;
 }
 
 // Duck-typed so the module stays testable without a DOM and usable in any
@@ -32,9 +33,16 @@ export function intentForKey(
   if (intent === undefined) {
     return null;
   }
+  const modified = event.ctrlKey === true || event.metaKey === true || event.altKey === true;
   // Modifier-sensitive intents get the event's Ctrl/Cmd state filled in.
   if (intent.kind === 'squad.digit') {
     return { ...intent, ctrl: event.ctrlKey === true || event.metaKey === true };
+  }
+  // With Ctrl/Cmd/Alt held the key belongs to the browser/OS (Ctrl+X is
+  // "cut", Alt+key is a menu) — returning null leaves the event
+  // unprevented, unlike dispatching the bare-key binding.
+  if (modified) {
+    return null;
   }
   return intent;
 }

@@ -9,6 +9,7 @@ function event(
     target: EventTarget | null;
     ctrlKey: boolean;
     metaKey: boolean;
+    altKey: boolean;
   }>,
 ) {
   return { code: 'Space', repeat: false, target: null, ...overrides };
@@ -44,6 +45,20 @@ describe('intentForKey', () => {
       ctrl: true,
     });
     expect(intentForKey(event({ code: 'Digit3', metaKey: true }), DEFAULT_KEYMAP)).toEqual({
+      kind: 'squad.digit',
+      digit: 3,
+      ctrl: true,
+    });
+  });
+
+  it('modified keys only fire modifier-aware intents — Ctrl+X is not demolish', () => {
+    expect(intentForKey(event({ code: 'KeyX', ctrlKey: true }), DEFAULT_KEYMAP)).toBeNull();
+    expect(intentForKey(event({ code: 'KeyX', metaKey: true }), DEFAULT_KEYMAP)).toBeNull();
+    expect(intentForKey(event({ code: 'KeyX', altKey: true }), DEFAULT_KEYMAP)).toBeNull();
+    expect(intentForKey(event({ code: 'KeyR', ctrlKey: true }), DEFAULT_KEYMAP)).toBeNull();
+    // squad.digit is modifier-aware and still fires (Ctrl/Cmd = control
+    // group assign); Alt alone produces the bare squad-select intent.
+    expect(intentForKey(event({ code: 'Digit3', ctrlKey: true }), DEFAULT_KEYMAP)).toEqual({
       kind: 'squad.digit',
       digit: 3,
       ctrl: true,

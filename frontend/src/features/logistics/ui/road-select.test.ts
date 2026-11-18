@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { extendRoute, nearestLink, type RoadLinkInfo } from './road-select';
+import { extendRoute, linkIndices, linkKey, nearestLink, type RoadLinkInfo } from './road-select';
 
 function linksOf(edges: [number, number][], flows: number[]): RoadLinkInfo[] {
   return edges.map(([a, b], i) => ({ a, b, flow: flows[i] ?? 0 }));
@@ -157,5 +157,37 @@ describe('nearestLink', () => {
       pathCells: [9, 10, 9, 10],
     };
     expect(nearestLink(tied, 8, 1.6, 1.5)).toBe(0);
+  });
+});
+
+// Selection stability: links are remembered by node-handle pair so a
+// network rebuild that reorders or drops links cannot corrupt the
+// selection.
+describe('link keys', () => {
+  const net = (a: number[], b: number[], handles: number[]) => ({
+    nodes: { handles },
+    links: { a, b },
+  });
+
+  test('linkKey normalizes the endpoint handles', () => {
+    const n = net([0, 1], [1, 0], [10, 20]);
+    expect(linkKey(n, 0)).toEqual({ a: 10, b: 20 });
+    // Endpoint order in the arrays does not matter.
+    expect(linkKey(n, 1)).toEqual({ a: 10, b: 20 });
+    expect(linkKey(net([0], [1], [0, 20]), 0)).toBeNull();
+  });
+
+  test('linkIndices follows links across a rebuild and drops dead ones', () => {
+    // Before: (10-20) at index 0, (20-30) at index 1.
+    const before = net([0, 1], [1, 2], [10, 20, 30]);
+    const keys = [linkKey(before, 0), linkKey(before, 1)].filter(
+      (k): k is NonNullable<typeof k> => k !== null,
+    );
+    // After: order flipped and a third link added.
+    const after = net([1, 0, 2], [2, 1, 0], [10, 20, 30]);
+    expect(linkIndices(after, keys)).toEqual([1, 0]);
+    // The (10-20) link is gone: only (20-30) resolves.
+    const shrunk = net([1], [2], [10, 20, 30]);
+    expect(linkIndices(shrunk, keys)).toEqual([0]);
   });
 });

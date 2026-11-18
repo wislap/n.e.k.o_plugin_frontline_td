@@ -14,7 +14,7 @@ import type { ContentDb } from '../content/index';
 import { PlaceCommand } from '../features/construction/protocol';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
 import { linkFlow } from '../features/logistics/render/index';
-import { extendRoute, nearestLink } from '../features/logistics/ui/index';
+import { extendRoute, linkKey, nearestLink, sameKey } from '../features/logistics/ui/index';
 import { MoveCommand } from '../features/movement/protocol';
 import { SquadsChannel, SquadsOrder, type SquadsSnapshot } from '../features/squads/protocol';
 import { routeMoveSelection } from '../client/squad-controls';
@@ -166,16 +166,24 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         if (link === -1) {
           return;
         }
-        if (intent.additive) {
-          build.toggleRoadLink(link);
+        const net = roadNetwork();
+        const key = net === null ? null : linkKey(net, link);
+        if (key === null) {
           return;
         }
-        if (build.roadSel.includes(link)) {
+        if (intent.additive) {
+          build.toggleRoadLink(key);
+          return;
+        }
+        if (build.roadSel.some((k) => sameKey(k, key.a, key.b))) {
           submitRoadOrder(client, db);
           return;
         }
         const route = extendRoute(flowedLinks(), link, warehouseNodes());
-        build.setRoadSel(route.includes(link) ? route : [link]);
+        const keys = (route.includes(link) ? route : [link])
+          .map((i) => (net === null ? null : linkKey(net, i)))
+          .filter((k): k is NonNullable<typeof k> => k !== null);
+        build.setRoadSel(keys);
         return;
       }
       case 'build.place': {

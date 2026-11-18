@@ -49,6 +49,8 @@ const PURITY_ZONES = [
   'src/protocol/x.ts',
   'src/features/alpha/sim/x.ts',
   'src/features/alpha/rules/x.ts',
+  'src/modes/m1/x.ts',
+  'src/modes/m1/sim/x.ts',
   'src/features/alpha/content.ts',
   'src/features/alpha/protocol.ts',
 ];
@@ -91,6 +93,15 @@ describe('purity zones', () => {
     expect(ruleIds).not.toContain('no-restricted-properties');
     expect(ruleIds).not.toContain('no-restricted-globals');
     expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+
+  it('does not flag modes ui code', async () => {
+    const ruleIds = await ruleIdsFor(
+      'src/modes/m1/ui/x.ts',
+      'export const x = Math.random() + Date.now();\n',
+    );
+    expect(ruleIds).not.toContain('no-restricted-properties');
+    expect(ruleIds).not.toContain('no-restricted-globals');
   });
 });
 

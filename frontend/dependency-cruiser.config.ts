@@ -13,7 +13,8 @@ const CROSS_FEATURE_PUBLIC =
   'src/features/[^/]+/(sim/index[.]ts|rules/index[.]ts|render/index[.]tsx?|ui/index[.]tsx?|protocol[.]ts|content[.]ts)';
 
 // Client-side directories that must never reach the simulation layer.
-const CLIENT_SIDE = 'src/(features/[^/]+/(render|ui)|client|input|render|ui|host|i18n)/';
+const CLIENT_SIDE =
+  'src/(features/[^/]+/(render|ui)|modes/[^/]+/ui|client|input|render|ui|host|i18n)/';
 
 const config: IConfiguration = {
   forbidden: [

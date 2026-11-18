@@ -105,6 +105,10 @@ export interface Snapshot {
   tick: Tick;
   observer: FactionId;
   channels: Record<string, unknown>;
+  // Kernel side: events emitted during the snapshot's tick. On the wire
+  // (worker → client) the runtime replaces this with every event since
+  // the previous posted snapshot, so consumers must treat it as
+  // "events not yet delivered" rather than "this tick's events".
   events: SnapshotEventEntry[];
   // Read-only views into live layer storage, keyed 'layer.id' for global
   // layers and 'layer.id#<faction>' for the observer's per-faction layers.

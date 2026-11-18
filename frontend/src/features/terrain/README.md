@@ -19,7 +19,7 @@
 ## 拥有的组件
 - 网格层 `frontline_td:terrain.height`（u8，全局）。
 - 网格层 `frontline_td:terrain.surface`（u16，全局）。
-- 网格层 `frontline_td:terrain.blocked`（u8，全局；cleanup 系统按需写入）。
+- 网格层 `frontline_td:terrain.blocked`（u8，全局；capture_fog 系统按需写入）。
 - 模块状态 `frontline_td:terrain.blocked_overlay`（覆盖层字节，序列化）。
 
 ## 不变量
@@ -29,7 +29,7 @@
 - 步进成本为整数：正交 = 目标格成本，对角 = floorDiv(cost × 14, 10)。
 - 高度与地表不可变；阻挡覆盖层可在任意 tick 边界修改，
   变化通过 onBlockedChange 通知 pathing 失效重算，并在下一个
-  cleanup 阶段镜像进 blocked 层。
+  capture_fog 阶段镜像进 blocked 层。
 
 ## 对应设计
 architecture.md §6（地形模型与扇区流场）、ADR 0010、ADR 0015。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMMAND_REJECTED, defineCommand, s, toFactionId } from '../core/index';
+import { COMMAND_REJECTED, defineCommand, defineEvent, s, toFactionId } from '../core/index';
 import { createQueuedController, createSimulation, defineComponent } from '../kernel/index';
 import type { SimModule } from '../kernel/index';
 import { baseConfig, F1 } from '../kernel/testing/helpers';
@@ -7,6 +7,7 @@ import { createSimHost } from './sim-host';
 
 const Marker = defineComponent('frontline_td:test.host.marker', { v: 'i32' });
 const Mark = defineCommand('frontline_td:test.host.mark', s.object({ v: s.int() }));
+const TickPing = defineEvent<{ n: number }>('frontline_td:test.host.tick_ping', 'all');
 
 function markModule(): SimModule {
   return {
@@ -121,6 +122,47 @@ describe('createSimHost', () => {
     expect(() => {
       host.submitLocal({ type: 'x', payload: null });
     }).toThrow('no local faction');
+  });
+
+  it('advance returns the ticks actually stepped when the match ends early', () => {
+    let ended = false;
+    const localQueue = createQueuedController(F1);
+    const sim = createSimulation(
+      baseConfig({ factions: [{ id: F1 }], controllers: [localQueue] }),
+      [markModule()],
+    );
+    const host = createSimHost({ sim, localQueue, observer: F1, ended: () => ended });
+    host.advance(0);
+    expect(host.advance(50)).toBe(1);
+    ended = true;
+    expect(host.advance(100)).toBe(0);
+    expect(host.advance(1000)).toBe(0);
+  });
+
+  it('takeEvents accumulates events across all stepped ticks and clears on take', () => {
+    const localQueue = createQueuedController(F1);
+    const sim = createSimulation(baseConfig({ factions: [{ id: F1 }] }), [
+      {
+        id: 'frontline_td:test.host.emitter',
+        install(builder) {
+          builder.system({
+            id: 'frontline_td:test.host.tick_emitter',
+            phase: 'orders',
+            emits: [TickPing],
+            run(ctx) {
+              ctx.emit(TickPing, { n: ctx.tick });
+            },
+          });
+        },
+      },
+    ]);
+    const host = createSimHost({ sim, localQueue, observer: F1 });
+    host.advance(0);
+    host.advance(200); // 4 ticks → one event each
+    const events = host.takeEvents();
+    expect(events).toHaveLength(4);
+    expect(events.map((e) => (e.payload as { n: number }).n)).toEqual([0, 1, 2, 3]);
+    expect(host.takeEvents()).toHaveLength(0);
   });
 
   it('reports stats: tick, speed, entity count and system timings', () => {

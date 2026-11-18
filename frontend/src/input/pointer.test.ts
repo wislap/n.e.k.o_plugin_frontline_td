@@ -98,3 +98,81 @@ describe('pointer modes', () => {
     expect(intents).toEqual([{ kind: 'build.place', x: 50, y: 50, blueprint: false }]);
   });
 });
+
+// Drag cancellation: pointercancel / lostpointercapture / window blur all
+// abort an in-flight drag without emitting select.box, and the box
+// overlay is cleared.
+describe('pointer drag cancellation', () => {
+  interface Harness {
+    target: FakeTarget & { captured: number[]; setPointerCapture(id: number): void };
+    blurTarget: ReturnType<typeof fakeTarget>;
+    intents: Intent[];
+    boxes: unknown[];
+  }
+
+  function makeHarness(): Harness {
+    const base = fakeTarget() as Harness['target'];
+    base.captured = [];
+    base.setPointerCapture = (id: number) => {
+      base.captured.push(id);
+    };
+    const blurTarget = fakeTarget();
+    const intents: Intent[] = [];
+    const boxes: unknown[] = [];
+    installPointer(
+      base,
+      (i) => intents.push(i),
+      (b) => boxes.push(b),
+      (e) => ({ x: (e as { clientX: number }).clientX, y: (e as { clientY: number }).clientY }),
+      { blurTarget },
+    );
+    return { target: base, blurTarget, intents, boxes };
+  }
+
+  function startDrag(h: Harness): void {
+    h.target.fire('pointerdown', {
+      button: 0,
+      pointerId: 7,
+      clientX: 0,
+      clientY: 0,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    h.target.fire('pointermove', { clientX: 50, clientY: 50, shiftKey: false });
+  }
+
+  it('captures the pointer on pointerdown', () => {
+    const h = makeHarness();
+    startDrag(h);
+    expect(h.target.captured).toEqual([7]);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('%s aborts the drag', (type) => {
+    const h = makeHarness();
+    startDrag(h);
+    h.target.fire(type, {});
+    h.target.fire('pointerup', { button: 0, clientX: 50, clientY: 50, shiftKey: false });
+    expect(h.intents.filter((i) => i.kind === 'select.box')).toHaveLength(0);
+    // The overlay was shown during the drag, then cleared on cancel.
+    expect(h.boxes.at(-1)).toBeNull();
+    // The next click is a fresh click, not a stale release.
+    h.target.fire('pointerdown', {
+      button: 0,
+      clientX: 1,
+      clientY: 1,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    h.target.fire('pointerup', { button: 0, clientX: 1, clientY: 1, shiftKey: false });
+    expect(h.intents).toContainEqual({ kind: 'select.click', x: 1, y: 1, additive: false });
+  });
+
+  it('window blur aborts the drag', () => {
+    const h = makeHarness();
+    startDrag(h);
+    h.blurTarget.fire('blur', {});
+    h.target.fire('pointerup', { button: 0, clientX: 50, clientY: 50, shiftKey: false });
+    expect(h.intents.filter((i) => i.kind === 'select.box')).toHaveLength(0);
+    expect(h.boxes.at(-1)).toBeNull();
+  });
+});

@@ -353,6 +353,15 @@ function createSimulationFrom(i: SimInternals): Simulation {
     snapshot(observer: FactionId) {
       return snapshotFor(i, ctx, observer);
     },
+    tickEvents(observer: FactionId) {
+      return i.tickEvents
+        .filter(
+          (event) =>
+            event.tick === i.snapshotCache.tick &&
+            visibilityAllows(i, event.type, event.payload, observer),
+        )
+        .map((event) => ({ type: event.type, payload: event.payload }));
+    },
     describe() {
       return describeManifest(i);
     },

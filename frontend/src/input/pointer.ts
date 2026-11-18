@@ -39,6 +39,7 @@ interface PointLike {
 
 interface PointerEventLike extends PointLike {
   button: number;
+  pointerId?: number;
   preventDefault(): void;
 }
 
@@ -50,6 +51,8 @@ interface WheelEventLike extends PointLike {
 interface PointerTarget {
   addEventListener(type: string, listener: EventListener, options?: unknown): void;
   removeEventListener(type: string, listener: EventListener): void;
+  setPointerCapture?(pointerId: number): void;
+  releasePointerCapture?(pointerId: number): void;
 }
 
 type PointerMode = 'normal' | 'build' | 'road';
@@ -57,6 +60,9 @@ type PointerMode = 'normal' | 'build' | 'road';
 export interface PointerOptions {
   // Build mode reroutes clicks to build.place / build.cancel.
   getMode?: () => PointerMode;
+  // Receives the 'blur' listener that cancels an in-flight drag when the
+  // window loses focus; defaults to `window` when available.
+  blurTarget?: PointerTarget | null;
 }
 
 // The dispatch callback receives fully-formed intents; the live box rect
@@ -88,6 +94,11 @@ export function installPointer(
     lastY = pos.y;
     boxing = false;
     panning = event.button === 1;
+    if (event.pointerId !== undefined) {
+      // Capture keeps move/up events flowing to this element even when
+      // the pointer leaves the canvas mid-drag.
+      target.setPointerCapture?.(event.pointerId);
+    }
     if (event.button === 1 || event.button === 2) {
       event.preventDefault();
     }
@@ -150,6 +161,16 @@ export function installPointer(
     onBox(null);
   };
 
+  // Aborts an in-flight drag without emitting select.box — pointer
+  // cancel/lost capture (touch pre-empted, capture released early) and
+  // window blur all land here.
+  const cancel = (): void => {
+    downButton = -1;
+    boxing = false;
+    panning = false;
+    onBox(null);
+  };
+
   const wheel = (event: WheelEventLike): void => {
     event.preventDefault();
     const pos = getPos(event);
@@ -165,17 +186,31 @@ export function installPointer(
   const upListener = up as unknown as EventListener;
   const wheelListener = wheel as unknown as EventListener;
   const contextListener = context;
+  const cancelListener = cancel as EventListener;
+
+  const blurTarget =
+    options.blurTarget !== undefined
+      ? options.blurTarget
+      : typeof window === 'undefined'
+        ? null
+        : (window as unknown as PointerTarget);
 
   target.addEventListener('pointerdown', downListener);
   target.addEventListener('pointermove', moveListener);
   target.addEventListener('pointerup', upListener);
+  target.addEventListener('pointercancel', cancelListener);
+  target.addEventListener('lostpointercapture', cancelListener);
   target.addEventListener('wheel', wheelListener, { passive: false });
   target.addEventListener('contextmenu', contextListener);
+  blurTarget?.addEventListener('blur', cancelListener);
   return () => {
     target.removeEventListener('pointerdown', downListener);
     target.removeEventListener('pointermove', moveListener);
     target.removeEventListener('pointerup', upListener);
+    target.removeEventListener('pointercancel', cancelListener);
+    target.removeEventListener('lostpointercapture', cancelListener);
     target.removeEventListener('wheel', wheelListener);
     target.removeEventListener('contextmenu', contextListener);
+    blurTarget?.removeEventListener('blur', cancelListener);
   };
 }

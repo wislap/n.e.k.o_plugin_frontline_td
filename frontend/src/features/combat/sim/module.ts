@@ -84,6 +84,16 @@ export function createCombatModule(): CombatModule {
       for (let gy = by - reach; gy <= by + reach; gy++) {
         for (let gx = bx - reach; gx <= bx + reach; gx++) {
           for (const t of buckets.get(gy * 65536 + gx) ?? []) {
+            // Buckets are rebuilt once per tick inside fire — entries
+            // read outside that system may be despawned or recycled
+            // (ADR 0040), so re-validate before touching fields.
+            if (
+              !ctx.has(Targetable, t as EntityId) ||
+              !ctx.has(InWorld, t as EntityId) ||
+              !ctx.has(Faction, t as EntityId)
+            ) {
+              continue;
+            }
             if (!ctx.isHostile(faction, (fac.id[t] ?? 0) as FactionId)) {
               continue;
             }

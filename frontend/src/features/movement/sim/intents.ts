@@ -16,6 +16,20 @@ import { assignSlots, collectSlots } from './slots';
 type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
 type TgtWriter = ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
 
+// Release only a goal this unit still owns: active===1 holds a live
+// reference; active===2 (holding the slot) and active===0 already
+// released theirs, so releasing their stale `goal` field would
+// decrement a refcount they no longer own.
+export function releaseHeldGoal(
+  pathing: PathingApi,
+  tgt: { goal: ReadonlyNumberArray; active: ReadonlyNumberArray },
+  id: number,
+): void {
+  if ((tgt.active[id] ?? 0) === 1) {
+    pathing.releaseGoal(tgt.goal[id] ?? 0);
+  }
+}
+
 // A move intent at an impassable cell snaps to the nearest passable,
 // reachable cell within this ring (spiral order, first hit wins).
 const SNAP_RING = 32;
@@ -86,9 +100,7 @@ function applyMove(
     // id is the same for the whole class).
     let goal = -1;
     for (const id of clsIds) {
-      if ((target.active[id] ?? 0) !== 0) {
-        pathing.releaseGoal(target.goal[id] ?? 0);
-      }
+      releaseHeldGoal(pathing, target, id);
       goal = pathing.acquireGoal(x, y, cls);
     }
     const slots = collectSlots(
@@ -134,7 +146,7 @@ export function installMovementIntents(
         const ids: number[] = [];
         for (const h of p.units) {
           const id = ctx.resolve(h as EntityHandle);
-          if (id !== null && ctx.has(Mover, id)) {
+          if (id !== null && ctx.has(Mover, id) && !ids.includes(id)) {
             ids.push(id);
           }
         }
@@ -171,9 +183,7 @@ export function installMovementIntents(
           if (id === null || !ctx.has(Mover, id)) {
             continue;
           }
-          if ((target.active[id] ?? 0) !== 0) {
-            pathing.releaseGoal(target.goal[id] ?? 0);
-          }
+          releaseHeldGoal(pathing, target, id);
           const out = ctx.write(tgtW) as TgtView;
           out.goal[id] = 0;
           out.active[id] = 0;
@@ -196,7 +206,12 @@ export function installMovementIntents(
       const classes = new Set<number>();
       for (const handle of payload.units) {
         const id = ctx.resolve(handle);
-        if (id === null || !ctx.ownedBy(handle, issuer) || !ctx.has(Mover, id)) {
+        if (
+          id === null ||
+          !ctx.ownedBy(handle, issuer) ||
+          !ctx.has(Mover, id) ||
+          ids.includes(id)
+        ) {
           continue;
         }
         ids.push(id);

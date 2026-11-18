@@ -245,7 +245,9 @@ export function createVisionModule(
             for (const f of factions) {
               const mem = memoryOf(Number(f));
               for (const id of ctx.query([Structure, InWorld])) {
-                const owner = fac.id[id] ?? 0;
+                // Ruins carry no Faction — record them as faction 0
+                // instead of reading a recycled slot (ADR 0040).
+                const owner = ctx.has(Faction, id as EntityId) ? (fac.id[id] ?? 0) : 0;
                 const kind = db.structures.byIndex(st.kind[id] ?? -1);
                 if (owner === Number(f) || kind === undefined) {
                   continue;

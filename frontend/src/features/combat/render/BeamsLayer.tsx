@@ -1,6 +1,6 @@
 // Shot tracers (M3 D): line segments from combat.shot events, fading
-// over ~150 ms. Events are last-tick only; collectBeams dedupes by
-// snapshot tick so each burst is appended once.
+// over ~150 ms. The client's event log delivers each event to this
+// consumer exactly once via its own cursor.
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -37,7 +37,7 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
     };
   }, []);
   const active = useRef<Beam[]>([]);
-  const lastTick = useRef(-1);
+  const eventCursor = useRef(0);
   const segsRef = useRef<THREE.LineSegments>(null);
 
   useFrame(() => {
@@ -54,15 +54,15 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
       return;
     }
     const now = performance.now();
+    const delivered = client.eventsSince(eventCursor.current);
+    eventCursor.current = delivered.cursor;
     const latest = client.snapshots().latest;
-    if (latest !== null) {
-      const collected = collectBeams(latest.events, latest.tick, lastTick.current, now);
-      lastTick.current = collected.tick;
+    if (delivered.events.length > 0) {
       // Fog: events are all-visible on the wire; hide a shot only when
       // neither endpoint's cell is visible to the observer.
-      const fog = latest.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
+      const fog = latest?.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
         ArrayLike<number> | undefined;
-      for (const beam of collected.beams) {
+      for (const beam of collectBeams(delivered.events, now)) {
         if (
           fog === undefined ||
           isCellVisible(fog, mapWidth, beam.x0, beam.y0) ||

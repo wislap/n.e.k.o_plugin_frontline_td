@@ -12,6 +12,7 @@ import type { ResolvedMap } from '../../../content/index';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { terrainY } from '../../../render/world';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
+import { linkIndices } from '../ui/road-select';
 
 const HOVER_COLOR = '#ffffff';
 const SELECT_COLOR = '#ffd166';
@@ -115,7 +116,9 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
     const build = useBuildStore.getState();
     const roadMode = build.roadMode;
     const overlayOn = useUiStore.getState().logisticsOverlay || roadMode || build.kind !== null;
-    draw(sel, bufs.sel, build.roadSel, roadMode);
+    // roadSel stores handle pairs (stable across network rebuilds);
+    // resolve to current link indices here, dropping dead links.
+    draw(sel, bufs.sel, network === undefined ? [] : linkIndices(network, build.roadSel), roadMode);
     draw(hov, bufs.hov, build.roadHover >= 0 ? [build.roadHover] : [], roadMode);
     const intercepted: number[] = [];
     if (network !== undefined) {

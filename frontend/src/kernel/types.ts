@@ -12,6 +12,7 @@ import type {
   Serializable,
   Snapshot,
   SnapshotChannelDef,
+  SnapshotEventEntry,
   Tick,
 } from '../core/index';
 import type {
@@ -205,6 +206,11 @@ export interface Simulation {
   step(): void;
   submit(envelope: CommandEnvelope): void;
   snapshot(observer: FactionId): Snapshot;
+  // Events visible to `observer` emitted during the last completed tick —
+  // the same visibility filter as Snapshot.events, without building any
+  // snapshot channels (used by the runtime to accumulate multi-tick
+  // events between posts).
+  tickEvents(observer: FactionId): SnapshotEventEntry[];
   // Static registration manifest: does not advance or mutate the sim.
   describe(): SimManifest;
   // Layer keys written during the last completed tick, without building a

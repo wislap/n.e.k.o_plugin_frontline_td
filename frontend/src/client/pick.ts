@@ -81,10 +81,13 @@ function pickStructureAt(
       }
     }
   }
+  // Salvage and road-work segments share one nearest-candidate search:
+  // the salvage channel always exists, so early-returning here would
+  // make road segments unpickable.
+  let best: number | null = null;
+  let bestDist = radius;
   const salvage = salvageChannel(snapshot);
   if (salvage !== null) {
-    let best: number | null = null;
-    let bestDist = radius;
     for (let i = 0; i < salvage.handles.length; i++) {
       const d = Math.hypot((salvage.x[i] ?? 0) - x, (salvage.y[i] ?? 0) - y);
       if (d <= bestDist) {
@@ -92,13 +95,9 @@ function pickStructureAt(
         best = salvage.handles[i] ?? null;
       }
     }
-    return best;
   }
-  // Road-work segments are small markers: pick within the click radius.
   const roadWorks = roadWorksChannel(snapshot);
   if (roadWorks !== null) {
-    let best: number | null = null;
-    let bestDist = radius;
     for (let i = 0; i < roadWorks.segments.handles.length; i++) {
       const d = Math.hypot((roadWorks.segments.x[i] ?? 0) - x, (roadWorks.segments.y[i] ?? 0) - y);
       if (d <= bestDist) {
@@ -106,7 +105,6 @@ function pickStructureAt(
         best = roadWorks.segments.handles[i] ?? null;
       }
     }
-    return best;
   }
-  return null;
+  return best;
 }

@@ -12,6 +12,7 @@ import { localName, type ContentDb } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
 import { LogisticsNetworkChannel, ROAD_LAYER_ID, type LogisticsNetwork } from '../protocol';
 import { roadPreview, type RoadPreviewLink } from './road-preview';
+import { linkIndices } from './road-select';
 
 const panel = {
   position: 'fixed',
@@ -92,7 +93,9 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
           cells: Array.from(network.links.pathCells.slice(from, to)),
         });
       }
-      const p = roadPreview(links, new Set(selected), (cell) => road[cell] ?? 0, 1, levelMult);
+      // roadSel stores handle pairs; resolve to current link indices.
+      const selectedLinks = new Set(linkIndices(network, selected));
+      const p = roadPreview(links, selectedLinks, (cell) => road[cell] ?? 0, 1, levelMult);
       const cargoId = db.cargos.byIndex(level?.cost?.[0]?.cargo ?? -1)?.id ?? '';
       setPreview({
         ...p,
