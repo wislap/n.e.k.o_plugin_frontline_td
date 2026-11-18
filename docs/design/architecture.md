@@ -378,7 +378,7 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟，仅 Chromium）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
 
 ### 11.2 CI
-`frontend.yml`：类型检查 → lint（含纯度、i18n 字面量）→ 格式检查 → 依赖规则 → knip → 测试 → 索引新鲜度（`gen:index` 后 `git diff --exit-code`）→ 棘轮 → 文档检查 → 构建并校验 `static/` 无差异 → 包体积检查（≤ 32MiB，超过 24MiB 预警）→ Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）。评估框架不进 CI 门槛。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
+`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估框架不进 CI 门槛。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
 
 ### 11.3 防腐化机制
 腐化的根源是 AI 追求完成眼前任务，单次合理的改动不断累积。防线设在"累积"这一层：

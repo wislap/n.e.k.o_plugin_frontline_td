@@ -17,7 +17,8 @@
 | [0033](../adr/0033-design-checklist-referenced-items.md) | 《设计决策清单 v2》被引用条目 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0037](../adr/0037-eval-bots-balance-runner.md) | 策略机器人与对拍 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0040](../adr/0040-entity-id-reuse-component-reads.md) | 实体 ID 复用与组件数组读取 | 已采纳 | wislap | M5 | 2026-11-18 |
-| [0041](../adr/0041-governance-and-indexes-v2.md) | 门禁与索引 v2 | 已采纳 | wislap | 治理 | 2026-11-18 |
+| [0041](../adr/0041-governance-and-indexes-v2.md) | 门禁与索引 v2 | 已采纳；部分被 0042 取代（CI 为单一 job 顺序管道的描述） | wislap | 治理 | 2026-11-18 |
+| [0042](../adr/0042-verification-segmentation-parallel-ci.md) | 验证分段与 CI 并行 | 已采纳 | wislap | 治理 | 2026-11-18 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -143,3 +144,4 @@
 
 ### 治理（2026-11-18）
 - [0041 门禁与索引 v2](../adr/0041-governance-and-indexes-v2.md)
+- [0042 验证分段与 CI 并行](../adr/0042-verification-segmentation-parallel-ci.md)

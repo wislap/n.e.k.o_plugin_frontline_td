@@ -37,4 +37,4 @@
 
 ## 验证
 
-`npm run verify` 覆盖：类型检查、lint（含模拟层纯度与 i18n 字面量）、格式、依赖规则、knip、测试、索引新鲜度、文档检查、棘轮指标、构建。`npm run e2e` 是额外的 Playwright 浏览器冒烟（不进 verify）。任何一项不通过都不要提交。
+`npm run verify` = `verify:static`（类型检查、lint（含模拟层纯度与 i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）→ `test`（unit + scenario 两层）→ `verify:build`（构建、包体积）。日常迭代可只跑 `verify:static` 和 `test:unit`；耗时 >~3 s 或跑整局对局的测试命名 `*.scenario.test.ts`。`npm run e2e` 是额外的 Playwright 浏览器冒烟（不进 verify）。任何一项不通过都不要提交。

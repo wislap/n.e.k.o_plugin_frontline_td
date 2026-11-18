@@ -1,9 +1,12 @@
 // CI determinism (M4 D): a balanced-bot assault match must hash identically
 // across two runs, and a mid-match save restored into a fresh resolveSetup
 // must reproduce the same final hash (controller state included).
-import { describe, expect, it } from 'vitest';
+// The two runs are shared: `a` saves at 90 s on the way to the end, so the
+// restore check replays from the same serialized state.
+import { beforeAll, describe, expect, it } from 'vitest';
 import { loadContent } from '../src/content/index';
 import { toFactionId } from '../src/core/index';
+import type { Serializable } from '../src/core/index';
 import { restoreSimulation } from '../src/kernel/index';
 import type { Simulation } from '../src/kernel/index';
 import { defaultSetup } from '../src/modes/assault/index';
@@ -41,23 +44,30 @@ function run(sim: Simulation, until: number): void {
 }
 
 describe('eval determinism', () => {
-  it('balanced-bot match hashes identically across two runs', () => {
-    const a = resolved();
+  let a: ReturnType<typeof resolved>;
+  let hashA: string;
+  let hashB: string;
+  let saved: Serializable;
+
+  beforeAll(() => {
+    a = resolved();
     const b = resolved();
+    run(a.sim, SAVE_TICK);
+    saved = a.sim.serialize();
     run(a.sim, END_TICK);
     run(b.sim, END_TICK);
-    expect(a.sim.hash()).toBe(b.sim.hash());
-  }, 120_000);
+    hashA = a.sim.hash();
+    hashB = b.sim.hash();
+  }, 240_000);
+
+  it('balanced-bot match hashes identically across two runs', () => {
+    expect(hashA).toBe(hashB);
+  });
 
   it('save at 90 s + restore reproduces the final hash', () => {
-    const a = resolved();
-    run(a.sim, SAVE_TICK);
-    const saved = a.sim.serialize();
-    run(a.sim, END_TICK);
-
-    const b = resolved();
-    const restored = restoreSimulation(b.config, b.modules, saved);
+    const c = resolved();
+    const restored = restoreSimulation(c.config, c.modules, saved);
     run(restored, END_TICK);
-    expect(restored.hash()).toBe(a.sim.hash());
+    expect(restored.hash()).toBe(hashA);
   }, 120_000);
 });

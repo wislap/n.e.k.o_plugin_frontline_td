@@ -12,6 +12,30 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.{ts,tsx}', 'tooling/**/*.test.ts', 'eval/**/*.test.ts'],
+    // Two tiers: `unit` (fast, everything) and `scenario` (full-match /
+    // property tests named *.scenario.test.ts, may run whole matches).
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['src/**/*.test.{ts,tsx}', 'tooling/**/*.test.ts', 'eval/**/*.test.ts'],
+          exclude: ['**/*.scenario.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'scenario',
+          environment: 'node',
+          include: [
+            'src/**/*.scenario.test.{ts,tsx}',
+            'tooling/**/*.scenario.test.ts',
+            'eval/**/*.scenario.test.ts',
+          ],
+        },
+      },
+    ],
   },
 });

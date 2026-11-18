@@ -74,10 +74,13 @@
 在 `frontend/` 目录下：
 ```bash
 npm ci
-npm run verify   # 类型检查、lint、格式、依赖规则、knip、测试、索引、文档、棘轮、构建
+npm run verify   # = verify:static && test && verify:build（提交前跑全量）
 npm run e2e      # 浏览器冒烟（首次需 npx playwright install chromium）；不进 verify
 ```
-- 黄金哈希（kernel determinism、`eval/match-smoke.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。
+- 日常迭代用分段命令：`npm run verify:static`、`npm run test:unit`、`npx vitest --changed`。
+- 测试分两层：全对局/耗时 >~3 s 的测试命名 `*.scenario.test.ts`（`npm run test:scenario`），其余为 unit。
+- 本地 lint/format/typecheck 有缓存（`node_modules/.cache/`）；缓存不追踪跨文件类型变化，`rm -rf node_modules/.cache` 可复位，存疑以冷跑/CI 为准。
+- 黄金哈希（kernel determinism、`eval/match-smoke.scenario.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。
 - `npm run build` 会更新 `static/`，`npm run gen:index` 会更新 `docs/generated/`，这两处的变更都要一起提交。
 
 Python 薄壳在 N.E.K.O 仓库根目录下检查：
