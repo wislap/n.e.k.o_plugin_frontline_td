@@ -24,6 +24,7 @@ const REJECT_CODES = [
 // Waiting-reason codes reported by the construction inspector.
 const WAITING_CODES = [
   'not_covered',
+  'hostile_zone',
   'not_connected',
   'occupied',
   'reserved',

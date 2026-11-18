@@ -9,10 +9,12 @@ import {
   StructuresChannel,
   STATE_BLUEPRINT,
   STATE_OPERATIONAL,
+  STATE_RUIN,
   type ConstructionStructures,
 } from '../protocol';
 import { checkFootprint, checkRange } from './index';
 import { SERVICE_LAYER_ID } from '../../logistics/protocol';
+import { VisionMemoryChannel, type VisionMemory } from '../../vision/protocol';
 import {
   TERRAIN_BLOCKED_LAYER_ID,
   TERRAIN_HEIGHT_LAYER_ID,
@@ -172,5 +174,83 @@ describe('makePlacementView', () => {
     // Right next to the base connects; far away does not.
     expect(view.connects(rule, 15, 52)).toBe(true);
     expect(view.connects(rule, 80, 10)).toBe(false);
+  });
+});
+
+describe('hostile exclusion zones (M5)', () => {
+  const OUTPOST = db.structures.byId('frontline_td:outpost');
+  if (OUTPOST === undefined) {
+    throw new Error('outpost missing');
+  }
+  // Hostile operational outpost at (20,40): centre (21.5,41.5), r 12.
+  const channel = structures({
+    kind: [OUTPOST.index],
+    x: [20],
+    y: [40],
+    faction: [2],
+    state: [STATE_OPERATIONAL],
+  });
+  const snap = snapshotWith({ channels: { [StructuresChannel.id]: channel } });
+
+  it('denies range checks inside the radius, before coverage', () => {
+    const view = makePlacementView(db, map, snap, OBSERVER);
+    // Depot 2x2 at (19,38): centre cell (20,39) is ~2.9 from (21.5,41.5).
+    expect(view.excluded(20, 39)).toBe(true);
+    expect(checkRange(depotRule, 19, 38, view)).toBe('hostile_zone');
+  });
+
+  it('does not exclude outside the radius', () => {
+    const view = makePlacementView(db, map, snap, OBSERVER);
+    expect(view.excluded(41, 41)).toBe(false);
+    expect(checkRange(depotRule, 40, 40, view)).toBe('not_covered');
+  });
+
+  it('own outposts and ruins never exclude', () => {
+    const own = structures({
+      kind: [OUTPOST.index, OUTPOST.index],
+      x: [20, 30],
+      y: [40, 40],
+      faction: [OBSERVER, 2],
+      state: [STATE_OPERATIONAL, STATE_RUIN],
+    });
+    const view = makePlacementView(
+      db,
+      map,
+      snapshotWith({ channels: { [StructuresChannel.id]: own } }),
+      OBSERVER,
+    );
+    expect(view.excluded(21, 41)).toBe(false);
+    expect(view.excluded(31, 41)).toBe(false);
+  });
+
+  it('remembered hostile outposts in fog still exclude', () => {
+    const memory: VisionMemory = {
+      handles: Float64Array.from([7]),
+      kind: Uint16Array.from([OUTPOST.index]),
+      x: Uint16Array.from([20]),
+      y: Uint16Array.from([40]),
+      faction: Uint16Array.from([2]),
+      state: Uint8Array.from([STATE_OPERATIONAL]),
+    };
+    const view = makePlacementView(
+      db,
+      map,
+      snapshotWith({ channels: { [VisionMemoryChannel.id]: memory } }),
+      OBSERVER,
+    );
+    expect(view.excluded(21, 41)).toBe(true);
+    // A remembered ruin or own structure does not exclude.
+    const dead: VisionMemory = {
+      ...memory,
+      faction: Uint16Array.from([2]),
+      state: Uint8Array.from([STATE_RUIN]),
+    };
+    const clear = makePlacementView(
+      db,
+      map,
+      snapshotWith({ channels: { [VisionMemoryChannel.id]: dead } }),
+      OBSERVER,
+    );
+    expect(clear.excluded(21, 41)).toBe(false);
   });
 });

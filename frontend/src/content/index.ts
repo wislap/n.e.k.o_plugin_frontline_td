@@ -5,6 +5,7 @@ export { loadContent } from './load';
 export type {
   ContentDb,
   Registry,
+  ResolvedCapture,
   ResolvedCargo,
   ResolvedLogisticsConfig,
   ResolvedMap,

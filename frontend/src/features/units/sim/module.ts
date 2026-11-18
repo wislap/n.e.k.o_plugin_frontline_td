@@ -4,7 +4,7 @@
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { ContentDb, ResolvedUnit } from '../../../content/index';
 import { Faction, InWorld } from '../../../kernel/index';
-import type { SimModule, SpawnInit, SystemContext } from '../../../kernel/index';
+import type { SimModule, SpawnInit, SystemContext, VisibilityQuery } from '../../../kernel/index';
 import { MoveTarget, moverComponents, Position } from '../../movement/sim/index';
 import { spiralOffsets } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
@@ -36,11 +36,13 @@ export interface FactionStart {
   structures?: readonly StartStructure[];
 }
 
-// Injected snapshot readouts: hp bp (default full) and energy bp
-// (default 0xFFFF = no energy slot).
+// Injected snapshot readouts: hp bp (default full), energy bp
+// (default 0xFFFF = no energy slot) and the observer visibility filter
+// (vision wires it; default all-visible).
 export interface UnitReadouts {
   hpBp?(ctx: SystemContext, id: number): number;
   energyBp?(ctx: SystemContext, id: number): number;
+  visible?: VisibilityQuery;
 }
 
 export function createUnitsModule(
@@ -156,11 +158,17 @@ export function createUnitsModule(
         },
       });
 
-      builder.snapshotChannel(DenseUnitsChannel, (ctx: SystemContext) => {
-        const ids = ctx.query([UnitKind, Position]);
+      builder.snapshotChannel(DenseUnitsChannel, (ctx: SystemContext, observer) => {
         const pos = ctx.read(Position);
-        const kind = ctx.read(UnitKind);
         const faction = ctx.read(Faction);
+        const ids = ctx
+          .query([UnitKind, Position])
+          .filter(
+            (id) =>
+              (faction.id[id] ?? -1) === observer ||
+              (readouts.visible?.(ctx, observer, pos.x[id] ?? 0, pos.y[id] ?? 0) ?? true),
+          );
+        const kind = ctx.read(UnitKind);
         const target = ctx.read(MoveTarget);
         const n = ids.length;
         const out: DenseUnits = {

@@ -19,8 +19,15 @@
   `makePlacementView`，建造幽灵预览与 eval 机器人共用。
 - `Core` 组件：只标在 operational 建筑上（site 期没有），供
   玩法模块判定胜负（ADR 0035）。
-- `content.ts`：结构基础 schema（`id`、`footprint`）；`build` 等
-  复合字段在 `content/` 中组装。
+- `content.ts`：结构基础 schema（`id`、`footprint`、`exclusion`）；
+  `build` 等复合字段在 `content/` 中组装。
+- 废墟与禁建区（M5，ADR 0038）：带 `capture` 档案的结构死亡时
+  生成 `Ruin` 实体（`Structure + Ruin + InWorld + Position(中心)`，
+  无 `Faction`，占地保持封锁，通道 `STATE_RUIN`）；`capture.completed`
+  事件触发下一 tick 的重建工地（工期 = `rebuildTicks`，纯时间）。
+  `checkRange` 新增 `hostile_zone`：运营中的敌对 `exclusion` 结构
+  以占地中心为圆心禁建，蓝图等待同名原因；客户端 `makePlacementView`
+  的 `excluded` 合并 `vision.memory` 记忆行，敌意判定经注入谓词。
 
 ## 拥有的组件
 - `Structure`（kind、左上角 x/y）；`Construction`（progress/total/
@@ -38,8 +45,8 @@
   规则），非节点建筑要求中心点被覆盖；占地内任何阵营的 mover
   阻挡直接放置（`units_in_way`）并使蓝图激活保持等待。
 - 蓝图激活顺序为 (orderTick, entity id)；等待原因：
-  `not_covered`/`not_connected`/`occupied`/`reserved`/
-  `units_in_way`/`terrain`。
+  `not_covered`/`hostile_zone`/`not_connected`/`occupied`/
+  `reserved`/`units_in_way`/`terrain`。
 - 建造进度受已交付材料封顶：`allowed = floor(total·delivered/
   required)`，每 tick 至多推进 1；完工时移除 `UnderConstruction`
   并把工地槽转换为运营存储（由注入的 `structureParts` 完成）。
@@ -47,7 +54,9 @@
   `amt = 退款`、`cap = amt`、`since = tick + 1`，全零不生成），
   废料无 Health、不阻塞地形，export 槽全空后每周期清理。
 - 预订表按阵营隔离并可序列化（`builder.state`）；蓝图仅出现在
-  观察者自身快照通道中。
+  观察者自身快照通道中。`structures`/`salvage` 通道接受注入的
+  `VisibilityQuery`（`app/` 接 vision.api，ADR 0039）：他阵营
+  建筑按占地可见、废料仅己方。
 - 道路项目（`upgrade_links`）按上游（仓库侧）→ 下游顺序逐段施工，
   每段 `segmentCells` 格：段实体带 `Construction`/`RoadSegment` 与
   注入的物流工地槽 + `FixedAttach`、战斗部件；无 `Structure`、不

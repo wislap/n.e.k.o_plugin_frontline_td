@@ -2,6 +2,10 @@
 // engage and leash, resupply, reinforcement, gather launch, retarget,
 // and the per-squad stagger.
 import { describe, expect, it } from 'vitest';
+import { handleId } from '../../../core/index';
+import type { EntityHandle } from '../../../core/index';
+import { loadContent } from '../../../content/index';
+import { Faction, InWorld } from '../../../kernel/index';
 import type { SimModule } from '../../../kernel/index';
 import { Health } from '../../combat/sim/index';
 import { CargoStore } from '../../logistics/sim/index';
@@ -20,6 +24,7 @@ import {
   structureInit,
   world,
 } from './test-world';
+import type { World } from './test-world';
 
 // 30×20 map: a rock column at x=15 leaves only a 2-cell gap at rows
 // 9–10 — a single 2×2 depot placed there seals the only corridor.
@@ -139,6 +144,103 @@ describe('squads AI', () => {
     expect(early?.order.kind).toBe('gather');
     expect((early?.route?.length ?? 0) > 0).toBe(true);
     run(w, 50);
+    expect(squad(w)?.order.kind).toBe('advance');
+  });
+
+  it('gather launch fires at launchTick even while resupplying', () => {
+    const drained = (c: unknown, init: Record<string, number>) =>
+      c === CargoStore && (init['cap0'] ?? 0) > 0
+        ? { ...init, amt0: Math.floor((init['cap0'] ?? 0) / 4), since0: 1 }
+        : init;
+    // 25% battery, no covered cell anywhere: resupply engages and can
+    // never release — the scheduled launch must still fire on time.
+    const w = world({
+      entities: [0, 1].map((i) => ({
+        parts: robotInit(ROBOT, 6 + i, 4, drained),
+        faction: 1,
+      })),
+    });
+    createAll(w);
+    w.issue('frontline_td:squads.gather', {
+      squad: 1,
+      x: 8,
+      y: 4,
+      launchTick: 40,
+      targetX: 20,
+      targetY: 4,
+    });
+    let resupplied = false;
+    for (let t = 0; t < 60; t++) {
+      w.sim.step();
+      resupplied ||= squad(w)?.phase === 'resupplying';
+    }
+    expect(resupplied).toBe(true);
+    expect(squad(w)?.order.kind).toBe('advance');
+    expect(Math.abs((squad(w)?.order.x ?? 0) - 20)).toBeLessThan(0.5);
+  });
+
+  it('battery-less members on a recycled entity id never trigger resupply', () => {
+    // A drained robot dies (t=5) and a battery-less crawler spawns
+    // (t=6): ids recycle, so the crawler reuses the dead robot's id and
+    // its stale CargoStore slots. meanEnergyBp must skip non-CargoStore
+    // entities, so the squad never resupplies and launches on time.
+    const crawler = loadContent().units.byId('frontline_td:crawler');
+    if (crawler === undefined) {
+      throw new Error('crawler missing');
+    }
+    const drained = (c: unknown, init: Record<string, number>) =>
+      c === CargoStore && (init['cap0'] ?? 0) > 0
+        ? { ...init, amt0: Math.floor((init['cap0'] ?? 0) / 4), since0: 1 }
+        : init;
+    let crawlerHandle = 0 as EntityHandle;
+    // `w` is captured by the swap system before its initializer runs.
+    const wRef: { world?: World } = {};
+    const swap: SimModule = {
+      id: 'frontline_td:test.id_reuse',
+      install(builder) {
+        builder.system({
+          id: 'frontline_td:test.id_reuse.go',
+          phase: 'cleanup',
+          run(ctx) {
+            if (ctx.tick === 5) {
+              const h = wRef.world?.handles[0];
+              if (h !== undefined) {
+                ctx.despawn(h);
+              }
+            }
+            if (ctx.tick === 6) {
+              crawlerHandle = ctx.spawn([
+                [Faction, { id: 1 }],
+                [InWorld],
+                ...robotInit(crawler, 6, 4),
+              ]);
+            }
+          },
+        });
+      },
+    };
+    const w = world({
+      entities: [{ parts: robotInit(ROBOT, 6, 4, drained), faction: 1 }],
+      extraModules: [swap],
+    });
+    wRef.world = w;
+    run(w, 10);
+    expect(handleId(crawlerHandle)).toBe(handleId(w.handles[0] ?? (0 as EntityHandle)));
+    w.issue('frontline_td:squads.create', { units: [Number(crawlerHandle)] });
+    w.issue('frontline_td:squads.gather', {
+      squad: 1,
+      x: 8,
+      y: 4,
+      launchTick: 40,
+      targetX: 20,
+      targetY: 4,
+    });
+    let resupplied = false;
+    for (let t = 0; t < 60; t++) {
+      w.sim.step();
+      resupplied ||= squad(w)?.phase === 'resupplying';
+    }
+    expect(resupplied).toBe(false);
     expect(squad(w)?.order.kind).toBe('advance');
   });
 

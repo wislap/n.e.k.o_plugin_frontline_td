@@ -3,7 +3,6 @@
 // Members are bound through the squads-owned SquadMember component.
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { SimModule } from '../../../kernel/index';
-import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import { Position } from '../../movement/sim/index';
 import type { SquadsSnapshot, SquadView } from '../protocol';
 import { SquadsChannel } from '../protocol';
@@ -12,6 +11,7 @@ import { SquadMember } from './components';
 import { createSquadsEnv, loadSquads, saveSquads } from './state';
 import type { SquadsDeps } from './deps';
 import { installSquadsUpdate } from './update';
+import { meanEnergyBp } from './energy';
 
 export function createSquadsModule(deps: SquadsDeps): SimModule {
   const env = createSquadsEnv();
@@ -31,7 +31,6 @@ export function createSquadsModule(deps: SquadsDeps): SimModule {
 
       builder.snapshotChannel(SquadsChannel, (ctx, observer: FactionId) => {
         const pos = ctx.read(Position);
-        const store = ctx.read(CargoStore);
         const squads: SquadView[] = [];
         for (const squad of env.squads.values()) {
           const ids = squad.members
@@ -44,6 +43,16 @@ export function createSquadsModule(deps: SquadsDeps): SimModule {
             cy += pos.y[id] ?? 0;
           }
           const n = Math.max(1, ids.length);
+          if (squad.faction !== observer && deps.visible !== undefined) {
+            // Hostile squads: visible centroid, or threat intel by
+            // design — a gather (with countdown) or a routed advance.
+            const broadcast =
+              squad.order.kind === 'gather' ||
+              (squad.order.kind === 'advance' && squad.route !== undefined);
+            if (!broadcast && !deps.visible(ctx, observer, cx / n, cy / n)) {
+              continue;
+            }
+          }
           const view: SquadView = {
             id: squad.id,
             faction: squad.faction,
@@ -57,24 +66,9 @@ export function createSquadsModule(deps: SquadsDeps): SimModule {
           };
           if (squad.faction === observer) {
             view.members = [...squad.members];
-            let sum = 0;
-            let count = 0;
-            for (const id of ids) {
-              let amt = 0;
-              let cap = 0;
-              for (let i = 0; i < CARGO_SLOTS; i++) {
-                if (sget(store, 'cargo', i, id) === deps.energyCargo) {
-                  amt += sget(store, 'amt', i, id);
-                  cap += sget(store, 'cap', i, id);
-                }
-              }
-              if (cap > 0) {
-                sum += Math.floor((amt * 10000) / cap);
-                count += 1;
-              }
-            }
-            if (count > 0) {
-              view.meanEnergyBp = Math.floor(sum / count);
+            const bp = meanEnergyBp(ctx, ids, deps.energyCargo);
+            if (bp !== null) {
+              view.meanEnergyBp = bp;
             }
           }
           squads.push(view);

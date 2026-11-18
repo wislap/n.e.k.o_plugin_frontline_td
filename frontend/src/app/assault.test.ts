@@ -5,15 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { loadContent } from '../content/index';
 import type { ResolvedMap } from '../content/index';
-import { contentId, toFactionId, TICKS_PER_SECOND } from '../core/index';
+import { toFactionId } from '../core/index';
 import { createSimulation, restoreSimulation } from '../kernel/index';
 import type { SimConfig, SimModule } from '../kernel/index';
-import { SquadsChannel } from '../features/squads/protocol';
-import type { SquadsSnapshot } from '../features/squads/protocol';
 import { StructuresChannel } from '../features/construction/protocol';
 import type { ConstructionStructures } from '../features/construction/protocol';
-import { DenseUnitsChannel } from '../features/units/protocol';
-import type { DenseUnits } from '../features/units/protocol';
 import type { FactionStart } from '../features/units/sim/index';
 import type { TerrainGrid } from '../features/terrain/content';
 import { AssaultChannel } from '../modes/assault/protocol';
@@ -171,161 +167,39 @@ describe('assault victory', () => {
   });
 });
 
-describe('assault director', () => {
-  function resolved(seed = 5) {
-    const r = resolveSetup(defaultSetup(seed));
-    if ('error' in r) {
-      throw new Error(r.error);
-    }
-    return r;
-  }
-
-  function squads(sim: ReturnType<typeof createSimulation>): SquadsSnapshot {
-    return sim.snapshot(F2).channels[SquadsChannel.id] as SquadsSnapshot;
-  }
-
-  it('gathers at ~90 s, launches at the window end and breathes out wave 2', () => {
-    const { sim } = resolved();
-    const tps = TICKS_PER_SECOND;
-    // Up to ~160 s: first gather at 90 s, window 60 s, launch ~150 s.
-    let sawGather = false;
-    let launched = 0;
-    let gatherAt = -1;
-    for (let t = 0; t < 170 * tps && launched === 0; t++) {
-      sim.step();
-      if (t % 20 !== 0) {
-        continue;
-      }
-      const squads = sim.snapshot(F2).channels[SquadsChannel.id] as SquadsSnapshot;
-      for (const s of squads.squads) {
-        if (s.order.kind === 'gather') {
-          sawGather = true;
-          gatherAt = t;
-        }
-        if (s.order.kind === 'advance' && sawGather && gatherAt > 0) {
-          launched = s.id;
-        }
-      }
-    }
-    expect(sawGather).toBe(true);
-    // First gather starts at 90 s: the gather order exists by ~95 s.
-    expect(gatherAt).toBeGreaterThanOrEqual(88 * tps);
-    expect(gatherAt).toBeLessThanOrEqual(150 * tps);
-    expect(launched).not.toBe(0);
-    // Second gather must be bigger: strength cap 8+4 per wave done.
-    for (let t = 0; t < 200 * tps; t++) {
-      sim.step();
-      if (t % 20 !== 0) {
-        continue;
-      }
-      const snap = squads(sim);
-      const wave2 = snap.squads.find(
-        (s) => s.order.kind === 'gather' && s.id !== launched && s.strength >= 12,
-      );
-      if (wave2 !== undefined) {
-        return;
-      }
-      if (t > 190 * tps) {
-        break;
-      }
-    }
-    // If wave 1's squad is still alive the breather may not have elapsed;
-    // assert at least the wave-count probe tracked the launch.
-    const probes = sim.probes();
-    expect(probes['frontline_td:assault.waves.f2'] ?? 0).toBeGreaterThanOrEqual(1);
-  }, 60_000);
-
-  it('identifies its squads by tag', () => {
-    const { sim } = resolved();
-    run(sim, 100 * TICKS_PER_SECOND);
-    const tags = squads(sim)
-      .squads.map((s) => s.tag)
-      .sort();
-    expect(tags).toContain('hive_guard');
-    expect(tags).toContain('raid');
-    expect(tags).toContain('wave:1');
-  }, 60_000);
-
-  it('pins wave strength at launch so later spawns stay unassigned', () => {
-    const { sim } = resolved();
-    const tps = TICKS_PER_SECOND;
-    // Past the first launch (gather 90 s + window 60 s = 150 s).
-    run(sim, 160 * tps);
-    const wave = squads(sim).squads.find((s) => s.tag === 'wave:1');
-    expect(wave).toBeDefined();
-    expect(wave?.order.kind === 'advance' || wave?.order.kind === 'guard').toBe(true);
-    const members = wave?.members?.length ?? 0;
-    expect(wave?.strength).toBe(members);
-    // The hive keeps producing; new monsters must not join the launched wave.
-    run(sim, 40 * tps);
-    const later = squads(sim).squads.find((s) => s.tag === 'wave:1');
-    if (later !== undefined) {
-      expect(later.members?.length ?? 0).toBeLessThanOrEqual(members);
-    }
-  }, 60_000);
-
-  it('restored mid-gather reproduces the uninterrupted run', () => {
-    const a = resolved();
-    const tps = TICKS_PER_SECOND;
-    run(a.sim, 100 * tps); // mid-gather: created at 90 s, launches ~150 s
-    const saved = a.sim.serialize();
-    const controllerStates = (saved as unknown as { controllerStates: Record<string, unknown> })
-      .controllerStates;
-    // The director's private state is part of the save (and the hash).
-    expect(controllerStates[String(2)]).toBeDefined();
-    // A second resolved instance supplies fresh modules for the restore.
-    const b = resolved();
-    const restored = restoreSimulation(b.config, b.modules, saved);
-    run(a.sim, 100 * tps);
-    run(restored, 100 * tps);
-    expect(restored.hash()).toBe(a.sim.hash());
-  }, 120_000);
-
-  it('raider squad advances on the nearest hostile non-warehouse node', () => {
-    // Give the player a station (non-warehouse node) west of the base;
-    // the raiders should advance on it rather than the warehouse.
-    const setup = defaultSetup(5);
-    const player = setup.factions[0];
-    if (player === undefined) {
-      throw new Error('no player faction');
-    }
-    player.start?.structures?.push({
-      structure: contentId('frontline_td:station'),
-      x: 14,
-      y: 46,
-    });
-    const r = resolveSetup(setup);
-    if ('error' in r) {
-      throw new Error(r.error);
-    }
-    run(r.sim, 60 * TICKS_PER_SECOND);
-    const snap = r.sim.snapshot(F2).channels[SquadsChannel.id] as SquadsSnapshot;
-    const raider = snap.squads.find((s) => s.order.kind === 'advance' && s.strength <= 10);
-    expect(raider).toBeDefined();
-    if (raider !== undefined) {
-      // Station centre is (15, 47); the advance should head there.
-      const structures = r.sim.snapshot(F2).channels[
-        StructuresChannel.id
-      ] as ConstructionStructures;
-      const stations = Array.from(structures.kind).filter((k) => {
-        const def = DB.structures.list[k];
-        return def?.id === 'frontline_td:station';
-      });
-      expect(stations.length).toBeGreaterThan(0);
-      expect(Math.abs(raider.order.x - 15)).toBeLessThan(3);
-      expect(Math.abs(raider.order.y - 47)).toBeLessThan(3);
+describe('assault outposts (M5 batch A)', () => {
+  it('default setup starts three enemy outposts with garrisons', () => {
+    const setup = defaultSetup(1);
+    const enemy = setup.factions[1];
+    const structures = enemy?.start?.structures ?? [];
+    const units = enemy?.start?.units ?? [];
+    const outposts = structures.filter((s) => s.structure === 'frontline_td:outpost');
+    expect(outposts).toHaveLength(3);
+    // Garrisons: south 3 crawlers + 1 spitter; west/east 4 + 2 each.
+    const at = (x: number, y: number) =>
+      units.filter((u) => u.x === x && u.y === y).reduce((n, u) => n + u.count, 0);
+    for (const s of outposts) {
+      expect(at(s.x, s.y)).toBeGreaterThanOrEqual(4);
     }
   });
 
-  it('hive spawns feed the gather squad and waves probe counts', () => {
-    const { sim } = resolved();
-    run(sim, 160 * TICKS_PER_SECOND);
-    const probes = sim.probes();
-    expect(probes['frontline_td:assault.waves.f2'] ?? 0).toBeGreaterThanOrEqual(1);
-    expect(probes['frontline_td:assault.hivehp.f2'] ?? -1).toBeGreaterThan(0);
-    const dense = sim.snapshot(F2).channels[DenseUnitsChannel.id] as DenseUnits;
-    const enemy = Array.from(dense.faction).filter((f) => f === 2).length;
-    // Hive production plus initial monsters.
-    expect(enemy).toBeGreaterThan(16);
+  it('outposts spawn operational and blocked on proto_01', () => {
+    const r = resolveSetup(defaultSetup(1));
+    if ('error' in r) {
+      throw new Error(r.error);
+    }
+    const sim = r.sim;
+    run(sim, 5);
+    const rows = sim.snapshot(F2).channels[StructuresChannel.id] as ConstructionStructures;
+    let found = 0;
+    for (let i = 0; i < rows.handles.length; i++) {
+      const def = DB.structures.list[rows.kind[i] ?? 0];
+      if (def?.id === 'frontline_td:outpost') {
+        found += 1;
+        expect(rows.state[i]).toBe(3); // STATE_OPERATIONAL
+        expect(rows.faction[i]).toBe(2);
+      }
+    }
+    expect(found).toBe(3);
   });
 });

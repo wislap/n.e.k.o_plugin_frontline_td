@@ -22,6 +22,8 @@ import {
   TERRAIN_HEIGHT_LAYER_ID,
   TERRAIN_SURFACE_LAYER_ID,
 } from '../../terrain/protocol';
+import { VisionMemoryChannel } from '../../vision/protocol';
+import type { VisionMemory } from '../../vision/protocol';
 
 // Conservative edge-to-edge estimate between two footprints: centre
 // distance minus each footprint's half extent along the dominant axis.
@@ -45,7 +47,12 @@ export function makePlacementView(
   map: ResolvedMap,
   snapshot: Snapshot,
   observer: number,
+  // Hostility predicate over channel factions; default treats every
+  // non-own, non-neutral faction as hostile (correct for the current
+  // two-faction matches — clients with relations inject their own).
+  isHostile?: (faction: number) => boolean,
 ): PlacementView {
+  const hostile = isHostile ?? ((f) => f !== 0 && f !== observer);
   const { width, height } = map.grid;
   const heights =
     (snapshot.layers[TERRAIN_HEIGHT_LAYER_ID] as Uint8Array | undefined) ?? map.grid.heights;
@@ -63,11 +70,9 @@ export function makePlacementView(
   // are `connects` anchors.
   const reservations: { x: number; y: number; w: number; h: number }[] = [];
   const nodes: { x: number; y: number; w: number; h: number; connect: number }[] = [];
+  const excluders: { cx: number; cy: number; r: number }[] = [];
   if (channel !== undefined) {
     for (let i = 0; i < channel.handles.length; i++) {
-      if ((channel.faction[i] ?? 0) !== observer) {
-        continue;
-      }
       const kind = db.structures.byIndex(channel.kind[i] ?? 0);
       if (kind === undefined) {
         continue;
@@ -75,10 +80,50 @@ export function makePlacementView(
       const x = channel.x[i] ?? 0;
       const y = channel.y[i] ?? 0;
       const state = channel.state[i] ?? 0;
-      if (state === STATE_BLUEPRINT || state === STATE_WAITING) {
-        reservations.push({ x, y, w: kind.footprint.w, h: kind.footprint.h });
-      } else if (state === STATE_OPERATIONAL && kind.node !== undefined) {
-        nodes.push({ x, y, w: kind.footprint.w, h: kind.footprint.h, connect: kind.node.connect });
+      const faction = channel.faction[i] ?? 0;
+      if (faction === observer) {
+        if (state === STATE_BLUEPRINT || state === STATE_WAITING) {
+          reservations.push({ x, y, w: kind.footprint.w, h: kind.footprint.h });
+        } else if (state === STATE_OPERATIONAL && kind.node !== undefined) {
+          nodes.push({
+            x,
+            y,
+            w: kind.footprint.w,
+            h: kind.footprint.h,
+            connect: kind.node.connect,
+          });
+        }
+      } else if (state === STATE_OPERATIONAL && kind.exclusion !== undefined && hostile(faction)) {
+        excluders.push({
+          cx: x + kind.footprint.w / 2,
+          cy: y + kind.footprint.h / 2,
+          r: kind.exclusion,
+        });
+      }
+    }
+  }
+  // Remembered hostile structures (vision memory) keep excluding: the
+  // sim still applies the zone while the structure may be alive unseen.
+  // Memory rows only ever list non-visible rows, so no live-row dupes.
+  const memory = snapshot.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+  if (memory !== undefined) {
+    for (let i = 0; i < memory.handles.length; i++) {
+      const kind = db.structures.byIndex(memory.kind[i] ?? 0);
+      if (kind === undefined) {
+        continue;
+      }
+      if (
+        (memory.state[i] ?? -1) === STATE_OPERATIONAL &&
+        kind.exclusion !== undefined &&
+        hostile(memory.faction[i] ?? 0)
+      ) {
+        const x = memory.x[i] ?? 0;
+        const y = memory.y[i] ?? 0;
+        excluders.push({
+          cx: x + kind.footprint.w / 2,
+          cy: y + kind.footprint.h / 2,
+          r: kind.exclusion,
+        });
       }
     }
   }
@@ -113,5 +158,13 @@ export function makePlacementView(
             10 <=
           Math.min(rule.connect, n.connect),
       ),
+    // Same metric as the sim: footprint-centre cell centre vs the
+    // excluder's structure centre, squared radius.
+    excluded: (x, y) =>
+      excluders.some((e) => {
+        const dx = x + 0.5 - e.cx;
+        const dy = y + 0.5 - e.cy;
+        return dx * dx + dy * dy <= e.r * e.r;
+      }),
   };
 }

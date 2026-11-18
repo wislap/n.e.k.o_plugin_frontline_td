@@ -139,7 +139,9 @@ export function resolveSetup(
     controllers,
     ...(options.timer !== undefined ? { timer: options.timer } : {}),
   };
-  const built = createSimModules(db, map, starts);
+  const built = createSimModules(db, map, starts, {
+    vision: new Map(setup.factions.map((f) => [Number(f.id), f.vision ?? 'fog'] as const)),
+  });
   const modules =
     mode === undefined
       ? built.modules

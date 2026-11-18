@@ -15,12 +15,15 @@ export function App({
   map,
   panTracker,
   onRestart,
+  isHostile,
 }: {
   client: SimClient;
   db: ContentDb;
   map: ResolvedMap;
   panTracker: PanTracker;
   onRestart: () => void;
+  // Hostility from the match relations (observer, faction) → bool.
+  isHostile: (observer: number, faction: number) => boolean;
 }) {
   const { t } = useTranslation();
   const panelOpen = useUiStore((state) => state.debugPanelOpen);
@@ -31,7 +34,7 @@ export function App({
 
   return (
     <main>
-      <GameCanvas client={client} db={db} map={map} panTracker={panTracker} />
+      <GameCanvas client={client} db={db} map={map} panTracker={panTracker} isHostile={isHostile} />
       <Hud client={client} db={db} modeUi={<EndScreen client={client} onRestart={onRestart} />} />
       {panelOpen && <DebugPanel client={client} />}
     </main>

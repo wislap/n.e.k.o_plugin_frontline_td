@@ -7,6 +7,7 @@ import { contentId } from '../../core/index';
 export const structures = [
   {
     id: contentId('frontline_td:main_base'),
+    vision: 12,
     footprint: { w: 4, h: 4 },
     hp: 1000,
     core: true,
@@ -31,6 +32,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:station'),
+    vision: 6,
     footprint: { w: 2, h: 2 },
     hp: 200,
     build: {
@@ -50,6 +52,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:supply_depot'),
+    vision: 8,
     footprint: { w: 2, h: 2 },
     hp: 300,
     build: {
@@ -73,7 +76,33 @@ export const structures = [
     ],
   },
   {
+    id: contentId('frontline_td:outpost'),
+    vision: 14,
+    visionLandmark: true,
+    footprint: { w: 3, h: 3 },
+    hp: 800,
+    // Outposts are never built: they start enemy-owned, become ruins on
+    // death and are re-captured into fresh sites (no build cost → the
+    // rebuild site is time-only progress).
+    node: { connect: 10, service: 10, vehicles: 3 },
+    stores: [
+      {
+        cargo: contentId('frontline_td:energy'),
+        capacity: 100,
+        class: 'reserve',
+      },
+      {
+        cargo: contentId('frontline_td:ammo'),
+        capacity: 100,
+        class: 'reserve',
+      },
+    ],
+    exclusion: 12,
+    capture: { radius: 4, seconds: 30, rebuildSeconds: 20 },
+  },
+  {
     id: contentId('frontline_td:miner'),
+    vision: 4,
     footprint: { w: 2, h: 2 },
     hp: 250,
     requiresDeposit: contentId('frontline_td:ore'),
@@ -105,6 +134,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:power_plant'),
+    vision: 4,
     footprint: { w: 3, h: 3 },
     hp: 250,
     build: {
@@ -135,6 +165,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:ammo_factory'),
+    vision: 4,
     footprint: { w: 3, h: 3 },
     hp: 250,
     build: {
@@ -170,6 +201,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:turret'),
+    vision: 9,
     footprint: { w: 1, h: 1 },
     hp: 150,
     build: {
@@ -202,6 +234,7 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:robot_factory'),
+    vision: 5,
     footprint: { w: 3, h: 3 },
     hp: 400,
     build: {
@@ -231,9 +264,12 @@ export const structures = [
   },
   {
     id: contentId('frontline_td:hive'),
+    vision: 10,
+    visionLandmark: true,
     footprint: { w: 4, h: 4 },
     hp: 3000,
     core: true,
+    exclusion: 16,
     // Not buildable, no logistics node/stores: a free-running monster
     // spawner (no inputs → no attachment or energy needed).
     producer: {

@@ -37,6 +37,11 @@ export const Salvage = defineComponent('frontline_td:salvage', {});
 // site completion). Batch B's victory module reads it.
 export const Core = defineComponent('frontline_td:core', {});
 
+// Ruin tag (M5): a destroyed capture structure left in place — no
+// Faction, footprint stays blocked until capture turns it into a fresh
+// site. Ruin-only extras (capture progress) arrive via ruinParts.
+export const Ruin = defineComponent('frontline_td:ruin', {});
+
 // A live road-build segment; `project` indexes the construction module's
 // serialized road-project list.
 export const RoadSegment = defineComponent('frontline_td:road_segment', {

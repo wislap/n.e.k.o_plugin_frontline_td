@@ -36,5 +36,6 @@ export type {
   SpawnInit,
   SystemContext,
   SystemSpec,
+  VisibilityQuery,
   WriteView,
 } from './types';

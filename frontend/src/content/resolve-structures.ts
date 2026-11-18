@@ -6,11 +6,17 @@ import { s } from '../core/index';
 import type { ContentId } from '../core/index';
 import type { Infer } from '../core/index';
 import { MILLI, TICKS_PER_SECOND } from '../core/index';
+import { captureProfileSchema } from '../features/capture/content';
 import { weaponSchema } from '../features/combat/content';
 import { structureBaseFields } from '../features/construction/content';
 import { nodeProfileSchema, storeProfileSchema } from '../features/logistics/content';
 import { cargoClassCode } from '../features/logistics/protocol';
 import { producerSchema } from '../features/production/content';
+import {
+  DEFAULT_STRUCTURE_VISION_CELLS,
+  visionFields,
+  visionLandmarkFields,
+} from '../features/vision/content';
 
 export interface ResolvedStoreProfile {
   cargo: number;
@@ -74,6 +80,23 @@ export interface ResolvedStructure {
   requiresDeposit?: number;
   producer?: ResolvedProducer;
   weapon?: ResolvedWeapon;
+  // Hostile build-exclusion radius in cells while operational.
+  exclusion?: number;
+  capture?: ResolvedCapture;
+  // Sight radius in cells while operational (M5 fog; default 4).
+  vision: number;
+  // Seeded into every other faction's structure memory on the first
+  // vision tick (outpost, hive).
+  visionLandmark?: boolean;
+}
+
+// Capture profile resolved to ticks and squared radius (cells²) for
+// integer distance checks.
+export interface ResolvedCapture {
+  radius: number;
+  radiusSq: number;
+  ticks: number;
+  rebuildTicks: number;
 }
 
 // Composite structure schema: construction base fields + logistics
@@ -84,6 +107,9 @@ export const structureSchema = s.object({
   stores: s.optional(s.array(storeProfileSchema, { maxLength: 4 })),
   producer: s.optional(producerSchema),
   weapon: s.optional(weaponSchema),
+  capture: s.optional(captureProfileSchema),
+  ...visionFields,
+  ...visionLandmarkFields,
   // Faction core structure flag — modes read it via the Core component,
   // never by content id.
   core: s.optional(s.bool()),
@@ -269,6 +295,22 @@ export function resolveStructures(
       ...(producer !== undefined ? { producer } : {}),
       ...(weapon !== undefined ? { weapon } : {}),
       ...(entry.core === true ? { core: true } : {}),
+      ...(entry.exclusion !== undefined ? { exclusion: entry.exclusion } : {}),
+      vision: entry.vision ?? DEFAULT_STRUCTURE_VISION_CELLS,
+      ...(entry.visionLandmark === true ? { visionLandmark: true } : {}),
+      ...(entry.capture !== undefined
+        ? {
+            capture: {
+              radius: entry.capture.radius,
+              radiusSq: entry.capture.radius * entry.capture.radius,
+              ticks: Math.max(1, Math.round(entry.capture.seconds * TICKS_PER_SECOND)),
+              rebuildTicks: Math.max(
+                1,
+                Math.round(entry.capture.rebuildSeconds * TICKS_PER_SECOND),
+              ),
+            },
+          }
+        : {}),
       ...(node !== undefined
         ? {
             node: {

@@ -18,6 +18,7 @@ import {
   type ConstructionStructures,
 } from '../../src/features/construction/protocol';
 import { DenseUnitsChannel, type DenseUnits } from '../../src/features/units/protocol';
+import { VisionMemoryChannel, type VisionMemory } from '../../src/features/vision/protocol';
 import {
   LogisticsNetworkChannel,
   type LogisticsNetwork,
@@ -83,21 +84,38 @@ export function structures(
 ): StructureRow[] {
   const st = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
   const out: StructureRow[] = [];
-  if (st === undefined) {
-    return out;
-  }
-  for (let i = 0; i < st.handles.length; i++) {
-    if (!filter(st.faction[i] ?? 0)) {
-      continue;
+  if (st !== undefined) {
+    for (let i = 0; i < st.handles.length; i++) {
+      if (!filter(st.faction[i] ?? 0)) {
+        continue;
+      }
+      const def = db.structures.byIndex(st.kind[i] ?? 0);
+      out.push({
+        handle: st.handles[i] ?? 0,
+        kind: st.kind[i] ?? 0,
+        x: (st.x[i] ?? 0) + (def?.footprint.w ?? 1) / 2,
+        y: (st.y[i] ?? 0) + (def?.footprint.h ?? 1) / 2,
+        state: st.state[i] ?? 0,
+      });
     }
-    const def = db.structures.byIndex(st.kind[i] ?? 0);
-    out.push({
-      handle: st.handles[i] ?? 0,
-      kind: st.kind[i] ?? 0,
-      x: (st.x[i] ?? 0) + (def?.footprint.w ?? 1) / 2,
-      y: (st.y[i] ?? 0) + (def?.footprint.h ?? 1) / 2,
-      state: st.state[i] ?? 0,
-    });
+  }
+  // Fog memory (M5): remembered non-own structures not currently
+  // visible — bots under fog still find the hive/outposts through it.
+  const mem = snapshot.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+  if (mem !== undefined) {
+    for (let i = 0; i < mem.handles.length; i++) {
+      if (!filter(mem.faction[i] ?? 0)) {
+        continue;
+      }
+      const def = db.structures.byIndex(mem.kind[i] ?? 0);
+      out.push({
+        handle: mem.handles[i] ?? 0,
+        kind: mem.kind[i] ?? 0,
+        x: (mem.x[i] ?? 0) + (def?.footprint.w ?? 1) / 2,
+        y: (mem.y[i] ?? 0) + (def?.footprint.h ?? 1) / 2,
+        state: mem.state[i] ?? 0,
+      });
+    }
   }
   return out;
 }

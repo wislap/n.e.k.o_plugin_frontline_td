@@ -9,6 +9,7 @@ export const units: readonly UnitContent[] = [
     radius: 0.35,
     movementClass: contentId('frontline_td:ground'),
     hp: 50,
+    vision: 7,
     // Lifeline battery: 60 energy, drains 0.05 units/s (upkeep).
     stores: [
       {
@@ -33,6 +34,7 @@ export const units: readonly UnitContent[] = [
     radius: 0.35,
     movementClass: contentId('frontline_td:ground'),
     hp: 40,
+    vision: 6,
     // Melee: free weapon, no battery (monster).
     weapon: { range: 0.6, damage: 6, cooldown: 1.0, delivery: 'instant' },
     // Low box — the skittering mass.
@@ -44,6 +46,7 @@ export const units: readonly UnitContent[] = [
     radius: 0.3,
     movementClass: contentId('frontline_td:ground'),
     hp: 25,
+    vision: 8,
     weapon: { range: 5, damage: 3, cooldown: 1.2, delivery: 'instant' },
     visual: { shape: 'cone', scale: 0.9 },
   },
@@ -53,6 +56,7 @@ export const units: readonly UnitContent[] = [
     radius: 0.3,
     movementClass: contentId('frontline_td:ground'),
     hp: 30,
+    vision: 7,
     // Monster raider: free weapon, no battery. Keeps its published id
     // and the logistics interceptor role (ADR 0030).
     weapon: { range: 0.6, damage: 4, cooldown: 0.8, delivery: 'instant' },

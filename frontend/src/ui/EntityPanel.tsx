@@ -146,13 +146,19 @@ export function EntityPanel({ client, db }: { client: SimClient; db: ContentDb }
     Record<string, unknown> | undefined;
   const combat = inspection.sections['frontline_td:combat'] as Record<string, unknown> | undefined;
   const kindName = str(construction?.['kind']).split(':')[1];
+  const isRuin = str(construction?.['state']) === 'ruin';
 
   return (
     <div style={panel}>
       {construction !== undefined && (
         <div>
           <div>
-            {t(`structure.${kindName}`, { defaultValue: kindName || '?' })} —{' '}
+            {isRuin
+              ? t(`structure.${kindName}_ruin`, {
+                  defaultValue: t(`structure.${kindName}`, { defaultValue: kindName || '?' }),
+                })
+              : t(`structure.${kindName}`, { defaultValue: kindName || '?' })}{' '}
+            —{' '}
             {t(`state.${str(construction['state'])}`, {
               defaultValue: str(construction['state']),
             })}

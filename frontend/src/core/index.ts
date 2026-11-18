@@ -12,6 +12,7 @@ export {
   floorDiv,
   mulDiv,
   applyBasisPoints,
+  lnMilli,
 } from './int';
 export { distance, distanceSquared } from './geometry';
 export { createHasher, hashCanonical } from './hash';

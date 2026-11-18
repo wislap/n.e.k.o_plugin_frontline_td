@@ -55,7 +55,9 @@
     "ammo_factory": "弹药厂",
     "turret": "炮塔",
     "robot_factory": "机器人工厂",
-    "hive": "虫巢"
+    "outpost": "据点",
+    "hive": "虫巢",
+    "outpost_ruin": "据点废墟"
   },
   "unit": {
     "robot": "机器人",
@@ -84,6 +86,7 @@
     "reserved": "已被蓝图预留",
     "needs_deposit": "需要矿脉",
     "not_covered": "不在服务范围内",
+    "hostile_zone": "位于敌方禁区范围内",
     "not_connected": "范围内没有物流节点",
     "no_stock": "仓库缺货",
     "disconnected": "未接入物流网络",
@@ -111,7 +114,8 @@
     "waiting": "待开工",
     "site": "建造中",
     "operational": "运转中",
-    "demolishing": "拆除中"
+    "demolishing": "拆除中",
+    "ruin": "废墟"
   },
   "prod": {
     "ready": "就绪",
@@ -176,5 +180,8 @@
       "ammo": "弹药库存：{{count}}"
     },
     "restart": "再来一局"
+  },
+  "capture": {
+    "contested": "争夺中"
   }
 }

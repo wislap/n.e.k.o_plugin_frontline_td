@@ -98,3 +98,69 @@ describe('loadContent', () => {
     expect(message).toContain('unknown movement class');
   });
 });
+
+describe('proto_01 outpost points (M5 batch A)', () => {
+  const db = loadContent();
+  const map = db.maps.byId('frontline_td:proto_01');
+  const outpost = db.structures.byId('frontline_td:outpost');
+  const hive = db.structures.byId('frontline_td:hive');
+  const groundCls = db.movementClasses.byId('frontline_td:ground')?.index ?? -1;
+  if (map === undefined || outpost === undefined || hive === undefined) {
+    throw new Error('base pack map/outpost/hive missing');
+  }
+  const hivePoint = map.points['enemy_north'];
+  const hiveCentre = {
+    x: (hivePoint?.x ?? 0) + hive.footprint.w / 2,
+    y: (hivePoint?.y ?? 0) + hive.footprint.h / 2,
+  };
+
+  it('exposes the three outpost points with valid 3x3 footprints', () => {
+    for (const name of ['outpost_south', 'outpost_west', 'outpost_east'] as const) {
+      const p = map.points[name];
+      expect(p, `${name} point`).toBeDefined();
+      const point = p ?? { x: 0, y: 0 };
+      const cx = point.x + 1.5;
+      const cy = point.y + 1.5;
+      // Outside the hive exclusion radius (16 cells); squared distance,
+      // purity-zone-safe (no Math.hypot).
+      const dhx = cx - hiveCentre.x;
+      const dhy = cy - hiveCentre.y;
+      const r = hive.exclusion ?? 0;
+      expect(dhx * dhx + dhy * dhy, `${name} outside hive exclusion`).toBeGreaterThan(r * r);
+      let h0 = -1;
+      for (let dy = 0; dy < 3; dy++) {
+        for (let dx = 0; dx < 3; dx++) {
+          const x = point.x + dx;
+          const y = point.y + dy;
+          const idx = y * map.grid.width + x;
+          const surface = db.surfaces.byIndex(map.grid.surfaces[idx] ?? 0);
+          // Flat, ground-passable, no ramp, not on a deposit field.
+          expect(
+            surface && (surface.costs[groundCls] ?? -1) >= 0,
+            `${name} cell ${x},${y} passable`,
+          ).toBe(true);
+          expect(map.grid.ramps[idx], `${name} cell ${x},${y} off ramps`).toBe(0);
+          expect(surface?.deposit, `${name} cell ${x},${y} not ore`).toBeUndefined();
+          const h = map.grid.heights[idx] ?? -1;
+          if (h0 < 0) {
+            h0 = h;
+          }
+          expect(h, `${name} cell ${x},${y} flat`).toBe(h0);
+        }
+      }
+    }
+  });
+
+  it('outpost content carries capture and exclusion profiles', () => {
+    expect(outpost.footprint).toEqual({ w: 3, h: 3 });
+    expect(outpost.build).toBeUndefined();
+    expect(outpost.exclusion).toBe(12);
+    expect(outpost.capture).toEqual({
+      radius: 4,
+      radiusSq: 16,
+      ticks: 600,
+      rebuildTicks: 400,
+    });
+    expect(hive.exclusion).toBe(16);
+  });
+});

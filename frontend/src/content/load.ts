@@ -12,6 +12,7 @@ import { decodeMap } from '../features/terrain/content';
 import type { MapContent, TerrainGrid } from '../features/terrain/content';
 import { mapSchema, movementClassSchema, surfaceSchema } from '../features/terrain/content';
 import { unitSchema } from '../features/units/content';
+import { DEFAULT_UNIT_VISION_CELLS } from '../features/vision/content';
 import { BASE_PACK_CONTENT } from './packs';
 import {
   createStoreResolver,
@@ -20,6 +21,7 @@ import {
   structureSchema,
 } from './resolve-structures';
 export type {
+  ResolvedCapture,
   ResolvedNodeProfile,
   ResolvedProducer,
   ResolvedStoreProfile,
@@ -64,6 +66,8 @@ export interface ResolvedUnit {
   interceptor?: { strengthBp: number };
   // Render-only shape hint; always resolved (default cylinder ×1).
   visual: { shape: 'cylinder' | 'cone' | 'box' | 'sphere'; scale: number };
+  // Sight radius in cells (M5 fog; default 6).
+  vision: number;
 }
 
 export interface ResolvedCargo {
@@ -335,6 +339,7 @@ export function loadContent(source: ContentSource = BASE_PACK_CONTENT): ContentD
         ? { interceptor: { strengthBp: entry.interceptor.strength } }
         : {}),
       visual: (entry.visual ?? { shape: 'cylinder', scale: 1 }) as ResolvedUnit['visual'],
+      vision: entry.vision ?? DEFAULT_UNIT_VISION_CELLS,
     };
   });
 

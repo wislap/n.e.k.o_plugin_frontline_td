@@ -96,6 +96,16 @@ export type EffectHandler = (
 
 export type CommandHandler<P> = (ctx: SystemContext, payload: P, issuer: FactionId) => void;
 
+// Per-observer visibility predicate injected into snapshot channel
+// builders (M5 fog): vision wires its layer query in app/; filtered
+// features declare it optional and default to all-visible.
+export type VisibilityQuery = (
+  ctx: SystemContext,
+  observer: FactionId,
+  x: number,
+  y: number,
+) => boolean;
+
 export interface Controller {
   readonly faction: FactionId;
   decide(input: {

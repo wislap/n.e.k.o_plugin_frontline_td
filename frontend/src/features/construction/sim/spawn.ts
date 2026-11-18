@@ -15,7 +15,7 @@ import {
 } from '../../logistics/sim/index';
 import { SLOT_SITE } from '../../logistics/protocol';
 import { Mover, Position } from '../../movement/sim/index';
-import { Blueprint, Construction, Core, MODE_BUILD, Salvage, Structure } from './components';
+import { Blueprint, Construction, Core, MODE_BUILD, Ruin, Salvage, Structure } from './components';
 import type { ConstructionEnv } from './env';
 import {
   footprintCells,
@@ -39,6 +39,9 @@ export function spawnStructure(
   x: number,
   y: number,
   phase: StructurePhase,
+  // Site build total override: capture rebuilds use rebuildTicks
+  // because the structure has no build cost (time-only progress).
+  totalTicks?: number,
 ): EntityHandle {
   const init: SpawnInit = [
     [Faction, { id: faction }],
@@ -49,13 +52,36 @@ export function spawnStructure(
     ...(phase === 'site'
       ? ([
           [UnderConstruction],
-          [Construction, { progress: 0, total: kind.build?.timeTicks ?? 1, mode: MODE_BUILD }],
+          [
+            Construction,
+            { progress: 0, total: totalTicks ?? kind.build?.timeTicks ?? 1, mode: MODE_BUILD },
+          ],
         ] as const)
       : []),
   ];
   const handle = ctx.spawn(init);
   setFootprintBlocked(env, kind, x, y, true);
   return handle;
+}
+
+// Spawn a ruin over the footprint of a destroyed capture structure:
+// Structure + InWorld + Ruin tag + capture's injected parts; no Faction
+// (ownership is only established by rebuilding). The footprint stays
+// blocked — free_dead never unblocks it.
+export function spawnRuin(
+  env: ConstructionEnv,
+  ctx: SystemContext,
+  kind: ResolvedStructure,
+  x: number,
+  y: number,
+): EntityHandle {
+  return ctx.spawn([
+    [InWorld],
+    [Structure, { kind: kind.index, x, y }],
+    [Ruin],
+    [Position, { x: x + kind.footprint.w / 2, y: y + kind.footprint.h / 2 }],
+    ...env.ruinParts.flatMap((p) => p(kind, x, y)),
+  ]);
 }
 
 // Spawn a blueprint (Faction + Blueprint only) and reserve its cells.
@@ -103,7 +129,14 @@ export function moversInside(
 }
 
 export type WaitingReason =
-  'not_covered' | 'not_connected' | 'occupied' | 'reserved' | 'units_in_way' | 'terrain' | null;
+  | 'not_covered'
+  | 'not_connected'
+  | 'hostile_zone'
+  | 'occupied'
+  | 'reserved'
+  | 'units_in_way'
+  | 'terrain'
+  | null;
 
 // Can a build start here for this faction? Returns null when it can, or
 // the first blocking reason (footprint, then range, then movers).

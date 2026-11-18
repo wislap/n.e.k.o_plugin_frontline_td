@@ -6,6 +6,7 @@ import { s } from '../../core/index';
 import type { Infer } from '../../core/index';
 import { weaponSchema } from '../combat/content';
 import { storeProfileSchema } from '../logistics/content';
+import { visionFields } from '../vision/content';
 
 export const unitSchema = s.object({
   id: s.contentId(),
@@ -19,6 +20,8 @@ export const unitSchema = s.object({
   // Logistics interception strength in basis points applied to hostile
   // link quotas inside the corridor (E2).
   interceptor: s.optional(s.object({ strength: s.int({ min: 0, max: 10000 }) })),
+  // Sight radius in cells (M5 fog; default 6).
+  ...visionFields,
   // Render-only shape hint (M4 monster visuals); sim never reads it.
   visual: s.optional(
     s.object({

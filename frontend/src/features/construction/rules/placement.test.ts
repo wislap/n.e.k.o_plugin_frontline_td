@@ -25,6 +25,7 @@ function view(overrides: Partial<PlacementView> = {}): PlacementView {
     covered: () => true,
     depositAt: () => -1,
     connects: () => true,
+    excluded: () => false,
     ...overrides,
   };
 }

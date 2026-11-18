@@ -97,5 +97,13 @@ export const proto01: MapContent = {
     // at x≈56–58, y≈13–16): open ground reachable overland from
     // enemy_north and across the mid-map land bridge from player_start.
     enemy_rally: { x: 50, y: 14 },
+    // M5 outposts (batch A): each point is the 3x3 footprint top-left on
+    // flat ground, off ramps and ore, outside the hive exclusion (16
+    // cells from the hive centre at 32,6) and ground-reachable from
+    // player_start. West/east sit beside their ore fields; south holds
+    // the land between the plateau and the river as the first target.
+    outpost_south: { x: 30, y: 55 },
+    outpost_west: { x: 26, y: 21 },
+    outpost_east: { x: 69, y: 21 },
   },
 };

@@ -4,25 +4,35 @@
 // UnderConstruction writer — operational systems exclude those entities.
 import type { ContentDb } from '../../../content/index';
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
-import type { SimModule, SystemContext } from '../../../kernel/index';
+import type { SimModule, SystemContext, VisibilityQuery } from '../../../kernel/index';
 import { Faction, UnderConstruction } from '../../../kernel/index';
+import { CaptureCompleted } from '../../capture/protocol';
 import { CombatDied } from '../../combat/protocol';
 import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import type { FactionStart } from '../../units/sim/index';
 import { ConstructionCompleted } from '../protocol';
-import { Blueprint, Construction, Core, MODE_BUILD, RoadSegment, Structure } from './components';
+import {
+  Blueprint,
+  Construction,
+  Core,
+  MODE_BUILD,
+  RoadSegment,
+  Ruin,
+  Structure,
+} from './components';
 import { registerConstructionCommands } from './commands';
 import type {
   ConstructionEnv,
   LogisticsQueries,
   RoadSegmentPartsFn,
+  RuinPartsFn,
   StructurePartsFn,
 } from './env';
 import { loadReservations, saveReservations, setFootprintBlocked } from './env';
 import { finishDemolition, startSite } from './lifecycle';
 import { endProjectOfSegment, registerRoads } from './roads';
-import { buildBlocker, deliveredAllowed, spawnStructure } from './spawn';
+import { buildBlocker, deliveredAllowed, spawnRuin, spawnStructure } from './spawn';
 import { Salvage } from './components';
 import { registerConstructionViews } from './views';
 
@@ -33,6 +43,11 @@ export interface ConstructionOptions {
   segmentParts?: readonly RoadSegmentPartsFn[];
   // Injected health readout (combat wires it); default full.
   healthBp?: (ctx: SystemContext, id: number) => number;
+  // Injected ruin parts (capture progress); default none.
+  ruinParts?: readonly RuinPartsFn[];
+  // Injected observer visibility filter for the structures channel
+  // (vision wires it); default all-visible.
+  visible?: VisibilityQuery;
   starts?: readonly FactionStart[];
 }
 
@@ -63,6 +78,7 @@ export function createConstructionModule(
         projects: new Map(),
         nextProjectId: 1,
         segmentParts: options.segmentParts ?? [],
+        ruinParts: options.ruinParts ?? [],
       };
 
       // Per-tick bookkeeping: commands run before systems in the command
@@ -224,16 +240,55 @@ export function createConstructionModule(
               continue;
             }
             const kind = db.structures.byIndex(st.kind[id] ?? 0);
-            if (kind !== undefined) {
-              setFootprintBlocked(env, kind, st.x[id] ?? 0, st.y[id] ?? 0, false);
+            if (kind === undefined) {
+              continue;
             }
+            // Capture structures (outposts) collapse into ruins: the
+            // footprint stays blocked and ownership resets to nobody.
+            if (kind.capture !== undefined) {
+              spawnRuin(env, ctx, kind, st.x[id] ?? 0, st.y[id] ?? 0);
+              continue;
+            }
+            setFootprintBlocked(env, kind, st.x[id] ?? 0, st.y[id] ?? 0, false);
+          }
+        },
+      });
+
+      // A completed capture despawns the ruin and replaces it with a
+      // fresh site for the captor (capture never rewrites Faction).
+      builder.system({
+        id: 'frontline_td:construction.capture_rebuild',
+        phase: 'construction',
+        reads: [CaptureCompleted],
+        run(ctx) {
+          const st = ctx.read(Structure);
+          for (const p of ctx.read(CaptureCompleted)) {
+            const id = ctx.resolve(p.ruin as EntityHandle);
+            if (id === null || !ctx.has(Ruin, id)) {
+              continue;
+            }
+            const kind = db.structures.byIndex(p.kind);
+            if (kind === undefined || kind.capture === undefined) {
+              continue;
+            }
+            ctx.despawn(ctx.handleOf(id) as EntityHandle);
+            spawnStructure(
+              env,
+              ctx,
+              p.faction as FactionId,
+              kind,
+              st.x[id] ?? 0,
+              st.y[id] ?? 0,
+              'site',
+              kind.capture.rebuildTicks,
+            );
           }
         },
       });
 
       registerConstructionCommands(builder, env, db);
       registerRoads(builder, env, db, options.healthBp);
-      registerConstructionViews(builder, env, db, options.healthBp);
+      registerConstructionViews(builder, env, db, options.healthBp, options.visible);
     },
   };
 }

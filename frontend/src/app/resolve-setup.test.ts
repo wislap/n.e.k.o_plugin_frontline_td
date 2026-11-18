@@ -43,6 +43,10 @@ describe('createSimModules', () => {
       'frontline_td:combat',
       // Squads read combat's public queries; installed after combat.
       'frontline_td:squads',
+      // Capture tug-of-war runs in the capture_fog phase.
+      'frontline_td:capture',
+      // Vision recompute registers after capture inside capture_fog.
+      'frontline_td:vision',
     ]);
     expect(RNG_STREAMS.map((s) => s.id)).toContain(CONTROLLER_STREAM_ID);
   });

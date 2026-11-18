@@ -6,6 +6,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { terrainY } from '../../../render/world';
+import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
+import { isCellVisible } from '../../vision/rules/index';
 import { BEAM_LIFE_MS, collectBeams, type Beam } from './beams';
 
 const MAX_BEAMS = 256;
@@ -39,7 +41,19 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
     if (latest !== null) {
       const collected = collectBeams(latest.events, latest.tick, lastTick.current, now);
       lastTick.current = collected.tick;
-      active.current.push(...collected.beams);
+      // Fog: events are all-visible on the wire; hide a shot only when
+      // neither endpoint's cell is visible to the observer.
+      const fog = latest.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
+        ArrayLike<number> | undefined;
+      for (const beam of collected.beams) {
+        if (
+          fog === undefined ||
+          isCellVisible(fog, mapWidth, beam.x0, beam.y0) ||
+          isCellVisible(fog, mapWidth, beam.x1, beam.y1)
+        ) {
+          active.current.push(beam);
+        }
+      }
       if (active.current.length > MAX_BEAMS) {
         active.current.splice(0, active.current.length - MAX_BEAMS);
       }

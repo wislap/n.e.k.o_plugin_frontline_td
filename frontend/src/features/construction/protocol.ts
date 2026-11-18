@@ -103,7 +103,15 @@ export const STATE_WAITING = 1;
 export const STATE_SITE = 2;
 export const STATE_OPERATIONAL = 3;
 export const STATE_DEMOLISHING = 4;
-export const STATE_NAMES = ['blueprint', 'waiting', 'site', 'operational', 'demolishing'] as const;
+export const STATE_RUIN = 5;
+export const STATE_NAMES = [
+  'blueprint',
+  'waiting',
+  'site',
+  'operational',
+  'demolishing',
+  'ruin',
+] as const;
 
 export interface ConstructionStructures {
   handles: Float64Array;

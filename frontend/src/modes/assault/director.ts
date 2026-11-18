@@ -1,21 +1,25 @@
 // Assault director controller: deterministic, no RNG. Decides every 20
 // ticks from its own snapshot. Cycle: first gather at 90 s; gather
 // window 60 s (+10 s per completed wave, max 120 s); the wave launches
-// on the nearest hostile structure to the rally point; breather 45 s
-// after the wave squad dies or 150 s after launch. Strengths steer the
-// generic squads reinforcement: the gather squad's strength is the wave
-// cap so hive spawns flow into it; at launch the strength is pinned to
-// the live member count so later spawns wait for the next gather.
-// Raiders are reassigned to a raider squad that raids hostile logistics
-// nodes. Squads are identified by opaque tags — 'hive_guard', 'raid',
-// 'wave:<n>' — never by heuristics. All mutable state lives in
-// save()/load() so save/restore mid-match stays deterministic.
+// on the nearest capture ruin or hostile-held outpost to the rally
+// point (nearest hostile structure otherwise); breather 45 s after the
+// wave squad dies or 150 s after launch. Garrison squads tagged
+// 'garrison:<x>,<y>' (footprint top-left, stable across rebuilds) hold
+// monsters within 8 cells of each own operational outpost and are
+// recreated when destroyed; the remaining monsters form 'hive_guard'
+// guarding the hive centre. Strengths steer the generic squads
+// reinforcement: the gather squad's strength is the wave cap so hive
+// spawns flow into it; at launch the strength is pinned to the live
+// member count so later spawns wait for the next gather. Raiders are
+// reassigned to a raider squad that raids hostile logistics nodes.
+// Squads are identified by opaque tags — 'hive_guard', 'raid',
+// 'garrison:<x>,<y>', 'wave:<n>' — never by heuristics. All mutable
+// state lives in save()/load() so save/restore mid-match stays
+// deterministic.
 import { TICKS_PER_SECOND } from '../../core/index';
 import type { ContentDb } from '../../content/index';
 import type { FactionId } from '../../core/index';
-import { StructuresChannel } from '../../features/construction/protocol';
-import type { ConstructionStructures } from '../../features/construction/protocol';
-import { STATE_OPERATIONAL } from '../../features/construction/protocol';
+import { garrisonTag, nearest, scanStructures } from './director-scan';
 import { DenseUnitsChannel } from '../../features/units/protocol';
 import type { DenseUnits } from '../../features/units/protocol';
 import { SquadsChannel } from '../../features/squads/protocol';
@@ -40,6 +44,10 @@ const WAVE_CAP_BASE = 8;
 const WAVE_CAP_STEP = 4;
 const WAVE_CAP_MAX = 40;
 const GUARD_RADIUS = 10;
+const GARRISON_STRENGTH = 6;
+const GARRISON_RADIUS = 6;
+// Initial garrison formation range from the outpost centre (cells).
+const GARRISON_RANGE_SQ = 8 * 8;
 
 const GUARD_TAG = 'hive_guard';
 const RAID_TAG = 'raid';
@@ -71,12 +79,18 @@ export function createDirectorController(options: DirectorOptions): Controller {
     return `wave:${wavesDone + 1}`;
   }
 
+  interface UnitRow {
+    handle: number;
+    x: number;
+    y: number;
+  }
+
   function ownUnits(snapshot: { channels: Record<string, unknown> }): {
-    monsters: number[];
-    raiders: number[];
+    monsters: UnitRow[];
+    raiders: UnitRow[];
   } {
     const dense = snapshot.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
-    const out = { monsters: [] as number[], raiders: [] as number[] };
+    const out = { monsters: [] as UnitRow[], raiders: [] as UnitRow[] };
     if (dense === undefined) {
       return out;
     }
@@ -84,11 +98,11 @@ export function createDirectorController(options: DirectorOptions): Controller {
       if (dense.faction[i] !== Number(faction)) {
         continue;
       }
-      const handle = dense.handles[i] ?? 0;
+      const row = { handle: dense.handles[i] ?? 0, x: dense.x[i] ?? 0, y: dense.y[i] ?? 0 };
       if (raiderKinds.has(dense.kind[i] ?? -1)) {
-        out.raiders.push(handle);
+        out.raiders.push(row);
       } else {
-        out.monsters.push(handle);
+        out.monsters.push(row);
       }
     }
     return out;
@@ -97,56 +111,6 @@ export function createDirectorController(options: DirectorOptions): Controller {
   function ownSquads(snapshot: { channels: Record<string, unknown> }): SquadView[] {
     const snap = snapshot.channels[SquadsChannel.id] as { squads: SquadView[] } | undefined;
     return (snap?.squads ?? []).filter((s) => s.faction === Number(faction));
-  }
-
-  function hostileStructures(snapshot: { channels: Record<string, unknown> }): {
-    all: { handle: number; x: number; y: number }[];
-    nodes: { handle: number; x: number; y: number }[];
-  } {
-    const st = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-    const all: { handle: number; x: number; y: number }[] = [];
-    const nodes: { handle: number; x: number; y: number }[] = [];
-    if (st === undefined) {
-      return { all, nodes };
-    }
-    for (let i = 0; i < st.handles.length; i++) {
-      if (!hostile.has(st.faction[i] ?? -1)) {
-        continue;
-      }
-      const kind = st.kind[i] ?? -1;
-      const def = db.structures.list[kind];
-      const cx = (st.x[i] ?? 0) + (def?.footprint.w ?? 1) / 2;
-      const cy = (st.y[i] ?? 0) + (def?.footprint.h ?? 1) / 2;
-      const entry = { handle: st.handles[i] ?? 0, x: cx, y: cy };
-      all.push(entry);
-      if (
-        nodeKinds.has(kind) &&
-        (st.state[i] ?? -1) === STATE_OPERATIONAL &&
-        def?.node !== undefined &&
-        !def.node.warehouse
-      ) {
-        nodes.push(entry);
-      }
-    }
-    return { all, nodes };
-  }
-
-  function nearest<T extends { x: number; y: number; handle: number }>(
-    from: { x: number; y: number },
-    list: readonly T[],
-  ): T | null {
-    let best: T | null = null;
-    let bestD = Infinity;
-    for (const e of list) {
-      const dx = e.x - from.x;
-      const dy = e.y - from.y;
-      const d = dx * dx + dy * dy;
-      if (d < bestD || (d === bestD && best !== null && e.handle < best.handle)) {
-        bestD = d;
-        best = e;
-      }
-    }
-    return best;
   }
 
   return {
@@ -195,23 +159,51 @@ export function createDirectorController(options: DirectorOptions): Controller {
       const guard = byTag.get(GUARD_TAG);
       const raid = byTag.get(RAID_TAG);
       const wave = byTag.get(waveTag());
-      const { all: hostileAll, nodes } = hostileStructures(input.snapshot);
+      const { hostileAll, nodes, retake, ownOutposts, ownCore } = scanStructures(
+        input.snapshot,
+        db,
+        Number(faction),
+        hostile,
+        nodeKinds,
+      );
 
       if (phase === 'init') {
         if (units.monsters.length === 0 && units.raiders.length === 0) {
           return;
         }
-        // Initial monsters guard the hive; raiders form the raider squad.
-        if (units.monsters.length > 0) {
+        // Initial split: monsters within 8 cells of an own operational
+        // outpost form its garrison; the rest guard the hive centre.
+        const claimed = new Set<number>();
+        for (const op of ownOutposts) {
+          const members = units.monsters
+            .filter(
+              (m) =>
+                !claimed.has(m.handle) &&
+                (m.x - op.cx) * (m.x - op.cx) + (m.y - op.cy) * (m.y - op.cy) <= GARRISON_RANGE_SQ,
+            )
+            .map((m) => m.handle);
+          for (const h of members) {
+            claimed.add(h);
+          }
+          if (members.length > 0) {
+            input.issue(SquadsCreate.type, {
+              units: members,
+              strength: GARRISON_STRENGTH,
+              tag: garrisonTag(op.x, op.y),
+            });
+          }
+        }
+        const rest = units.monsters.filter((m) => !claimed.has(m.handle));
+        if (rest.length > 0) {
           input.issue(SquadsCreate.type, {
-            units: units.monsters,
-            strength: units.monsters.length,
+            units: rest.map((m) => m.handle),
+            strength: rest.length,
             tag: GUARD_TAG,
           });
         }
         if (units.raiders.length > 0) {
           input.issue(SquadsCreate.type, {
-            units: units.raiders,
+            units: units.raiders.map((r) => r.handle),
             strength: units.raiders.length,
             tag: RAID_TAG,
           });
@@ -220,15 +212,45 @@ export function createDirectorController(options: DirectorOptions): Controller {
         return;
       }
 
-      // Guard squad: guard the hive position (its centroid) once.
+      // Guard squad: guard the hive centre once.
       if (guard !== undefined && guard.order.kind === 'idle') {
         input.issue(SquadsOrder.type, {
           squad: guard.id,
           kind: 'guard',
-          x: guard.centroid.x,
-          y: guard.centroid.y,
+          x: ownCore?.x ?? guard.centroid.x,
+          y: ownCore?.y ?? guard.centroid.y,
           radius: GUARD_RADIUS,
         });
+      }
+
+      // Garrisons: every own operational outpost gets its squad from the
+      // unassigned non-raider pool (refill then happens through generic
+      // reinforcement). Garrisons of fallen outposts are left alone —
+      // they keep guarding and contest the ruin by presence.
+      const assigned = new Set(squads.flatMap((s) => s.members ?? []));
+      for (const op of ownOutposts) {
+        const g = byTag.get(garrisonTag(op.x, op.y));
+        if (g === undefined) {
+          const pool = units.monsters.filter((m) => !assigned.has(m.handle)).map((m) => m.handle);
+          if (pool.length > 0) {
+            input.issue(SquadsCreate.type, {
+              units: pool,
+              strength: GARRISON_STRENGTH,
+              tag: garrisonTag(op.x, op.y),
+            });
+            for (const h of pool) {
+              assigned.add(h);
+            }
+          }
+        } else if (g.order.kind === 'idle') {
+          input.issue(SquadsOrder.type, {
+            squad: g.id,
+            kind: 'guard',
+            x: op.cx,
+            y: op.cy,
+            radius: GARRISON_RADIUS,
+          });
+        }
       }
 
       // Raider squad: advance on the nearest hostile non-warehouse
@@ -254,7 +276,8 @@ export function createDirectorController(options: DirectorOptions): Controller {
         // Pull newly spawned raiders out of the wave squad so raid
         // reinforcement can keep it filled instead.
         if (wave !== undefined) {
-          const stray = (wave.members ?? []).filter((h) => units.raiders.includes(h));
+          const raiderHandles = new Set(units.raiders.map((r) => r.handle));
+          const stray = (wave.members ?? []).filter((h) => raiderHandles.has(h));
           if (stray.length > 0) {
             input.issue(SquadsAssign.type, { squad: raid.id, units: stray });
             input.issue(SquadsSetStrength.type, {
@@ -272,8 +295,7 @@ export function createDirectorController(options: DirectorOptions): Controller {
         if (wave === undefined) {
           // Create the wave squad from unassigned non-raider monsters;
           // strength = wave cap so new spawns auto-fill it.
-          const assigned = new Set(squads.flatMap((s) => s.members ?? []));
-          const pool = units.monsters.filter((h) => !assigned.has(h));
+          const pool = units.monsters.filter((m) => !assigned.has(m.handle)).map((m) => m.handle);
           if (pool.length === 0) {
             return;
           }
@@ -289,7 +311,9 @@ export function createDirectorController(options: DirectorOptions): Controller {
           // The window runs from the gather's start tick, not the decide
           // tick the squad id resolved on.
           launchTick = gatherStart + window;
-          const target = nearest(rally, hostileAll) ?? rally;
+          // Retake first: nearest capture ruin or hostile-held outpost;
+          // otherwise the nearest hostile structure as before.
+          const target = nearest(rally, retake) ?? nearest(rally, hostileAll) ?? rally;
           input.issue(SquadsGather.type, {
             squad: wave.id,
             x: rally.x,

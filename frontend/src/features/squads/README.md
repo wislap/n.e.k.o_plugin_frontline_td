@@ -27,8 +27,14 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   guard（半径 6）。
 - 交战拆分：武器射程内有敌的成员停火站桩（StopIntent），其余
   继续压上（MoveIntent）。
-- 补给：成员均带电池且平均能量 < 3000 bp 时撤向最近的己方覆盖
-  格（物流 `covered`），≥ 8000 bp 后返回原命令。
+- 补给：`sim/energy.ts` 的 `meanEnergyBp`（跳过无 `CargoStore`
+  的成员——id 会被回收，ADR 0040）算出平均能量 < 3000 bp 时
+  撤向最近的己方覆盖格（物流 `covered`），≥ 8000 bp 后返回原
+  命令；全员无电池返回 null，永不进 resupplying。
+- 集结发射不可被补给阻塞：到 `launchTick` 先转 advance 并发
+  `SquadsLaunched`（ADR 0040）。
+- 敌方小队通道视图接受注入的 `VisibilityQuery`：质心格可见、
+  或指令为集结/溃退推进时才出现（威胁情报保留，ADR 0039）。
 - 增援：`units.spawned` 的新单位补进缺口最大
   （strength − 成员数）的小队，平局取最小 id。
 - 集结（gather）：先走到集结点待命，到 launchTick 转为向目标

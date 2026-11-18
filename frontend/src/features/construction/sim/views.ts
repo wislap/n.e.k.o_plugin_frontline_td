@@ -2,9 +2,9 @@
 // faction-private: they only appear in the owner's channel and can
 // only be inspected by the owner.
 import type { ContentDb } from '../../../content/index';
-import type { EntityId, Serializable } from '../../../core/index';
+import type { EntityId, FactionId, Serializable } from '../../../core/index';
 import { floorDiv } from '../../../core/index';
-import type { SimBuilder, SystemContext } from '../../../kernel/index';
+import type { SimBuilder, SystemContext, VisibilityQuery } from '../../../kernel/index';
 import { Faction, InWorld } from '../../../kernel/index';
 import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import { SLOT_SITE } from '../../logistics/protocol';
@@ -17,16 +17,22 @@ import {
   STATE_NAMES,
   STATE_OPERATIONAL,
   STATE_SITE,
+  STATE_RUIN,
   STATE_WAITING,
 } from '../protocol';
 import type { ConstructionSalvage, ConstructionStructures } from '../protocol';
-import { Blueprint, Construction, MODE_DEMOLISH, Salvage, Structure } from './components';
+import { Blueprint, Construction, MODE_DEMOLISH, Ruin, Salvage, Structure } from './components';
 import type { ConstructionEnv } from './env';
 import { buildBlocker } from './spawn';
 
 // Structures-channel state for a Structure entity (blueprints have
 // their own rows).
-function structureState(ctx: SystemContext, id: number): number {
+// Public state mapping shared with vision's memory channel (single
+// implementation; exported via sim/index).
+export function structureStateOf(ctx: SystemContext, id: number): number {
+  if (ctx.has(Ruin, id as EntityId)) {
+    return STATE_RUIN;
+  }
   if (ctx.has(Construction, id as EntityId)) {
     return (ctx.read(Construction).mode[id] ?? 0) === MODE_DEMOLISH
       ? STATE_DEMOLISHING
@@ -35,14 +41,38 @@ function structureState(ctx: SystemContext, id: number): number {
   return STATE_OPERATIONAL;
 }
 
+// Any-cell check over an integer footprint rect.
+function visibleRect(
+  visible: VisibilityQuery,
+  ctx: SystemContext,
+  observer: FactionId,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): boolean {
+  for (let cy = y; cy < y + h; cy++) {
+    for (let cx = x; cx < x + w; cx++) {
+      if (visible(ctx, observer, cx, cy)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function registerConstructionViews(
   builder: SimBuilder,
   env: ConstructionEnv,
   db: ContentDb,
   // Injected health readout (combat wires it); default full.
   healthBp?: (ctx: SystemContext, id: number) => number,
+  // Injected observer visibility (vision wires it); default all-visible.
+  visible?: VisibilityQuery,
 ): void {
-  // Snapshot: all structures + own blueprints only.
+  // Snapshot: own structures + own blueprints always; non-own
+  // structures only while any footprint cell is visible to the
+  // observer (fog memory covers the rest).
   builder.snapshotChannel(StructuresChannel, (ctx, observer) => {
     const fac = ctx.read(Faction);
     const bp = ctx.read(Blueprint);
@@ -61,12 +91,22 @@ export function registerConstructionViews(
       }
     }
     for (const id of ctx.query([Structure, InWorld])) {
+      if ((fac.id[id] ?? -1) !== observer && visible !== undefined) {
+        const kind = db.structures.byIndex(st.kind[id] ?? -1);
+        const fp = kind?.footprint;
+        const seen =
+          fp !== undefined &&
+          visibleRect(visible, ctx, observer, st.x[id] ?? 0, st.y[id] ?? 0, fp.w, fp.h);
+        if (!seen) {
+          continue;
+        }
+      }
       rows.push({
         id,
         kind: st.kind[id] ?? 0,
         x: st.x[id] ?? 0,
         y: st.y[id] ?? 0,
-        state: structureState(ctx, id),
+        state: structureStateOf(ctx, id),
       });
     }
     rows.sort((a, b) => a.id - b.id);
@@ -90,22 +130,26 @@ export function registerConstructionViews(
       out.state[i] = r.state;
       const total = cons.total[r.id] ?? 0;
       out.progressBp[i] =
-        r.state === STATE_OPERATIONAL || total <= 0
-          ? 10000
-          : r.state === STATE_BLUEPRINT || r.state === STATE_WAITING
-            ? 0
+        r.state === STATE_BLUEPRINT || r.state === STATE_WAITING || r.state === STATE_RUIN
+          ? 0
+          : r.state === STATE_OPERATIONAL || total <= 0
+            ? 10000
             : Math.min(10000, floorDiv((cons.progress[r.id] ?? 0) * 10000, total));
       out.hpBp[i] =
-        r.state === STATE_BLUEPRINT || r.state === STATE_WAITING
-          ? 10000
-          : (healthBp?.(ctx, r.id) ?? 10000);
+        r.state === STATE_RUIN
+          ? 0
+          : r.state === STATE_BLUEPRINT || r.state === STATE_WAITING
+            ? 10000
+            : (healthBp?.(ctx, r.id) ?? 10000);
     });
     return out;
   });
 
-  builder.snapshotChannel(SalvageChannel, (ctx) => {
+  // Salvage piles are owner-only intel (M5 fog).
+  builder.snapshotChannel(SalvageChannel, (ctx, observer) => {
     const pos = ctx.read(Position);
-    const ids = ctx.query([Salvage, InWorld]);
+    const fac = ctx.read(Faction);
+    const ids = ctx.query([Salvage, InWorld]).filter((id) => (fac.id[id] ?? -1) === observer);
     const out: ConstructionSalvage = {
       handles: new Float64Array(ids.length),
       x: new Float32Array(ids.length),
@@ -151,7 +195,7 @@ export function registerConstructionViews(
       return null;
     }
     const kind = db.structures.byIndex(st.kind[id] ?? 0);
-    const state = structureState(ctx, id);
+    const state = structureStateOf(ctx, id);
     const section: Record<string, unknown> = {
       state: STATE_NAMES[state],
       kind: kind?.id ?? 'unknown',

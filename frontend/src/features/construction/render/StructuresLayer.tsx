@@ -15,6 +15,7 @@ import {
   StructuresChannel,
   STATE_BLUEPRINT,
   STATE_DEMOLISHING,
+  STATE_RUIN,
   STATE_SITE,
   STATE_WAITING,
   type ConstructionSalvage,
@@ -30,12 +31,17 @@ const KIND_HEIGHT: Record<string, number> = {
   'frontline_td:power_plant': 1.4,
   'frontline_td:ammo_factory': 1.3,
   'frontline_td:turret': 1.2,
+  'frontline_td:outpost': 1.5,
 };
 const DEFAULT_HEIGHT = 1.0;
 const SALVAGE_SIZE = 0.3;
 const SALVAGE_COLOR = '#8a6a3f';
 const SITE_DARKEN = 0.45;
 const DEMOLISH_DARKEN = 0.4;
+// Outposts read as squat fortified pads; ruins are faction-neutral rubble.
+const OUTPOST_TINT = 0.8;
+const RUIN_COLOR = '#3a3430';
+const RUIN_HEIGHT = 0.3;
 
 export function structureKindHeight(db: ContentDb, kindIndex: number): number {
   const id = db.structures.byIndex(kindIndex)?.id ?? '';
@@ -122,16 +128,28 @@ export function StructuresLayer({
           bi += 1;
           continue;
         }
-        const heightScale = state === STATE_SITE ? Math.max(0.15, progress) : 1;
+        const heightScale =
+          state === STATE_RUIN
+            ? RUIN_HEIGHT / full
+            : state === STATE_SITE
+              ? Math.max(0.15, progress)
+              : 1;
         dummy.position.set(cx, groundY + (full * heightScale) / 2, cy);
         dummy.scale.set(w * 0.9, full * heightScale, h * 0.9);
         dummy.updateMatrix();
         solid.setMatrixAt(si, dummy.matrix);
-        color.set(factionColorHex(channel.faction[i] ?? 0, localFaction));
-        if (state === STATE_SITE) {
-          color.multiplyScalar(SITE_DARKEN + progress * (1 - SITE_DARKEN));
-        } else if (state === STATE_DEMOLISHING) {
-          color.multiplyScalar(DEMOLISH_DARKEN);
+        if (state === STATE_RUIN) {
+          color.set(RUIN_COLOR);
+        } else {
+          color.set(factionColorHex(channel.faction[i] ?? 0, localFaction));
+          if (kind.capture !== undefined) {
+            color.multiplyScalar(OUTPOST_TINT);
+          }
+          if (state === STATE_SITE) {
+            color.multiplyScalar(SITE_DARKEN + progress * (1 - SITE_DARKEN));
+          } else if (state === STATE_DEMOLISHING) {
+            color.multiplyScalar(DEMOLISH_DARKEN);
+          }
         }
         solid.setColorAt(si, color);
         si += 1;

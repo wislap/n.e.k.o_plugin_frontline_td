@@ -55,7 +55,9 @@
     "ammo_factory": "Ammo Factory",
     "turret": "Turret",
     "robot_factory": "Robot Factory",
-    "hive": "Hive"
+    "outpost": "Outpost",
+    "hive": "Hive",
+    "outpost_ruin": "Ruined Outpost"
   },
   "unit": {
     "robot": "Robot",
@@ -84,6 +86,7 @@
     "reserved": "reserved by a blueprint",
     "needs_deposit": "requires an ore deposit",
     "not_covered": "outside service coverage",
+    "hostile_zone": "inside a hostile exclusion zone",
     "not_connected": "no network node in reach",
     "no_stock": "warehouse out of stock",
     "disconnected": "not linked to the network",
@@ -111,7 +114,8 @@
     "waiting": "waiting",
     "site": "under construction",
     "operational": "operational",
-    "demolishing": "demolishing"
+    "demolishing": "demolishing",
+    "ruin": "ruin"
   },
   "prod": {
     "ready": "ready",
@@ -176,5 +180,8 @@
       "ammo": "Ammo stock: {{count}}"
     },
     "restart": "Play again"
+  },
+  "capture": {
+    "contested": "contested"
   }
 }

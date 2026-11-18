@@ -4,6 +4,7 @@ import { useBuildStore } from '../client/build-store';
 import { useCameraStore } from '../client/camera-store';
 import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
+import { makeIsHostile } from '../client/hostility';
 import { createSimClient } from '../client/sim-client';
 import { useUiStore } from '../client/ui-store';
 import { loadContent } from '../content/index';
@@ -36,6 +37,10 @@ const worker = new Worker(new URL('./sim-worker.ts', import.meta.url), { type: '
 const client = createSimClient(worker);
 const setup = defaultSetup(Date.now() >>> 0);
 client.start(setup);
+// Hostility for fog-aware client code (ghost previews, exclusion
+// circles) comes from the same relations the sim resolves — the restart
+// path rebuilds the setup but relations stay constant per mode.
+const isHostile = makeIsHostile(setup.relations);
 
 const db = loadContent();
 const map = db.maps.byId(proto01.id);
@@ -167,5 +172,12 @@ const restart = (): void => {
 };
 
 createRoot(container).render(
-  <App client={client} db={db} map={map} panTracker={panTracker} onRestart={restart} />,
+  <App
+    client={client}
+    db={db}
+    map={map}
+    panTracker={panTracker}
+    onRestart={restart}
+    isHostile={isHostile}
+  />,
 );

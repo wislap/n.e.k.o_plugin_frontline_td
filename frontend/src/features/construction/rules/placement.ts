@@ -29,6 +29,9 @@ export interface PlacementView {
   // Surface deposit cargo index at the cell, -1 when none (batch C).
   depositAt(x: number, y: number): number;
   connects(rule: PlacementRule, x: number, y: number): boolean;
+  // Footprint centre inside a hostile operational structure's exclusion
+  // radius (outpost 12, hive 16). Evaluated on the centre cell only.
+  excluded(x: number, y: number): boolean;
 }
 
 export const FOOTPRINT_CODES = [
@@ -42,7 +45,7 @@ export const FOOTPRINT_CODES = [
 ] as const;
 export type FootprintCode = (typeof FOOTPRINT_CODES)[number];
 
-export const RANGE_CODES = ['ok', 'not_covered', 'not_connected'] as const;
+export const RANGE_CODES = ['ok', 'hostile_zone', 'not_covered', 'not_connected'] as const;
 export type RangeCode = (typeof RANGE_CODES)[number];
 
 // One pass per check category so the reason precedence is the code
@@ -95,10 +98,15 @@ export function checkRange(
   y: number,
   view: PlacementView,
 ): RangeCode {
+  const cx = x + Math.floor(rule.w / 2);
+  const cy = y + Math.floor(rule.h / 2);
+  // Hostile exclusion zones deny construction before coverage and
+  // connection checks.
+  if (view.excluded(cx, cy)) {
+    return 'hostile_zone';
+  }
   if (rule.node) {
     return view.connects(rule, x, y) ? 'ok' : 'not_connected';
   }
-  const cx = x + Math.floor(rule.w / 2);
-  const cy = y + Math.floor(rule.h / 2);
   return view.covered(cx, cy) ? 'ok' : 'not_covered';
 }

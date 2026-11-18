@@ -2,9 +2,11 @@
 // writers and the serialized per-faction blueprint reservation map
 // (cell -> blueprint entity id + 1, so 0 can mean "no reservation").
 import type { ContentDb, ResolvedStructure } from '../../../content/index';
-import type { FactionId, Serializable } from '../../../core/index';
+import type { EntityId, FactionId, Serializable } from '../../../core/index';
 import type { ComponentWriter, SpawnInit, SystemContext } from '../../../kernel/index';
+import { Faction, InWorld, UnderConstruction } from '../../../kernel/index';
 import type { TerrainApi } from '../../terrain/sim/index';
+import { Structure } from './components';
 import type { RoadSegmentDesc } from '../protocol';
 import type { PlacementRule, PlacementView } from '../rules/index';
 
@@ -21,6 +23,11 @@ export type StructurePartsFn = (
 // Injected road-segment spawn parts (logistics site slots + FixedAttach,
 // combat Health + Targetable); same pattern as structureParts.
 export type RoadSegmentPartsFn = (desc: RoadSegmentDesc, tick: number) => SpawnInit;
+
+// Injected ruin spawn parts (capture contributes its progress
+// component); ruins are spawned by construction on capture-structure
+// death and carry no Faction.
+export type RuinPartsFn = (kind: ResolvedStructure, x: number, y: number) => SpawnInit;
 
 // The upgrade query result logistics hands back (structural mirror of
 // its public LinkPath).
@@ -100,6 +107,7 @@ export interface ConstructionEnv {
   projects: Map<number, RoadProject>;
   nextProjectId: number;
   segmentParts: readonly RoadSegmentPartsFn[];
+  ruinParts: readonly RuinPartsFn[];
 }
 
 export function placementRule(kind: ResolvedStructure): PlacementRule {
@@ -138,7 +146,44 @@ export function placementView(
     depositAt: (x, y) => terrain.depositAt(x, y),
     connects: (rule, x, y) =>
       env.logistics.connectsToNetwork(ctx, faction, { x, y, w: rule.w, h: rule.h }, rule.connect),
+    excluded: (x, y) => hostileExclusionHit(env, ctx, faction, x, y),
   };
+}
+
+// Is the cell inside a hostile operational structure's exclusion
+// radius? Non-node distance check at the placed footprint centre;
+// friendly structures and ruins (no Faction) never exclude.
+function hostileExclusionHit(
+  env: ConstructionEnv,
+  ctx: SystemContext,
+  faction: FactionId,
+  x: number,
+  y: number,
+): boolean {
+  const st = ctx.read(Structure);
+  const fac = ctx.read(Faction);
+  for (const id of ctx.query([Structure, Faction, InWorld])) {
+    if (ctx.has(UnderConstruction, id as EntityId)) {
+      continue;
+    }
+    const other = fac.id[id] ?? 0;
+    if (!ctx.isHostile(faction, other as FactionId)) {
+      continue;
+    }
+    const kind = env.db.structures.byIndex(st.kind[id] ?? 0);
+    const r = kind?.exclusion;
+    if (kind === undefined || r === undefined) {
+      continue;
+    }
+    const cx = (st.x[id] ?? 0) + kind.footprint.w / 2;
+    const cy = (st.y[id] ?? 0) + kind.footprint.h / 2;
+    const dx = x + 0.5 - cx;
+    const dy = y + 0.5 - cy;
+    if (dx * dx + dy * dy <= r * r) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function footprintCells(

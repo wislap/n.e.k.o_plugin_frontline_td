@@ -12,7 +12,9 @@ import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import { BeamsLayer } from '../features/combat/render/index';
+import { CaptureLayer } from '../features/capture/render/index';
 import {
+  ExclusionLayer,
   GhostPreview,
   RoadWorksLayer,
   roadWorksHpItems,
@@ -26,6 +28,7 @@ import { TerrainMesh } from '../features/terrain/render/index';
 import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
 import { ThreatsLayer } from '../features/squads/render/index';
+import { FogLayer, MemoryLayer } from '../features/vision/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
@@ -44,6 +47,8 @@ export interface GameCanvasProps {
   db: ContentDb;
   map: ResolvedMap;
   panTracker: PanTracker;
+  // Hostility from the match relations (observer, faction) → bool.
+  isHostile: (observer: number, faction: number) => boolean;
 }
 
 // Damaged-unit bars from the dense units channel.
@@ -178,7 +183,7 @@ function MoveMarker({
   );
 }
 
-export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
+export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanvasProps) {
   // Wait for the first snapshot (terrain layers + observer) before
   // mounting the scene content.
   const [ready, setReady] = useState(false);
@@ -266,7 +271,34 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               mapHeight={grid.height}
               collect={roadWorksHpItems}
             />
-            <GhostPreview client={client} db={db} map={map} heights={heights} />
+            <GhostPreview
+              client={client}
+              db={db}
+              map={map}
+              heights={heights}
+              isHostile={isHostile}
+            />
+            <ExclusionLayer
+              client={client}
+              db={db}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+              isHostile={isHostile}
+            />
+            <MemoryLayer
+              client={client}
+              db={db}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+            />
+            <CaptureLayer
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+            />
             <BeamsLayer
               client={client}
               heights={heights}
@@ -274,6 +306,12 @@ export function GameCanvas({ client, db, map, panTracker }: GameCanvasProps) {
               mapHeight={grid.height}
             />
             <MoveMarker heights={heights} mapWidth={grid.width} mapHeight={grid.height} />
+            <FogLayer
+              client={client}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+            />
             <InputBridge
               client={client}
               db={db}

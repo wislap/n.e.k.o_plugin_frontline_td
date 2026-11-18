@@ -25,4 +25,8 @@ export const structureBaseFields = {
   build: s.optional(buildProfileSchema),
   // Required surface deposit (cargo id) under the footprint; miners only.
   requiresDeposit: s.optional(s.contentId()),
+  // Hostile factions cannot build within this many cells of the
+  // footprint centre while the structure is operational (outposts,
+  // hive). Radius in cells.
+  exclusion: s.optional(s.int({ min: 1, max: 64 })),
 };

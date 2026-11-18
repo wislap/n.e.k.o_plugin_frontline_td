@@ -32,7 +32,15 @@ function validUnits(
   const ids: number[] = [];
   for (const h of handles) {
     const id = ctx.resolve(h as EntityHandle);
-    if (id === null || (fac.id[id] ?? 0) !== issuer || (mover.speed[id] ?? 0) <= 0) {
+    // Ids recycle: check component ownership before reading the dense
+    // arrays so a stale Mover/Faction slot can't admit a non-mover.
+    if (
+      id === null ||
+      !ctx.has(Faction, id) ||
+      !ctx.has(Mover, id) ||
+      (fac.id[id] ?? 0) !== issuer ||
+      (mover.speed[id] ?? 0) <= 0
+    ) {
       return null;
     }
     ids.push(id);

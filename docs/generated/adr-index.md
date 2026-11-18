@@ -16,6 +16,7 @@
 | [0032](../adr/0032-host-display-autopause.md) | 宿主显示模式与自动暂停 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0033](../adr/0033-design-checklist-referenced-items.md) | 《设计决策清单 v2》被引用条目 | 已采纳 | wislap | M3 跨模块参考实现 | 2026-11-17 |
 | [0037](../adr/0037-eval-bots-balance-runner.md) | 策略机器人与对拍 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0040](../adr/0040-entity-id-reuse-component-reads.md) | 实体 ID 复用与组件数组读取 | 已采纳 | wislap | M5 | 2026-11-18 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -40,6 +41,8 @@
 | [0034](../adr/0034-squads.md) | 小队 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0038](../adr/0038-outposts-ruins-capture-exclusion.md) | 据点、废墟、占领与禁建区 | 已采纳 | wislap | M5 | 2026-11-18 |
+| [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | wislap | M5 | 2026-11-18 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 决策者 | 批次 | 日期 |
@@ -131,3 +134,8 @@
 - [0035 攻占模式、导演与胜负](../adr/0035-assault-mode-director-victory.md)
 - [0036 控制者状态与存档](../adr/0036-controller-state-save-load.md)
 - [0037 策略机器人与对拍](../adr/0037-eval-bots-balance-runner.md)
+
+### M5（2026-11-18）
+- [0038 据点、废墟、占领与禁建区](../adr/0038-outposts-ruins-capture-exclusion.md)
+- [0039 视野与战争迷雾](../adr/0039-vision-fog-of-war.md)
+- [0040 实体 ID 复用与组件数组读取](../adr/0040-entity-id-reuse-component-reads.md)

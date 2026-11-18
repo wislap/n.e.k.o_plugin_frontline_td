@@ -16,6 +16,8 @@ const factionSchema = s.object({
   id: s.factionId(),
   archetype: s.optional(s.contentId()),
   controller: s.enumOf(['local', 'none', 'director'] as const),
+  // Fog mode (M5): 'omniscient' factions see the whole map (director).
+  vision: s.optional(s.enumOf(['fog', 'omniscient'] as const)),
   carryIn: s.object({
     unlocks: s.array(s.contentId(), { maxLength: 512 }),
   }),

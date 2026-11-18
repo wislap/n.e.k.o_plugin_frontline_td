@@ -26,9 +26,11 @@ export interface GhostPreviewProps {
   db: ContentDb;
   map: ResolvedMap;
   heights: ArrayLike<number>;
+  // Hostility from the match relations (observer, faction) → bool.
+  isHostile: (observer: number, faction: number) => boolean;
 }
 
-export function GhostPreview({ client, db, map, heights }: GhostPreviewProps) {
+export function GhostPreview({ client, db, map, heights, isHostile }: GhostPreviewProps) {
   const boxRef = useRef<THREE.Mesh>(null);
   const boxMat = useRef<THREE.MeshBasicMaterial>(null);
   const ringRef = useRef<THREE.Mesh>(null);
@@ -66,7 +68,9 @@ export function GhostPreview({ client, db, map, heights }: GhostPreviewProps) {
     const h = kind.footprint.h;
     const tx = Math.floor(cursorGround.x - w / 2);
     const ty = Math.floor(cursorGround.y - h / 2);
-    const view = makePlacementView(db, map, snapshot, snapshot.observer);
+    const view = makePlacementView(db, map, snapshot, snapshot.observer, (f) =>
+      isHostile(snapshot.observer, f),
+    );
     const rule: PlacementRule = {
       w,
       h,

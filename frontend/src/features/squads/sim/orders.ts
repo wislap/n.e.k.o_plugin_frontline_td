@@ -5,11 +5,11 @@ import { distance } from '../../../core/index';
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
-import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import { MoveIntent, StopIntent } from '../../movement/protocol';
 import { Mover, MoveTarget, Position } from '../../movement/sim/index';
 import { SquadsLaunched } from '../protocol';
 import type { SquadsDeps } from './deps';
+import { meanEnergyBp } from './energy';
 import { nearestCovered, retargetStructure } from './routing';
 import type { Squad, SquadsEnv } from './state';
 
@@ -21,33 +21,6 @@ const STRAY_DIST = 10;
 const RESUPPLY_LEAVE_BP = 3000;
 const RESUPPLY_RETURN_BP = 8000;
 const RETARGET_PERIOD = 40;
-
-// Mean energy bp over members that have a battery (an energy slot with
-// capacity > 0); null when no member carries one.
-function meanEnergyBp(
-  ctx: SystemContext,
-  ids: readonly number[],
-  energyCargo: number,
-): number | null {
-  const store = ctx.read(CargoStore);
-  let sum = 0;
-  let count = 0;
-  for (const id of ids) {
-    let amt = 0;
-    let cap = 0;
-    for (let i = 0; i < CARGO_SLOTS; i++) {
-      if (sget(store, 'cargo', i, id) === energyCargo && sget(store, 'cap', i, id) > 0) {
-        amt += sget(store, 'amt', i, id);
-        cap += sget(store, 'cap', i, id);
-      }
-    }
-    if (cap > 0) {
-      sum += Math.floor((amt * 10000) / cap);
-      count += 1;
-    }
-  }
-  return count === 0 ? null : Math.floor(sum / count);
-}
 
 function centroid(ctx: SystemContext, ids: readonly number[]): { x: number; y: number } {
   const pos = ctx.read(Position);
@@ -124,6 +97,25 @@ export function updateSquad(
     .filter((id): id is EntityId => id !== null);
   const c = centroid(ctx, ids);
 
+  // Gather launch is a scheduled order transition: it fires before
+  // resupply so a drained squad still launches on time.
+  if (squad.order.kind === 'gather' && ctx.tick >= (squad.order.launchTick ?? 0)) {
+    const g = squad.order;
+    squad.order = {
+      kind: 'advance',
+      x: g.targetX ?? g.x,
+      y: g.targetY ?? g.y,
+      radius: 0,
+    };
+    squad.phase = 'moving';
+    ctx.emit(SquadsLaunched, {
+      squad: squad.id,
+      faction: squad.faction,
+      x: squad.order.x,
+      y: squad.order.y,
+    });
+  }
+
   // Resupply: squads with batteries retreat to the nearest own
   // covered cell while their mean energy is below the threshold.
   const bp = meanEnergyBp(ctx, ids, deps.energyCargo);
@@ -142,35 +134,19 @@ export function updateSquad(
     return;
   }
 
-  // Gather: sit at the gather point; at launchTick the order
-  // becomes advance to the stored target (route already stored).
+  // Gather: sit at the gather point until launchTick (handled above —
+  // a just-launched squad falls through to the advance path).
   const order = squad.order;
   if (order.kind === 'gather') {
-    if (ctx.tick >= (order.launchTick ?? 0)) {
-      squad.order = {
-        kind: 'advance',
-        x: order.targetX ?? order.x,
-        y: order.targetY ?? order.y,
-        radius: 0,
-      };
+    if (squad.phase !== 'holding') {
       squad.phase = 'moving';
-      ctx.emit(SquadsLaunched, {
-        squad: squad.id,
-        faction: squad.faction,
-        x: squad.order.x,
-        y: squad.order.y,
-      });
-    } else {
-      if (squad.phase !== 'holding') {
-        squad.phase = 'moving';
-      }
-      if (distance(0, 0, order.x - c.x, order.y - c.y) > ARRIVE_DIST) {
-        emitMove(ctx, squad, ids, order.x, order.y);
-      } else {
-        squad.phase = 'holding';
-      }
-      return;
     }
+    if (distance(0, 0, order.x - c.x, order.y - c.y) > ARRIVE_DIST) {
+      emitMove(ctx, squad, ids, order.x, order.y);
+    } else {
+      squad.phase = 'holding';
+    }
+    return;
   }
 
   const goalX = order.x;
@@ -187,6 +163,7 @@ export function updateSquad(
     const fac = ctx.read(Faction);
     if (
       id !== null &&
+      ctx.has(Faction, id) &&
       ctx.isHostile(squad.faction as FactionId, (fac.id[id] ?? 0) as FactionId) &&
       distance(0, 0, (pos.x[id] ?? 0) - order.x, (pos.y[id] ?? 0) - order.y) <=
         order.radius + LEASH_EXTRA

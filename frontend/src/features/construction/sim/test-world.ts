@@ -22,7 +22,7 @@ import type { FactionStart } from '../../units/sim/index';
 import { RoadWorksChannel, SalvageChannel, StructuresChannel } from '../protocol';
 import type { ConstructionSalvage, ConstructionStructures, RoadWorks } from '../protocol';
 import { createConstructionModule } from './module';
-import type { RoadSegmentPartsFn } from './env';
+import type { RoadSegmentPartsFn, RuinPartsFn, StructurePartsFn } from './env';
 import { Structure } from './components';
 
 const DB: ContentDb = loadContent();
@@ -92,6 +92,12 @@ export interface WorldOpts {
   factions?: readonly number[];
   // Road-segment parts injected like the app does (logistics + combat).
   segmentParts?: readonly RoadSegmentPartsFn[];
+  // Extra structure parts appended after the logistics default.
+  structureParts?: readonly StructurePartsFn[];
+  // Ruin parts injected like the app does (capture progress).
+  ruinParts?: readonly RuinPartsFn[];
+  // Faction relations for exclusion/hostility tests.
+  relations?: readonly { a: number; b: number; relation: 'hostile' | 'allied' | 'neutral' }[];
   // Extra sim modules appended after construction (e.g. combat).
   extraModules?: readonly SimModule[];
 }
@@ -140,8 +146,9 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
     logistics.blockersChanged(cells, blocked);
   });
   const construction = createConstructionModule(DB, terrain.api, logistics, {
-    structureParts: [structureParts],
+    structureParts: [structureParts, ...(opts.structureParts ?? [])],
     ...(opts.segmentParts !== undefined ? { segmentParts: opts.segmentParts } : {}),
+    ruinParts: opts.ruinParts ?? [],
     starts: opts.starts ?? [],
   });
 
@@ -171,7 +178,11 @@ export function buildWorld(opts: WorldOpts): BuiltWorld {
   const config: SimConfig = {
     seed: 7,
     factions,
-    relations: [],
+    relations: (opts.relations ?? []).map((r) => ({
+      a: toFactionId(r.a),
+      b: toFactionId(r.b),
+      relation: r.relation,
+    })),
     grid: { width: grid.width, height: grid.height },
     rngStreams: [],
     controllers: [],
