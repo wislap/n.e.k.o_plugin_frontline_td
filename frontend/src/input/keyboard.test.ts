@@ -42,6 +42,9 @@ describe('intentForKey', () => {
       expect(intentForKey(event({ code: 'KeyL' }), mode)).toEqual({
         kind: 'overlay.toggle_logistics',
       });
+      expect(intentForKey(event({ code: 'KeyK' }), mode)).toEqual({
+        kind: 'ui.toggle_keymap_help',
+      });
       expect(intentForKey(event({ code: 'Escape' }), mode)).toEqual({
         kind: 'escape',
       });
@@ -110,7 +113,11 @@ describe('intentForKey', () => {
     expect(intentForKey(event({ code: 'Enter' }), 'build')).toBeNull();
   });
 
-  it('triggers keymap help on ? or Shift+Slash without Ctrl/Meta/Alt', () => {
+  it('triggers keymap help on K and ? or Shift+Slash without Ctrl/Meta/Alt', () => {
+    expect(intentForKey(event({ code: 'KeyK' }), 'command')).toEqual({
+      kind: 'ui.toggle_keymap_help',
+    });
+    expect(intentForKey(event({ code: 'KeyK', ctrlKey: true }), 'command')).toBeNull();
     expect(intentForKey(event({ code: 'Slash', key: '?' }), 'command')).toEqual({
       kind: 'ui.toggle_keymap_help',
     });
@@ -214,6 +221,15 @@ describe('installKeyboard', () => {
       'help.group.build',
       'help.group.logistics',
     ]);
+    expect(KEYBINDING_GROUPS.map((g) => g.mode)).toEqual([
+      undefined,
+      'command',
+      'build',
+      'logistics',
+    ]);
+    expect(KEYBINDING_GROUPS[0]?.entries.find((e) => e.descKey === 'help.key.help')?.keys).toBe(
+      'K',
+    );
     for (const group of KEYBINDING_GROUPS) {
       expect(group.entries.length).toBeGreaterThan(0);
     }

@@ -4,6 +4,7 @@
     "status": "原型开发中"
   },
   "dev": {
+    "title": "运行遥测",
     "tick": "Tick",
     "speed": "速度",
     "paused": "已暂停",
@@ -19,6 +20,14 @@
   "hud": {
     "paused": "已暂停",
     "speed": "速度 ×{{n}}",
+    "clock_tick": "T{{tick}}",
+    "mode_switcher": "交互模式",
+    "logistics_layer": "物流层",
+    "guide_title": "快捷键引导",
+    "guide_collapse": "收起",
+    "guide_expand": "快捷键 ›",
+    "guide_mode_section": "当前模式",
+    "guide_global_section": "全局",
     "camera": {
       "spectate": "观战视角",
       "tactical": "战术视角",
@@ -41,8 +50,8 @@
     "demolish_confirm_btn": "确认拆除",
     "demolish_cancel_btn": "取消",
     "selected": "已选中 {{count}} 个",
-    "hints": "F1-F3 模式 | Tab 视角 | WASD 平移 | Space 暂停 | -/= 速度 | L 物流 | ` 调试 | ? 快捷键",
-    "help_button_hint": "快捷键说明 (?)",
+    "hints": "F1-F3 模式 | Tab 视角 | WASD 平移 | Space 暂停 | -/= 速度 | L 物流 | ` 调试 | K 快捷键",
+    "help_button_hint": "快捷键说明 (K)",
     "threat": "敌军集结中 · 约 {{count}} · {{time}} 后进攻",
     "fullscreen": "全屏",
     "fullscreen_unsupported": "仅在 NEKO 面板内可用",
@@ -75,8 +84,8 @@
       "modes": "切换主交互模式",
       "logistics_overlay": "开关物流覆盖层",
       "debug": "开关调试面板",
-      "escape": "退出工具 / 关闭帮助 / 取消固定",
-      "help": "打开 / 关闭快捷键说明",
+      "escape": "退出工具 / 取消固定",
+      "help": "展开 / 收起快捷键引导",
       "squad_select": "选中绑定小队（双击居中）",
       "squad_create": "将当前选中单位编为小队",
       "move": "移动指令",
@@ -92,6 +101,15 @@
     }
   },
   "build": {
+    "category": {
+      "all": "全部",
+      "logistics": "物流",
+      "production": "生产",
+      "military": "军事"
+    },
+    "footprint": "{{w}}×{{h}}",
+    "time_sec": "{{s}}秒",
+    "demolish_btn": "拆除",
     "demolish_button": "拆除",
     "demolish_hint": "拆除 / 取消 (C / Del)：无选中时进入拆除工具，选中运转中建筑需二次确认"
   },
@@ -101,7 +119,14 @@
     "unpin": "取消固定 (Esc)",
     "activate_btn": "G 开工",
     "demolish_btn": "C 拆除",
+    "activate_action": "开工",
+    "demolish_action": "拆除",
     "confirm_demolish_btn": "确认拆除",
+    "coords": "({{x}}, {{y}})",
+    "hp_label": "生命",
+    "energy_label": "能量",
+    "progress_label": "进度",
+    "capture_label": "占领",
     "cell_coords": "地形 ({{x}}, {{y}})",
     "unexplored": "未探索区域",
     "fog_memory": "迷雾记忆",
@@ -159,6 +184,8 @@
   },
   "road": {
     "button": "道路",
+    "tool_btn": "道路工具",
+    "confirm_btn": "下单",
     "button_hint": "道路工具（R）：点击路段自动延伸主线",
     "preview_title": "道路工程",
     "cells": "待铺设 {{n}} 格",
@@ -227,6 +254,7 @@
   },
   "stock": {
     "title": "仓库",
+    "per_sec": "/秒",
     "rate": "{{value}}/秒",
     "priorities": "优先级：{{order}}（点击交换）"
   },
@@ -244,6 +272,9 @@
   },
   "squad": {
     "disband": "解散小队",
+    "create_btn": "+ 小队",
+    "empty_hint": "选中己方单位后按 Ctrl+1-9 或点击 + 小队编队",
+    "center_hint": "双击居中视角",
     "phase": {
       "moving": "移动中",
       "holding": "驻留中",

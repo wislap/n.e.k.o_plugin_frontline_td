@@ -27,6 +27,8 @@ describe('resetClientState', () => {
     useUiStore.getState().toggleDebugPanel();
     useUiStore.getState().toggleLogisticsOverlay();
     useUiStore.getState().toggleKeymapHelp();
+    expect(useUiStore.getState().debugPanelOpen).toBe(true);
+    expect(useUiStore.getState().keymapHelpOpen).toBe(false);
     useCameraStore.getState().setCenter({ x: 40, y: 40 });
     useCameraStore.getState().toggleMode();
     useCameraStore.getState().setLocked(true);
@@ -50,9 +52,9 @@ describe('resetClientState', () => {
     expect(interaction.roadHover).toBe(-1);
     expect(useBoxStore.getState().box).toBeNull();
     const ui = useUiStore.getState();
-    expect(ui.debugPanelOpen).toBe(true);
+    expect(ui.debugPanelOpen).toBe(false);
     expect(ui.logisticsOverlay).toBe(false);
-    expect(ui.keymapHelpOpen).toBe(false);
+    expect(ui.keymapHelpOpen).toBe(true);
     const camera = useCameraStore.getState();
     expect(camera.mode).toBe('spectate');
     expect(camera.autoSwitch).toBe(false);

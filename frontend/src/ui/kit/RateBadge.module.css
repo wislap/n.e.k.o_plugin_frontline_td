@@ -1,0 +1,30 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.pos {
+  border-color: rgba(70, 224, 154, 0.38);
+  background: var(--semantic-ok-dim);
+  color: var(--semantic-ok);
+}
+
+.neg {
+  border-color: rgba(255, 92, 92, 0.42);
+  background: var(--semantic-danger-dim);
+  color: var(--semantic-danger);
+}
+
+.flat {
+  color: var(--text-muted);
+}

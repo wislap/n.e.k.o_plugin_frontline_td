@@ -42,6 +42,7 @@ export const structures = [
       time: 6,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'logistics',
     },
     node: { connect: 20, service: 4, vehicles: 8 },
     stores: [
@@ -63,6 +64,7 @@ export const structures = [
       time: 8,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'logistics',
     },
     node: { connect: 10, service: 10, vehicles: 3 },
     stores: [
@@ -116,6 +118,7 @@ export const structures = [
       time: 5,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'production',
     },
     stores: [
       {
@@ -148,6 +151,7 @@ export const structures = [
       time: 8,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'production',
     },
     stores: [
       {
@@ -180,6 +184,7 @@ export const structures = [
       time: 10,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'production',
     },
     stores: [
       {
@@ -217,6 +222,7 @@ export const structures = [
       time: 6,
       demolishTime: 3,
       salvageBp: 5000,
+      category: 'military',
     },
     stores: [
       {
@@ -251,6 +257,7 @@ export const structures = [
       time: 10,
       demolishTime: 5,
       salvageBp: 5000,
+      category: 'military',
     },
     stores: [
       {

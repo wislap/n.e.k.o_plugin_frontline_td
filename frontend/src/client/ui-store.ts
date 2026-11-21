@@ -9,14 +9,13 @@ export interface UiState {
   toggleDebugPanel(): void;
   toggleLogisticsOverlay(): void;
   toggleKeymapHelp(): void;
-  closeKeymapHelp(): void;
   reset(): void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  debugPanelOpen: true,
+  debugPanelOpen: false,
   logisticsOverlay: false,
-  keymapHelpOpen: false,
+  keymapHelpOpen: true,
   toggleDebugPanel: () => {
     set((state) => ({ debugPanelOpen: !state.debugPanelOpen }));
   },
@@ -26,10 +25,7 @@ export const useUiStore = create<UiState>((set) => ({
   toggleKeymapHelp: () => {
     set((state) => ({ keymapHelpOpen: !state.keymapHelpOpen }));
   },
-  closeKeymapHelp: () => {
-    set((state) => (state.keymapHelpOpen ? { keymapHelpOpen: false } : state));
-  },
   reset: () => {
-    set({ debugPanelOpen: true, logisticsOverlay: false, keymapHelpOpen: false });
+    set({ debugPanelOpen: false, logisticsOverlay: false, keymapHelpOpen: true });
   },
 }));

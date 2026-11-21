@@ -1,0 +1,87 @@
+:root {
+  /* Obsidian & slate surfaces */
+  --surface-bg: #070b13;
+  --surface-panel: rgba(10, 15, 25, 0.84);
+  --surface-elevated: rgba(16, 23, 36, 0.94);
+  --surface-ghost: rgba(12, 18, 30, 0.64);
+  --surface-hover: rgba(148, 178, 214, 0.11);
+  --surface-inset: rgba(5, 8, 15, 0.72);
+  --backdrop-blur: blur(10px);
+
+  /* Hairline steel borders */
+  --border-subtle: rgba(148, 178, 214, 0.22);
+  --border-strong: rgba(148, 178, 214, 0.45);
+  --border-grid: rgba(148, 178, 214, 0.08);
+
+  /* Mode accent tokens (default: command) */
+  --mode-command: #5cc8ff;
+  --mode-build: #ffaa33;
+  --mode-logistics: #3ddc97;
+  --mode-accent: var(--mode-command);
+  --mode-accent-dim: rgba(92, 200, 255, 0.16);
+  --mode-accent-glow: rgba(92, 200, 255, 0.36);
+
+  /* Semantic palette */
+  --semantic-danger: #ff5c5c;
+  --semantic-danger-dim: rgba(255, 92, 92, 0.16);
+  --semantic-danger-glow: rgba(255, 92, 92, 0.36);
+  --semantic-warn: #ffc14d;
+  --semantic-warn-dim: rgba(255, 193, 77, 0.16);
+  --semantic-ok: #46e09a;
+  --semantic-ok-dim: rgba(70, 224, 154, 0.16);
+
+  /* Typography colors */
+  --text-primary: #eef3fa;
+  --text-secondary: #c1cfe0;
+  --text-muted: #8fa3bd;
+
+  /* Offline industrial font stacks */
+  --font-sans:
+    'Bahnschrift', 'DIN Alternate', 'Segoe UI Variable Text', 'PingFang SC', 'Microsoft YaHei UI',
+    system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', monospace;
+
+  /* Scale & rhythm */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 10px;
+  --space-4: 14px;
+
+  --radius-panel: 3px;
+  --radius-btn: 3px;
+  --cut-size: 6px;
+
+  /* Elevation & layering */
+  --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  --z-hud: 900;
+  --z-modal: 1000;
+  --z-tooltip: 1050;
+
+  --ease-snap: cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+
+[data-mode='command'] {
+  --mode-accent: #5cc8ff;
+  --mode-accent-dim: rgba(92, 200, 255, 0.16);
+  --mode-accent-glow: rgba(92, 200, 255, 0.36);
+}
+
+[data-mode='build'] {
+  --mode-accent: #ffaa33;
+  --mode-accent-dim: rgba(255, 170, 51, 0.16);
+  --mode-accent-glow: rgba(255, 170, 51, 0.36);
+}
+
+[data-mode='logistics'] {
+  --mode-accent: #3ddc97;
+  --mode-accent-dim: rgba(61, 220, 151, 0.16);
+  --mode-accent-glow: rgba(61, 220, 151, 0.36);
+}

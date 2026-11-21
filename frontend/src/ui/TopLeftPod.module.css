@@ -1,0 +1,56 @@
+.root {
+  pointer-events: auto;
+  max-width: 100%;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.clockPill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--semantic-ok);
+  box-shadow: 0 0 6px var(--semantic-ok);
+  flex-shrink: 0;
+}
+
+.dotPaused {
+  background: var(--semantic-warn);
+  box-shadow: 0 0 6px var(--semantic-warn);
+}
+
+.clockTime {
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.clockTick {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}

@@ -1,0 +1,170 @@
+.shell {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'topLeft topCenter topRight'
+    'middleLeft . .'
+    'bottomLeft bottomCenter bottomRight';
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+:where(.slot > *) {
+  pointer-events: auto;
+}
+
+.topLeft {
+  grid-area: topLeft;
+  justify-self: start;
+  align-self: start;
+  align-items: flex-start;
+  max-width: min(380px, 40vw);
+}
+
+.topCenter {
+  grid-area: topCenter;
+  justify-self: center;
+  align-self: start;
+  align-items: center;
+  max-width: min(560px, 100%);
+}
+
+.topRight {
+  grid-area: topRight;
+  justify-self: end;
+  align-self: start;
+  align-items: flex-end;
+  max-width: min(340px, 36vw);
+}
+
+.middleLeft {
+  grid-area: middleLeft;
+  justify-self: start;
+  align-self: center;
+  align-items: flex-start;
+  max-width: min(272px, 34vw);
+  max-height: 100%;
+}
+
+.bottomLeft {
+  grid-area: bottomLeft;
+  justify-self: start;
+  align-self: end;
+  align-items: flex-start;
+  max-width: min(440px, 44vw);
+}
+
+.bottomCenter {
+  grid-area: bottomCenter;
+  justify-self: center;
+  align-self: end;
+  align-items: center;
+  max-width: 100%;
+}
+
+.bottomRight {
+  grid-area: bottomRight;
+  justify-self: end;
+  align-self: end;
+  align-items: flex-end;
+  max-width: min(360px, 40vw);
+}
+
+/* Shared HUD bar / banner helpers used by Hud.tsx */
+.bottomLeftBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selectionBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bannerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.bannerTextDanger {
+  color: #ffd4d4;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.bannerTextWarn {
+  color: #ffe8b8;
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.bannerTextInfo {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.marqueeBox {
+  position: fixed;
+  border: 1px solid var(--mode-accent);
+  background: var(--mode-accent-dim);
+  box-shadow: 0 0 12px var(--mode-accent-glow);
+  z-index: calc(var(--z-hud) + 50);
+  pointer-events: none;
+}
+
+@media (max-width: 1080px) {
+  .shell {
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+
+  .topLeft,
+  .bottomLeft {
+    max-width: min(320px, 42vw);
+  }
+
+  .topRight,
+  .bottomRight {
+    max-width: min(290px, 38vw);
+  }
+
+  .middleLeft {
+    max-width: min(230px, 34vw);
+  }
+}
+
+@media (max-height: 760px) {
+  .shell {
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+}

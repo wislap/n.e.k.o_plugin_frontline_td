@@ -64,11 +64,6 @@ export function createIntentRouter(deps: { client: SimClient; db: ContentDb }): 
           interaction.exitTool();
           return;
         }
-        const ui = useUiStore.getState();
-        if (ui.keymapHelpOpen) {
-          ui.closeKeymapHelp();
-          return;
-        }
         const inspector = useInspectorStore.getState();
         if (inspector.pinned !== null) {
           inspector.unpin();

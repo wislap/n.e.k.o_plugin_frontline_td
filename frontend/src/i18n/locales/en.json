@@ -4,6 +4,7 @@
     "status": "In development"
   },
   "dev": {
+    "title": "TELEMETRY",
     "tick": "Tick",
     "speed": "Speed",
     "paused": "Paused",
@@ -19,6 +20,14 @@
   "hud": {
     "paused": "Paused",
     "speed": "Speed ×{{n}}",
+    "clock_tick": "T{{tick}}",
+    "mode_switcher": "Primary Mode",
+    "logistics_layer": "Logistics",
+    "guide_title": "KEY GUIDE",
+    "guide_collapse": "Hide",
+    "guide_expand": "Keys ›",
+    "guide_mode_section": "MODE",
+    "guide_global_section": "GLOBAL",
     "camera": {
       "spectate": "Spectate",
       "tactical": "Tactical",
@@ -41,8 +50,8 @@
     "demolish_confirm_btn": "Confirm Demolish",
     "demolish_cancel_btn": "Cancel",
     "selected": "{{count}} selected",
-    "hints": "F1-F3 modes | Tab camera | WASD pan | Space pause | -/= speed | L logistics | ` debug | ? keys",
-    "help_button_hint": "Keybindings (?)",
+    "hints": "F1-F3 modes | Tab camera | WASD pan | Space pause | -/= speed | L logistics | ` debug | K keys",
+    "help_button_hint": "Keybindings (K)",
     "threat": "Enemy gathering · ~{{count}} · attacks in {{time}}",
     "fullscreen": "Fullscreen",
     "fullscreen_unsupported": "Fullscreen is only available inside the NEKO panel",
@@ -75,8 +84,8 @@
       "modes": "Switch primary mode",
       "logistics_overlay": "Toggle logistics overlay",
       "debug": "Toggle debug panel",
-      "escape": "Exit tool / Close help / Unpin inspector",
-      "help": "Toggle keybindings help",
+      "escape": "Exit tool / Unpin inspector",
+      "help": "Expand / collapse key guide",
       "squad_select": "Select bound squad (double-press centers)",
       "squad_create": "Bind selection to squad",
       "move": "Move order",
@@ -92,6 +101,15 @@
     }
   },
   "build": {
+    "category": {
+      "all": "All",
+      "logistics": "Logistics",
+      "production": "Production",
+      "military": "Military"
+    },
+    "footprint": "{{w}}×{{h}}",
+    "time_sec": "{{s}}s",
+    "demolish_btn": "Demolish",
     "demolish_button": "Demolish",
     "demolish_hint": "Demolish / Cancel (C / Del): toggles demolish tool if nothing is selected; operational buildings require confirmation"
   },
@@ -101,7 +119,14 @@
     "unpin": "Unpin (Esc)",
     "activate_btn": "G Activate",
     "demolish_btn": "C Demolish",
+    "activate_action": "Activate",
+    "demolish_action": "Demolish",
     "confirm_demolish_btn": "Confirm Demolish",
+    "coords": "({{x}}, {{y}})",
+    "hp_label": "HP",
+    "energy_label": "Energy",
+    "progress_label": "Progress",
+    "capture_label": "Capture",
     "cell_coords": "Terrain ({{x}}, {{y}})",
     "unexplored": "Unexplored",
     "fog_memory": "Fog Memory",
@@ -159,6 +184,8 @@
   },
   "road": {
     "button": "Roads",
+    "tool_btn": "Road Tool",
+    "confirm_btn": "Order",
     "button_hint": "Road tool (R): click a link to auto-extend the main route",
     "preview_title": "Road works",
     "cells": "{{n}} cells to pave",
@@ -227,6 +254,7 @@
   },
   "stock": {
     "title": "Warehouse",
+    "per_sec": "/s",
     "rate": "{{value}}/s",
     "priorities": "Priority: {{order}} (click to swap)"
   },
@@ -244,6 +272,9 @@
   },
   "squad": {
     "disband": "Disband squad",
+    "create_btn": "+ Squad",
+    "empty_hint": "Select own units and press Ctrl+1-9 or click + Squad",
+    "center_hint": "Double-click to center",
     "phase": {
       "moving": "moving",
       "holding": "holding",

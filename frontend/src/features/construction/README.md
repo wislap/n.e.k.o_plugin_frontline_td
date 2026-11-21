@@ -21,6 +21,9 @@
   预览与 eval 机器人共用；`centeredFootprint`/`demolishRefund`/
   `classifyCancelSelection` 纯拆除退款与取消选区分类规则。
   放置/等待原因码在这里定义。
+- `content.ts`：`structureBaseFields`、`BUILD_CATEGORIES` 与
+  `BuildCategory`（`logistics` / `production` / `military`，`build.category`
+  省略时由内容加载器回退为 `production`）。
 - `render/`/`ui/`/`inspector`：建造幽灵与废墟覆盖、`BuildMenu`、
   工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
@@ -81,4 +84,5 @@
 - [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（通道
   可见性）、[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
   （句柄校验）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
-  （注入部件工厂）。
+  （注入部件工厂）、[ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
+  （建造分类与 HUD 布局）。

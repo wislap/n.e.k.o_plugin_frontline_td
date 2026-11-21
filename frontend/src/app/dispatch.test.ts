@@ -110,30 +110,33 @@ describe('intent router', () => {
     expect(useInteractionStore.getState().tool).toEqual({ kind: 'none' });
   });
 
-  it('resolves escape in priority order: tool -> help -> pinned inspector', () => {
+  it('resolves escape in priority order: tool -> pinned inspector, leaving keymapHelpOpen untouched', () => {
     const router = createIntentRouter({ client: fakeClient(null), db });
     useInteractionStore.getState().enterPlace('frontline_td:turret');
-    useUiStore.getState().toggleKeymapHelp();
+    expect(useUiStore.getState().keymapHelpOpen).toBe(true);
     useInspectorStore.getState().pin({ kind: 'own_unit', handle: 7 });
 
-    // (1) Exits active tool first, leaving help and pinned untouched.
+    // (1) Exits active tool first, leaving pinned and keymapHelpOpen untouched.
     router.dispatch({ kind: 'escape' });
     expect(useInteractionStore.getState().tool).toEqual({ kind: 'none' });
     expect(useUiStore.getState().keymapHelpOpen).toBe(true);
     expect(useInspectorStore.getState().pinned).toEqual({ kind: 'own_unit', handle: 7 });
 
-    // (2) Closes keymap help next, leaving pinned untouched.
-    router.dispatch({ kind: 'escape' });
-    expect(useUiStore.getState().keymapHelpOpen).toBe(false);
-    expect(useInspectorStore.getState().pinned).toEqual({ kind: 'own_unit', handle: 7 });
-
-    // (3) Unpins inspector last.
+    // (2) Unpins inspector next, leaving keymapHelpOpen untouched.
     router.dispatch({ kind: 'escape' });
     expect(useInspectorStore.getState().pinned).toBeNull();
+    expect(useUiStore.getState().keymapHelpOpen).toBe(true);
+
+    // (3) Further escape leaves keymapHelpOpen untouched (toggled via K / rail button).
+    router.dispatch({ kind: 'escape' });
+    expect(useUiStore.getState().keymapHelpOpen).toBe(true);
   });
 
   it('toggles keymap help and unpins inspector via direct intents', () => {
     const router = createIntentRouter({ client: fakeClient(null), db });
+    expect(useUiStore.getState().keymapHelpOpen).toBe(true);
+    router.dispatch({ kind: 'ui.toggle_keymap_help' });
+    expect(useUiStore.getState().keymapHelpOpen).toBe(false);
     router.dispatch({ kind: 'ui.toggle_keymap_help' });
     expect(useUiStore.getState().keymapHelpOpen).toBe(true);
     useInspectorStore.getState().pin({ kind: 'ruin', handle: 42 });

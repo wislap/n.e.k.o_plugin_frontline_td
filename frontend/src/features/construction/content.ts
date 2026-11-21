@@ -5,6 +5,11 @@
 // and later batches' fields (producer, weapon, requiresDeposit).
 import { s } from '../../core/index';
 
+// Build menu category tabs (ADR 0049): structures with a `build` block
+// belong to one of these groups; omitted entries default to 'production'.
+export const BUILD_CATEGORIES = ['logistics', 'production', 'military'] as const;
+export type BuildCategory = (typeof BUILD_CATEGORIES)[number];
+
 // Structures that can be built: cost in cargo units, build/demolish
 // times in seconds and the demolition refund share (basis points).
 // cost is converted to milli and times to ticks by the loader.
@@ -13,6 +18,7 @@ const buildProfileSchema = s.object({
   time: s.number({ min: 0.05, max: 3600 }),
   demolishTime: s.number({ min: 0.05, max: 3600 }),
   salvageBp: s.int({ min: 0, max: 10000 }),
+  category: s.optional(s.enumOf(BUILD_CATEGORIES)),
 });
 
 export const structureBaseFields = {

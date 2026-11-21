@@ -1,50 +1,24 @@
-// Road tool panel (ADR 0048): renders the [Road R] button bar in
-// logistics mode (F3), plus the road-upgrade preview and hovered link
-// interception tooltip when the road tool is active. Uses
-// useSnapshotValue rather than a private setInterval.
+// Road tool panel (ADR 0048, bottomCenter): shown only in logistics
+// mode (F3). Provides the [R] Road Tool toggle, selected-route preview
+// metrics + [Enter] Confirm inside a flow TacticalPanel, plus the
+// cursor interception tooltip (position: fixed; pointer-events: none).
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cursorState } from '../../../client/cursor';
-import { useInteractionStore } from '../../../client/interaction-store';
 import { useIntentRouter } from '../../../client/intent';
+import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { localName, type ContentDb } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
+import { ActionButton, TacticalPanel } from '../../../ui/kit/index';
 import { lowestBuildableRoadLevel } from '../content';
 import { LogisticsNetworkChannel, ROAD_LAYER_ID, type LogisticsNetwork } from '../protocol';
+import styles from './RoadPanel.module.css';
 import { roadPreview, type RoadPreviewLink } from './road-preview';
 import { linkIndices } from './road-select';
 
-const bar = {
-  position: 'fixed',
-  bottom: 8,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  display: 'flex',
-  gap: 6,
-  padding: '6px 8px',
-  background: 'rgba(0,0,0,0.55)',
-  fontFamily: 'monospace',
-  fontSize: 12,
-  zIndex: 900,
-  borderRadius: 4,
-} as const;
-
-const panel = {
-  position: 'fixed',
-  right: 8,
-  top: '30%',
-  padding: '8px 10px',
-  background: 'rgba(0,0,0,0.6)',
-  color: '#fff',
-  fontFamily: 'monospace',
-  fontSize: 12,
-  zIndex: 900,
-  pointerEvents: 'none',
-  borderRadius: 4,
-  whiteSpace: 'pre',
-} as const;
+const ENTER_KBD = 'Enter';
 
 interface RoadSnapshotSlice {
   tick: number;
@@ -107,7 +81,7 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
 
   const snap = useSnapshotValue(client, selectRoadSlice, sameRoadSlice, 200);
 
-  if (mode !== 'logistics' && !roadMode) {
+  if (mode !== 'logistics') {
     return null;
   }
 
@@ -152,67 +126,85 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
 
   return (
     <>
-      {mode === 'logistics' && (
-        <div style={bar}>
-          <button
-            type="button"
-            title={t('road.button_hint')}
+      <TacticalPanel tone="mode" compact className={styles['panel']}>
+        <div className={styles['toolbar']}>
+          <div className={styles['toolbarLeft']}>
+            <ActionButton
+              size="sm"
+              kbd="R"
+              variant={roadMode ? 'active' : 'default'}
+              aria-pressed={roadMode}
+              title={t('road.button_hint')}
+              onClick={() => {
+                router.dispatch({ kind: 'road.toggle' });
+              }}
+            >
+              {t('road.tool_btn')}
+            </ActionButton>
+            {preview !== null && (
+              <span className={styles['titleTag']}>{t('road.preview_title')}</span>
+            )}
+          </div>
+          <ActionButton
+            size="sm"
+            kbd={ENTER_KBD}
+            variant="primary"
+            disabled={selected.length === 0}
             onClick={() => {
-              router.dispatch({ kind: 'road.toggle' });
-            }}
-            style={{
-              cursor: 'pointer',
-              padding: '4px 8px',
-              border: roadMode ? '1px solid #ffd166' : '1px solid #555',
-              background: roadMode ? 'rgba(255,209,102,0.25)' : 'rgba(30,30,30,0.9)',
-              color: '#fff',
+              router.dispatch({ kind: 'road.confirm' });
             }}
           >
-            {t('road.button')}
-            <div style={{ fontSize: 10, color: '#bbb' }}>{'R'}</div>
-          </button>
+            {t('road.confirm_btn')}
+          </ActionButton>
         </div>
-      )}
-      {preview !== null && (
-        <div style={panel}>
-          <div>{t('road.preview_title')}</div>
-          <div>
-            {t('road.cells', { n: preview.cellsToPave })} ·{' '}
-            {t('road.cost', {
-              n: preview.material,
-              cargo: t(`cargo.${preview.cargoName}`, { defaultValue: preview.cargoName }),
-            })}{' '}
-            · {t('road.time', { s: preview.seconds.toFixed(1) })}
+
+        {preview !== null ? (
+          <div className={styles['metrics']}>
+            <div className={styles['summaryRow']}>
+              <span className={styles['chip']}>{t('road.cells', { n: preview.cellsToPave })}</span>
+              <span className={styles['chip']}>
+                {t('road.cost', {
+                  n: preview.material,
+                  cargo: t(`cargo.${preview.cargoName}`, { defaultValue: preview.cargoName }),
+                })}
+              </span>
+              <span className={styles['chip']}>
+                {t('road.time', { s: preview.seconds.toFixed(1) })}
+              </span>
+            </div>
+            <div className={styles['quotaGrid']}>
+              <span>
+                {t('road.quota_out', {
+                  old: Math.floor(preview.quotaOut / 1000),
+                  next: Math.floor(preview.quotaOutNew / 1000),
+                })}
+              </span>
+              <span>
+                {t('road.quota_in', {
+                  old: Math.floor(preview.quotaIn / 1000),
+                  next: Math.floor(preview.quotaInNew / 1000),
+                })}
+              </span>
+            </div>
+            <div className={styles['carried']}>
+              {t('road.carried', {
+                out: Math.floor(preview.volOut / 1000),
+                inn: Math.floor(preview.volIn / 1000),
+              })}
+            </div>
+            <div className={styles['hint']}>{t('road.hint')}</div>
           </div>
-          <div>
-            {t('road.quota_out', {
-              old: Math.floor(preview.quotaOut / 1000),
-              next: Math.floor(preview.quotaOutNew / 1000),
-            })}
-          </div>
-          <div>
-            {t('road.quota_in', {
-              old: Math.floor(preview.quotaIn / 1000),
-              next: Math.floor(preview.quotaInNew / 1000),
-            })}
-          </div>
-          <div style={{ color: '#bbb' }}>
-            {t('road.carried', {
-              out: Math.floor(preview.volOut / 1000),
-              inn: Math.floor(preview.volIn / 1000),
-            })}
-          </div>
-          <div style={{ color: '#999' }}>{t('road.hint')}</div>
-        </div>
-      )}
+        ) : (
+          roadMode && <div className={styles['hint']}>{t('road.hint')}</div>
+        )}
+      </TacticalPanel>
+
       {tip !== null && tip.intercept > 0 && (
         <div
+          className={styles['tooltip']}
           style={{
-            ...panel,
             top: tip.y + 16,
             left: tip.x + 12,
-            right: 'auto',
-            padding: '3px 6px',
           }}
         >
           {t('road.intercept', { pct: (tip.intercept / 100).toFixed(0) })}

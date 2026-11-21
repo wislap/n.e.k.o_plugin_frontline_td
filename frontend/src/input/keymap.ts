@@ -30,6 +30,7 @@ export const GLOBAL_KEYMAP: Readonly<Record<string, Intent>> = {
   F2: { kind: 'mode.select', mode: 'build' },
   F3: { kind: 'mode.select', mode: 'logistics' },
   KeyL: { kind: 'overlay.toggle_logistics' },
+  KeyK: { kind: 'ui.toggle_keymap_help' },
   Backquote: { kind: 'dev.toggle_panel' },
   Escape: { kind: 'escape' },
 };
@@ -59,6 +60,7 @@ interface KeybindingEntry {
 
 export interface KeybindingGroup {
   readonly titleKey: string;
+  readonly mode?: PrimaryMode;
   readonly entries: readonly KeybindingEntry[];
 }
 
@@ -74,11 +76,12 @@ export const KEYBINDING_GROUPS: readonly KeybindingGroup[] = [
       { keys: 'L', descKey: 'help.key.logistics_overlay' },
       { keys: '`', descKey: 'help.key.debug' },
       { keys: 'Esc', descKey: 'help.key.escape' },
-      { keys: '?', descKey: 'help.key.help' },
+      { keys: 'K', descKey: 'help.key.help' },
     ],
   },
   {
     titleKey: 'help.group.command',
+    mode: 'command',
     entries: [
       { keys: '1-9', descKey: 'help.key.squad_select' },
       { keys: 'Ctrl+1-9', descKey: 'help.key.squad_create' },
@@ -88,6 +91,7 @@ export const KEYBINDING_GROUPS: readonly KeybindingGroup[] = [
   },
   {
     titleKey: 'help.group.build',
+    mode: 'build',
     entries: [
       { keys: '1-9', descKey: 'help.key.build_category' },
       { keys: 'Shift+Click', descKey: 'help.key.place_blueprint' },
@@ -98,6 +102,7 @@ export const KEYBINDING_GROUPS: readonly KeybindingGroup[] = [
   },
   {
     titleKey: 'help.group.logistics',
+    mode: 'logistics',
     entries: [
       { keys: 'R', descKey: 'help.key.road_tool' },
       { keys: 'Shift+Click', descKey: 'help.key.road_toggle_link' },

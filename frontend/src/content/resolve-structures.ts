@@ -8,7 +8,7 @@ import type { Infer } from '../core/index';
 import { MILLI, TICKS_PER_SECOND } from '../core/index';
 import { captureProfileSchema } from '../features/capture/content';
 import { weaponSchema } from '../features/combat/content';
-import { structureBaseFields } from '../features/construction/content';
+import { type BuildCategory, structureBaseFields } from '../features/construction/content';
 import { nodeProfileSchema, storeProfileSchema } from '../features/logistics/content';
 import { cargoClassCode } from '../features/logistics/protocol';
 import { producerSchema } from '../features/production/content';
@@ -43,6 +43,7 @@ interface ResolvedBuild {
   timeTicks: number;
   demolishTicks: number;
   salvageBp: number;
+  readonly category: BuildCategory;
 }
 
 // Damage in milli units, cooldown in ticks, cost amount in milli.
@@ -175,6 +176,7 @@ function resolveBuildProfile(
     timeTicks: Math.max(1, Math.round(entry.time * TICKS_PER_SECOND)),
     demolishTicks: Math.max(1, Math.round(entry.demolishTime * TICKS_PER_SECOND)),
     salvageBp: entry.salvageBp,
+    category: entry.category ?? 'production',
   };
 }
 

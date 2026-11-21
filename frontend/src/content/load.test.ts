@@ -97,6 +97,53 @@ describe('loadContent', () => {
     expect(message).toContain('expected 64 rows');
     expect(message).toContain('unknown movement class');
   });
+
+  it('resolves expected build categories and rejects invalid categories', () => {
+    const db = loadContent();
+    expect(db.structures.byId('frontline_td:station')?.build?.category).toBe('logistics');
+    expect(db.structures.byId('frontline_td:supply_depot')?.build?.category).toBe('logistics');
+    expect(db.structures.byId('frontline_td:miner')?.build?.category).toBe('production');
+    expect(db.structures.byId('frontline_td:power_plant')?.build?.category).toBe('production');
+    expect(db.structures.byId('frontline_td:ammo_factory')?.build?.category).toBe('production');
+    expect(db.structures.byId('frontline_td:turret')?.build?.category).toBe('military');
+    expect(db.structures.byId('frontline_td:robot_factory')?.build?.category).toBe('military');
+
+    const badStructures = [
+      {
+        id: contentId('frontline_td:bad_cat'),
+        footprint: { w: 1, h: 1 },
+        visual: { height: 1 },
+        build: {
+          cost: { 'frontline_td:material': 10 },
+          time: 1,
+          demolishTime: 1,
+          salvageBp: 5000,
+          category: 'invalid_category',
+        },
+      },
+    ];
+    expect(() => loadContent(sourceWith({ structures: badStructures }))).toThrow(
+      /must be one of logistics, production, military/,
+    );
+
+    const defaultStructures = [
+      {
+        id: contentId('frontline_td:default_cat'),
+        footprint: { w: 1, h: 1 },
+        visual: { height: 1 },
+        build: {
+          cost: { 'frontline_td:material': 10 },
+          time: 1,
+          demolishTime: 1,
+          salvageBp: 5000,
+        },
+      },
+    ];
+    const defaultDb = loadContent(sourceWith({ structures: defaultStructures }));
+    expect(defaultDb.structures.byId('frontline_td:default_cat')?.build?.category).toBe(
+      'production',
+    );
+  });
 });
 
 describe('proto_01 outpost points (M5 batch A)', () => {

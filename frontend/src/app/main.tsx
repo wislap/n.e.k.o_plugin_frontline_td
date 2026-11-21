@@ -1,20 +1,22 @@
 import { createRoot } from 'react-dom/client';
 import '../i18n';
+import '../ui/styles/tokens.css';
+import '../ui/styles/base.css';
 import { useCameraStore } from '../client/camera-store';
 import { makeIsHostile } from '../client/hostility';
 import { IntentContext } from '../client/intent';
 import { useInteractionStore } from '../client/interaction-store';
-import { resetClientState } from '../client/session';
 import { useRuntimeStore } from '../client/runtime-store';
+import { resetClientState } from '../client/session';
 import { createSimClient } from '../client/sim-client';
 import { loadContent, type ResolvedMap } from '../content/index';
-import type { MatchSetup } from '../protocol/index';
 import { installVisibilityPause } from '../host/visibility';
-import { createPanTracker, installPanTracking } from '../input/pan';
 import { installKeyboard } from '../input/keyboard';
+import { createPanTracker, installPanTracking } from '../input/pan';
+import { defaultSetup } from '../modes/assault/index';
+import type { MatchSetup } from '../protocol/index';
 import { App } from './App';
 import { createIntentRouter } from './dispatch';
-import { defaultSetup } from '../modes/assault/index';
 
 const worker = new Worker(new URL('./sim-worker.ts', import.meta.url), { type: 'module' });
 const client = createSimClient(worker);

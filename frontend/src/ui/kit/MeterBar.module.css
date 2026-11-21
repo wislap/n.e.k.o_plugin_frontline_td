@@ -1,0 +1,79 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.25;
+}
+
+.label {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 18px,
+    rgba(7, 11, 19, 0.48) 18px 20px
+  );
+}
+
+.fill {
+  height: 100%;
+  border-radius: 1px;
+  transition:
+    width 140ms var(--ease-snap),
+    background-color 140ms var(--ease-snap);
+}
+
+.tone-mode {
+  background: var(--mode-accent);
+  box-shadow: 0 0 8px var(--mode-accent-glow);
+}
+
+.tone-ok {
+  background: var(--semantic-ok);
+  box-shadow: 0 0 8px rgba(70, 224, 154, 0.35);
+}
+
+.tone-warn {
+  background: var(--semantic-warn);
+  box-shadow: 0 0 8px rgba(255, 193, 77, 0.35);
+}
+
+.tone-danger {
+  background: var(--semantic-danger);
+  box-shadow: 0 0 8px var(--semantic-danger-glow);
+}

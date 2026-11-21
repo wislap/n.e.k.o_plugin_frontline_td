@@ -1,8 +1,9 @@
-// i18n coverage for protocol codes, surfaces, and keybinding help metadata
-// (ADR 0048): every code/label the UI can render must have a translation in
-// BOTH locales.
+// i18n coverage for protocol codes, surfaces, build categories, and keybinding
+// help metadata (ADR 0048/0049): every code/label the UI can render must have
+// a translation in BOTH locales.
 import { describe, expect, it } from 'vitest';
 import { loadContent, localName } from '../content/index';
+import { BUILD_CATEGORIES } from '../features/construction/content';
 import { STATE_NAMES } from '../features/construction/protocol';
 import { FOOTPRINT_CODES, RANGE_CODES } from '../features/construction/rules/index';
 import { CARGO_CLASSES, UNMET_REASONS } from '../features/logistics/protocol';
@@ -34,6 +35,25 @@ const WAITING_CODES = [
   'terrain',
 ] as const;
 const MOD_SOURCES = ['energy_low', 'energy_empty'] as const;
+const SHARED_HUD_KEYS = [
+  'hud.guide_title',
+  'hud.guide_collapse',
+  'hud.guide_expand',
+  'hud.guide_mode_section',
+  'hud.guide_global_section',
+  'hud.logistics_layer',
+  'hud.clock_tick',
+  'build.footprint',
+  'build.time_sec',
+  'build.demolish_btn',
+  'stock.per_sec',
+  'road.confirm_btn',
+  'road.tool_btn',
+  'squad.create_btn',
+  'squad.empty_hint',
+  'squad.center_hint',
+  'dev.title',
+] as const;
 
 type Messages = Record<string, unknown>;
 
@@ -67,7 +87,7 @@ const surfaceNames = db.surfaces.list.map((s) => localName(s.id));
 const helpKeys = KEYBINDING_GROUPS.flatMap((g) => [g.titleKey, ...g.entries.map((e) => e.descKey)]);
 
 describe('i18n protocol-code coverage', () => {
-  it('covers every code/name/surface/help key in English and Chinese', () => {
+  it('covers every code/name/surface/category/help key in English and Chinese', () => {
     for (const bundle of [en, zhCN] as Messages[]) {
       assertKeys(
         bundle,
@@ -114,7 +134,13 @@ describe('i18n protocol-code coverage', () => {
         surfaceNames.map((s) => `surface.${s}`),
         'surface',
       );
+      assertKeys(
+        bundle,
+        ['all', ...BUILD_CATEGORIES].map((c) => `build.category.${c}`),
+        'build.category',
+      );
       assertKeys(bundle, helpKeys, 'help');
+      assertKeys(bundle, SHARED_HUD_KEYS, 'hud');
       // Suggestion text exists for every unmet reason the stock panel shows.
       assertKeys(
         bundle,

@@ -1,57 +1,50 @@
 // Assault match end overlay (M4): once the mode's channel reports
-// `ended`, the observer-relative outcome, the match duration, and a few
-// probe stats; play-again restarts the sim through the app (no reload).
-import { useEffect, useState } from 'react';
+// `ended`, shows the observer-relative outcome, match duration, and
+// probe stats in a frosted obsidian debrief card; play-again restarts
+// the sim through the app (no reload). Uses useSnapshotValue.
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatClock, matchOutcome } from '../../../client/match-info';
-import type { SimClient } from '../../../client/sim-client';
 import { useRuntimeStore } from '../../../client/runtime-store';
+import type { SimClient, SnapshotPair } from '../../../client/sim-client';
+import { useSnapshotValue } from '../../../client/use-snapshot';
+import { ActionButton, TacticalPanel, cx } from '../../../ui/kit/index';
 import { AssaultChannel, type AssaultState } from '../protocol';
+import styles from './EndScreen.module.css';
 
 const PROBE_PREFIX = 'frontline_td:assault.';
 
-const overlay = {
-  position: 'fixed',
-  inset: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: 'rgba(0,0,0,0.6)',
-  zIndex: 1000,
-} as const;
+interface EndSlice {
+  state: AssaultState | null;
+  observer: number;
+}
 
-const card = {
-  padding: '24px 36px',
-  background: 'rgba(10,14,26,0.95)',
-  border: '1px solid #444',
-  borderRadius: 8,
-  color: '#fff',
-  fontFamily: 'monospace',
-  fontSize: 14,
-  textAlign: 'center',
-  minWidth: 280,
-} as const;
+function sameEndSlice(a: EndSlice, b: EndSlice): boolean {
+  return (
+    a.observer === b.observer &&
+    a.state?.ended === b.state?.ended &&
+    a.state?.winner === b.state?.winner &&
+    a.state?.tick === b.state?.tick
+  );
+}
 
 export function EndScreen({ client, onRestart }: { client: SimClient; onRestart: () => void }) {
   const { t } = useTranslation();
-  const [end, setEnd] = useState<{ state: AssaultState; observer: number } | null>(null);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      const latest = client.snapshots().latest;
-      const state = latest?.channels[AssaultChannel.id] as AssaultState | undefined;
-      if (state !== undefined && state.ended !== 0) {
-        setEnd({ state, observer: latest?.observer ?? -1 });
-      }
-    }, 250);
-    return () => {
-      clearInterval(id);
-    };
-  }, [client]);
+  const selectEnd = useCallback((pair: SnapshotPair): EndSlice => {
+    const latest = pair.latest;
+    const state = (latest?.channels[AssaultChannel.id] as AssaultState | undefined) ?? null;
+    if (state === null || state.ended === 0) {
+      return { state: null, observer: -1 };
+    }
+    return { state, observer: latest?.observer ?? -1 };
+  }, []);
 
+  const end = useSnapshotValue(client, selectEnd, sameEndSlice, 250);
   const stats = useRuntimeStore((s) => s.stats);
-  const outcome = matchOutcome(end?.state ?? null, end?.observer ?? -1);
-  if (end === null || outcome === null) {
+  const outcome = matchOutcome(end.state, end.observer);
+
+  if (end.state === null || outcome === null) {
     return null;
   }
 
@@ -63,42 +56,57 @@ export function EndScreen({ client, onRestart }: { client: SimClient; onRestart:
     .filter((k) => k.startsWith(`${PROBE_PREFIX}stock.${own}.`))
     .sort();
 
+  const panelTone = outcome === 'defeat' ? 'danger' : outcome === 'draw' ? 'warn' : 'mode';
+
   return (
-    <div style={overlay}>
-      <div style={card}>
-        <div style={{ fontSize: 22, marginBottom: 8 }}>{t(`end.${outcome}`)}</div>
-        <div>{t('end.duration', { time: formatClock(end.state.tick) })}</div>
-        <div style={{ marginTop: 10, textAlign: 'left', fontSize: 12, color: '#bbb' }}>
-          <div>{t('end.units', { count: probe(`units.${own}`) ?? 0 })}</div>
-          <div>{t('end.structures', { count: probe(`structures.${own}`) ?? 0 })}</div>
-          <div>{t('end.waves', { count: probe(`waves.${foe}`) ?? 0 })}</div>
-          {stockKeys.map((k) => (
-            <div key={k}>
-              {t(`end.stock.${k.split('.').pop() ?? ''}`, {
-                count: probes[k] ?? 0,
-                defaultValue: `${k.split('.').pop() ?? ''}: ${probes[k] ?? 0}`,
-              })}
-            </div>
-          ))}
+    <div className={styles['backdrop']}>
+      <TacticalPanel
+        tone={panelTone}
+        className={cx(styles['card'], styles[`outcome-${outcome}`])}
+        bodyClassName={styles['body']}
+      >
+        <div className={styles['hero']}>
+          <div className={styles['outcomeTitle']}>{t(`end.${outcome}`)}</div>
+          <div className={styles['duration']}>
+            {t('end.duration', { time: formatClock(end.state.tick) })}
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onRestart}
-          style={{
-            marginTop: 14,
-            padding: '6px 18px',
-            cursor: 'pointer',
-            background: 'rgba(127,212,255,0.2)',
-            color: '#fff',
-            border: '1px solid #7fd4ff',
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            fontSize: 14,
-          }}
-        >
-          {t('end.restart')}
-        </button>
-      </div>
+
+        <div className={styles['statsGrid']}>
+          <div className={styles['statCell']}>
+            {t('end.units', { count: probe(`units.${own}`) ?? 0 })}
+          </div>
+          <div className={styles['statCell']}>
+            {t('end.structures', { count: probe(`structures.${own}`) ?? 0 })}
+          </div>
+          <div className={styles['statCell']}>
+            {t('end.waves', { count: probe(`waves.${foe}`) ?? 0 })}
+          </div>
+          {stockKeys.map((k) => {
+            const cargoName = k.split('.').pop() ?? '';
+            const count = probes[k] ?? 0;
+            return (
+              <div key={k} className={styles['statCell']}>
+                {t(`end.stock.${cargoName}`, {
+                  count,
+                  defaultValue: `${cargoName}: ${count}`,
+                })}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className={styles['actions']}>
+          <ActionButton
+            variant="primary"
+            size="md"
+            onClick={onRestart}
+            className={styles['restartBtn']}
+          >
+            {t('end.restart')}
+          </ActionButton>
+        </div>
+      </TacticalPanel>
     </div>
   );
 }

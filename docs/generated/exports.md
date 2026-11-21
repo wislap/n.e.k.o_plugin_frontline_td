@@ -135,6 +135,8 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `BUILD_CATEGORIES` | const | Build menu category tabs (ADR 0049): structures with a `build` block belong to one of these groups; omitted entries default to 'production'. |
+| `BuildCategory` | type |  |
 | `structureBaseFields` | const |  |
 
 ## src/features/construction/protocol.ts

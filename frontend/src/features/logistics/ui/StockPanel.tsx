@@ -1,4 +1,4 @@
-// Warehouse stock panel (ADR 0048, top-right): stock per cargo with
+// Warehouse stock panel (ADR 0048, topRight): stock per cargo with
 // localized names, rolling net stock rates (/s), unmet demand/export
 // counts by reason with a one-line suggestion, and the construction ⇄
 // production priority toggle. Driven by useSnapshotValue.
@@ -8,6 +8,7 @@ import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import { createStockRateTracker } from '../../../client/stock-rate';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { localName, type ContentDb } from '../../../content/index';
+import { ActionButton, RateBadge, TacticalPanel } from '../../../ui/kit/index';
 import {
   ADJUSTABLE_CLASSES,
   LogisticsNetworkChannel,
@@ -16,21 +17,9 @@ import {
   type CargoClassName,
   type LogisticsNetwork,
 } from '../protocol';
+import styles from './StockPanel.module.css';
 
 const POLL_MS = 500;
-const panel = {
-  position: 'fixed',
-  top: 8,
-  right: 8,
-  padding: '8px 10px',
-  background: 'rgba(0,0,0,0.55)',
-  color: '#fff',
-  fontFamily: 'monospace',
-  fontSize: 12,
-  zIndex: 900,
-  borderRadius: 4,
-  minWidth: 200,
-} as const;
 
 interface StockSlice {
   tick: number;
@@ -40,27 +29,6 @@ interface StockSlice {
 
 function sameStockSlice(a: StockSlice, b: StockSlice): boolean {
   return a.tick === b.tick && a.network === b.network;
-}
-
-function formatRate(milliPerSec: number): string {
-  const units = milliPerSec / 1000;
-  if (milliPerSec > 0) {
-    return `+${units.toFixed(1)}`;
-  }
-  if (milliPerSec < 0) {
-    return units.toFixed(1);
-  }
-  return '0.0';
-}
-
-function rateColor(milliPerSec: number): string {
-  if (milliPerSec > 0) {
-    return '#7aff9a';
-  }
-  if (milliPerSec < 0) {
-    return '#ff9a7a';
-  }
-  return '#999';
 }
 
 export function StockPanel({ client, db }: { client: SimClient; db: ContentDb }) {
@@ -86,55 +54,72 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
   if (network === null) {
     return null;
   }
+
   const adjustable = network.priorities.filter((p): p is CargoClassName =>
     (ADJUSTABLE_CLASSES as readonly string[]).includes(p),
   );
 
+  const unmetEntries = UNMET_REASONS.map((reason, i) => ({
+    reason,
+    count: (network.unmet[i] ?? 0) + (network.unmetExport[i] ?? 0),
+  })).filter((entry) => entry.reason !== 'none' && entry.count > 0);
+
   return (
-    <div style={panel}>
-      <div>{t('stock.title')}</div>
-      {network.stock.map((milli, cargo) => {
-        const id = db.cargos.byIndex(cargo)?.id ?? String(cargo);
-        const rateMilli = rates[cargo] ?? 0;
-        return (
-          <div key={id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-            <span>
-              {t(`cargo.${localName(id)}`, { defaultValue: localName(id) })}:{' '}
-              {Math.floor(milli / 1000)}
-            </span>
-            <span style={{ color: rateColor(rateMilli) }}>
-              {t('stock.rate', { value: formatRate(rateMilli) })}
-            </span>
-          </div>
-        );
-      })}
-      {UNMET_REASONS.map((reason, i) => {
-        const demand = network.unmet[i] ?? 0;
-        const exported = network.unmetExport[i] ?? 0;
-        if (reason === 'none' || demand + exported === 0) {
-          return null;
-        }
-        return (
-          <div key={reason} style={{ color: '#ffb37a' }}>
-            {t(`reason.${reason}`, { defaultValue: reason })}: {demand + exported} —{' '}
-            {t(`suggest.${reason}`, { defaultValue: '' })}
-          </div>
-        );
-      })}
-      {adjustable.length === 2 && (
-        <button
-          type="button"
-          style={{ marginTop: 4, cursor: 'pointer' }}
-          onClick={() => {
-            client.submit({
-              type: SetPrioritiesCommand.type,
-              payload: { order: [...adjustable].reverse() },
-            });
-          }}
-        >
-          {t('stock.priorities', { order: adjustable.map((c) => t(`class.${c}`)).join(' > ') })}
-        </button>
+    <TacticalPanel tone="neutral" compact title={t('stock.title')} className={styles['panel']}>
+      <div className={styles['rows']}>
+        {network.stock.map((milli, cargo) => {
+          const id = db.cargos.byIndex(cargo)?.id ?? String(cargo);
+          const cargoKey = localName(id);
+          const rateMilli = rates[cargo] ?? 0;
+          return (
+            <div key={id} className={styles['row']}>
+              <span className={styles['cargoName']}>
+                {t(`cargo.${cargoKey}`, { defaultValue: cargoKey })}
+              </span>
+              <div className={styles['metrics']}>
+                <span className={styles['amount']}>{Math.floor(milli / 1000)}</span>
+                <RateBadge milliPerSec={rateMilli} suffix={t('stock.per_sec')} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {unmetEntries.length > 0 && (
+        <div className={styles['warnings']}>
+          {unmetEntries.map(({ reason, count }) => {
+            const suggestion = t(`suggest.${reason}`, { defaultValue: '' });
+            return (
+              <div key={reason} className={styles['warnItem']}>
+                <div className={styles['warnHead']}>
+                  <span>{t(`reason.${reason}`, { defaultValue: reason })}</span>
+                  <span className={styles['warnCount']}>{count}</span>
+                </div>
+                {suggestion.length > 0 && <div className={styles['warnSuggest']}>{suggestion}</div>}
+              </div>
+            );
+          })}
+        </div>
       )}
-    </div>
+
+      {adjustable.length === 2 && (
+        <div className={styles['footer']}>
+          <ActionButton
+            size="sm"
+            className={styles['priorityBtn']}
+            onClick={() => {
+              client.submit({
+                type: SetPrioritiesCommand.type,
+                payload: { order: [...adjustable].reverse() },
+              });
+            }}
+          >
+            {t('stock.priorities', {
+              order: adjustable.map((c) => t(`class.${c}`)).join(' ⇄ '),
+            })}
+          </ActionButton>
+        </div>
+      )}
+    </TacticalPanel>
   );
 }

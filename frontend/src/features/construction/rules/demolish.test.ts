@@ -95,6 +95,7 @@ describe('demolishRefund', () => {
         timeTicks: 10,
         demolishTicks: 10,
         salvageBp: 5000,
+        category: 'production',
       },
     };
     // floorDiv(3 * 5000, 10000) = 1; floorDiv(1 * 5000, 10000) = 0 (filtered)
@@ -145,6 +146,7 @@ describe('classifyCancelSelection', () => {
         timeTicks: 10,
         demolishTicks: 10,
         salvageBp: 5000,
+        category: 'production',
       },
     };
     const fakeDb = {

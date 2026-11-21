@@ -5,9 +5,9 @@ import { useUiStore } from '../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import { DebugPanel } from '../dev/DebugPanel';
 import type { PanTracker } from '../input/pan';
+import { EndScreen } from '../modes/assault/ui/EndScreen';
 import { GameCanvas } from '../render/GameCanvas';
 import { Hud } from '../ui/Hud';
-import { EndScreen } from '../modes/assault/ui/EndScreen';
 
 export function App({
   client,
@@ -35,8 +35,14 @@ export function App({
   return (
     <main>
       <GameCanvas client={client} db={db} map={map} panTracker={panTracker} isHostile={isHostile} />
-      <Hud client={client} db={db} modeUi={<EndScreen client={client} onRestart={onRestart} />} />
-      {panelOpen && <DebugPanel client={client} />}
+      <Hud
+        client={client}
+        db={db}
+        map={map}
+        isHostile={isHostile}
+        modeUi={<EndScreen client={client} onRestart={onRestart} />}
+        debugUi={panelOpen ? <DebugPanel client={client} /> : null}
+      />
     </main>
   );
 }
