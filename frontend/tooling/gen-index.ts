@@ -102,6 +102,10 @@ export function scanAdrs(adrDir: string): AdrScanResult {
 
     const text = readFileSync(path.join(adrDir, fileName), 'utf8');
     const lines = text.split(/\r?\n/);
+    // Header fields live between the H1 and the first '## ' section;
+    // body text that happens to look like a field line is ignored.
+    const bodyStart = lines.findIndex((line) => line.startsWith('## '));
+    const header = bodyStart === -1 ? lines : lines.slice(0, bodyStart);
 
     const h1 = ADR_H1_RE.exec(lines[0] ?? '');
     if (h1 === null) {
@@ -115,16 +119,16 @@ export function scanAdrs(adrDir: string): AdrScanResult {
       continue;
     }
 
-    const statusLine = lines.map((line) => ADR_STATUS_RE.exec(line)).find((m) => m !== null);
+    const statusLine = header.map((line) => ADR_STATUS_RE.exec(line)).find((m) => m !== null);
     if (statusLine === undefined) {
       errors.push(`${fileName}: missing '- 状态：' line with a valid status`);
       continue;
     }
 
-    const implLine = lines.map((line) => ADR_IMPL_RE.exec(line)).find((m) => m !== null);
+    const implLine = header.map((line) => ADR_IMPL_RE.exec(line)).find((m) => m !== null);
     let implementation: AdrImplementation;
     if (implLine === undefined) {
-      const present = lines.some((line) => line.startsWith('- 实现：'));
+      const present = header.some((line) => line.startsWith('- 实现：'));
       errors.push(
         present
           ? `${fileName}: invalid '实现' value (expected 已实现[（注：…）] / 部分|未实现（缺：…）)`
@@ -151,12 +155,12 @@ export function scanAdrs(adrDir: string): AdrScanResult {
 
     let headerOk = true;
     const readField = (field: string, strict: RegExp, hint: string): string => {
-      const match = lines.map((line) => strict.exec(line)).find((m) => m !== null);
+      const match = header.map((line) => strict.exec(line)).find((m) => m !== null);
       if (match !== undefined) {
         return match[1] ?? '';
       }
       headerOk = false;
-      const present = lines.some((line) => line.startsWith(`- ${field}：`));
+      const present = header.some((line) => line.startsWith(`- ${field}：`));
       errors.push(
         present
           ? `${fileName}: invalid '${field}' value (expected ${hint})`
@@ -187,7 +191,7 @@ export function scanAdrs(adrDir: string): AdrScanResult {
       }
     }
 
-    const partialSupersedes = lines
+    const partialSupersedes = header
       .map((line) => ADR_PARTIAL_RE.exec(line))
       .filter((m): m is RegExpExecArray => m !== null)
       .map((m) => ({ number: m[1] ?? '', note: m[2] ?? '' }));
@@ -446,6 +450,9 @@ function exportKind(decl: ts.Declaration): string {
   }
   if (ts.isVariableDeclaration(decl)) {
     const init = decl.initializer;
+    if (init !== undefined && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
+      return 'function';
+    }
     if (init !== undefined && ts.isCallExpression(init) && ts.isIdentifier(init.expression)) {
       return CALLEE_KINDS[init.expression.text] ?? 'const';
     }
@@ -454,48 +461,95 @@ function exportKind(decl: ts.Declaration): string {
   return 'export';
 }
 
-// The contiguous '//' block nearest the declaration, joined and cut at
-// the first sentence end ('. ', '. ' variants, '：', ';') or 140 chars.
-function leadingComment(decl: ts.Declaration): string {
-  const text = decl.getFullText();
-  const ranges = (ts.getLeadingCommentRanges(text, 0) ?? []).filter(
-    (r) => r.kind === ts.SyntaxKind.SingleLineCommentTrivia,
-  );
-  if (ranges.length === 0) {
-    return '';
+// 'e.g.', 'i.e.', 'etc.', 'vs.' end a token, not a sentence.
+const SENTENCE_ABBREVIATIONS = new Set(['e.g.', 'i.e.', 'etc.', 'vs.']);
+
+// First sentence of a doc block: cut at '。', or at '.' followed by a
+// space / end of text unless it terminates a common abbreviation or sits
+// inside parentheses. Otherwise truncate at 140 chars.
+function firstSentence(block: string): string {
+  let depth = 0;
+  for (let i = 0; i < block.length; i += 1) {
+    const ch = block[i];
+    if (ch === '(' || ch === '（') {
+      depth += 1;
+    } else if (ch === ')' || ch === '）') {
+      depth = Math.max(0, depth - 1);
+    }
+    if (depth !== 0) {
+      continue;
+    }
+    if (ch === '。') {
+      return block.slice(0, i + 1);
+    }
+    if (ch === '.' && (i + 1 >= block.length || block[i + 1] === ' ')) {
+      const token = /[\w.]+$/.exec(block.slice(0, i + 1))?.[0] ?? '';
+      if (!SENTENCE_ABBREVIATIONS.has(token)) {
+        return block.slice(0, i + 1);
+      }
+    }
   }
-  // Extend the nearest range backwards across earlier '//' lines separated
-  // only by whitespace so multi-line comments report their first line.
-  let first = ranges.length - 1;
-  while (first > 0 && /^\s*$/.test(text.slice(ranges[first - 1]?.end ?? 0, ranges[first]?.pos))) {
-    first -= 1;
-  }
-  const block = ranges
-    .slice(first)
-    .map((r) => text.slice(r.pos + 2, r.end).trim())
-    .filter((line) => line !== '')
-    .join(' ');
-  const sentenceEnd = block.search(/[.。;；：]\s|[.。;；：]$/);
-  const cut =
-    sentenceEnd >= 0
-      ? block.slice(0, sentenceEnd + 1)
-      : block.length > 140
-        ? `${block.slice(0, 140)}…`
-        : block;
-  return cut.replace(/\|/g, '\\|');
+  return block.length > 140 ? `${block.slice(0, 140)}…` : block;
 }
 
-function exportSurfaceFiles(): string[] {
+function commentLines(range: ts.CommentRange, text: string): string[] {
+  const raw = text.slice(range.pos, range.end);
+  if (range.kind === ts.SyntaxKind.SingleLineCommentTrivia) {
+    return [raw.slice(2)];
+  }
+  const inner = raw.replace(/^\/\*+/, '').replace(/\*\/$/, '');
+  return inner.split(/\r?\n/).map((line) => line.replace(/^\s*\*\s?/, ''));
+}
+
+function startsLine(text: string, pos: number): boolean {
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  return /^[ \t]*$/.test(text.slice(lineStart, pos));
+}
+
+// The comment block immediately adjacent to the declaration's enclosing
+// statement (leading comments attach to the VariableStatement, not the
+// VariableDeclaration). A blank line ends the block, and a comment that
+// does not start its own line is a trailing comment of the previous
+// statement — neither counts. Supports '//' runs and '/* */'/'/** */'
+// blocks; the joined text is cut to its first sentence.
+function leadingComment(decl: ts.Declaration): string {
+  const node: ts.Node = ts.isVariableDeclaration(decl) ? decl.parent.parent : decl;
+  const text = decl.getSourceFile().getFullText();
+  const ranges = ts.getLeadingCommentRanges(text, node.getFullStart()) ?? [];
+  const block: ts.CommentRange[] = [];
+  let end = node.getStart();
+  for (let i = ranges.length - 1; i >= 0; i -= 1) {
+    const range = ranges[i];
+    if (range === undefined) {
+      break;
+    }
+    if (/\n\s*\n/.test(text.slice(range.end, end)) || !startsLine(text, range.pos)) {
+      break;
+    }
+    block.unshift(range);
+    end = range.pos;
+  }
+  const joined = block
+    .flatMap((r) => commentLines(r, text))
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .join(' ');
+  return firstSentence(joined).replace(/\|/g, '\\|');
+}
+
+export function exportSurfaceFiles(): string[] {
   const files = new Set<string>([
     'src/core/index.ts',
     'src/kernel/index.ts',
     'src/content/index.ts',
     'src/protocol/index.ts',
+    'src/testing/index.ts',
   ]);
   const featuresDir = path.join(FRONTEND_ROOT, 'src', 'features');
   for (const feature of readdirSync(featuresDir).sort()) {
     for (const candidate of [
       `src/features/${feature}/protocol.ts`,
+      `src/features/${feature}/content.ts`,
       ...['sim', 'rules', 'render', 'ui'].flatMap((sub) => [
         `src/features/${feature}/${sub}/index.ts`,
         `src/features/${feature}/${sub}/index.tsx`,
@@ -506,10 +560,18 @@ function exportSurfaceFiles(): string[] {
       }
     }
   }
+  const modesDir = path.join(FRONTEND_ROOT, 'src', 'modes');
+  for (const mode of readdirSync(modesDir).sort()) {
+    for (const candidate of [`src/modes/${mode}/index.ts`, `src/modes/${mode}/index.tsx`]) {
+      if (existsSync(path.join(FRONTEND_ROOT, candidate))) {
+        files.add(candidate);
+      }
+    }
+  }
   return [...files].sort();
 }
 
-function renderExports(files: readonly string[]): string {
+export function renderExports(files: readonly string[]): string {
   const program = ts.createProgram(
     files.map((f) => path.join(FRONTEND_ROOT, f)),
     {

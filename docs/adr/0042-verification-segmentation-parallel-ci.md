@@ -7,6 +7,7 @@
 - 批次：治理
 - 领域：工程
 - 部分取代：0041（CI 为单一 job 顺序管道的描述）
+- 部分取代：0017（CI 管道固定顺序：改为 verify:static → test → verify:build 三段、三个并行 job）
 
 ## 背景
 验证整体耗时成为迭代瓶颈：本地 `npm run verify` 串行约 150 s（测试 80 s、lint 32 s、typecheck 12 s、其余 ~23 s），CI 单 job 约 3 min。测试墙钟被单文件支配（vitest 只按文件并行）：`assault-director` 38 s、`determinism` 22 s、`match-smoke` 11 s、`pathing` 9 s。门禁强度不降的前提下缩短反馈。

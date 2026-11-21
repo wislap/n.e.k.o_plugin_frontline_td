@@ -15,9 +15,9 @@
 - `sim/`：`Vision { radius, x, y }` 组件（经 `unitParts`/`structureParts`
   注入——结构无 Position，工厂直接烘入占地中心；工地、废墟、蓝图
   不挂视野）、`VisionApi`（`visible`/`visibleRect`；全知阵营恒真）。
-- `rules/` 纯函数：`isCellVisible`、`fogBuckets`、`hostileExcluders`
+- `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
-- `render/`：`FogLayer`（未见/已见 instanced 覆盖块，按层身份重建）、
+- `render/`：`FogLayer`（地形形网格 + DataTexture 明暗覆盖）、
   `MemoryLayer`（记忆结构暗框）。
 
 ## 拥有的组件

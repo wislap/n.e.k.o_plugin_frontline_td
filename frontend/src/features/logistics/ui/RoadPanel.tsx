@@ -10,6 +10,7 @@ import { cursorScreen } from '../../../client/cursor';
 import type { SimClient } from '../../../client/sim-client';
 import { localName, type ContentDb } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
+import { lowestBuildableRoadLevel } from '../content';
 import { LogisticsNetworkChannel, ROAD_LAYER_ID, type LogisticsNetwork } from '../protocol';
 import { roadPreview, type RoadPreviewLink } from './road-preview';
 import { linkIndices } from './road-select';
@@ -49,9 +50,18 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
   const [preview, setPreview] = useState<PreviewRow | null>(null);
   const [tip, setTip] = useState<HoverTip | null>(null);
 
-  const level = db.logistics.roadLevels[1];
-  const materialPerCell = level?.cost?.[0]?.milli ?? 0;
-  const ticksPerCell = level?.ticksPerCell ?? 0;
+  const levelIndex = lowestBuildableRoadLevel(db.logistics.roadLevels);
+  const level = db.logistics.roadLevels[levelIndex];
+  const cost = level?.cost?.[0];
+  if (cost === undefined || level?.ticksPerCell === undefined) {
+    throw new Error('logistics: buildable road level lacks a cost or build time');
+  }
+  const materialPerCell = cost.milli;
+  const ticksPerCell = level.ticksPerCell;
+  const cargo = db.cargos.byIndex(cost.cargo);
+  if (cargo === undefined) {
+    throw new Error('logistics: road level cost references an unknown cargo');
+  }
   const levelMult = db.logistics.roadLevels.map((l) => l.multiplierBp);
 
   useEffect(() => {
@@ -95,8 +105,8 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
       }
       // roadSel stores handle pairs; resolve to current link indices.
       const selectedLinks = new Set(linkIndices(network, selected));
-      const p = roadPreview(links, selectedLinks, (cell) => road[cell] ?? 0, 1, levelMult);
-      const cargoId = db.cargos.byIndex(level?.cost?.[0]?.cargo ?? -1)?.id ?? '';
+      const p = roadPreview(links, selectedLinks, (cell) => road[cell] ?? 0, levelIndex, levelMult);
+      const cargoId = cargo.id;
       setPreview({
         ...p,
         material: Math.ceil((p.cellsToPave * materialPerCell) / 1000),
@@ -107,7 +117,18 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
     return () => {
       clearInterval(id);
     };
-  }, [client, db, roadMode, selected, hovered, level, levelMult, materialPerCell, ticksPerCell]);
+  }, [
+    client,
+    db,
+    roadMode,
+    selected,
+    hovered,
+    levelIndex,
+    levelMult,
+    materialPerCell,
+    ticksPerCell,
+    cargo.id,
+  ]);
 
   if (!roadMode) {
     return null;

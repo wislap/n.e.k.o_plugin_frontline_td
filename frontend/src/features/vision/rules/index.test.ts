@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadContent } from '../../../content/index';
 import { STATE_OPERATIONAL, STATE_RUIN } from '../../construction/protocol';
-import { fogBuckets, hostileExcluders, isCellVisible } from './index';
+import { hostileExcluders, isCellVisible } from './index';
 
 const W = 10;
 const H = 8;
@@ -27,16 +27,6 @@ describe('isCellVisible', () => {
     expect(isCellVisible(layer, W, -1, 2)).toBe(false);
     expect(isCellVisible(layer, W, W + 1, 2)).toBe(false);
     expect(isCellVisible(undefined, W, 3, 2)).toBe(false);
-  });
-});
-
-describe('fogBuckets', () => {
-  it('buckets cells into unexplored/explored flat indices', () => {
-    const { unexplored, explored } = fogBuckets(layer, W, H);
-    expect(unexplored.length).toBe(W * H - 3);
-    expect(explored).toEqual([4 * W + 1]);
-    expect(unexplored).not.toContain(2 * W + 3);
-    expect(unexplored).not.toContain(5 * W + 9);
   });
 });
 

@@ -8,7 +8,7 @@
 |---|---|---|
 | `ContentDb` | interface |  |
 | `loadContent` | function |  |
-| `localName` | function | Local name of a content id ('pack:name' → 'name'); |
+| `localName` | function | Local name of a content id ('pack:name' → 'name'); ids without a namespace pass through unchanged. |
 | `ResolvedMap` | interface |  |
 | `ResolvedStoreProfile` | interface |  |
 | `ResolvedStructure` | interface |  |
@@ -47,13 +47,13 @@
 | `Inspection` | interface | Read-only per-entity explanation produced by Simulation.inspect: the entity's active modifiers plus every non-null module inspector section. |
 | `IntentDef` | interface | Intents are like events but always invisible to snapshots and allow exactly one reader. |
 | `isPackId` | function |  |
-| `lnMilli` | function | round(ln(2) * 1e6) round(1000 * ln(valueMilli / 1000)) for valueMilli >= 1000, integer-only (no Math.log — ADR 0006): the mantissa is range-reduced to [1, 2) in micro units by repeated halving, then ln(y) = 2·atanh((y−1)/(y+1)) is summed as a fixed-point series. |
+| `lnMilli` | function | round(1000 * ln(valueMilli / 1000)) for valueMilli >= 1000, integer-only (no Math.log — ADR 0006): the mantissa is range-reduced to [1, 2) in micro units by repeated halving, then ln(y) = 2·atanh((y−1)/(y+1)) is summed as a fixed-point series. |
 | `MILLI` | const |  |
 | `NULL_HANDLE` | const |  |
 | `packHandle` | function |  |
 | `parseContentId` | function |  |
-| `rngNextIntBelow` | function | Unbiased integer in [0, n) via rejection sampling; |
-| `RngState` | type | Seeded, serializable RNG: sfc32 over a Uint32Array(4) state. |
+| `rngNextIntBelow` | function | Unbiased integer in [0, n) via rejection sampling; n in 1..2^32. |
+| `RngState` | type |  |
 | `s` | export | A tiny schema DSL deriving both the TS type and the runtime validator. |
 | `Serializable` | type | JSON-like data plus TypedArrays. |
 | `Snapshot` | interface |  |
@@ -65,6 +65,12 @@
 | `toFactionId` | function |  |
 | `toTick` | function |  |
 | `validate` | function |  |
+
+## src/features/capture/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `captureProfileSchema` | const |  |
 
 ## src/features/capture/protocol.ts
 
@@ -85,8 +91,14 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `captureRuinParts` | function | Injected into construction as a ruin part factory (wired in app): every ruin carries Capture; |
+| `captureRuinParts` | function | Injected into construction as a ruin part factory (wired in app): every ruin carries Capture; kind/x/y mirror the Structure fields so the module needs no construction import. |
 | `createCaptureModule` | function |  |
+
+## src/features/combat/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `weaponSchema` | const |  |
 
 ## src/features/combat/protocol.ts
 
@@ -96,7 +108,7 @@
 | `CombatShot` | event def |  |
 | `DamageIntent` | intent def |  |
 | `DamagePayload` | type | target = entity handle, amount = milli damage. |
-| `DiedPayload` | type | Emitted once per entity when its hp drops to 0; |
+| `DiedPayload` | type | Emitted once per entity when its hp drops to 0; cleanup-phase readers (movement, construction) release per-entity resources before combat's own despawn runs. |
 | `ShotPayload` | type |  |
 
 ## src/features/combat/render/index.ts
@@ -112,27 +124,33 @@
 | `CombatModule` | interface |  |
 | `createCombatModule` | function |  |
 | `Health` | component def |  |
-| `healthFraction` | function | hp fraction in basis points; |
+| `healthFraction` | function | hp fraction in basis points; entities without Health read as full. |
 | `roadSegmentParts` | function | Road-segment parts (E1): flat segment hp and a 0.5-cell hit radius. |
 | `structureParts` | function |  |
 | `unitParts` | function |  |
+
+## src/features/construction/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `structureBaseFields` | const |  |
 
 ## src/features/construction/protocol.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `ActivateCommand` | command def |  |
-| `CancelCommand` | command def |  |
+| `ActivateCommand` | command def | construction.activate: activate blueprint handles for auto-start. |
+| `CancelCommand` | command def | construction.cancel: blueprint -> despawn; build site -> salvage of delivered materials; finished building -> demolition. |
 | `ConstructionCompleted` | event def |  |
 | `ConstructionCompletedPayload` | type |  |
 | `ConstructionSalvage` | interface |  |
 | `ConstructionStructures` | interface |  |
-| `PlaceCommand` | command def |  |
+| `PlaceCommand` | command def | construction.place: kind is a structure content id; blueprint spawns a reservation instead of a site. |
 | `RoadSegmentDesc` | interface | Data handed to the injected road-segment parts factories (logistics contributes site slots + FixedAttach, combat Health + Targetable). |
 | `RoadWorks` | interface | Per-observer road-works snapshot: live segments plus planned projects. |
 | `RoadWorksChannel` | channel def |  |
 | `SalvageChannel` | channel def |  |
-| `STATE_BLUEPRINT` | const |  |
+| `STATE_BLUEPRINT` | const | Structures channel row states. |
 | `STATE_DEMOLISHING` | const |  |
 | `STATE_NAMES` | const |  |
 | `STATE_OPERATIONAL` | const |  |
@@ -140,7 +158,7 @@
 | `STATE_SITE` | const |  |
 | `STATE_WAITING` | const |  |
 | `StructuresChannel` | channel def |  |
-| `UpgradeLinksCommand` | command def |  |
+| `UpgradeLinksCommand` | command def | construction.upgrade_links: order road projects on links between own nodes (a/b are node entity handles); level is a roadLevels index. |
 
 ## src/features/construction/render/index.ts
 
@@ -150,7 +168,7 @@
 | `GhostPreview` | function |  |
 | `roadWorksHpItems` | function | HP-bar collector for road segments (only damaged ones render). |
 | `RoadWorksLayer` | function |  |
-| `structureKindHeight` | function | Greybox height from content (`visual.height`, required per kind); |
+| `structureKindHeight` | function | Greybox height from content (`visual.height`, required per kind); unknown indices fall back to a unit-height box. |
 | `StructuresLayer` | function |  |
 
 ## src/features/construction/rules/index.ts
@@ -161,7 +179,7 @@
 | `checkRange` | function |  |
 | `FOOTPRINT_CODES` | const |  |
 | `makePlacementView` | function |  |
-| `PlacementRule` | interface | Shared placement rules (ADR 0012): pure footprint and range checks used by the sim (authoritative) and the client preview (batch D). |
+| `PlacementRule` | interface |  |
 | `PlacementView` | interface |  |
 | `RANGE_CODES` | const |  |
 
@@ -169,10 +187,10 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `Core` | component def |  |
+| `Core` | component def | Core tag: construction-owned flag present only on operational structures whose content sets `core` (added at spawn-complete or on site completion). |
 | `createConstructionModule` | function |  |
-| `Structure` | component def |  |
-| `StructurePartsFn` | type | Injected structure spawn-part factories (logistics contributes node + store parts; |
+| `Structure` | component def | A placed structure (site or building); x,y is the footprint top-left. |
+| `StructurePartsFn` | type | Injected structure spawn-part factories (logistics contributes node + store parts; later batches add theirs). |
 | `structureStateOf` | function | Structures-channel state for a Structure entity (blueprints have their own rows). |
 
 ## src/features/construction/ui/index.tsx
@@ -181,13 +199,25 @@
 |---|---|---|
 | `BuildMenu` | function |  |
 
+## src/features/logistics/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `CargoContent` | type |  |
+| `cargoSchema` | const |  |
+| `LogisticsConfigContent` | type |  |
+| `logisticsConfigSchema` | const | Pack-level logistics parameters (single object, not a registry). |
+| `lowestBuildableRoadLevel` | function | First road level carrying a build profile (level 0 is the dirt baseline). |
+| `nodeProfileSchema` | const | Structure logistics node: connect and service in cells (connect is converted to cost units ×10 by the loader), warehouse marks the faction stock hub. |
+| `storeProfileSchema` | const | One CargoStore slot: capacity in units (converted to milli by the loader), an optional per-second rate (negative = upkeep drain) and the export flag that marks the slot as a source shipped to the warehouse. |
+
 ## src/features/logistics/protocol.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `ADJUSTABLE_CLASSES` | const |  |
+| `ADJUSTABLE_CLASSES` | const | Classes a faction can reorder; lifeline is always first, reserve last. |
 | `CARGO_CLASSES` | const |  |
-| `CARGO_CONSTRUCTION` | const |  |
+| `CARGO_CONSTRUCTION` | const | Cargo slot class codes (CargoStore.cls{i}). |
 | `CARGO_PRODUCTION` | const |  |
 | `CARGO_RESERVE` | const |  |
 | `cargoClassCode` | function |  |
@@ -196,17 +226,17 @@
 | `DepositIntent` | intent def |  |
 | `LogisticsNetwork` | interface |  |
 | `LogisticsNetworkChannel` | channel def |  |
-| `ROAD_LAYER_ID` | const |  |
+| `ROAD_LAYER_ID` | const | Global road-level layer id (u8): 0 = dirt, >=1 paved level. |
 | `RoadLinkKey` | interface | Stable link identity: the normalized pair of endpoint node handles (smaller first). |
-| `SERVICE_LAYER_ID` | const |  |
+| `SERVICE_LAYER_ID` | const | Per-faction coverage layer id (u8, perFaction). |
 | `SetPrioritiesCommand` | command def |  |
-| `SLOT_EXPORT` | const |  |
+| `SLOT_EXPORT` | const | CargoStore slot flag bits. |
 | `SLOT_SITE` | const |  |
-| `StoreTransferPayload` | type | Other features only emit these; |
+| `StoreTransferPayload` | type | Other features only emit these; logistics is the sole reader/resolver. |
 | `UNMET_DISCONNECTED` | const |  |
 | `UNMET_NO_CAPACITY` | const |  |
 | `UNMET_NO_STOCK` | const |  |
-| `UNMET_NONE` | const |  |
+| `UNMET_NONE` | const | Unmet-demand reason codes (CargoStore.unmet{i}). |
 | `UNMET_NOT_COVERED` | const |  |
 | `UNMET_REASONS` | const |  |
 
@@ -229,16 +259,16 @@
 | `createLogisticsModule` | function |  |
 | `EMPTY_CARGO` | const |  |
 | `EnergyEmptyModifier` | modifier def |  |
-| `EnergyLowModifier` | modifier def |  |
+| `EnergyLowModifier` | modifier def | Supply-state modifiers; the values come from the pack logistics config (lowSpeedBp) and the spec-fixed −10000 for empty. |
 | `exportStoreInit` | function | A CargoStore whose filled slots are pure export buffers (cargo, amt = cap = refund, export flag, since = tick + 1). |
-| `Interceptor` | component def |  |
+| `Interceptor` | component def | Interception strength (bp) this entity applies to hostile link quotas inside the corridor around link polylines. |
 | `LinkPath` | interface | The upgrade query for construction: the link polyline oriented upstream (warehouse side per the budget-free full tree) -> downstream, per-cell cumulative path cost, the upstream node's handle and the link index. |
 | `LogisticsModule` | interface |  |
-| `LogisticsNode` | component def |  |
+| `LogisticsNode` | component def | connect: max link path cost in cost units (cell = 10); service: coverage radius in cells; w/h: structure footprint (B1 uses it for link rings). |
 | `roadSegmentParts` | function | Road-segment parts (E1): construction-class site slots for the segment's material cost and a FixedAttach pinning it to the project's upstream node. |
 | `sget` | function |  |
 | `structureParts` | function | Structure spawn parts for the two phases. |
-| `unitParts` | function | A unit's declared store profile becomes its CargoStore; |
+| `unitParts` | function | A unit's declared store profile becomes its CargoStore; the robot's lifeline battery (energy 60, −0.05/s) is defined in the pack. |
 
 ## src/features/logistics/ui/index.tsx
 
@@ -246,7 +276,7 @@
 |---|---|---|
 | `extendRoute` | function | Extends a clicked link into a route: from each endpoint greedily pick the incident unselected link with the highest flow (ties by link index), continuing while the candidate flow is >= half the clicked link's flow and the far node is neither a warehouse nor a leaf. |
 | `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
-| `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); |
+| `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
 | `RoadPanel` | function |  |
 | `sameKey` | function |  |
 | `StockPanel` | function |  |
@@ -256,8 +286,8 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `MoveCommand` | command def |  |
-| `MoveIntent` | intent def |  |
-| `MoveOrdered` | event def |  |
+| `MoveIntent` | intent def | Sim-internal order channel (ADR 0008): squads/AI emit these; the resolver validates handle liveness and Mover but not faction (the emitter's responsibility). |
+| `MoveOrdered` | event def | Emitted by the MoveCommand handler with the handles it applied (player override — squads drop these members). |
 | `StopIntent` | intent def |  |
 
 ## src/features/movement/sim/index.ts
@@ -268,8 +298,8 @@
 | `MoveCommand` | command def |  |
 | `Mover` | component def |  |
 | `moverComponents` | function | Spawn tuples for a movable entity: callers add Faction/InWorld/UnitKind. |
-| `MoveSpeed` | stat def |  |
-| `MoveTarget` | component def |  |
+| `MoveSpeed` | stat def | The movement speed stat: logistics' energy modifiers multiply it (ADR 0025). |
+| `MoveTarget` | component def | One shared pathing goal id + the unit's slot point (cell centre). |
 | `Position` | component def |  |
 
 ## src/features/pathing/sim/index.ts
@@ -278,9 +308,15 @@
 |---|---|---|
 | `createPathingModule` | function |  |
 | `dijkstra` | function | neighbors(node, visit) must call visit(to, cost) for every outgoing edge. |
-| `DIR_ORDER` | const |  |
+| `DIR_ORDER` | const | Neighbour order for direction pick: N, E, S, W, NE, SE, SW, NW. |
 | `PathingApi` | interface |  |
 | `UNREACHABLE` | const |  |
+
+## src/features/production/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `producerSchema` | const |  |
 
 ## src/features/production/sim/index.ts
 
@@ -295,14 +331,14 @@
 |---|---|---|
 | `SquadsAssign` | command def |  |
 | `SquadsChannel` | channel def |  |
-| `SquadsCreate` | command def |  |
+| `SquadsCreate` | command def | Payload `units` are entity handles; `squad` is a squad id. |
 | `SquadsDisband` | command def |  |
 | `SquadsGather` | command def |  |
-| `SquadsLaunched` | event def |  |
+| `SquadsLaunched` | event def | Emitted when a gathering squad's launchTick arrives and its order becomes advance — the wave has launched. |
 | `SquadsOrder` | command def |  |
 | `SquadsSetStrength` | command def |  |
 | `SquadsSnapshot` | interface |  |
-| `SquadView` | interface | Full view of an own squad; |
+| `SquadView` | interface | Full view of an own squad; hostiles only expose the public fields. |
 
 ## src/features/squads/render/index.ts
 
@@ -323,12 +359,25 @@
 |---|---|---|
 | `SquadPanel` | function |  |
 
+## src/features/terrain/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `decodeMap` | function |  |
+| `MapContent` | type |  |
+| `mapSchema` | const |  |
+| `MovementClassContent` | type |  |
+| `movementClassSchema` | const |  |
+| `SurfaceContent` | type |  |
+| `surfaceSchema` | const | A class missing from `costs` is impassable on the surface. |
+| `TerrainGrid` | interface |  |
+
 ## src/features/terrain/protocol.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `TERRAIN_BLOCKED_LAYER_ID` | const |  |
-| `TERRAIN_HEIGHT_LAYER_ID` | const |  |
+| `TERRAIN_HEIGHT_LAYER_ID` | const | Terrain layer ids: shared by the sim layer defs and the client renderer (render/input may import this file but never sim/). |
 | `TERRAIN_SURFACE_LAYER_ID` | const |  |
 
 ## src/features/terrain/render/index.ts
@@ -353,14 +402,21 @@
 | `createTerrainModule` | function |  |
 | `TerrainApi` | interface |  |
 
+## src/features/units/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `UnitContent` | type |  |
+| `unitSchema` | const |  |
+
 ## src/features/units/protocol.ts
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `DenseUnits` | interface |  |
 | `DenseUnitsChannel` | channel def |  |
-| `SpawnIntent` | intent def |  |
-| `UnitsSpawned` | event def |  |
+| `SpawnIntent` | intent def | Spawn a unit of content-id `kind` for `faction` at the nearest passable free cell around (x, y) — the same spiral as start spawning. |
+| `UnitsSpawned` | event def | Emitted when the spawned unit's handle is known (same tick as the intent resolves; the entity becomes query-visible next tick). |
 
 ## src/features/units/render/index.ts
 
@@ -379,6 +435,15 @@
 | `FactionStart` | interface |  |
 | `StartUnit` | interface |  |
 | `UnitKind` | component def |  |
+
+## src/features/vision/content.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `DEFAULT_STRUCTURE_VISION_CELLS` | const |  |
+| `DEFAULT_UNIT_VISION_CELLS` | const |  |
+| `visionFields` | const |  |
+| `visionLandmarkFields` | const |  |
 
 ## src/features/vision/protocol.ts
 
@@ -400,8 +465,6 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `ExclusionCircle` | interface |  |
-| `fogBuckets` | function | Buckets every cell of the layer into unexplored (0) and explored (1); |
-| `FogBuckets` | interface |  |
 | `hostileExcluders` | function | Operational hostile structures carrying an `exclusion` field, merged across row sets (structures channel first, then vision memory rows — memory rows by definition are not currently visible, so they never duplicate a live channel row). |
 | `isCellVisible` | function | True when the cell containing position (x, y) is currently visible (layer value 2) to the layer's owner. |
 | `StructureRows` | interface | Minimal structure-row shape shared by the structures channel and the vision memory channel (both carry the same columns). |
@@ -411,7 +474,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `createVisionModule` | function |  |
-| `structureVisionParts` | const |  |
+| `structureVisionParts` | function | Injected into construction's structureParts (wired in app/). |
 | `unitVisionParts` | function | Injected into units' unitParts (wired in app/). |
 | `VisionLayer` | layer def |  |
 
@@ -429,11 +492,11 @@
 | `defineGridLayer` | function |  |
 | `defineModifier` | function |  |
 | `defineStat` | function |  |
-| `Faction` | component def |  |
+| `Faction` | component def | Kernel contract components (ADR 0019/0021). |
 | `GridLayerWriter` | interface |  |
 | `InWorld` | component def |  |
 | `OPERATIONAL_EXCLUDE` | const |  |
-| `QueuedController` | interface | A controller whose commands are pushed from outside (e.g. |
+| `QueuedController` | interface | A controller whose commands are pushed from outside (e.g. local input routed through the runtime). |
 | `ReadonlyNumberArray` | type |  |
 | `restoreSimulation` | function |  |
 | `runScenario` | function |  |
@@ -443,9 +506,22 @@
 | `Simulation` | interface |  |
 | `SpawnInit` | type |  |
 | `SystemContext` | interface | The context a system / effect / command handler / snapshot builder sees. |
-| `UnderConstruction` | component def |  |
-| `VisibilityQuery` | type | Per-observer visibility predicate injected into snapshot channel builders (M5 fog): vision wires its layer query in app/; |
+| `UnderConstruction` | component def | Set by construction while a structure is being built (claimed there). |
+| `VisibilityQuery` | type | Per-observer visibility predicate injected into snapshot channel builders (M5 fog): vision wires its layer query in app/; filtered features declare it optional and default to all-visible. |
 | `WriteView` | type |  |
+
+## src/modes/assault/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `ASSAULT_MODE_ID` | const |  |
+| `AssaultChannel` | channel def |  |
+| `assaultDirector` | function |  |
+| `assaultEnded` | function |  |
+| `AssaultModeContext` | interface |  |
+| `assaultModules` | function |  |
+| `AssaultState` | interface |  |
+| `defaultSetup` | function |  |
 
 ## src/protocol/index.ts
 
@@ -455,5 +531,13 @@
 | `MatchSetup` | type |  |
 | `parseMatchSetup` | function |  |
 | `RuntimeStats` | interface |  |
-| `SPEED_STEPS` | const |  |
+| `SPEED_STEPS` | const | ADR 0005: index 0 is paused; indices are multipliers of base speed. |
 | `WorkerToMain` | type |  |
+
+## src/testing/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `denseUnits` | function | Read the dense-units snapshot channel for one faction (the common `dense(sim)` helper previously copy-pasted per test world). |
+| `makeGrid` | function | Grid builder from ASCII rows: '.' (anything else) = flat ground, '#' = rock surface 1, '^' or 'r' = ramp, 'p' = plateau (height 1), '1'..'9' = height level. |
+| `must` | function | Require a base-pack entry by name: throws with the entry name when the registry lookup misses (a content bug, not a test expectation). |

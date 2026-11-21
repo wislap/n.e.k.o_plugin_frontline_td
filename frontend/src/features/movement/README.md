@@ -20,7 +20,7 @@
   `MoveTarget {goal:u32,x,y,active:u8}` —— 只有本模块可写。
 
 ## 不变量
-- 三个系统固定顺序：steer → separate → integrate（movement 相位）。
+- movement 相位三个系统固定顺序：steer → separate → integrate；cleanup 相位另有 release_dead（须先于 combat.despawn，见 sim-registry 注释）；移动意图由 `installMovementIntents` 的处理函数结算。
 - 移动命令先校验再改状态：按移动类别收集目标周围可通行且与目标
   连通的槽位（方环螺旋、半径 ≤ ⌈√n⌉+8，不足则循环复用），再按
   保形贪心分配（按距编队质心距离降序取最近未占槽位）。
@@ -30,7 +30,7 @@
 - 分离推挤阈值 = rA + rB + 0.2（SEPARATION_GAP），用 2 格均匀桶、
   升序 id、固定邻桶序；重合时按 id 奇偶选轴。
 - 积分只允许可通行步，整步失败时先尝试仅 x、再仅 y；位置夹在地图内。
-- 目标不可达（流场返回 null）按到达处理并释放目标。
+- 目标不可达（流场返回 null）时 `stopUnit`：释放目标、`active=0` 停止。
 - 只有 `active=1` 的单位持有共享目标引用，到达驻留时已释放；所有
   释放点统一走 `releaseHeldGoal`，不自行判断 `active≠0`（ADR 0045）。
 

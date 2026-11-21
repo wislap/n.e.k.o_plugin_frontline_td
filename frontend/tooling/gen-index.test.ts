@@ -2,7 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ADR_DOMAINS, renderAdrIndex, scanAdrs } from './gen-index.ts';
+import {
+  ADR_DOMAINS,
+  exportSurfaceFiles,
+  renderAdrIndex,
+  renderExports,
+  scanAdrs,
+} from './gen-index.ts';
 import type { AdrEntry } from './gen-index.ts';
 
 let dir: string;
@@ -307,5 +313,71 @@ describe('renderAdrIndex', () => {
     const aSection = timeline.slice(batchA, batchB);
     expect(aSection).toContain('- [0001 T](../adr/0001-a.md)');
     expect(aSection).toContain('- [0003 T](../adr/0003-c.md)');
+  });
+});
+
+describe('renderExports', () => {
+  const fixture = 'tooling/fixtures/gen-index/exports.ts';
+
+  it('reads const docs from the enclosing statement, not the declaration', () => {
+    const row = renderExports([fixture])
+      .split('\n')
+      .find((l) => l.includes('`ANSWER`'));
+    expect(row).toContain('Doc for the const export.');
+  });
+
+  it('ignores file headers, trailing comments and comments across blank lines', () => {
+    const content = renderExports([fixture]);
+    const constant = content.split('\n').find((l) => l.includes('`CONSTANT`')) ?? '';
+    const plain = content.split('\n').find((l) => l.includes('`plain`')) ?? '';
+    expect(constant).not.toContain('File header');
+    expect(plain).not.toContain('belongs to nothing');
+    expect(plain).not.toContain('File header');
+  });
+
+  it('supports JSDoc blocks and does not cut at e.g., ; or ：', () => {
+    const row =
+      renderExports([fixture])
+        .split('\n')
+        .find((l) => l.includes('`helper`')) ?? '';
+    expect(row).toContain('JSDoc doc for the arrow export (e.g. helpers).');
+    expect(row).not.toContain('Second sentence');
+    const tagged =
+      renderExports([fixture])
+        .split('\n')
+        .find((l) => l.includes('`tagged`')) ?? '';
+    expect(tagged).toContain('colons: stay intact');
+  });
+
+  it('classifies a const initialised with an arrow function as function', () => {
+    const row =
+      renderExports([fixture])
+        .split('\n')
+        .find((l) => l.includes('`helper`')) ?? '';
+    expect(row).toContain('| function |');
+  });
+});
+
+describe('exportSurfaceFiles', () => {
+  it('includes feature content.ts, mode index and testing entry', () => {
+    const files = exportSurfaceFiles();
+    expect(files).toContain('src/features/logistics/content.ts');
+    expect(files).toContain('src/modes/assault/index.ts');
+    expect(files).toContain('src/testing/index.ts');
+  });
+});
+
+describe('scanAdrs header scoping', () => {
+  it('ignores field-looking lines in the body after the first ## section', () => {
+    writeAdr('0001-base.md', adr('0001', 'Base'));
+    writeAdr(
+      '0002-body.md',
+      `${adr('0002', 'Body')}\n  \`\`\`md\n  - 部分取代：0001（body example, not a header field）\n  \`\`\`\n`,
+    );
+    const result = scanAdrs(adrDir);
+    expect(result.errors).toEqual([]);
+    const content = renderAdrIndex(result.entries);
+    const row0001 = content.split('\n').find((l) => l.includes('[0001]')) ?? '';
+    expect(row0001).not.toContain('部分被 0002');
   });
 });

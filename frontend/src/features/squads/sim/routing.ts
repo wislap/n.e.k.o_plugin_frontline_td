@@ -34,7 +34,8 @@ export function traceRoute(
     const tx = Math.floor(gx);
     const ty = Math.floor(gy);
     let guard = 0;
-    while ((x !== tx || y !== ty) && route.length < ROUTE_MAX_CELLS) {
+    // route stores flat (x, y) pairs, so the cap counts twice the cells.
+    while ((x !== tx || y !== ty) && route.length < ROUTE_MAX_CELLS * 2) {
       route.push(x, y);
       const d = pathing.directionAt(goal, x, y);
       if (d === null || (d.dx === 0 && d.dy === 0)) {

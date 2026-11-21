@@ -22,28 +22,6 @@ export function isCellVisible(
   return (layer[cy * width + cx] ?? 0) === 2;
 }
 
-export interface FogBuckets {
-  // Flat cell indices (y * width + x).
-  unexplored: number[];
-  explored: number[];
-}
-
-// Buckets every cell of the layer into unexplored (0) and explored (1);
-// visible cells (2) get no quad.
-export function fogBuckets(layer: ArrayLike<number>, width: number, height: number): FogBuckets {
-  const unexplored: number[] = [];
-  const explored: number[] = [];
-  for (let i = 0; i < width * height; i++) {
-    const v = layer[i] ?? 0;
-    if (v === 0) {
-      unexplored.push(i);
-    } else if (v === 1) {
-      explored.push(i);
-    }
-  }
-  return { unexplored, explored };
-}
-
 // Minimal structure-row shape shared by the structures channel and the
 // vision memory channel (both carry the same columns).
 export interface StructureRows {

@@ -76,3 +76,13 @@ export const logisticsConfigSchema = s.object({
   corridorWidth: s.number({ min: 0.1, max: 8 }),
 });
 export type LogisticsConfigContent = Infer<typeof logisticsConfigSchema>;
+
+// First road level carrying a build profile (level 0 is the dirt
+// baseline). Throws when content defines none — fail fast (ADR 0043).
+export function lowestBuildableRoadLevel(levels: readonly { cost?: readonly unknown[] }[]): number {
+  const index = levels.findIndex((l) => l.cost !== undefined);
+  if (index < 0) {
+    throw new Error('logistics content defines no buildable road level');
+  }
+  return index;
+}
