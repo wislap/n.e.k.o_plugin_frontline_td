@@ -32,6 +32,7 @@
 | [0014](../adr/0014-data-driven-boundaries.md) | 数据驱动的边界 | 已采纳 | 部分（局内解锁未做，carryIn.unlocks 有 schema 无消费方） | wislap | M0 架构基线 | 2026-11-14 |
 | [0019](../adr/0019-factions-and-pluggable-modes.md) | 阵营模型与玩法可插拔 | 已采纳；部分被 0038 取代（归属变更方式：占领后新建实体，不改写 Faction） | 已实现 | wislap | M1 前置 | 2026-11-15 |
 | [0023](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md) | 网格图层、编组、命令 schema、RNG 登记与运行时限制 | 已采纳 | 部分（嵌套编组未做（小队单层）；经济收入来源注册接口未做） | wislap | M1 前置 | 2026-11-15 |
+| [0045](../adr/0045-second-review-conventions.md) | 第二轮评审整改约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
 
 ### 模拟
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -149,3 +150,4 @@
 - [0042 验证分段与 CI 并行](../adr/0042-verification-segmentation-parallel-ci.md)
 - [0043 评审整改约定](../adr/0043-review-remediation.md)
 - [0044 ADR 实现状态字段](../adr/0044-adr-implementation-field.md)
+- [0045 第二轮评审整改约定](../adr/0045-second-review-conventions.md)

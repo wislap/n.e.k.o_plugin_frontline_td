@@ -54,6 +54,8 @@
 - `pave` 只升不降并推路层版本；`linkPath` 返回上游（仓库侧）→ 下游
   的折线、累计代价、上游节点与 `FixedAttach` 初始值。
 - 数量用整数 milli 单位；运力与原因码用核心整数辅助函数。
+- 道路工具的选择存规范化端点句柄对 `RoadLinkKey`，不存链路下标；
+  每帧和下单时再解析为当前下标（ADR 0045）。
 
 ## 对应设计
 - docs/adr/0025（模型）、0030（实现约定）；docs/design/architecture.md §6.11（modifiers）。
