@@ -39,3 +39,13 @@ export const FormationGuide = defineComponent('frontline_td:movement.formation_g
   maxSpeed: 'f64',
   active: 'u8',
 });
+
+// Shared topological corridor-gate chain handle + per-unit progress & lane
+// offset (ADR 0056). Permanent internal component on movers; active: 0 none,
+// 1 following chain.
+export const RouteFollow = defineComponent('frontline_td:movement.route_follow', {
+  chain: 'u32',
+  gate: 'u16',
+  lane: 'f64',
+  active: 'u8',
+});

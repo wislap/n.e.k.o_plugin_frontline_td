@@ -20,10 +20,20 @@ import {
   type ClearanceTier,
 } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { FormationGuide, MoveTarget, Mover, Position, Velocity } from './components';
+import { FormationGuide, MoveTarget, Mover, Position, RouteFollow, Velocity } from './components';
 import { clearFormationGuide, installMovementIntents, releaseHeldGoal } from './intents';
 import { lineWalkable } from './line';
+import {
+  boundedLocalRejoin,
+  createRouteChainStore,
+  releaseRouteFollow,
+  steerRouteFollow,
+  type RouteChainStore,
+  type RouteFollowView,
+} from './route-chain';
 import { makeSeparate } from './separate';
+
+const HEAVY_TIER = CLEARANCE_HEAVY;
 
 // The movement speed stat: logistics' energy modifiers multiply it (ADR
 // 0025). With no modifiers stat() returns the base unchanged.
@@ -40,6 +50,7 @@ const SLOWDOWN_DIST = 0.85;
 const DIRECT_DIST = 8;
 
 const marginScratch = { x: 0, y: 0 };
+const routeScratch = { dx: 0, dy: 0 };
 
 function clampCornerMargin(
   terrain: TerrainApi,
@@ -82,6 +93,7 @@ export function moverComponents(
     [Mover, { speed, radius, cls }],
     [MoveTarget, { goal: 0, x: 0, y: 0, active: 0 }],
     [FormationGuide, { x: 0, y: 0, maxSpeed: 0, active: 0 }],
+    [RouteFollow, { chain: 0, gate: 0, lane: 0, active: 0 }],
   ];
 }
 
@@ -93,13 +105,16 @@ type GuideView = WriteView<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }
 // slot point if separation later pushes it off.
 function holdUnit(
   pathing: PathingApi,
+  routes: RouteChainStore,
   vel: VelView,
   tgt: TgtView,
   guide: GuideView,
+  routeOut: RouteFollowView,
   id: number,
 ): void {
   releaseHeldGoal(pathing, tgt, id);
   clearFormationGuide(guide, id);
+  releaseRouteFollow(routes, routeOut, id);
   tgt.active[id] = 2;
   vel.x[id] = 0;
   vel.y[id] = 0;
@@ -108,13 +123,16 @@ function holdUnit(
 // Release the shared goal and stop the unit for good (unreachable target).
 function stopUnit(
   pathing: PathingApi,
+  routes: RouteChainStore,
   vel: VelView,
   tgt: TgtView,
   guide: GuideView,
+  routeOut: RouteFollowView,
   id: number,
 ): void {
   releaseHeldGoal(pathing, tgt, id);
   clearFormationGuide(guide, id);
+  releaseRouteFollow(routes, routeOut, id);
   tgt.active[id] = 0;
   vel.x[id] = 0;
   vel.y[id] = 0;
@@ -147,8 +165,7 @@ function clampFootprintMargin(
 ): { x: number; y: number } {
   let nx = x;
   let ny = y;
-  const margin =
-    tier === CLEARANCE_HEAVY ? Math.min(radius * 0.85, 0.75) : Math.min(radius * 0.75, 0.3);
+  const margin = tier === HEAVY_TIER ? Math.min(radius * 0.85, 0.75) : Math.min(radius * 0.75, 0.3);
   if (margin <= 0) {
     marginScratch.x = nx;
     marginScratch.y = ny;
@@ -210,6 +227,11 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
   let posW: ComponentWriter<{ x: 'f64'; y: 'f64' }>;
   let tgtW: ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
   let guideW: ComponentWriter<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+  let routeW: ComponentWriter<{ chain: 'u32'; gate: 'u16'; lane: 'f64'; active: 'u8' }>;
+  const routes = createRouteChainStore();
+  terrain.onBlockedChange(() => {
+    routes.rejoinMemo.reset();
+  });
   const separate = makeSeparate(terrain, () => velW);
 
   function steer(ctx: SystemContext): void {
@@ -217,9 +239,11 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const mover = ctx.read(Mover);
     const target = ctx.read(MoveTarget);
     const guide = ctx.read(FormationGuide);
+    const route = ctx.read(RouteFollow);
     const vel = ctx.write(velW);
     const tgt = ctx.write(tgtW);
     const guideOut = ctx.write(guideW);
+    const routeOut = ctx.write(routeW) as RouteFollowView;
     const ids = ctx.query([Position, Mover, MoveTarget]);
     const posX = pos.x;
     const posY = pos.y;
@@ -231,6 +255,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const guideX = guide.x;
     const guideY = guide.y;
     const guideMaxSpeed = guide.maxSpeed;
+    const routeActive = route.active;
     const moverRadius = mover.radius;
     const moverCls = mover.cls;
     const moverSpeed = mover.speed;
@@ -239,17 +264,17 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const maxScx = terrain.width - 1;
     const maxScy = terrain.height - 1;
     for (let i = 0; i < ids.length; i++) {
-      const id = ids[i] ?? 0;
-      const active = tgtActive[id] ?? 0;
+      const id = ids[i] as number;
+      const active = tgtActive[id] as number;
       if (active === 0) {
         velX[id] = 0;
         velY[id] = 0;
         continue;
       }
-      const px = posX[id] ?? 0;
-      const py = posY[id] ?? 0;
-      const tx = tgtX[id] ?? 0;
-      const ty = tgtY[id] ?? 0;
+      const px = posX[id] as number;
+      const py = posY[id] as number;
+      const tx = tgtX[id] as number;
+      const ty = tgtY[id] as number;
       const dx = tx - px;
       const dy = ty - py;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -263,7 +288,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
         const scx = Math.min(maxScx, Math.max(0, Math.floor(px)));
         const scy = Math.min(maxScy, Math.max(0, Math.floor(py)));
         const maxSpeed =
-          ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] ?? 0) *
+          ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] as number) *
           (terrain.speedBpAt(scx, scy) / 10000);
         const returnScale = Math.min(1, (dist - HOLD_DEADBAND_DIST) / SLOWDOWN_DIST);
         const effSpeed = Math.min(
@@ -281,26 +306,53 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       }
       // active === 1 (moving)
       if (dist <= ARRIVAL_ENTER_DIST) {
-        holdUnit(pathing, vel, tgt, guideOut, id);
+        holdUnit(pathing, routes, vel, tgt, guideOut, routeOut, id);
         continue;
       }
-      const radius = moverRadius[id] ?? 0;
-      const cls = moverCls[id] ?? 0;
+      const radius = moverRadius[id] as number;
+      const cls = moverCls[id] as number;
       const tier = clearanceTierForRadius(radius);
-      const gActive = (guideActive[id] ?? 0) === 1;
+      const gActive = (guideActive[id] as number) === 1;
       let dirX = 0;
       let dirY = 0;
       let approachingSlot = false;
       let steered = false;
       if (dist <= DIRECT_DIST && lineWalkable(terrain, cls, px, py, tx, ty, tier)) {
-        // Close enough and a legal straight line: go straight at the slot.
+        // Close enough and a legal straight line: release corridor chain and steer straight at slot.
+        if ((routeActive[id] as number) === 1) {
+          releaseRouteFollow(routes, routeOut, id);
+        }
         dirX = dx;
         dirY = dy;
         approachingSlot = true;
         steered = true;
+      } else if (
+        (routeActive[id] as number) === 1 &&
+        steerRouteFollow(routes, terrain, routeOut, id, px, py, cls, tier, routeScratch)
+      ) {
+        dirX = routeScratch.dx;
+        dirY = routeScratch.dy;
+        approachingSlot = false;
+        steered = true;
+        if (gActive) {
+          const gx = guideX[id] as number;
+          const gy = guideY[id] as number;
+          const gdx = gx - px;
+          const gdy = gy - py;
+          const gDistSq = gdx * gdx + gdy * gdy;
+          if (
+            gDistSq > 0.0625 &&
+            gDistSq <= DIRECT_DIST * DIRECT_DIST &&
+            gdx * dirX + gdy * dirY > 0 &&
+            lineWalkable(terrain, cls, px, py, gx, gy, tier)
+          ) {
+            dirX = gdx;
+            dirY = gdy;
+          }
+        }
       } else if (gActive) {
-        const gx = guideX[id] ?? 0;
-        const gy = guideY[id] ?? 0;
+        const gx = guideX[id] as number;
+        const gy = guideY[id] as number;
         const gdx = gx - px;
         const gdy = gy - py;
         const gDistSq = gdx * gdx + gdy * gdy;
@@ -316,21 +368,40 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
         }
       }
       if (!steered) {
-        const flow = pathing.smoothDirectionAt(tgtGoal[id] ?? 0, px, py);
-        if (flow === null) {
-          // Unreachable: give up and stop in place.
-          stopUnit(pathing, vel, tgt, guideOut, id);
-          continue;
-        }
-        if (flow.dx === 0 && flow.dy === 0) {
-          // On the goal cell: steer straight at the slot.
-          dirX = dx;
-          dirY = dy;
-          approachingSlot = true;
-        } else {
-          dirX = flow.dx;
-          dirY = flow.dy;
+        if (
+          dist <= DIRECT_DIST &&
+          boundedLocalRejoin(routes, terrain, cls, tier, px, py, tx, ty, routeScratch)
+        ) {
+          dirX = routeScratch.dx;
+          dirY = routeScratch.dy;
           approachingSlot = false;
+        } else {
+          const flow = pathing.smoothDirectionAt(tgtGoal[id] as number, px, py);
+          if (flow === null) {
+            // Unreachable: give up and stop in place.
+            stopUnit(pathing, routes, vel, tgt, guideOut, routeOut, id);
+            continue;
+          }
+          if (flow.dx === 0 && flow.dy === 0) {
+            if (
+              dist <= 12 &&
+              !lineWalkable(terrain, cls, px, py, tx, ty, tier) &&
+              boundedLocalRejoin(routes, terrain, cls, tier, px, py, tx, ty, routeScratch)
+            ) {
+              dirX = routeScratch.dx;
+              dirY = routeScratch.dy;
+              approachingSlot = false;
+            } else {
+              // On the goal cell: steer straight at the slot.
+              dirX = dx;
+              dirY = dy;
+              approachingSlot = true;
+            }
+          } else {
+            dirX = flow.dx;
+            dirY = flow.dy;
+            approachingSlot = false;
+          }
         }
       }
       const len = approachingSlot ? dist : Math.sqrt(dirX * dirX + dirY * dirY);
@@ -342,9 +413,9 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       const scx = Math.min(maxScx, Math.max(0, Math.floor(px)));
       const scy = Math.min(maxScy, Math.max(0, Math.floor(py)));
       const statSpeed =
-        ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] ?? 0) *
+        ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] as number) *
         (terrain.speedBpAt(scx, scy) / 10000);
-      const gCap = gActive ? (guideMaxSpeed[id] ?? 0) : 0;
+      const gCap = gActive ? (guideMaxSpeed[id] as number) : 0;
       const maxSpeed = gCap > 0 && gCap < statSpeed ? gCap : statSpeed;
       const effSpeed =
         approachingSlot && dist < SLOWDOWN_DIST
@@ -412,10 +483,18 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       posW = builder.claimWriter(Position);
       tgtW = builder.claimWriter(MoveTarget);
       guideW = builder.claimWriter(FormationGuide);
+      routeW = builder.claimWriter(RouteFollow);
       // Mover is read-only after spawn (stats come from content).
       builder.ownComponent(Mover);
 
-      installMovementIntents(builder, terrain, pathing, tgtW, guideW);
+      builder.state('frontline_td:movement.routes', {
+        save: () => routes.save(),
+        load: (data) => {
+          routes.load(data);
+        },
+      });
+
+      installMovementIntents(builder, terrain, pathing, routes, tgtW, guideW, routeW);
 
       builder.system({ id: 'frontline_td:movement.steer', phase: 'movement', run: steer });
       builder.system({ id: 'frontline_td:movement.separate', phase: 'movement', run: separate });
@@ -433,6 +512,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
           const target = ctx.read(MoveTarget);
           const out = ctx.write(tgtW);
           const guideOut = ctx.write(guideW);
+          const routeOut = ctx.write(routeW) as RouteFollowView;
           for (const p of ctx.read(CombatDied)) {
             const id = ctx.resolve(p.handle as EntityHandle);
             if (id === null || !ctx.has(Mover, id)) {
@@ -440,6 +520,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
             }
             releaseHeldGoal(pathing, target, id);
             clearFormationGuide(guideOut, id);
+            releaseRouteFollow(routes, routeOut, id);
             out.goal[id] = 0;
             out.active[id] = 0;
           }

@@ -1,7 +1,8 @@
 // Uniform-grid separation: pairwise overlap resolution on a fixed 2-cell
-// bucket grid (ADR 0053). Uses two-slope overdamped repulsion, mass × state
-// asymmetric yielding, tangential wrapping, and per-tick push clamping.
-// Buffers are reused every tick and never reallocated (ADR 0020).
+// bucket grid (ADR 0053, ADR 0056). Uses two-slope overdamped repulsion,
+// mass × state asymmetric yielding, same-direction longitudinal rear-unit
+// yielding + one-sided overtake slip, tangential wrapping, and per-tick
+// push clamping. Buffers are reused every tick and never reallocated (ADR 0020).
 import type { ComponentWriter, SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
 import type { TerrainApi } from '../../terrain/sim/index';
@@ -19,8 +20,11 @@ const CORE_STIFFNESS = 0.65;
 const STATE_MOVING_WEIGHT = 2.5;
 const STATE_STOPPED_WEIGHT = 1.8;
 const STATE_HOLDING_WEIGHT = 0.6;
-// Tangential wrap coefficient for oncoming / overtaking pairs.
+// Maximum mass multiplier on the leading unit in a same-direction moving pair.
+const FRONT_MOVER_MAX_MULT = 3.5;
+// Tangential wrap coefficients (oncoming/static vs overtaking rear unit).
 const WRAP_FACTOR = 0.6;
+const OVERTAKE_WRAP_FACTOR = 0.35;
 // Per-tick push clamp relative to unit base speed.
 const MAX_PUSH_SPEED_FACTOR = 1.15;
 const MIN_MAX_PUSH = 0.06;
@@ -83,12 +87,12 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
     }
     // Insert in reverse slot order so singly-linked bucket traversal yields ascending slot order.
     for (let slot = count - 1; slot >= 0; slot--) {
-      const id = ids[slot] ?? 0;
-      const bx = Math.min(Math.floor((posX[id] ?? 0) / BUCKET), bucketCols - 1);
-      const by = Math.floor((posY[id] ?? 0) / BUCKET);
+      const id = ids[slot] as number;
+      const bx = Math.min(Math.floor((posX[id] as number) / BUCKET), bucketCols - 1);
+      const by = Math.floor((posY[id] as number) / BUCKET);
       const key = by * bucketCols + bx;
       if (bx >= 0 && key >= 0 && key < totalBuckets) {
-        next[slot] = head[key] ?? -1;
+        next[slot] = head[key] as number;
         head[key] = slot;
       } else {
         if (oobBuckets === null) {
@@ -119,10 +123,10 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       if (other <= slot) {
         return;
       }
-      const b = ids[other] ?? 0;
-      const br = moverR[b] ?? 0;
-      const ddx = (posX[b] ?? 0) - ax;
-      const ddy = (posY[b] ?? 0) - ay;
+      const b = ids[other] as number;
+      const br = moverR[b] as number;
+      const ddx = (posX[b] as number) - ax;
+      const ddy = (posY[b] as number) - ay;
       const maxDist = ar + br + SEPARATION_GAP;
       if (Math.abs(ddx) >= maxDist || Math.abs(ddy) >= maxDist) {
         return;
@@ -152,26 +156,49 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       const impulse = soft * SOFT_STIFFNESS + core * CORE_STIFFNESS;
 
       const mb = Math.max(br * br, 0.01);
-      const fb = facId[b] ?? 0;
+      const fb = facId[b] as number;
       const sameFaction = fa !== 0 && fa === fb;
-      const actB = tgtActive[b] ?? 0;
-      const wMassA = sameFaction ? ma * stateWeight(actA) : ma;
-      const wMassB = sameFaction ? mb * stateWeight(actB) : mb;
+      const actB = tgtActive[b] as number;
+      const vbx = actB === 1 || actA === 1 ? (velRX[b] as number) : 0;
+      const vby = actB === 1 || actA === 1 ? (velRY[b] as number) : 0;
+      let wMassA = sameFaction ? ma * stateWeight(actA) : ma;
+      let wMassB = sameFaction ? mb * stateWeight(actB) : mb;
+      let cosLong = 0;
+      let sameDirLong = false;
+      if (sameFaction && actA === 1 && actB === 1) {
+        const vDot = vax * vbx + vay * vby;
+        if (vDot > 0) {
+          const mx = vax + vbx;
+          const my = vay + vby;
+          const mLenSq = mx * mx + my * my;
+          if (mLenSq > 1e-8) {
+            cosLong = (ux * mx + uy * my) / Math.sqrt(mLenSq);
+            const absCos = Math.abs(cosLong);
+            if (absCos > 0.25) {
+              sameDirLong = true;
+              const mult = 1 + (FRONT_MOVER_MAX_MULT - 1) * ((absCos - 0.25) / 0.75);
+              if (cosLong > 0) {
+                wMassB *= mult;
+              } else {
+                wMassA *= mult;
+              }
+            }
+          }
+        }
+      }
       const invTotal = 1 / (wMassA + wMassB);
       // Lighter / yielding unit absorbs larger share.
       const shareA = wMassB * invTotal;
       const shareB = wMassA * invTotal;
 
-      let pax = (pushX[slot] ?? 0) - ux * impulse * shareA;
-      let pay = (pushY[slot] ?? 0) - uy * impulse * shareA;
-      let pbx = (pushX[other] ?? 0) + ux * impulse * shareB;
-      let pby = (pushY[other] ?? 0) + uy * impulse * shareB;
+      let pax = (pushX[slot] as number) - ux * impulse * shareA;
+      let pay = (pushY[slot] as number) - uy * impulse * shareA;
+      let pbx = (pushX[other] as number) + ux * impulse * shareB;
+      let pby = (pushY[other] as number) + uy * impulse * shareB;
 
       if (actA === 1 || actB === 1) {
         const tx = -uy;
         const ty = ux;
-        const vbx = velRX[b] ?? 0;
-        const vby = velRY[b] ?? 0;
         const dotA = vax * ux + vay * uy;
         const dotB = vbx * ux + vby * uy;
         if (actA === 1 && actB === 1 && dotA > 0 && dotB < 0) {
@@ -184,7 +211,25 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
           pbx -= s * shareB * wrapMag * tx;
           pby -= s * shareB * wrapMag * ty;
         } else if (sameFaction) {
-          if (actA === 1 && actB !== 1 && dotA > 0) {
+          if (sameDirLong) {
+            if (dotA - dotB > 1e-4) {
+              if (cosLong > 0) {
+                const sideA = vax * tx + vay * ty;
+                const sA =
+                  Math.abs(sideA) > 1e-6 ? (sideA > 0 ? 1 : -1) : (a + b) % 2 === 0 ? 1 : -1;
+                const wrapA = sA * shareA * impulse * OVERTAKE_WRAP_FACTOR;
+                pax += wrapA * tx;
+                pay += wrapA * ty;
+              } else {
+                const sideB = vbx * tx + vby * ty;
+                const sB =
+                  Math.abs(sideB) > 1e-6 ? (sideB > 0 ? 1 : -1) : (a + b) % 2 === 0 ? 1 : -1;
+                const wrapB = sB * shareB * impulse * OVERTAKE_WRAP_FACTOR;
+                pbx += wrapB * tx;
+                pby += wrapB * ty;
+              }
+            }
+          } else if (actA === 1 && actB !== 1 && dotA > 0) {
             const sideA = vax * tx + vay * ty;
             const sA = Math.abs(sideA) > 1e-6 ? (sideA > 0 ? 1 : -1) : (a + b) % 2 === 0 ? 1 : -1;
             const wrapA = sA * shareA * impulse * WRAP_FACTOR;
@@ -207,24 +252,24 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
     };
 
     for (let slot = 0; slot < count; slot++) {
-      const a = ids[slot] ?? 0;
-      const ax = posX[a] ?? 0;
-      const ay = posY[a] ?? 0;
-      const ar = moverR[a] ?? 0;
+      const a = ids[slot] as number;
+      const ax = posX[a] as number;
+      const ay = posY[a] as number;
+      const ar = moverR[a] as number;
       const ma = Math.max(ar * ar, 0.01);
-      const fa = facId[a] ?? 0;
-      const actA = tgtActive[a] ?? 0;
-      const vax = velRX[a] ?? 0;
-      const vay = velRY[a] ?? 0;
+      const fa = facId[a] as number;
+      const actA = tgtActive[a] as number;
+      const vax = velRX[a] as number;
+      const vay = velRY[a] as number;
       const bx = Math.floor(ax / BUCKET);
       const by = Math.floor(ay / BUCKET);
       for (let n = 0; n < 9; n++) {
-        const nbKey = (by + (NB_DY[n] ?? 0)) * bucketCols + bx + (NB_DX[n] ?? 0);
+        const nbKey = (by + (NB_DY[n] as number)) * bucketCols + bx + (NB_DX[n] as number);
         if (nbKey >= 0 && nbKey < totalBuckets) {
-          let other = head[nbKey] ?? -1;
+          let other = head[nbKey] as number;
           while (other !== -1) {
             resolvePair(slot, other, a, ax, ay, ar, ma, fa, actA, vax, vay);
-            other = next[other] ?? -1;
+            other = next[other] as number;
           }
         } else if (oobBuckets !== null) {
           const list = oobBuckets.get(nbKey);
@@ -242,21 +287,21 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
     const velWX = vel.x;
     const velWY = vel.y;
     for (let slot = 0; slot < count; slot++) {
-      let pxPush = pushX[slot] ?? 0;
-      let pyPush = pushY[slot] ?? 0;
+      let pxPush = pushX[slot] as number;
+      let pyPush = pushY[slot] as number;
       if (pxPush === 0 && pyPush === 0) {
         continue;
       }
-      const id = ids[slot] ?? 0;
-      const maxPush = Math.max(MIN_MAX_PUSH, (moverSpeed[id] ?? 0) * MAX_PUSH_SPEED_FACTOR);
+      const id = ids[slot] as number;
+      const maxPush = Math.max(MIN_MAX_PUSH, (moverSpeed[id] as number) * MAX_PUSH_SPEED_FACTOR);
       const magSq = pxPush * pxPush + pyPush * pyPush;
       if (magSq > maxPush * maxPush) {
         const scale = maxPush / Math.sqrt(magSq);
         pxPush *= scale;
         pyPush *= scale;
       }
-      velWX[id] = (velWX[id] ?? 0) + pxPush;
-      velWY[id] = (velWY[id] ?? 0) + pyPush;
+      velWX[id] = (velWX[id] as number) + pxPush;
+      velWY[id] = (velWY[id] as number) + pyPush;
     }
   };
 }

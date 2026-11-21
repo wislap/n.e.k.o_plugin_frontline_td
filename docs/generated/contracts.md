@@ -32,6 +32,8 @@
 
 - 命令：`frontline_td:movement.move`（发出：`frontline_td:movement.ordered`）
 
+- 模块状态：`frontline_td:movement.routes`
+
 ### `frontline_td:logistics`
 
 | 系统 | 阶段 | 每 N tick | 偏移 | 读取 | 发出 |
@@ -174,6 +176,7 @@
 | `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.mover` | speed: f64、radius: f64、cls: u8 | frontline_td:movement | — |
 | `frontline_td:movement.position` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
+| `frontline_td:movement.route_follow` | chain: u32、gate: u16、lane: f64、active: u8 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.velocity` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:production.producer` | kind: u16、progress: u32、cycle: u8 | frontline_td:production | frontline_td:production |
 | `frontline_td:road_segment` | project: u32 | frontline_td:construction | — |

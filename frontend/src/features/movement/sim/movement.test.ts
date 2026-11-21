@@ -81,8 +81,11 @@ describe('movement', () => {
     run(world, 2);
     expect(rejections(world)).toContain('invalid_target');
 
-    const world2 = makeWorld(['########', '........'], [{ x: 1, y: 1 }]);
-    // Impassable cell for the unit's class.
+    const world2 = makeWorld(
+      ['########', '########', '########', '########', '........'],
+      [{ x: 1, y: 4 }],
+    );
+    // Deep impassable cell beyond the <= 3-cell near-face snap radius.
     world2.sim.submit(move(world2.handles, 0, 0));
     run(world2, 2);
     expect(rejections(world2)).toContain('invalid_target');
@@ -341,5 +344,51 @@ describe('movement', () => {
     expect(Math.abs(p.x - 15)).toBeLessThan(0.3);
     expect(Math.abs(p.y - 2)).toBeLessThan(0.3);
     expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
+  });
+
+  it('snaps MoveCommand within <= 3 cells onto the near face of structures and obstacle edges', () => {
+    const rows = Array.from({ length: 9 }, () => '.'.repeat(16));
+    const world = makeWorld(rows, [{ x: 2, y: 4 }]);
+    const structure: { x: number; y: number }[] = [];
+    for (let y = 3; y <= 5; y++) {
+      for (let x = 8; x <= 10; x++) {
+        structure.push({ x, y });
+      }
+    }
+    world.terrain.setBlocked(structure, true);
+    // Target the centre of the blocked 3x3 structure (2 cells inside from west face).
+    world.sim.submit(move(world.handles, 9, 4));
+    run(world, 10);
+    expect(rejections(world)).toEqual([]);
+    run(world, 150);
+    const p = world.pos(0);
+    expect(world.active(0)).toBe(2);
+    expect(p.x).toBeLessThan(8);
+    expect(Math.abs(p.x - 7.5)).toBeLessThan(0.6);
+    expect(Math.abs(p.y - 4.5)).toBeLessThan(0.8);
+  });
+
+  it('longitudinal rear-unit yielding prevents faster rear ally from shoving slower front ally in a 1-wide corridor', () => {
+    const rows = ['#'.repeat(24), '.'.repeat(24), '#'.repeat(24)];
+    const world = makeWorld(rows, [
+      { x: 5, y: 1, radius: 0.35, speed: 0.07 },
+      { x: 2, y: 1, radius: 0.35, speed: 0.14 },
+    ]);
+    world.sim.submit(move(world.handles, 20, 1));
+    let maxFrontStep = 0;
+    let prevFrontX = world.pos(0).x;
+    for (let t = 0; t < 120; t++) {
+      world.sim.step();
+      const curFrontX = world.pos(0).x;
+      maxFrontStep = Math.max(maxFrontStep, curFrontX - prevFrontX);
+      prevFrontX = curFrontX;
+      expect(world.vel(0).x).toBeGreaterThanOrEqual(-1e-4);
+      expect(world.vel(1).x).toBeGreaterThanOrEqual(-1e-4);
+    }
+    expect(maxFrontStep).toBeLessThanOrEqual(0.07 + 0.025);
+    const steadyStart = world.pos(0).x;
+    run(world, 20);
+    const steadyPerTick = (world.pos(0).x - steadyStart) / 20;
+    expect(steadyPerTick).toBeLessThan(0.09);
   });
 });
