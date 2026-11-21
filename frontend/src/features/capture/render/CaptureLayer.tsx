@@ -120,7 +120,7 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
   });
 
   return (
-    <lineSegments ref={segsRef} visible={false} renderOrder={4}>
+    <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
       <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
     </lineSegments>
   );

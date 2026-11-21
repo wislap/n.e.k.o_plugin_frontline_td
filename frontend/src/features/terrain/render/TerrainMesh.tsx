@@ -138,10 +138,16 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   }
   return (
     <>
-      <mesh ref={meshRef} geometry={geometry}>
+      <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
         <meshLambertMaterial vertexColors />
       </mesh>
-      <mesh ref={gridMeshRef} geometry={geometry} renderOrder={1} visible={false} />
+      <mesh
+        ref={gridMeshRef}
+        geometry={geometry}
+        renderOrder={1}
+        visible={false}
+        frustumCulled={false}
+      />
     </>
   );
 }

@@ -342,7 +342,7 @@ export function StructuresLayer({
           if (gMesh !== undefined && gMesh !== null) {
             const gSlot = glyphCounts[glyph];
             const badgeSize = Math.max(0.7, Math.min(w, h) * 0.66);
-            dummy.position.set(cx, groundY + full + 0.04, cy);
+            dummy.position.set(cx, groundY + full + 0.06, cy);
             dummy.scale.set(badgeSize, 1, badgeSize);
             dummy.updateMatrix();
             gMesh.setMatrixAt(gSlot, dummy.matrix);
@@ -398,6 +398,7 @@ export function StructuresLayer({
             silRefs.current[s] = m;
           }}
           args={[undefined, undefined, capacity]}
+          frustumCulled={false}
         >
           <meshLambertMaterial vertexColors />
         </instancedMesh>
@@ -409,6 +410,7 @@ export function StructuresLayer({
             glyphRefs.current[g] = m;
           }}
           args={[undefined, undefined, capacity]}
+          frustumCulled={false}
           renderOrder={1}
         />
       ))}
@@ -416,6 +418,7 @@ export function StructuresLayer({
         key={`bp-${capacity}`}
         ref={blueprintRef}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial transparent opacity={0.28} depthWrite={false} />
@@ -424,11 +427,17 @@ export function StructuresLayer({
         key={`wait-${capacity}`}
         ref={waitingRef}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial transparent opacity={0.5} depthWrite={false} />
       </instancedMesh>
-      <instancedMesh key={`c-${capacity}`} ref={crateRef} args={[undefined, undefined, capacity]}>
+      <instancedMesh
+        key={`c-${capacity}`}
+        ref={crateRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+      >
         <boxGeometry args={[1, 1, 1]} />
         <meshLambertMaterial color={SALVAGE_COLOR} />
       </instancedMesh>

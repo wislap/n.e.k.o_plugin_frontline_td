@@ -117,7 +117,7 @@ export function ExclusionLayer({
   });
 
   return (
-    <lineSegments ref={segsRef} visible={false} renderOrder={4}>
+    <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
       <lineBasicMaterial vertexColors transparent opacity={0.85} depthWrite={false} />
     </lineSegments>
   );

@@ -88,7 +88,8 @@
 | [0028](../adr/0028-rendering-camera-picking.md) | 渲染、镜头与拾取 | 已采纳；部分被 0048 取代（按 V 切换视角改为 Tab；删除暂停自动切指挥视角，改为进入建造/物流模式自动切 2D 且可锁定视角；点选拆分为己方可控选中集合与可固定检视对象） | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
 | [0048](../adr/0048-interaction-modes-and-inspector-contract.md) | 客户端交互模式、检视焦点与强类型检查器契约 | 已采纳；部分被 0049 取代（快捷键速查由居中浮层改为左中常驻可折叠快捷键引导栏并以 K 键开关、Esc 不再关闭引导栏；战术检视面板移至右下角，左下角承载一级模式栏并预留小地图槽位） | 已实现 | wislap | F1 客户端交互底座 | 2026-11-20 |
 | [0049](../adr/0049-hud-design-system-and-layout.md) | 近未来战术 HUD 设计系统、九宫格布局与建造分类字段 | 已采纳 | 已实现 | wislap | F2 战术 HUD 主体 | 2026-11-20 |
-| [0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md) | 电子沙盘程序化建筑渲染、战术圈层反馈与 WebGL 资源生命周期 | 已采纳 | 已实现 | wislap | F4 电子沙盘渲染与 GPU 治理 | 2026-11-20 |
+| [0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md) | 电子沙盘程序化建筑渲染、战术圈层反馈与 WebGL 资源生命周期 | 已采纳；部分被 0051 取代（屋顶战术图标升级为 128×128 各向异性过滤加 polygonOffset；全图动态 InstancedMesh 与 LineSegments 强制显式声明 frustumCulled 并由 ESLint 守门） | 已实现 | wislap | F4 电子沙盘渲染与 GPU 治理 | 2026-11-20 |
+| [0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md) | 全图批次视锥裁剪契约、动态深度窗口与地表贴花层级 | 已采纳 | 已实现 | wislap | R1 场景视锥裁剪与深度精度治理 | 2026-11-21 |
 
 ## 已取代 / 已废弃
 
@@ -167,3 +168,6 @@
 
 ### F4 电子沙盘渲染与 GPU 治理（2026-11-20）
 - [0050 电子沙盘程序化建筑渲染、战术圈层反馈与 WebGL 资源生命周期](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+
+### R1 场景视锥裁剪与深度精度治理（2026-11-21）
+- [0051 全图批次视锥裁剪契约、动态深度窗口与地表贴花层级](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)

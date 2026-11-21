@@ -31,6 +31,7 @@ function makeLabel(): LabelEntry {
   const texture = new THREE.CanvasTexture(canvas);
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const sprite = new THREE.Sprite(material);
+  sprite.frustumCulled = false;
   sprite.scale.set(4, LABEL_H / (LABEL_W / 4), 1);
   return { sprite, canvas, texture, text: '' };
 }
@@ -196,6 +197,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         if (entry === undefined) {
           const line = new THREE.LineSegments(geometry, getLineMaterial(lineMatRef));
+          line.frustumCulled = false;
           lines.current.set(squad.id, { line, sig });
           group.add(line);
         } else {
@@ -236,7 +238,11 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
 
   return (
     <group ref={groupRef}>
-      <instancedMesh ref={markerRef} args={[undefined, undefined, MARKER_CAPACITY]}>
+      <instancedMesh
+        ref={markerRef}
+        args={[undefined, undefined, MARKER_CAPACITY]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.6, 0.85, 24]} />
         <meshBasicMaterial
           color={THREAT_COLOR}
@@ -245,7 +251,11 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
           side={THREE.DoubleSide}
         />
       </instancedMesh>
-      <instancedMesh ref={arrowRef} args={[undefined, undefined, ARROW_CAPACITY]}>
+      <instancedMesh
+        ref={arrowRef}
+        args={[undefined, undefined, ARROW_CAPACITY]}
+        frustumCulled={false}
+      >
         <coneGeometry args={[0.3, 0.8, 6]} />
         <meshBasicMaterial color={THREAT_COLOR} transparent opacity={0.85} />
       </instancedMesh>

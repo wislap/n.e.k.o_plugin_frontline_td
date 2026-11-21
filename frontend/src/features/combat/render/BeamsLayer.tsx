@@ -115,7 +115,7 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
   });
 
   return (
-    <lineSegments ref={segsRef} visible={false}>
+    <lineSegments ref={segsRef} visible={false} frustumCulled={false}>
       <lineBasicMaterial vertexColors transparent opacity={0.9} />
     </lineSegments>
   );

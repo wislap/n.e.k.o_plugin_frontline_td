@@ -8,6 +8,7 @@ import {
   i18nextJsxBlock,
   networkGlobalsBlock,
   purityZoneBlock,
+  renderCullingBlock,
 } from './tooling/eslint-rules';
 
 export default defineConfig(
@@ -47,6 +48,7 @@ export default defineConfig(
   purityZoneBlock,
   downloadBanBlock,
   networkGlobalsBlock,
+  renderCullingBlock,
   {
     files: ['tooling/**', 'eval/**', 'e2e/**', '*.config.ts'],
     languageOptions: {

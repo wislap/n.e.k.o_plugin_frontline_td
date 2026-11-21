@@ -66,9 +66,19 @@ export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: Memory
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, CAP]} renderOrder={3}>
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, CAP]}
+      renderOrder={3}
+      frustumCulled={false}
+    >
       <boxGeometry args={[1, 1, 1]} />
-      <meshLambertMaterial color={MEMORY_COLOR} transparent opacity={MEMORY_OPACITY} />
+      <meshLambertMaterial
+        color={MEMORY_COLOR}
+        transparent
+        opacity={MEMORY_OPACITY}
+        depthWrite={false}
+      />
     </instancedMesh>
   );
 }

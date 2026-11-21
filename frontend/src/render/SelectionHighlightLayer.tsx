@@ -33,7 +33,7 @@ const INITIAL_CAPACITY_VERTICES = 1024;
 const RING_SEGMENTS = 48;
 const VERTS_PER_BRACKET = 16;
 const VERTS_PER_CIRCLE = RING_SEGMENTS * 2;
-const LIFT = 0.065;
+const LIFT = 0.07;
 const EMPTY_TARGETS: readonly number[] = [];
 
 const BRACKET_COLORS: Readonly<Record<HighlightBracket['tone'], string>> = {

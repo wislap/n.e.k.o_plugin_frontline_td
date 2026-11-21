@@ -182,9 +182,20 @@ function MoveMarker({
   }
   const y = terrainY(heights, mapWidth, mapHeight, marker.x, marker.y);
   return (
-    <mesh ref={ref} position={[marker.x, y + 0.03, marker.y]} rotation={[-Math.PI / 2, 0, 0]}>
+    <mesh
+      ref={ref}
+      position={[marker.x, y + 0.065, marker.y]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      frustumCulled={false}
+    >
       <ringGeometry args={[0.4, 0.55, 24]} />
-      <meshBasicMaterial ref={material} color={MARKER_COLOR} transparent side={THREE.DoubleSide} />
+      <meshBasicMaterial
+        ref={material}
+        color={MARKER_COLOR}
+        transparent
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
     </mesh>
   );
 }

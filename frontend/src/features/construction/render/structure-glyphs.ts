@@ -1,5 +1,5 @@
-// Procedural roof tactical glyph badges for structures (ADR 0050):
-// draws 64x64 high-contrast CanvasTexture badges at startup (100% offline,
+// Procedural roof tactical glyph badges for structures (ADR 0050 / ADR 0051):
+// draws 128x128 high-contrast CanvasTexture badges at startup (100% offline,
 // zero external assets) and disposes textures + materials on unmount.
 import * as THREE from 'three';
 import { STRUCTURE_GLYPHS, type StructureGlyph } from '../content';
@@ -15,8 +15,9 @@ export interface GlyphMaterialEntry {
   material: THREE.MeshBasicMaterial;
 }
 
-const SIZE = 64;
-const CENTER = SIZE / 2;
+const LOGICAL_SIZE = 64;
+const CENTER = LOGICAL_SIZE / 2;
+const TEX_SCALE = 2;
 const BADGE_BG = 'rgba(6, 10, 18, 0.78)';
 const BADGE_BORDER = 'rgba(235, 245, 255, 0.85)';
 const SYMBOL_COLOR = '#ffffff';
@@ -215,21 +216,28 @@ export function createGlyphMaterials(): Record<ActiveGlyph, GlyphMaterialEntry> 
   const record: Partial<Record<ActiveGlyph, GlyphMaterialEntry>> = {};
   for (const glyph of ACTIVE_STRUCTURE_GLYPHS) {
     const canvas = document.createElement('canvas');
-    canvas.width = SIZE;
-    canvas.height = SIZE;
+    canvas.width = LOGICAL_SIZE * TEX_SCALE;
+    canvas.height = LOGICAL_SIZE * TEX_SCALE;
     const ctx = canvas.getContext('2d');
     if (ctx !== null) {
+      ctx.scale(TEX_SCALE, TEX_SCALE);
       drawOctagonBadge(ctx);
       drawGlyphSymbol(ctx, glyph);
     }
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = 4;
     texture.needsUpdate = true;
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       opacity: 0.88,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
     record[glyph] = { texture, material };
   }

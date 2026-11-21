@@ -7,6 +7,7 @@ import {
   i18nextJsxBlock,
   networkGlobalsBlock,
   purityZoneBlock,
+  renderCullingBlock,
 } from './eslint-rules.ts';
 
 const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
@@ -31,6 +32,7 @@ beforeAll(() => {
       downloadBanBlock,
       networkGlobalsBlock,
       i18nextJsxBlock,
+      renderCullingBlock,
     ],
   });
 });
@@ -142,7 +144,7 @@ describe('content/mode id literals', () => {
 });
 
 describe('runtime code download ban', () => {
-  it.each(['src/client/x.ts', 'src/app/x.ts', 'src/core/x.ts'])(
+  it.each(['src/client/x.ts', 'src/app/x.ts', 'src/core/x.ts', 'src/ui/x.tsx'])(
     'flags eval/new Function/dynamic imports in %s',
     async (filePath) => {
       const ruleIds = await ruleIdsFor(
@@ -192,5 +194,32 @@ describe('i18next literal strings', () => {
     const code = 'const c = () => <p>Hello world</p>;\nexport default c;\n';
     const ruleIds = await ruleIdsFor('src/x.tsx', code);
     expect(ruleIds).toContain('i18next/no-literal-string');
+  });
+});
+
+describe('render batch frustumCulled guard', () => {
+  it('flags <instancedMesh> without explicit frustumCulled', async () => {
+    const code = 'const c = () => <instancedMesh args={[]} />;\nexport default c;\n';
+    const ruleIds = await ruleIdsFor('src/render/x.tsx', code);
+    expect(ruleIds).toContain('no-restricted-syntax');
+  });
+
+  it('flags <lineSegments> without explicit frustumCulled', async () => {
+    const code = 'const c = () => <lineSegments />;\nexport default c;\n';
+    const ruleIds = await ruleIdsFor('src/render/x.tsx', code);
+    expect(ruleIds).toContain('no-restricted-syntax');
+  });
+
+  it('allows <instancedMesh> and <lineSegments> with explicit frustumCulled={false}', async () => {
+    const code =
+      'const c = () => (<><instancedMesh frustumCulled={false} args={[]} /><lineSegments frustumCulled={false} /></>);\nexport default c;\n';
+    const ruleIds = await ruleIdsFor('src/render/x.tsx', code);
+    expect(ruleIds).not.toContain('no-restricted-syntax');
+  });
+
+  it('does not flag test files', async () => {
+    const code = 'const c = () => <instancedMesh args={[]} />;\nexport default c;\n';
+    const ruleIds = await ruleIdsFor('src/render/x.test.tsx', code);
+    expect(ruleIds).not.toContain('no-restricted-syntax');
   });
 });

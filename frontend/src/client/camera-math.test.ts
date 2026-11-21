@@ -11,7 +11,9 @@ import {
   clampTacticalHeight,
   easeInOut,
   matchZoomForMode,
+  orthoClipPlanes,
   orthoHeightForPerspectiveDist,
+  perspectiveClipPlanes,
   perspectiveDistAtPitch,
   perspectiveDistForOrthoHeight,
   screenUpDir,
@@ -94,5 +96,39 @@ describe('camera math', () => {
     expect(easeInOut(0.5)).toBeCloseTo(0.5, 6);
     expect(easeInOut(-1)).toBe(0);
     expect(easeInOut(2)).toBe(1);
+  });
+
+  it('perspectiveClipPlanes tightens near with distance and expands far for large maps', () => {
+    const close = perspectiveClipPlanes(SPECTATE_MIN_DIST, 96, 64);
+    expect(close.near).toBeCloseTo(SPECTATE_MIN_DIST * 0.12, 6);
+    expect(close.far).toBe(500);
+
+    // Distances below SPECTATE_MIN_DIST clamp to SPECTATE_MIN_DIST.
+    expect(perspectiveClipPlanes(1, 96, 64)).toEqual(close);
+
+    // Mid-distance scales near linearly until capped at 8.
+    const mid = perspectiveClipPlanes(40, 96, 64);
+    expect(mid.near).toBeCloseTo(4.8, 6);
+    expect(mid.far).toBe(500);
+
+    const farZoom = perspectiveClipPlanes(80, 96, 64);
+    expect(farZoom.near).toBe(8);
+    expect(farZoom.far).toBe(500);
+
+    // Large maps push far beyond the 500 floor.
+    const hugeMap = perspectiveClipPlanes(80, 400, 300);
+    expect(hugeMap.near).toBe(8);
+    expect(hugeMap.far).toBeCloseTo(80 + 500 + 120, 6);
+
+    // Degenerate zero/negative map sizes clamp to 1x1 without NaN.
+    const tiny = perspectiveClipPlanes(10, 0, -5);
+    expect(tiny.near).toBeCloseTo(1.2, 6);
+    expect(tiny.far).toBe(500);
+  });
+
+  it('orthoClipPlanes sets near=1 and expands far when cameraY grows', () => {
+    expect(orthoClipPlanes(200)).toEqual({ near: 1, far: 300 });
+    expect(orthoClipPlanes(220)).toEqual({ near: 1, far: 300 });
+    expect(orthoClipPlanes(300)).toEqual({ near: 1, far: 380 });
   });
 });

@@ -47,7 +47,7 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 - **内容扩充**：更多据点类型（目标一局 6–10 次攻占）、更多防御建筑与兵种、中立据点、对拍机器人学会占点（见 §13）。
 - **ADR 缺口**：[ADR 索引](../generated/adr-index.md)「实现」列中标为"部分"或"未实现"的条目。
 - **前端正式化重构（F1–F5，已完成落地）**：[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md) 已完成交互模式状态机、Hover/Pin 检视与强类型契约、九宫格战术 HUD、战略小地图、电子沙盘程序化渲染与 GPU 生命周期治理及 E2E 验证；后续可选扩充（如 `F2` 建造模式下 `1–9` 建造分类快捷抽屉绑定）留待后续需求定夺。
-- **低优先级工程项**：命令日志随对局只增不减且参与存档与哈希；性能评估缺"大量建造与阻挡变化"场景，其他性能推断等有数据再决定；铺满全图的图层是否关闭视锥裁剪；NEKO 宿主隐藏面板时是否触发 `visibilitychange`（§3.1）。
+- **低优先级工程项**：命令日志随对局只增不减且参与存档与哈希；性能评估缺"大量建造与阻挡变化"场景，其他性能推断等有数据再决定；NEKO 宿主隐藏面板时是否触发 `visibilitychange`（§3.1）。
 
 ---
 
@@ -276,13 +276,13 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 - 局内解锁状态（"本局可用内容"）由占领模块写入，建造、小队模块读取。（存档当前保存 u16 内容索引，与内容版本绑定；包补丁、别名与局内解锁尚未实现，ADR 0014、0022 实现：部分）
 
 ### 6.13 客户端
-- 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh 与缓冲区，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。`render/` 与 `features/*/render/` 的命令式 Three.js 资源（`BufferGeometry`、`Material`、`CanvasTexture`、`DataTexture`、`LineBuffer`）遵守统一的 `.dispose()` 生命周期，在卸载或容量重建前显式释放（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）。
+- 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh 与缓冲区，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。`render/` 与 `features/*/render/` 的命令式 Three.js 资源（`BufferGeometry`、`Material`、`CanvasTexture`、`DataTexture`、`LineBuffer`）遵守统一的 `.dispose()` 生命周期，在卸载或容量重建前显式释放（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）；全图动态 `<instancedMesh>` / `<lineSegments>` 批次统一显式声明 `frustumCulled={false}` 并由 ESLint `renderCullingBlock` 守门（[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）。
 - 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：`useInteractionStore` 管理平级一级模式（`F1 command` / `F2 build` / `F3 logistics`）与互斥二级工具（`place` / `demolish` / `road`）；`useSelectionStore` 仅持己方可控实体句柄；`useInspectorStore` 持有 `hovered` 与 `pinned`（地形格仅可悬停不可固定，严守迷雾零泄密），并以 `client/inspect-subject.ts` 提供 0ms 观察者快照即时解析与 80ms 防抖强类型 `*Inspection` 深度查询。所有 UI 面板通过共享 `subscribeSnapshotClock` / `useSnapshotValue` 节流订阅快照（禁止自建 `setInterval`），跨局重置收口于 `client/session.ts`。
 - 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)）：`HudShell` 采用九宫格流式槽位（无 `position: fixed` 硬编码互盖），集成左上时间/视角/全屏与 `ToastStack`、左中可折叠 `KeyGuideRail`（`K`/`?` 开关、`Esc` 不关闭）、左下模式栏与战略小地图 `Minimap`、底中小队/建造/道路工作台、右上 `StockPanel`（含净速率 `/s`）与默认收起的调试面板（`` ` ``），以及右下 `InspectorPanel`。全部 UI 原语与模式联动主题色收口于 `src/ui/kit/` 与 `src/ui/styles/`，100% 离线零外部字体/图标依赖。
 - 输入分三段：按键 / 鼠标 → 意图 → 命令，由数据驱动的 `input/keymap.ts` 按通用层与当前模式分层解析，组件中不直接监听具体按键。
 - 建造预览（`GhostPreview`）由客户端依据快照网格层与 `rules/` 先行判断，显示程序化建筑轮廓、连接与服务双圈、武器射程圈及阻塞原因，最终由模拟层裁决；不合法时模拟层发出 `COMMAND_REJECTED` 并由 `ToastStack` 提示。
-- 镜头：M2 起就是同一个摄像机在 3D 观战与 2D 正交战术视角之间切换（设计清单 A6 ⑤，[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0033](../adr/0033-design-checklist-referenced-items.md)），场景从一开始按 3D 构建；F1 阶段按 [ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 改为 `Tab` 键手动切换、取消暂停自动切视角，并在未开启「视角锁定」时于进入 `F2` / `F3` 自动切 2D、返回 `F1` 自动恢复 3D。
-- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）：建筑采用程序化多部件轮廓（`visual.silhouette`）与离线 `CanvasTexture` 屋顶战术图标（`visual.glyph`），蓝图（`STATE_BLUEPRINT`）与等待阻塞（`STATE_WAITING`）视觉分离；`UnitsLayer` 显示低电/断电标牌；`SelectionHighlightLayer` 绘制地面四角框、武器射程圈与物流连接/服务双圈；`TerrainMesh` 使用基于 `fwidth` 的自适应网格着色器强化高程、悬崖与坡道对比；`LogisticsOverlay` 服务覆盖层以单张 `DataTexture` 绘制；所有信息层同时以颜色与形状/图案区分，照顾色盲。
+- 镜头：M2 起就是同一个摄像机在 3D 观战与 2D 正交战术视角之间切换（设计清单 A6 ⑤，[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0033](../adr/0033-design-checklist-referenced-items.md)），场景从一开始按 3D 构建；F1 阶段按 [ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 改为 `Tab` 键手动切换、取消暂停自动切视角，并在未开启「视角锁定」时于进入 `F2` / `F3` 自动切 2D、返回 `F1` 自动恢复 3D；`CameraRig` 通过 `perspectiveClipPlanes` / `orthoClipPlanes` 随视距与地图对角线动态收紧 `near/far` 深度窗口（[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）。
+- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）：建筑采用程序化多部件轮廓（`visual.silhouette`）与离线 `128×128` `CanvasTexture`（`anisotropy = 4` + `polygonOffset`）屋顶战术图标（`visual.glyph`），蓝图（`STATE_BLUEPRINT`）与等待阻塞（`STATE_WAITING`）视觉分离；`UnitsLayer` 显示低电/断电标牌；`SelectionHighlightLayer` 绘制地面四角框、武器射程圈与物流连接/服务双圈，地表贴花严格遵循 `0.000..0.070` 单调分层 Y-lift 栈消除 Z-fighting；`TerrainMesh` 使用基于 `fwidth` 的自适应网格着色器强化高程、悬崖与坡道对比；`LogisticsOverlay` 服务覆盖层以单张 `DataTexture` 绘制；所有信息层同时以颜色与形状/图案区分，照顾色盲。
 
 ### 6.14 Python 薄壳
 只声明 static 面板与插件元数据（含 i18n）。将来如接入 NEKO 解说 / 语音，参照 `neko_survivors` 的 `game_event → /chat → speak` 模式，经事件流驱动。

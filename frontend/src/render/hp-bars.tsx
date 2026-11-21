@@ -164,11 +164,21 @@ export function HpBars({
 
   return (
     <group>
-      <instancedMesh key={`bg-${capacity}`} ref={bgRef} args={[undefined, undefined, capacity]}>
+      <instancedMesh
+        key={`bg-${capacity}`}
+        ref={bgRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+      >
         <planeGeometry args={[1, BAR_HEIGHT]} />
         <meshBasicMaterial color={BAR_BG} transparent opacity={0.8} depthTest={false} />
       </instancedMesh>
-      <instancedMesh key={`fg-${capacity}`} ref={fgRef} args={[undefined, undefined, capacity]}>
+      <instancedMesh
+        key={`fg-${capacity}`}
+        ref={fgRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+      >
         <planeGeometry args={[1, BAR_HEIGHT * 0.7]} />
         <meshBasicMaterial transparent opacity={0.95} depthTest={false} />
       </instancedMesh>

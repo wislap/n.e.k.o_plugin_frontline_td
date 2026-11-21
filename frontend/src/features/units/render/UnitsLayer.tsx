@@ -198,7 +198,7 @@ export function UnitsLayer({
       if (selected.has(handle)) {
         color.multiplyScalar(SELECTED_BRIGHTEN);
         if (ring !== null && rings < capacity) {
-          dummy.position.set(x, groundY + 0.02, y);
+          dummy.position.set(x, groundY + 0.055, y);
           dummy.scale.set(radius * RING_SCALE * 2, 1, radius * RING_SCALE * 2);
           // The ring geometry lies in the XY plane; rotate it flat.
           dummy.rotation.set(-Math.PI / 2, 0, 0);
@@ -241,6 +241,7 @@ export function UnitsLayer({
           meshRefs.current[0] = m;
         }}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />
         <meshLambertMaterial />
@@ -251,6 +252,7 @@ export function UnitsLayer({
           meshRefs.current[1] = m;
         }}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <boxGeometry args={[1, UNIT_HEIGHT, 1]} />
         <meshLambertMaterial />
@@ -261,6 +263,7 @@ export function UnitsLayer({
           meshRefs.current[2] = m;
         }}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />
         <meshLambertMaterial />
@@ -271,18 +274,31 @@ export function UnitsLayer({
           meshRefs.current[3] = m;
         }}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <sphereGeometry args={[0.5, 12, 10]} />
         <meshLambertMaterial />
       </instancedMesh>
-      <instancedMesh key={`ring-${capacity}`} ref={ringRef} args={[undefined, undefined, capacity]}>
+      <instancedMesh
+        key={`ring-${capacity}`}
+        ref={ringRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.7, 1, 16]} />
-        <meshBasicMaterial color={RING_COLOR} side={THREE.DoubleSide} transparent opacity={0.9} />
+        <meshBasicMaterial
+          color={RING_COLOR}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+        />
       </instancedMesh>
       <instancedMesh
         key={`epip-${capacity}`}
         ref={energyPipRef}
         args={[undefined, undefined, capacity]}
+        frustumCulled={false}
       >
         <octahedronGeometry args={[0.13, 0]} />
         <meshBasicMaterial />

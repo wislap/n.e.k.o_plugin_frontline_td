@@ -136,3 +136,23 @@ export function spectateViewDir(pitchDeg: number): { x: number; y: number; z: nu
   const pitch = (pitchDeg * Math.PI) / 180;
   return { x: 0, y: -Math.sin(pitch), z: -Math.cos(pitch) };
 }
+
+// Dynamic depth clip planes for the perspective camera (ADR 0051): tightens
+// near with view distance to preserve 24-bit depth buffer precision while
+// expanding far to cover large maps.
+export function perspectiveClipPlanes(
+  dist: number,
+  mapWidth: number,
+  mapHeight: number,
+): { near: number; far: number } {
+  const safeDist = Math.max(SPECTATE_MIN_DIST, dist);
+  const near = Math.max(0.8, Math.min(8, safeDist * 0.12));
+  const diag = Math.hypot(Math.max(1, mapWidth), Math.max(1, mapHeight));
+  const far = Math.max(500, safeDist + diag + 120);
+  return { near, far };
+}
+
+// Dynamic depth clip planes for the top-down orthographic camera (ADR 0051).
+export function orthoClipPlanes(cameraY: number): { near: number; far: number } {
+  return { near: 1, far: Math.max(300, cameraY + 80) };
+}

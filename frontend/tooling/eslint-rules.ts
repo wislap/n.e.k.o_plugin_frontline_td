@@ -182,3 +182,24 @@ export const i18nextJsxBlock: Linter.Config = {
     'i18next/no-literal-string': ['error', { mode: 'jsx-only' }],
   },
 };
+
+// Dynamic <instancedMesh> and <lineSegments> batches freeze Frame-1 bounding
+// spheres when frustumCulled defaults to true; require explicit frustumCulled
+// (ADR 0051). Includes DOWNLOAD_BAN_SYNTAX so non-purity .tsx files retain the
+// ADR 0023 download ban when flat config merges no-restricted-syntax.
+export const renderCullingBlock: Linter.Config = {
+  files: ['src/**/*.tsx'],
+  ignores: ['src/**/*.test.tsx'],
+  rules: {
+    'no-restricted-syntax': [
+      'error',
+      ...DOWNLOAD_BAN_SYNTAX,
+      {
+        selector:
+          'JSXOpeningElement[name.name=/^(instancedMesh|lineSegments)$/]:not(:has(JSXAttribute[name.name="frustumCulled"]))',
+        message:
+          'Dynamic <instancedMesh> and <lineSegments> batches must explicitly set frustumCulled (ADR 0051).',
+      },
+    ],
+  },
+};

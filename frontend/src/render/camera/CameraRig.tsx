@@ -15,15 +15,30 @@ import {
   clampSpectateDist,
   clampTacticalHeight,
   easeInOut,
+  orthoClipPlanes,
+  perspectiveClipPlanes,
   perspectiveDistAtPitch,
   spectateCameraPosition,
   visibleGroundHeight,
 } from '../../client/camera-math';
 
-const FAR = 500;
 const ORTHO_HEIGHT = 200;
 // Pan speed: one full visible height per second.
 const PAN_SPEED = 1.0;
+
+function syncPerspClip(
+  persp: THREE.PerspectiveCamera,
+  dist: number,
+  mapWidth: number,
+  mapHeight: number,
+): void {
+  const clip = perspectiveClipPlanes(dist, mapWidth, mapHeight);
+  if (Math.abs(persp.near - clip.near) > 1e-3 || Math.abs(persp.far - clip.far) > 1e-3) {
+    persp.near = clip.near;
+    persp.far = clip.far;
+    persp.updateProjectionMatrix();
+  }
+}
 
 interface Transition {
   startedAt: number;
@@ -59,7 +74,17 @@ export function CameraRig({
   // Create both cameras once and register the perspective camera.
   useEffect(() => {
     if (cameras.current === null) {
-      const persp = new THREE.PerspectiveCamera(SPECTATE_FOV_DEG, 1, 0.1, FAR);
+      const initialClip = perspectiveClipPlanes(
+        clampSpectateDist(useCameraStore.getState().zoom),
+        1,
+        1,
+      );
+      const persp = new THREE.PerspectiveCamera(
+        SPECTATE_FOV_DEG,
+        1,
+        initialClip.near,
+        initialClip.far,
+      );
       // Map north (-Z) as the up reference: never parallel to the view for
       // pitch in (0°, 90°], so lookAt stays defined all through the
       // transition (the tactical→spectate leg starts exactly at 90°).
@@ -138,6 +163,7 @@ export function CameraRig({
       if (!(finished && cam.mode === 'tactical')) {
         const pitch = t.fromPitch + (t.toPitch - t.fromPitch) * k;
         const dist = perspectiveDistAtPitch(t.extent, pitch);
+        syncPerspClip(persp, dist, mapWidth, mapHeight);
         const pos = spectateCameraPosition(center, dist, pitch);
         persp.position.set(pos.x, pos.y, pos.z);
         persp.lookAt(center.x, 0, center.y);
@@ -153,12 +179,13 @@ export function CameraRig({
 
     if (cam.mode === 'tactical') {
       const h = clampTacticalHeight(cam.zoom);
+      const clip = orthoClipPlanes(ORTHO_HEIGHT);
       ortho.left = (-h * aspect) / 2;
       ortho.right = (h * aspect) / 2;
       ortho.top = h / 2;
       ortho.bottom = -h / 2;
-      ortho.near = 0.1;
-      ortho.far = FAR;
+      ortho.near = clip.near;
+      ortho.far = clip.far;
       ortho.updateProjectionMatrix();
       // Straight down; screen-up is scene -Z (up set once at creation).
       ortho.position.set(center.x, ORTHO_HEIGHT, center.y);
@@ -166,6 +193,7 @@ export function CameraRig({
       activate(ortho);
     } else {
       const dist = clampSpectateDist(cam.zoom);
+      syncPerspClip(persp, dist, mapWidth, mapHeight);
       const pos = spectateCameraPosition(center, dist, SPECTATE_PITCH_DEG);
       persp.position.set(pos.x, pos.y, pos.z);
       persp.lookAt(center.x, 0, center.y);

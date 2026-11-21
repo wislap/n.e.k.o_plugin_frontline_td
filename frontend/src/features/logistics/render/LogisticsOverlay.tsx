@@ -30,7 +30,7 @@ const MAX_LINK_VERTS = 8192;
 const RING_CAP = 64;
 const RING_COLOR = '#7fd4ff';
 const RING_SEGMENTS = 48;
-const LIFT = 0.04;
+const LIFT = 0.05;
 
 interface BuiltCover {
   geometry: THREE.BufferGeometry;
@@ -169,7 +169,7 @@ function updateRings(
       }
       const cx = (structures.x[i] ?? 0) + kind.footprint.w / 2;
       const cy = (structures.y[i] ?? 0) + kind.footprint.h / 2;
-      scratchDummy.position.set(cx, terrainY(heights, width, height, cx, cy) + LIFT + 0.01, cy);
+      scratchDummy.position.set(cx, terrainY(heights, width, height, cx, cy) + LIFT + 0.002, cy);
       scratchDummy.rotation.set(-Math.PI / 2, 0, 0);
       scratchDummy.scale.set(kind.node.service, kind.node.service, 1);
       scratchDummy.updateMatrix();
@@ -281,12 +281,18 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
           opacity={1}
         />
       </mesh>
-      <lineSegments ref={linkRef} visible={false}>
-        <lineBasicMaterial vertexColors transparent opacity={0.9} />
+      <lineSegments ref={linkRef} visible={false} frustumCulled={false}>
+        <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
       </lineSegments>
-      <instancedMesh ref={ringRef} args={[undefined, undefined, RING_CAP]}>
+      <instancedMesh ref={ringRef} args={[undefined, undefined, RING_CAP]} frustumCulled={false}>
         <ringGeometry args={[0.95, 1, RING_SEGMENTS]} />
-        <meshBasicMaterial color={RING_COLOR} transparent opacity={0.5} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          color={RING_COLOR}
+          transparent
+          opacity={0.5}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
       </instancedMesh>
     </group>
   );

@@ -184,7 +184,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     if (kind.node !== undefined) {
       // Connect radius is stored in cost units (cells × 10).
       const radius = kind.node.connect / 10;
-      connectRing.position.set(cx, groundY + 0.05, cy);
+      connectRing.position.set(cx, groundY + 0.06, cy);
       connectRing.scale.set(radius, radius, 1);
 
       // Dashed predicted links to own completed nodes inside the radius.
@@ -210,10 +210,10 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           }
           const base = segs * 6;
           positions[base] = cx;
-          positions[base + 1] = groundY + 0.06;
+          positions[base + 1] = groundY + 0.062;
           positions[base + 2] = cy;
           positions[base + 3] = ox;
-          positions[base + 4] = terrainY(heights, map.grid.width, map.grid.height, ox, oy) + 0.06;
+          positions[base + 4] = terrainY(heights, map.grid.width, map.grid.height, ox, oy) + 0.062;
           positions[base + 5] = oy;
           segs += 1;
         }
@@ -231,9 +231,9 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     serviceDisc.visible = hasService;
     if (kind.node !== undefined && kind.node.service > 0) {
       const sr = kind.node.service;
-      serviceRing.position.set(cx, groundY + 0.04, cy);
+      serviceRing.position.set(cx, groundY + 0.059, cy);
       serviceRing.scale.set(sr, sr, 1);
-      serviceDisc.position.set(cx, groundY + 0.03, cy);
+      serviceDisc.position.set(cx, groundY + 0.058, cy);
       serviceDisc.scale.set(sr, sr, 1);
     }
 
@@ -241,7 +241,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     weaponRing.visible = hasWeapon;
     if (kind.weapon !== undefined && kind.weapon.range > 0) {
       const wr = kind.weapon.range;
-      weaponRing.position.set(cx, groundY + 0.055, cy);
+      weaponRing.position.set(cx, groundY + 0.061, cy);
       weaponRing.scale.set(wr, wr, 1);
       setWeaponRingColor(weaponMat, ok);
     }
@@ -249,10 +249,15 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
 
   return (
     <group>
-      <mesh ref={boxRef} visible={false}>
+      <mesh ref={boxRef} visible={false} frustumCulled={false}>
         <meshBasicMaterial ref={boxMat} transparent opacity={0.4} depthWrite={false} />
       </mesh>
-      <mesh ref={connectRingRef} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        ref={connectRingRef}
+        visible={false}
+        rotation={[-Math.PI / 2, 0, 0]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.96, 1, RING_SEGMENTS]} />
         <meshBasicMaterial
           color={CONNECT_COLOR}
@@ -262,7 +267,12 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           depthWrite={false}
         />
       </mesh>
-      <mesh ref={serviceRingRef} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        ref={serviceRingRef}
+        visible={false}
+        rotation={[-Math.PI / 2, 0, 0]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.97, 1, CIRCLE_SEGMENTS]} />
         <meshBasicMaterial
           color={SERVICE_COLOR}
@@ -272,7 +282,12 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           depthWrite={false}
         />
       </mesh>
-      <mesh ref={serviceDiscRef} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        ref={serviceDiscRef}
+        visible={false}
+        rotation={[-Math.PI / 2, 0, 0]}
+        frustumCulled={false}
+      >
         <circleGeometry args={[1, CIRCLE_SEGMENTS]} />
         <meshBasicMaterial
           color={SERVICE_COLOR}
@@ -282,7 +297,12 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           depthWrite={false}
         />
       </mesh>
-      <mesh ref={weaponRingRef} visible={false} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        ref={weaponRingRef}
+        visible={false}
+        rotation={[-Math.PI / 2, 0, 0]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.975, 1, CIRCLE_SEGMENTS]} />
         <meshBasicMaterial
           ref={weaponMatRef}
@@ -293,7 +313,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
           depthWrite={false}
         />
       </mesh>
-      <lineSegments ref={linksRef} visible={false}>
+      <lineSegments ref={linksRef} visible={false} frustumCulled={false}>
         <lineDashedMaterial color={CONNECT_COLOR} dashSize={0.5} gapSize={0.35} />
       </lineSegments>
     </group>
