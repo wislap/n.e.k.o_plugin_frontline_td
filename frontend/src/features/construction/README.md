@@ -13,11 +13,11 @@
   （activate/cancel 数组上限 256）、`UpgradeLinksCommand`
   （`links: [{a,b}]` 上限 64、`level`）、`ConstructionCompleted` 事件
   （issuer 可见）、`StructuresChannel`/`SalvageChannel`/
-  `RoadWorksChannel`、放置与等待原因码（含 `already_upgraded`）。
+  `RoadWorksChannel`。
 - `rules/`：`checkFootprint`/`checkRange` 与 `PlacementView` 纯放置
   规则（不依赖 sim）；`makePlacementView` 快照侧适配器，建造幽灵
   预览与 eval 机器人共用。放置/等待原因码在这里定义。
-- `render/`/`ui/`/`inspector`：建造幽灵与废墟覆盖、`BuildPanel`、
+- `render/`/`ui/`/`inspector`：建造幽灵与废墟覆盖、`BuildMenu`、
   工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。

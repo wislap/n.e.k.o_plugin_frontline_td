@@ -26,7 +26,7 @@
 
 ## 分层与依赖（工具强制，见 ADR 0007）
 - 模拟层（`core/`、`kernel/`、`features/*/sim/`、`features/*/rules/`）是无头游戏核心，只通过命令、快照、事件与外界交互（ADR 0004）。
-- `features/*/render/`、`features/*/ui/`、`client/`、`input/` **禁止 import 任何 `sim/`**。需要共享的纯规则放在 `features/*/rules/`。
+- `features/*/render/`、`features/*/ui/`、`modes/*/ui/`、`client/`、`input/` 等客户端层 **禁止 import 任何 `sim/`、`kernel/`、`runtime/`**。需要共享的纯规则放在 `features/*/rules/`。
 - 跨功能引用只能走对方的 `index.ts`，不能深入引用内部文件。禁止循环依赖。只有 `app/` 可以装配全部模块。
 - 玩法专属代码放在 `modes/<mode>/`，只有 `app/` 可以引用它。通用模块不感知玩法，禁止按玩法 ID 写特判（ADR 0019）。
 - 违反依赖规则时修改设计，不要修改规则。规则本身的改动属于架构级改动，必须先写 ADR。

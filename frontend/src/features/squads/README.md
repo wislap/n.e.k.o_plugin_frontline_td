@@ -61,5 +61,5 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（敌方
   视图过滤）、[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
   （句柄校验）。
-- [game_design.md §4.3](../../../../docs/design/game_design.md)
+- [game_design.md §4.7](../../../../docs/design/game_design.md)
   （小队玩法）。

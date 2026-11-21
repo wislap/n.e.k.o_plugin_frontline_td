@@ -20,10 +20,10 @@
   [contracts.md](../../../../docs/generated/contracts.md)。
 
 ## 拥有的组件
-- `Position {x,y:f64}`、`Mover {speed,radius,cls}`、
-  `MoveTarget {goal:u32,x,y,active:u8}` —— 只有本模块可写；
-  `Mover` 经 `ownComponent` 声明归属（spawn 烘入，无字段写者，
-  ADR 0047）。`Velocity` 为内部组件，不在公共导出。
+- `Position {x,y:f64}`、`MoveTarget {goal:u32,x,y,active:u8}`（本模块写）；
+  `Velocity` 为内部组件，本模块写、不在公共导出。
+- `Mover {speed,radius,cls}`：spawn 烘入，经 `ownComponent` 声明归属本模块、
+  无字段写者（ADR 0047）。
 
 ## 不变量
 - movement 相位四个系统固定顺序：intents（移动意图结算）→ steer →
