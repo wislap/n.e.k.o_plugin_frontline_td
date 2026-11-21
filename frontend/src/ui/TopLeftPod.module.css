@@ -54,3 +54,10 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+@media (max-width: 960px) {
+  .body,
+  .row {
+    gap: var(--space-1);
+  }
+}

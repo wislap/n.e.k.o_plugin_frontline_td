@@ -1,11 +1,11 @@
 .panel {
   width: 320px;
-  max-width: min(340px, 92vw);
+  max-width: 100%;
   pointer-events: auto;
 }
 
 .body {
-  max-height: 46vh;
+  max-height: 42vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -134,12 +134,18 @@
 
 @media (max-width: 1080px) {
   .panel {
-    width: 280px;
+    width: 268px;
   }
 }
 
-@media (max-height: 760px) {
+@media (max-width: 920px) {
+  .panel {
+    width: 232px;
+  }
+}
+
+@media (max-height: 700px) {
   .body {
-    max-height: 36vh;
+    max-height: 30vh;
   }
 }

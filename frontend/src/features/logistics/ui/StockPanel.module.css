@@ -1,7 +1,7 @@
 .panel {
   width: 100%;
   min-width: 228px;
-  max-width: 296px;
+  max-width: min(296px, 100%);
   pointer-events: auto;
 }
 
@@ -95,4 +95,10 @@
 .priorityBtn {
   width: 100%;
   justify-content: center;
+}
+
+@media (max-width: 960px) {
+  .panel {
+    min-width: 196px;
+  }
 }

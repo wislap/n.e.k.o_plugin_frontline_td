@@ -21,6 +21,7 @@ import styles from './HudShell.module.css';
 import { KeyGuideRail } from './KeyGuideRail';
 import { TopLeftPod } from './TopLeftPod';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import { Minimap } from './minimap/Minimap';
 import {
   ActionButton,
   SegmentedTabs,
@@ -38,6 +39,10 @@ const PRIMARY_MODES: readonly { mode: PrimaryMode; keyLabel: string }[] = [
 const TOAST_MS = 3000;
 const MAX_TOASTS = 4;
 const KBD_ESC = 'Esc';
+
+function defaultIsHostile(observer: number, faction: number): boolean {
+  return faction !== 0 && faction !== observer;
+}
 
 export function Hud({
   client,
@@ -237,37 +242,42 @@ export function Hud({
   );
 
   const bottomLeft = (
-    <TacticalPanel tone="mode" compact>
-      <div className={styles['bottomLeftBar']}>
-        <SegmentedTabs
-          size="sm"
-          ariaLabel={t('hud.mode_switcher')}
-          value={primaryMode}
-          items={PRIMARY_MODES.map(({ mode, keyLabel }) => ({
-            value: mode,
-            label: t(`hud.mode.${mode}`),
-            kbd: keyLabel,
-          }))}
-          onChange={(mode) => {
-            router.dispatch({ kind: 'mode.select', mode });
-          }}
-        />
-        <ActionButton
-          size="sm"
-          kbd="L"
-          variant={logisticsOverlay ? 'active' : 'default'}
-          aria-pressed={logisticsOverlay}
-          onClick={() => {
-            router.dispatch({ kind: 'overlay.toggle_logistics' });
-          }}
-        >
-          {t('hud.logistics_layer')}
-        </ActionButton>
-        <span className={styles['selectionBadge']}>
-          {t('hud.selected', { count: selected.size })}
-        </span>
-      </div>
-    </TacticalPanel>
+    <>
+      {map !== null && map !== undefined && (
+        <Minimap client={client} db={db} map={map} isHostile={isHostile ?? defaultIsHostile} />
+      )}
+      <TacticalPanel tone="mode" compact>
+        <div className={styles['bottomLeftBar']}>
+          <SegmentedTabs
+            size="sm"
+            ariaLabel={t('hud.mode_switcher')}
+            value={primaryMode}
+            items={PRIMARY_MODES.map(({ mode, keyLabel }) => ({
+              value: mode,
+              label: t(`hud.mode.${mode}`),
+              kbd: keyLabel,
+            }))}
+            onChange={(mode) => {
+              router.dispatch({ kind: 'mode.select', mode });
+            }}
+          />
+          <ActionButton
+            size="sm"
+            kbd="L"
+            variant={logisticsOverlay ? 'active' : 'default'}
+            aria-pressed={logisticsOverlay}
+            onClick={() => {
+              router.dispatch({ kind: 'overlay.toggle_logistics' });
+            }}
+          >
+            {t('hud.logistics_layer')}
+          </ActionButton>
+          <span className={styles['selectionBadge']}>
+            {t('hud.selected', { count: selected.size })}
+          </span>
+        </div>
+      </TacticalPanel>
+    </>
   );
 
   const bottomCenter = (

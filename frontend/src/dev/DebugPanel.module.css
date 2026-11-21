@@ -1,7 +1,7 @@
 .panel {
   width: 100%;
   min-width: 228px;
-  max-width: 296px;
+  max-width: min(296px, 100%);
   pointer-events: auto;
 }
 
@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  max-height: 36vh;
+  max-height: 30vh;
   overflow-y: auto;
 }
 
@@ -85,4 +85,16 @@
   gap: var(--space-1);
   padding-top: var(--space-1);
   border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 960px) {
+  .panel {
+    min-width: 196px;
+  }
+}
+
+@media (max-height: 700px) {
+  .body {
+    max-height: 24vh;
+  }
 }

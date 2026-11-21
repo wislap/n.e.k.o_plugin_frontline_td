@@ -1,5 +1,6 @@
 .panel {
-  width: min(680px, 92vw);
+  width: min(680px, 100%);
+  max-width: 100%;
   pointer-events: auto;
 }
 
@@ -119,4 +120,17 @@
 .time {
   flex-shrink: 0;
   color: var(--text-muted);
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(106px, 1fr));
+    max-height: 128px;
+  }
+}
+
+@media (max-height: 700px) {
+  .grid {
+    max-height: 116px;
+  }
 }

@@ -307,5 +307,12 @@
   },
   "capture": {
     "contested": "contested"
+  },
+  "minimap": {
+    "title": "RADAR",
+    "sector": "{{x}},{{y}}",
+    "collapse": "Hide",
+    "expand": "Radar ▲",
+    "aria_label": "Strategic minimap"
   }
 }

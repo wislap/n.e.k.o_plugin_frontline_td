@@ -1,5 +1,6 @@
 .panel {
-  width: min(560px, 92vw);
+  width: min(560px, 100%);
+  max-width: 100%;
   pointer-events: auto;
 }
 

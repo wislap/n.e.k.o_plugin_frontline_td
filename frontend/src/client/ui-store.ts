@@ -6,9 +6,11 @@ export interface UiState {
   // Logistics overlay toggle (L); forced on while build/logistics mode is active.
   logisticsOverlay: boolean;
   keymapHelpOpen: boolean;
+  minimapOpen: boolean;
   toggleDebugPanel(): void;
   toggleLogisticsOverlay(): void;
   toggleKeymapHelp(): void;
+  toggleMinimap(): void;
   reset(): void;
 }
 
@@ -16,6 +18,7 @@ export const useUiStore = create<UiState>((set) => ({
   debugPanelOpen: false,
   logisticsOverlay: false,
   keymapHelpOpen: true,
+  minimapOpen: true,
   toggleDebugPanel: () => {
     set((state) => ({ debugPanelOpen: !state.debugPanelOpen }));
   },
@@ -25,7 +28,15 @@ export const useUiStore = create<UiState>((set) => ({
   toggleKeymapHelp: () => {
     set((state) => ({ keymapHelpOpen: !state.keymapHelpOpen }));
   },
+  toggleMinimap: () => {
+    set((state) => ({ minimapOpen: !state.minimapOpen }));
+  },
   reset: () => {
-    set({ debugPanelOpen: false, logisticsOverlay: false, keymapHelpOpen: true });
+    set({
+      debugPanelOpen: false,
+      logisticsOverlay: false,
+      keymapHelpOpen: true,
+      minimapOpen: true,
+    });
   },
 }));

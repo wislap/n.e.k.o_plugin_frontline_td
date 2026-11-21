@@ -53,6 +53,11 @@ const SHARED_HUD_KEYS = [
   'squad.empty_hint',
   'squad.center_hint',
   'dev.title',
+  'minimap.title',
+  'minimap.sector',
+  'minimap.collapse',
+  'minimap.expand',
+  'minimap.aria_label',
 ] as const;
 
 type Messages = Record<string, unknown>;

@@ -24,13 +24,19 @@ export function HudShell({
 }) {
   return (
     <div className={styles['shell']} data-mode={primaryMode}>
-      <div className={cx(styles['slot'], styles['topLeft'])}>{topLeft}</div>
-      <div className={cx(styles['slot'], styles['topCenter'])}>{topCenter}</div>
-      <div className={cx(styles['slot'], styles['topRight'])}>{topRight}</div>
-      <div className={cx(styles['slot'], styles['middleLeft'])}>{middleLeft}</div>
-      <div className={cx(styles['slot'], styles['bottomLeft'])}>{bottomLeft}</div>
-      <div className={cx(styles['slot'], styles['bottomCenter'])}>{bottomCenter}</div>
-      <div className={cx(styles['slot'], styles['bottomRight'])}>{bottomRight}</div>
+      <div className={styles['colLeft']}>
+        <div className={cx(styles['slot'], styles['topLeft'])}>{topLeft}</div>
+        <div className={cx(styles['slot'], styles['middleLeft'])}>{middleLeft}</div>
+        <div className={cx(styles['slot'], styles['bottomLeft'])}>{bottomLeft}</div>
+      </div>
+      <div className={styles['colCenter']}>
+        <div className={cx(styles['slot'], styles['topCenter'])}>{topCenter}</div>
+        <div className={cx(styles['slot'], styles['bottomCenter'])}>{bottomCenter}</div>
+      </div>
+      <div className={styles['colRight']}>
+        <div className={cx(styles['slot'], styles['topRight'])}>{topRight}</div>
+        <div className={cx(styles['slot'], styles['bottomRight'])}>{bottomRight}</div>
+      </div>
     </div>
   );
 }

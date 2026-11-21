@@ -307,5 +307,12 @@
   },
   "capture": {
     "contested": "争夺中"
+  },
+  "minimap": {
+    "title": "战术雷达",
+    "sector": "{{x}},{{y}}",
+    "collapse": "收起",
+    "expand": "雷达 ▲",
+    "aria_label": "战略小地图"
   }
 }

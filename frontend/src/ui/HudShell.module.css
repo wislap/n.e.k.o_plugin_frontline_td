@@ -5,13 +5,38 @@
   pointer-events: none;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'topLeft topCenter topRight'
-    'middleLeft . .'
-    'bottomLeft bottomCenter bottomRight';
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-2);
   padding: var(--space-3);
+}
+
+.colLeft,
+.colCenter,
+.colRight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  pointer-events: none;
+}
+
+.colLeft {
+  justify-content: space-between;
+  align-items: flex-start;
+  max-width: min(360px, 34vw);
+}
+
+.colCenter {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.colRight {
+  justify-content: space-between;
+  align-items: flex-end;
+  max-width: min(340px, 32vw);
 }
 
 .slot {
@@ -20,6 +45,7 @@
   gap: var(--space-2);
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
   pointer-events: none;
 }
 
@@ -28,60 +54,45 @@
 }
 
 .topLeft {
-  grid-area: topLeft;
-  justify-self: start;
-  align-self: start;
+  flex-shrink: 0;
   align-items: flex-start;
-  max-width: min(380px, 40vw);
 }
 
 .topCenter {
-  grid-area: topCenter;
-  justify-self: center;
-  align-self: start;
+  width: 100%;
   align-items: center;
-  max-width: min(560px, 100%);
+  flex-shrink: 0;
 }
 
 .topRight {
-  grid-area: topRight;
-  justify-self: end;
-  align-self: start;
+  flex: 0 1 auto;
+  min-height: 0;
   align-items: flex-end;
-  max-width: min(340px, 36vw);
 }
 
 .middleLeft {
-  grid-area: middleLeft;
-  justify-self: start;
-  align-self: center;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
   align-items: flex-start;
-  max-width: min(272px, 34vw);
-  max-height: 100%;
 }
 
 .bottomLeft {
-  grid-area: bottomLeft;
-  justify-self: start;
-  align-self: end;
+  flex-shrink: 0;
   align-items: flex-start;
-  max-width: min(440px, 44vw);
 }
 
 .bottomCenter {
-  grid-area: bottomCenter;
-  justify-self: center;
-  align-self: end;
+  width: 100%;
   align-items: center;
-  max-width: 100%;
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .bottomRight {
-  grid-area: bottomRight;
-  justify-self: end;
-  align-self: end;
+  flex: 0 1 auto;
+  min-height: 0;
   align-items: flex-end;
-  max-width: min(360px, 40vw);
 }
 
 /* Shared HUD bar / banner helpers used by Hud.tsx */
@@ -147,22 +158,36 @@
     padding: var(--space-2);
   }
 
-  .topLeft,
-  .bottomLeft {
-    max-width: min(320px, 42vw);
+  .colLeft {
+    max-width: min(280px, 33vw);
   }
 
-  .topRight,
-  .bottomRight {
-    max-width: min(290px, 38vw);
-  }
-
-  .middleLeft {
-    max-width: min(230px, 34vw);
+  .colRight {
+    max-width: min(272px, 32vw);
   }
 }
 
-@media (max-height: 760px) {
+@media (max-width: 920px) {
+  .colLeft {
+    max-width: min(244px, 32vw);
+  }
+
+  .colRight {
+    max-width: min(240px, 31vw);
+  }
+
+  .bottomLeftBar {
+    gap: var(--space-1);
+  }
+
+  .selectionBadge {
+    height: 22px;
+    padding: 0 6px;
+    font-size: var(--text-xs);
+  }
+}
+
+@media (max-height: 720px) {
   .shell {
     gap: var(--space-1);
     padding: var(--space-2);
