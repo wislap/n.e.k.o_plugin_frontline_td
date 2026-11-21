@@ -161,28 +161,29 @@ describe('movement intents', () => {
     expect(world.slot(1)).toEqual({ x: 4.5, y: 2.5 });
   });
 
-  it('FormationGuideIntent steers toward a walkable waypoint and caps speed at <= statSpeed', () => {
+  it('FormationGuideIntent caps speed at <= statSpeed without overriding flow heading', () => {
     const grid = Array.from({ length: 5 }, () => '.'.repeat(20));
     const { world, emit, guideActive } = build(grid, [{ x: 1, y: 2 }]);
     const h0 = Number(world.handles[0]);
     emit(MoveIntent as never, { units: [h0], x: 18, y: 2 });
     emit(FormationGuideIntent as never, {
       units: [h0],
-      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      maxSpeeds: [0.05],
       active: true,
     });
     run(world, 1);
     const v1 = world.vel(0);
     const s1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
     expect(guideActive(0)).toBe(1);
-    // Steers upward toward waypoint (5.5, 0.5) rather than flat along y=2.5.
-    expect(v1.y).toBeLessThan(-0.01);
+    // Flows horizontally along y=2.5 without any 2D waypoint deflection.
+    expect(v1.x).toBeGreaterThan(0.045);
+    expect(Math.abs(v1.y)).toBeLessThan(0.01);
     expect(s1).toBeCloseTo(0.05, 6);
 
     // maxSpeed above statSpeed (0.125) never exceeds statSpeed.
     emit(FormationGuideIntent as never, {
       units: [h0],
-      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.5 }],
+      maxSpeeds: [0.5],
       active: true,
     });
     run(world, 1);
@@ -200,7 +201,7 @@ describe('movement intents', () => {
     a.emit(MoveIntent as never, { units: [ha], x: 18, y: 2 });
     a.emit(FormationGuideIntent as never, {
       units: [ha],
-      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      maxSpeeds: [0.05],
       active: true,
     });
     run(a.world, 1);
@@ -217,7 +218,7 @@ describe('movement intents', () => {
     b.emit(MoveIntent as never, { units: [hb], x: 18, y: 2 });
     b.emit(FormationGuideIntent as never, {
       units: [hb],
-      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      maxSpeeds: [0.05],
       active: true,
     });
     run(b.world, 1);
@@ -234,7 +235,7 @@ describe('movement intents', () => {
     c.emit(MoveIntent as never, { units: [hc], x: 18, y: 2 });
     c.emit(FormationGuideIntent as never, {
       units: [hc],
-      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      maxSpeeds: [0.05],
       active: true,
     });
     run(c.world, 1);
@@ -251,7 +252,7 @@ describe('movement intents', () => {
     d.emit(MoveIntent as never, { units: [hd], x: 2, y: 2 });
     d.emit(FormationGuideIntent as never, {
       units: [hd],
-      waypoints: [{ x: 2.5, y: 2.5, maxSpeed: 0.05 }],
+      maxSpeeds: [0.05],
       active: true,
     });
     run(d.world, 30);

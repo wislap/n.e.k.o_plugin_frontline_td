@@ -248,7 +248,7 @@ frontend/src/
 - 视线、射程修正、空地目标可攻击性读取同一张高度网格。
 - 只有地形模块知道原始地形编码；其他模块通过其公开的格子 / 边属性与代价场读取。新增地表类型（如海域）≈ 新增类型 + 代价表数据，不改寻路算法。
 - 流场采用按 `(cls, tier)` 槽位懒惰烘焙网格缓存、无向连通分量可达性门控与可恢复迎风 Eikonal 连续距离/流向场（Dial 环形桶队列 + 池化 `GoalField`），全图无缝提供离散 8 向、连续双线性梯度与连续距离；建造或摧毁阻挡物时按净空分档（标准外扩 `{-1..1}`、重型外扩 `{-2..1}`）局部失效，按需恢复重算（[ADR 0010](../adr/0010-terrain-model-sector-flowfields.md)、[ADR 0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)、[ADR 0055](../adr/0055-resumable-upwind-eikonal-and-component-reachability.md)）。
-- 流场之上运行阻尼非对称与纵向后车让行避让、墙体边距夹紧、基于共享流场的分水岭防分裂宽门走廊链以及小队虚拟领航锚点 / 职能分排 / 巡航控速同步，邻居遍历顺序确定且热路径零分配（[ADR 0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、[ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)、[ADR 0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)）。
+- 流场之上运行阻尼非对称与纵向后车让行避让、墙体边距夹紧、基于共享流场的分水岭防分裂宽门走廊链以及基于连续测地距截尾中位数的小队巡航控速与指令首拍瞬发，邻居遍历顺序确定且热路径零分配（[ADR 0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、[ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)、[ADR 0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)、[ADR 0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)）。
 
 ### 6.9 弹道与效果：组合模型
 武器 = 正交维度的数据组合，不是"弹道类型"枚举：

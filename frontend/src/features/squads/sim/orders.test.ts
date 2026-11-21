@@ -371,7 +371,9 @@ describe('squads AI', () => {
     expect(w.structHp(0)).toBeLessThan((BASE.hp ?? 0) * 1000);
   });
 
-  it('each squad updates on its own stagger slot', () => {
+  it('starts SquadsOrder on the next tick while periodic updates keep their stagger slot', () => {
+    // Part 1: SquadsOrder sets immediate=true so both squads move on the same next tick
+    // regardless of (tick + squad.id) % 10.
     const w = world({
       entities: [{ parts: robotInit(ROBOT, 4, 4) }, { parts: robotInit(ROBOT, 8, 4) }],
     });
@@ -383,7 +385,7 @@ describe('squads AI', () => {
     const startX = [w.pos(0).x, w.pos(1).x];
     let firstMove0 = -1;
     let firstMove1 = -1;
-    for (let t = 0; t < 30 && (firstMove0 < 0 || firstMove1 < 0); t++) {
+    for (let t = 0; t < 15 && (firstMove0 < 0 || firstMove1 < 0); t++) {
       w.sim.step();
       if (firstMove0 < 0 && w.pos(0).x !== startX[0]) {
         firstMove0 = w.sim.tick;
@@ -392,10 +394,54 @@ describe('squads AI', () => {
         firstMove1 = w.sim.tick;
       }
     }
-    // Squad 2 fires on (tick + 2) % 10 === 0, squad 1 one tick later
-    // (the position probe can lag the intent tick by one).
-    expect((firstMove1 + 2) % 10).toBeLessThanOrEqual(1);
-    expect(firstMove0).toBe(firstMove1 + 1);
+    expect(firstMove0).toBe(firstMove1);
+    expect(firstMove0).toBeLessThanOrEqual(4);
+
+    // Part 2: Ongoing periodic updates still stagger on (tick + squad.id) % 10 === 0
+    // when two holding guards simultaneously detect approaching hostiles.
+    const wide = Array.from({ length: 20 }, () => '.'.repeat(30));
+    const wStagger = world({
+      rows: wide,
+      entities: [
+        { parts: robotInit(ROBOT, 4, 4), faction: 1 },
+        { parts: robotInit(ROBOT, 4, 14), faction: 1 },
+        { parts: robotInit(ROBOT, 20, 4), faction: 2 },
+        { parts: robotInit(ROBOT, 20, 14), faction: 2 },
+      ],
+      factions: [1, 2],
+    });
+    wStagger.issue('frontline_td:squads.create', { units: [Number(wStagger.handles[0])] });
+    wStagger.issue('frontline_td:squads.create', { units: [Number(wStagger.handles[1])] });
+    wStagger.issue('frontline_td:squads.order', { squad: 1, kind: 'guard', x: 4, y: 4, radius: 8 });
+    wStagger.issue('frontline_td:squads.order', {
+      squad: 2,
+      kind: 'guard',
+      x: 4,
+      y: 14,
+      radius: 8,
+    });
+    run(wStagger, 12);
+    expect(squad(wStagger, 1)?.phase).toBe('holding');
+    expect(squad(wStagger, 2)?.phase).toBe('holding');
+
+    wStagger.issue(MoveCommand.type, { units: [Number(wStagger.handles[2])], x: 8, y: 4 }, F2);
+    wStagger.issue(MoveCommand.type, { units: [Number(wStagger.handles[3])], x: 8, y: 14 }, F2);
+    let engageTick1 = -1;
+    let engageTick2 = -1;
+    for (let t = 0; t < 150 && (engageTick1 < 0 || engageTick2 < 0); t++) {
+      wStagger.sim.step();
+      if (engageTick1 < 0 && squad(wStagger, 1)?.phase === 'engaging') {
+        engageTick1 = wStagger.sim.tick - 1;
+      }
+      if (engageTick2 < 0 && squad(wStagger, 2)?.phase === 'engaging') {
+        engageTick2 = wStagger.sim.tick - 1;
+      }
+    }
+    expect(engageTick1).toBeGreaterThan(0);
+    expect(engageTick2).toBeGreaterThan(0);
+    expect((engageTick1 + 1) % 10).toBe(0);
+    expect((engageTick2 + 2) % 10).toBe(0);
+    expect(engageTick1).not.toBe(engageTick2);
   });
 
   it('mixed-unit role formation places vanguard ahead of backline without invalid heavy cells', () => {
@@ -607,5 +653,39 @@ describe('squads AI', () => {
     run(wCombat, 20);
     // Full speed is 3.5 cells/s vs cruise 2.2 cells/s; verify clear > 2.8 cells/s advance.
     expect(wCombat.pos(0).x - raiderStart).toBeGreaterThan(2.8);
+  });
+
+  it('trapped cross-wall outlier does not drag down squad march cruise speed', () => {
+    const db = loadContent();
+    const raider = db.units.byId('frontline_td:raider');
+    const spitter = db.units.byId('frontline_td:spitter');
+    if (raider === undefined || spitter === undefined) {
+      throw new Error('raider/spitter missing');
+    }
+    // 40x16 map with a long west-sealed wall at y=6, x=0..37 (only x=38..39 open):
+    // the slow spitter at (15, 8) is only 5.0 Euclidean cells from the fast raiders
+    // at (14..16, 2..3), yet > 24 geodesic cells behind along Eikonal distance to (28, 3).
+    const rows = Array.from({ length: 16 }, (_, y) => {
+      if (y !== 6) {
+        return '.'.repeat(40);
+      }
+      return '#'.repeat(38) + '..';
+    });
+    const w = world({
+      rows,
+      entities: [
+        { parts: robotInit(raider, 14, 2) },
+        { parts: robotInit(raider, 14, 3) },
+        { parts: robotInit(raider, 15, 2) },
+        { parts: robotInit(raider, 15, 3) },
+        { parts: robotInit(raider, 16, 3) },
+        { parts: robotInit(spitter, 15, 8) },
+      ],
+    });
+    createAll(w);
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 28, y: 3 });
+    run(w, 60); // 3 s: full raider speed ~3.5 cells/s (+10.5) vs spitter speed 2.2 (+6.6)
+    const minRaiderX = Math.min(w.pos(0).x, w.pos(1).x, w.pos(2).x, w.pos(3).x, w.pos(4).x);
+    expect(minRaiderX).toBeGreaterThan(22.5);
   });
 });

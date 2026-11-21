@@ -2,8 +2,9 @@
 
 ## 职责
 编队指挥：把移动单位编成 squad，在 `orders` 阶段按
-`(tick + id) % 10 === 0` 错峰运行 AI，维护职能分排持久阵型槽位与虚拟领航锚点
-（`sim/formation.ts`、`sim/transit.ts`），只通过 movement 的 `MoveIntent`（含显式 `slots`）/
+`(tick + id) % 10 === 0` 错峰周期运行 AI（`SquadsOrder` / `SquadsGather` 首拍通过
+`immediate` 标记次 tick 瞬发），维护职能分排持久阵型槽位与基于 1D 连续测地距
+截尾中位数的抗离群巡航控速（`sim/formation.ts`、`sim/transit.ts`），只通过 movement 的 `MoveIntent`（含显式 `slots`）/
 `StopIntent` / `FormationGuideIntent` 驱动成员，从不直写 `MoveTarget` 或
 `FormationGuide`。
 
@@ -26,8 +27,8 @@
 - Squad 字段：id、tag、faction、有序成员句柄、strength、order、
   phase、engage 目标、retarget、lastGoal（≥2 格漂移才换目标）、
   可选 route、持久职能槽位 `slots`（`handle / fwd / right / destX / destY`）、
-  虚拟领航锚点 `anchor`（`x / y / hx / hy / halfWidth / widthScale`）与
-  领航激活标记 `guideActive`。
+  阵型朝向参考 `anchor`（`x / y / hx / hy / halfWidth`）、
+  巡航限速激活标记 `guideActive` 与首拍瞬发标记 `immediate`。
 
 ## 不变量
 - `create`/`assign` 只校验句柄存活、同阵营、带 `Mover` 且
@@ -63,12 +64,8 @@
   周围螺旋分配持久 `slots`；同目标仅对缺失/早停成员做增量槽位补发（预留其余
   已定槽位足迹），已全员在途且减员 < 30% 时不重发 `MoveIntent`，交战拆分与
   走失召回亦显式避让已停火前排并保留各自持久槽位。
-- 虚拟领航锚点、隘口伸缩与巡航同步（ADR 0054）：`moving` / `returning`
-  期间通过 `advanceLeaderAnchor` 与 `probeCorridorWidth` 沿连续流场前瞻探测
-  通道净宽并平滑缩放 `widthScale ∈ [0.25, 1.0]`，经 `FormationGuideIntent`
-  下发瞬态路径点与巡航限速 `computeCruiseCap`（滞后与走失成员不限速）；进入
-  `resupplying` / `holding` / `engaging` / `idle` 或末段接近目标时立即释放
-  领航。
+- 1D Eikonal 测地距截尾中位数巡航控速、O(1) 可达性与首拍瞬发（ADR 0054 / ADR 0057）：`moving` / `returning`
+  期间通过 `pathing.distanceAt` 计算成员站位 `s_i = d_i + slot.fwd`，剔除距中位数超过 `STRAY_DIST = 10` 的隔墙/掉队离群者并对 `n >= 5` 两端各截去 20% 极值得到 `sRef` 与 `vCruise`；经纯标量 `FormationGuideIntent { units, maxSpeeds, active }` 抑制过快及超前成员（落后或离群成员不限速全速归队）；进入 `resupplying` / `holding` / `engaging` / `idle` 或末段接近目标时立即释放控速。`advance` 阶段可达性复检经 `isGoalReachableWithFallback` 走 $O(1)$ `pathing.reachable`（质心落障自动退避至合法成员）；`SquadsOrder` 与 `SquadsGather` 置 `immediate = true` 次 tick 即刻起步。
 - 净空分档寻路联动（ADR 0052 / ADR 0054）：`SquadsGather` 与
   `routing.ts`（`traceRoute` / `retargetStructure`）均按小队最重成员的
   `ClearanceTier` 探测并支持向 `CLEARANCE_STANDARD` 回退。
@@ -87,6 +84,7 @@
   [ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
   （地形净空分档与连续流向梯度）、
   [ADR 0054](../../../../docs/adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)
-  （小队虚拟领航锚点、混编职能分排与巡航控速）。
+  （混编职能分排与巡航控速）、[ADR 0057](../../../../docs/adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)
+  （1D 测地距截尾中位数控速、O(1) 可达性与首拍瞬发）。
 - [game_design.md §4.7](../../../../docs/design/game_design.md)
   （小队玩法）。

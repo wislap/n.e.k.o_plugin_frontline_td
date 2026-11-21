@@ -31,11 +31,9 @@ export const MoveTarget = defineComponent('frontline_td:movement.move_target', {
   active: 'u8',
 });
 
-// Transient squad formation waypoint + cruise speed cap (ADR 0054).
-// Permanent internal component on movers; active: 0 unguided, 1 active guide.
+// Transient scalar squad cruise speed cap (ADR 0054 / ADR 0057).
+// Permanent internal component on movers; active: 0 unguided, 1 active cap.
 export const FormationGuide = defineComponent('frontline_td:movement.formation_guide', {
-  x: 'f64',
-  y: 'f64',
   maxSpeed: 'f64',
   active: 'u8',
 });

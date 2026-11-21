@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityId } from '../../../core/index';
-import { contentId, distance } from '../../../core/index';
+import { contentId } from '../../../core/index';
 import type { ResolvedSurface } from '../../../content/index';
 import { makeGrid } from '../../../testing/index';
 import { createPathingModule } from '../../pathing/sim/index';
@@ -12,19 +12,14 @@ import {
 import { createTerrainApi } from '../../terrain/sim/index';
 import {
   FORMATION_PAD,
-  GUIDE_LOOKAHEAD,
-  LEADER_MAX_LEAD,
-  MIN_WIDTH_SCALE,
-  advanceLeaderAnchor,
-  computeCruiseCap,
   computeFormationLayout,
+  computeGeodesicCruiseCap,
+  computeGeodesicPacing,
   isFootprintFree,
   markFootprintCells,
-  probeCorridorWidth,
   projectFormationSlots,
   type FormationMemberInfo,
 } from './formation';
-import type { SquadAnchor } from './state';
 
 const SURFACES: ResolvedSurface[] = [
   { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
@@ -152,148 +147,91 @@ describe('formation layout & slot projection', () => {
     }
   });
 
-  it('probes corridor width and shifts centerBias away from closer wall', () => {
-    // Passable rows y=4..8, walls at y<=3 and y>=9.
-    const rows = Array.from({ length: 14 }, (_, y) =>
-      y >= 4 && y <= 8 ? '.'.repeat(16) : '#'.repeat(16),
+  it('preserves role rank stations along 1D geodesic distances without slowing vanguard behind rear', () => {
+    const pacing = computeGeodesicPacing(
+      [
+        { handle: 1, dist: 18.8, fwd: 1.2, speed: 0.12 }, // vanguard at d=18.8 -> station 20.0
+        { handle: 2, dist: 21.2, fwd: -1.2, speed: 0.12 }, // rear at d=21.2 -> station 20.0
+      ],
+      10,
     );
-    const terrain = createTerrainApi(makeGrid(rows), SURFACES);
+    expect(pacing).not.toBeNull();
+    if (pacing === null) {
+      return;
+    }
+    expect(pacing.sRef).toBeCloseTo(20.0, 6);
+    expect(computeGeodesicCruiseCap(0.12, 18.8, 1.2, pacing, 10)).toBe(0);
+    expect(computeGeodesicCruiseCap(0.12, 21.2, -1.2, pacing, 10)).toBe(0);
 
-    // Heading east (+1, 0), right perpendicular is (0, +1).
-    // At y=7.5: +r hits wall at y=9 (rightClear=1.0), -r open until y=3 (leftClear=3.5).
-    const probe = probeCorridorWidth(terrain, 0, CLEARANCE_STANDARD, 8.5, 7.5, 0, 1, 3.0);
-    expect(probe.availHalf).toBeCloseTo(2.25, 5);
-    expect(probe.centerBias).toBeLessThan(0);
-    expect(probe.centerBias).toBeGreaterThanOrEqual(-1.5);
+    // Rear member rushing past vanguard (d=17.5 -> station 16.3, ahead +3.7) is throttled.
+    const rushedRearCap = computeGeodesicCruiseCap(0.12, 17.5, -1.2, pacing, 10);
+    expect(rushedRearCap).toBeGreaterThan(0);
+    expect(rushedRearCap).toBeLessThan(0.12);
+
+    // Vanguard lagging behind its station (d=22.0 -> station 20.8, ahead -0.8) runs uncapped (0).
+    expect(computeGeodesicCruiseCap(0.12, 22.0, 1.2, pacing, 10)).toBe(0);
   });
 
-  it('advances anchor, pulls rubber band, compresses widthScale in choke, and expands in open ground', () => {
-    // 32x15 map: walls at x=12..16 leaving a 2-cell choke at y=7..8.
-    const rows = Array.from({ length: 15 }, (_, y) => {
-      const chars = '.'.repeat(32).split('');
-      if (y !== 7 && y !== 8) {
-        for (let x = 12; x <= 16; x++) {
-          chars[x] = '#';
-        }
-      }
-      return chars.join('');
-    });
-    const terrain = createTerrainApi(makeGrid(rows), SURFACES);
-    const pathing = createPathingModule(terrain, 1);
-    const goalId = pathing.api.acquireGoal(28, 7, 0, CLEARANCE_STANDARD);
-
-    // 1. Rubber-band pull-back when anchor is > 2 * LEADER_MAX_LEAD ahead of centroid.
-    const farAnchor: SquadAnchor = {
-      x: 20,
-      y: 7.5,
-      hx: 1,
-      hy: 0,
-      halfWidth: 2.5,
-      widthScale: 1,
-    };
-    advanceLeaderAnchor(
-      terrain,
-      pathing.api,
-      goalId,
-      farAnchor,
-      28.5,
-      7.5,
-      5.5,
-      7.5,
-      0,
-      CLEARANCE_STANDARD,
-      0.15,
-      2.5,
-      10,
+  it('trimmed-median geodesic pacing rejects trapped >STRAY_DIST outliers and trims 20% tails', () => {
+    const strayDist = 10;
+    const pacing = computeGeodesicPacing(
+      [
+        { handle: 1, dist: 20.0, fwd: 0, speed: 0.2 },
+        { handle: 2, dist: 20.4, fwd: 0, speed: 0.2 },
+        { handle: 3, dist: 20.8, fwd: 0, speed: 0.2 },
+        { handle: 4, dist: 21.0, fwd: 0, speed: 0.2 },
+        { handle: 5, dist: 21.2, fwd: 0, speed: 0.2 },
+        // Trapped slow member > 24 geodesic cells behind despite potentially small Euclidean gap.
+        { handle: 6, dist: 45.0, fwd: 0, speed: 0.08 },
+      ],
+      strayDist,
     );
-    expect(farAnchor.x).toBeLessThan(20);
-    expect(farAnchor.x).toBeCloseTo(20 + (5.5 - 20) * 0.5, 5);
+    expect(pacing).not.toBeNull();
+    if (pacing === null) {
+      return;
+    }
+    // Trapped outlier's 0.08 speed is excluded from in-band vCruise and its dist=45 is trimmed/filtered.
+    expect(pacing.vCruise).toBeCloseTo(0.2, 6);
+    // 5 in-band stations [20.0, 20.4, 20.8, 21.0, 21.2] trim 1 from each end -> mean(20.4, 20.8, 21.0).
+    expect(pacing.sRef).toBeCloseTo((20.4 + 20.8 + 21.0) / 3, 6);
+    expect(computeGeodesicCruiseCap(0.08, 45.0, 0, pacing, strayDist)).toBe(0);
 
-    // 2. Choke compression and open-ground recovery.
-    const chokeAnchor: SquadAnchor = {
-      x: 11.0,
-      y: 7.5,
-      hx: 1,
-      hy: 0,
-      halfWidth: 3.0,
-      widthScale: 1.0,
-    };
-    const chokeOut = advanceLeaderAnchor(
-      terrain,
-      pathing.api,
-      goalId,
-      chokeAnchor,
-      28.5,
-      7.5,
-      10.5,
-      7.5,
-      0,
-      CLEARANCE_STANDARD,
-      0.15,
-      3.0,
-      10,
+    // With all 5 samples within strayDist, 20% trimming (trim=1) ignores top and bottom extremes.
+    const trimmed = computeGeodesicPacing(
+      [
+        { handle: 1, dist: 15.0, fwd: 0, speed: 0.2 },
+        { handle: 2, dist: 20.0, fwd: 0, speed: 0.2 },
+        { handle: 3, dist: 21.0, fwd: 0, speed: 0.2 },
+        { handle: 4, dist: 22.0, fwd: 0, speed: 0.2 },
+        { handle: 5, dist: 30.0, fwd: 0, speed: 0.2 },
+      ],
+      strayDist,
     );
-    expect(chokeOut.widthScale).toBeLessThan(0.8);
-    expect(chokeOut.widthScale).toBeGreaterThanOrEqual(MIN_WIDTH_SCALE);
-    expect(chokeOut.depthScale).toBeGreaterThan(1.0);
-
-    // Now move into open field beyond the choke and verify widthScale recovers upward.
-    const openAnchor: SquadAnchor = {
-      x: 22.0,
-      y: 7.5,
-      hx: 1,
-      hy: 0,
-      halfWidth: 3.0,
-      widthScale: chokeOut.widthScale,
-    };
-    const openOut = advanceLeaderAnchor(
-      terrain,
-      pathing.api,
-      goalId,
-      openAnchor,
-      28.5,
-      7.5,
-      21.5,
-      7.5,
-      0,
-      CLEARANCE_STANDARD,
-      0.15,
-      3.0,
-      10,
-    );
-    expect(openOut.widthScale).toBeGreaterThan(chokeOut.widthScale);
-    expect(distance(21.5, 7.5, openAnchor.x, openAnchor.y)).toBeLessThanOrEqual(LEADER_MAX_LEAD);
-    const guideLead = distance(
-      openAnchor.x,
-      openAnchor.y,
-      openOut.guideCenterX,
-      openOut.guideCenterY,
-    );
-    expect(guideLead).toBeGreaterThan(1.5);
-    expect(guideLead).toBeLessThanOrEqual(GUIDE_LOOKAHEAD + 0.05);
-
-    pathing.api.releaseGoal(goalId);
+    expect(trimmed?.sRef).toBeCloseTo(21.0, 6);
   });
 
-  it('computes cruise caps for fast, ahead, lagging, and stray members', () => {
-    const cruise = 0.1;
+  it('computes geodesic cruise caps for null-dist, fast, ahead, lagging, and stray members', () => {
+    const pacing = { sRef: 20, vCruise: 0.1, vMax: 0.2, sMed: 20 };
     const strayDist = 10;
 
-    // Fast member alongside slot: capped to cruise speed.
-    expect(computeCruiseCap(0.2, 5.0, 5.0, 5.0, 5.0, 1, 0, cruise, strayDist)).toBeCloseTo(0.1, 6);
+    // Unreachable/null distance returns 0 (uncapped).
+    expect(computeGeodesicCruiseCap(0.2, null, 0, pacing, strayDist)).toBe(0);
 
-    // Uniform-speed member well ahead (> 0.75): throttled smoothly.
-    const aheadCap = computeCruiseCap(0.1, 6.75, 5.0, 5.0, 5.0, 1, 0, cruise, strayDist);
+    // Fast member alongside sRef: capped to cruise speed.
+    expect(computeGeodesicCruiseCap(0.2, 20.0, 0, pacing, strayDist)).toBeCloseTo(0.1, 6);
+
+    // Uniform-speed member well ahead (sRef - station = 2.0 > 0.65): throttled smoothly.
+    const aheadCap = computeGeodesicCruiseCap(0.1, 18.0, 0, pacing, strayDist);
     expect(aheadCap).toBeGreaterThan(0);
     expect(aheadCap).toBeLessThan(0.1);
 
-    // Uniform-speed member aligned with slot: no cap (0).
-    expect(computeCruiseCap(0.1, 5.2, 5.0, 5.0, 5.0, 1, 0, cruise, strayDist)).toBe(0);
+    // Uniform-speed member aligned near sRef: no cap (0).
+    expect(computeGeodesicCruiseCap(0.1, 19.8, 0, pacing, strayDist)).toBe(0);
 
-    // Lagging behind slot (ahead < -0.75): uncapped (0) so it catches up.
-    expect(computeCruiseCap(0.2, 4.0, 5.0, 5.0, 5.0, 1, 0, cruise, strayDist)).toBe(0);
+    // Lagging behind (sRef - station = -1.0 < -0.75): uncapped (0) so it catches up.
+    expect(computeGeodesicCruiseCap(0.2, 21.0, 0, pacing, strayDist)).toBe(0);
 
-    // Stray (> strayDist): uncapped (0) so it sprints to rejoin.
-    expect(computeCruiseCap(0.2, 20.0, 5.0, 5.0, 5.0, 1, 0, cruise, strayDist)).toBe(0);
+    // Stray (> strayDist from median): uncapped (0) so it sprints to rejoin.
+    expect(computeGeodesicCruiseCap(0.2, 35.0, 0, pacing, strayDist)).toBe(0);
   });
 });

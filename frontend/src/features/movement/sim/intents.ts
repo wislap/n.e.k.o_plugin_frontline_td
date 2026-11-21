@@ -39,8 +39,8 @@ const HEAVY_TIER = CLEARANCE_HEAVY;
 
 type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
 type TgtWriter = ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
-type GuideView = WriteView<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
-type GuideWriter = ComponentWriter<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+type GuideView = WriteView<{ maxSpeed: 'f64'; active: 'u8' }>;
+type GuideWriter = ComponentWriter<{ maxSpeed: 'f64'; active: 'u8' }>;
 type RouteFollowWriter = ComponentWriter<{
   chain: 'u32';
   gate: 'u16';
@@ -49,8 +49,6 @@ type RouteFollowWriter = ComponentWriter<{
 }>;
 
 export function clearFormationGuide(guide: GuideView, id: number): void {
-  guide.x[id] = 0;
-  guide.y[id] = 0;
   guide.maxSpeed[id] = 0;
   guide.active[id] = 0;
 }
@@ -450,14 +448,7 @@ export function installMovementIntents(
             clearFormationGuide(guideOut, id);
             continue;
           }
-          const wp = p.waypoints?.[i];
-          if (wp === undefined || !terrain.inBounds(Math.floor(wp.x), Math.floor(wp.y))) {
-            clearFormationGuide(guideOut, id);
-            continue;
-          }
-          guideOut.x[id] = wp.x;
-          guideOut.y[id] = wp.y;
-          guideOut.maxSpeed[id] = Math.max(0, wp.maxSpeed ?? 0);
+          guideOut.maxSpeed[id] = Math.max(0, p.maxSpeeds?.[i] ?? 0);
           guideOut.active[id] = 1;
         }
       }

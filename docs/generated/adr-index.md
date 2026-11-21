@@ -45,14 +45,15 @@
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | 已实现 | wislap | M1 前置 | 2026-11-15 |
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳；部分被 0043 取代（容纳关系的 ContainedIn 契约组件设计） | 已实现（调度队列已实现，尚无生产使用方） | wislap | M1 前置 | 2026-11-15 |
 | [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳；部分被 0043 取代（契约组件清单中的 ContainedIn）、部分被 0047 取代（组件归属不再只由 claimWriter 表达：新增 ownComponent，声明 spawn 即挂但无字段写者的组件） | 已实现 | wislap | M1 模拟核心 | 2026-11-15 |
-| [0034](../adr/0034-squads.md) | 小队 | 已采纳；部分被 0054 取代（小队升级为持久职能分排阵型槽位、虚拟领航锚点、隘口柔缩/展开与行军巡航同步，经 MoveIntent.slots 与 FormationGuideIntent 驱动，仍不直写移动组件） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0034](../adr/0034-squads.md) | 小队 | 已采纳；部分被 0054 取代（小队升级为持久职能分排阵型槽位、虚拟领航锚点、隘口柔缩/展开与行军巡航同步，经 MoveIntent.slots 与 FormationGuideIntent 驱动，仍不直写移动组件）、部分被 0057 取代（小队 `advance` 可达性探针改为 $O(1)$ 连通分量查询，且 `SquadsOrder` / `SquadsGather` 下令次 tick 立即生效） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳；部分被 0038 取代（波次目标） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0038](../adr/0038-outposts-ruins-capture-exclusion.md) | 据点、废墟、占领与禁建区 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md) | 阻尼非对称避让、到达迟滞与墙体边距 | 已采纳；部分被 0056 取代（在同阵营双行进单位分离中增加纵向后车让行与单侧超车切向滑步，消除后车顶推前车抽动） | 已实现 | wislap | S2 阻尼避让与到达迟滞 | 2026-11-21 |
-| [0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md) | 小队虚拟领航锚点、混编职能分排与巡航控速 | 已采纳；部分被 0056 取代（在流场之上引入共享宽门走廊链 `RouteChain` 与内部组件 `RouteFollow`，从根源消除障碍物中线处的分水岭分裂与稀疏孤立绕路） | 已实现 | wislap | S3 小队编队领航与混编协同 | 2026-11-21 |
+| [0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md) | 小队虚拟领航锚点、混编职能分排与巡航控速 | 已采纳；部分被 0056 取代（在流场之上引入共享宽门走廊链 `RouteChain` 与内部组件 `RouteFollow`，从根源消除障碍物中线处的分水岭分裂与稀疏孤立绕路）、部分被 0057 取代（移除 2D 虚拟领航锚点与路径点转向覆盖，简化 `FormationGuide` 为标量巡航限速并改用 1D 连续测地距截尾中位数控速） | 已实现 | wislap | S3 小队编队领航与混编协同 | 2026-11-21 |
 | [0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md) | 分水岭防分裂空间聚类与宽门走廊链、MoveCommand 近端吸附及纵向后车让行 | 已采纳 | 已实现 | wislap | P2 寻路与运动 V2 重构 | 2026-11-21 |
+| [0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md) | 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发 | 已采纳 | 已实现 | wislap | P3 寻路与运动 V2 重构 | 2026-11-21 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -191,3 +192,6 @@
 
 ### P2 寻路与运动 V2 重构（2026-11-21）
 - [0056 分水岭防分裂空间聚类与宽门走廊链、MoveCommand 近端吸附及纵向后车让行](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)
+
+### P3 寻路与运动 V2 重构（2026-11-21）
+- [0057 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)

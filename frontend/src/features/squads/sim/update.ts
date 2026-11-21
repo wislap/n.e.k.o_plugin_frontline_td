@@ -74,7 +74,9 @@ export function installSquadsUpdate(
       }
 
       for (const squad of env.squads.values()) {
-        if ((ctx.tick + squad.id) % SQUAD_PERIOD !== 0) {
+        if (squad.immediate === true) {
+          delete squad.immediate;
+        } else if ((ctx.tick + squad.id) % SQUAD_PERIOD !== 0) {
           continue;
         }
         updateSquad(ctx, env, deps, squad);

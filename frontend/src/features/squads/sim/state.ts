@@ -27,13 +27,12 @@ export interface SquadSlot {
   destY: number;
 }
 
-export interface SquadAnchor {
+interface SquadAnchor {
   x: number;
   y: number;
   hx: number;
   hy: number;
   halfWidth: number;
-  widthScale: number;
 }
 
 export interface Squad {
@@ -55,10 +54,12 @@ export interface Squad {
   route?: number[];
   // Persistent role-ordered formation slots (ADR 0054).
   slots?: SquadSlot[];
-  // Virtual leader anchor and corridor width-scaling state (ADR 0054).
+  // Formation heading & spread reference for incremental reinforcement projection (ADR 0054 / ADR 0057).
   anchor?: SquadAnchor;
-  // True while FormationGuideIntent waypoints are active on members.
+  // True while scalar FormationGuideIntent cruise caps are active on members.
   guideActive?: boolean;
+  // Set on new SquadsOrder / SquadsGather so updateSquad runs on the next tick (ADR 0057).
+  immediate?: boolean;
 }
 
 export interface SquadsEnv {
@@ -86,6 +87,7 @@ interface SavedSquad {
   slots?: Serializable;
   anchor?: Serializable;
   guideActive?: boolean;
+  immediate?: boolean;
 }
 
 export function saveSquads(env: SquadsEnv): Serializable {
@@ -122,6 +124,9 @@ export function saveSquads(env: SquadsEnv): Serializable {
       if (sq.guideActive !== undefined) {
         out.guideActive = sq.guideActive;
       }
+      if (sq.immediate !== undefined) {
+        out.immediate = sq.immediate;
+      }
       return out;
     }),
   };
@@ -154,6 +159,7 @@ export function loadSquads(env: SquadsEnv, data: Serializable): void {
             ? { anchor: { ...(sq.anchor as unknown as SquadAnchor) } }
             : {}),
           ...(sq.guideActive !== undefined ? { guideActive: sq.guideActive } : {}),
+          ...(sq.immediate !== undefined ? { immediate: sq.immediate } : {}),
         },
       ];
     }),

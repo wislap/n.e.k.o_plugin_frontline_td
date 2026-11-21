@@ -24,10 +24,10 @@ export const MoveIntent = defineIntent<{
   slots?: { x: number; y: number }[];
 }>('frontline_td:movement.move');
 export const StopIntent = defineIntent<{ units: number[] }>('frontline_td:movement.stop');
-// Transient squad formation waypoint + cruise speed cap (ADR 0054).
+// Transient scalar squad cruise speed cap (ADR 0054 / ADR 0057).
 export const FormationGuideIntent = defineIntent<{
   units: number[];
-  waypoints?: { x: number; y: number; maxSpeed?: number }[];
+  maxSpeeds?: number[];
   active: boolean;
 }>('frontline_td:movement.formation_guide');
 

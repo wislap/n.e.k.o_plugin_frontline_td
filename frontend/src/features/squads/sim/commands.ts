@@ -202,6 +202,7 @@ export function installSquadCommands(
     const radius = payload.kind === 'guard' ? (payload.radius ?? 6) : 0;
     squad.order = { kind: payload.kind, x: payload.x, y: payload.y, radius };
     squad.phase = 'moving';
+    squad.immediate = true;
     delete squad.route;
     delete squad.anchor;
     delete squad.slots;
@@ -223,6 +224,7 @@ export function installSquadCommands(
       targetY: payload.targetY,
     };
     squad.phase = 'moving';
+    squad.immediate = true;
     delete squad.anchor;
     delete squad.slots;
     // Store the predicted gather→target route (pathing descent

@@ -1,7 +1,6 @@
-// Squad formation layout, slot projection, virtual leader anchor,
-// corridor width probing, and cruise speed synchronization (ADR 0054).
+// Squad formation layout, slot projection, and 1D Eikonal geodesic
+// trimmed-median cruise speed synchronization (ADR 0054 / ADR 0057).
 // Pure deterministic math only (ADR 0006 purity zone).
-import { distance } from '../../../core/index';
 import type { EntityId } from '../../../core/index';
 import type { PathingApi } from '../../pathing/sim/index';
 import {
@@ -12,12 +11,8 @@ import {
   type ClearanceTier,
 } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import type { SquadAnchor } from './state';
 
 export const FORMATION_PAD = 0.35;
-export const LEADER_MAX_LEAD = 4.0;
-export const GUIDE_LOOKAHEAD = 2.5;
-export const MIN_WIDTH_SCALE = 0.25;
 
 const PROJECT_SPIRAL_RING = 10;
 
@@ -240,183 +235,103 @@ export function projectFormationSlots(
   return result;
 }
 
-export function probeCorridorWidth(
-  terrain: TerrainApi,
-  cls: number,
-  tier: ClearanceTier,
-  px: number,
-  py: number,
-  rx: number,
-  ry: number,
-  maxHalf: number,
-): { availHalf: number; centerBias: number } {
-  const limit = Math.max(1.5, maxHalf + 1.0);
-  let rightClear = 0;
-  for (let d = 0.5; d <= limit + 1e-9; d += 0.5) {
-    const sx = px + rx * d;
-    const sy = py + ry * d;
-    if (
-      !terrain.passable(clearanceAnchorCell(sx, tier), clearanceAnchorCell(sy, tier), cls, tier)
-    ) {
-      break;
-    }
-    rightClear = d;
+export interface GeodesicSample {
+  handle: number;
+  dist: number;
+  fwd: number;
+  speed: number;
+}
+
+export interface GeodesicPacing {
+  sRef: number;
+  vCruise: number;
+  vMax: number;
+  sMed: number;
+}
+
+// Compute outlier-proof 1D geodesic station reference and target cruise speed
+// from Eikonal remaining distances `d_i` and role depth offsets `fwd_i`
+// (s_i = d_i + fwd_i). Rejects strays > strayDist from the median and trims
+// 20% tails on >= 5 valid samples (ADR 0057).
+export function computeGeodesicPacing(
+  samples: readonly GeodesicSample[],
+  strayDist: number,
+): GeodesicPacing | null {
+  if (samples.length === 0) {
+    return null;
   }
-  let leftClear = 0;
-  for (let d = 0.5; d <= limit + 1e-9; d += 0.5) {
-    const sx = px - rx * d;
-    const sy = py - ry * d;
-    if (
-      !terrain.passable(clearanceAnchorCell(sx, tier), clearanceAnchorCell(sy, tier), cls, tier)
-    ) {
-      break;
+  let vMax = 0;
+  const entries: { handle: number; station: number; speed: number }[] = [];
+  for (const s of samples) {
+    if (s.speed > vMax) {
+      vMax = s.speed;
     }
-    leftClear = d;
+    entries.push({ handle: s.handle, station: s.dist + s.fwd, speed: s.speed });
+  }
+  if (vMax <= 0) {
+    return null;
+  }
+  entries.sort((a, b) => a.station - b.station || a.handle - b.handle);
+  const n = entries.length;
+  const mid = n >> 1;
+  const sMed =
+    n % 2 === 1
+      ? (entries[mid]?.station ?? 0)
+      : ((entries[mid - 1]?.station ?? 0) + (entries[mid]?.station ?? 0)) * 0.5;
+
+  const filtered = entries.filter((e) => Math.abs(e.station - sMed) <= strayDist);
+  const inBand = filtered.length > 0 ? filtered : entries;
+
+  const trim = inBand.length >= 5 ? Math.floor(inBand.length * 0.2) : 0;
+  const start = trim;
+  const end = inBand.length - trim;
+  let sum = 0;
+  for (let i = start; i < end; i++) {
+    sum += inBand[i]?.station ?? 0;
+  }
+  const sRef = sum / Math.max(1, end - start);
+
+  let vSlow = Infinity;
+  for (const e of inBand) {
+    if (e.speed > 0 && e.speed < vSlow) {
+      vSlow = e.speed;
+    }
+  }
+  if (!Number.isFinite(vSlow)) {
+    vSlow = vMax;
   }
   return {
-    availHalf: (leftClear + rightClear) * 0.5,
-    centerBias: Math.max(-1.5, Math.min(1.5, (rightClear - leftClear) * 0.5)),
+    sRef,
+    vCruise: Math.max(vSlow, vMax * 0.5),
+    vMax,
+    sMed,
   };
 }
 
-export function advanceLeaderAnchor(
-  terrain: TerrainApi,
-  pathing: PathingApi,
-  goalId: number,
-  anchor: SquadAnchor,
-  goalX: number,
-  goalY: number,
-  centroidX: number,
-  centroidY: number,
-  cls: number,
-  tier: ClearanceTier,
-  cruiseSpeed: number,
-  halfWidth: number,
-  periodTicks: number,
-): { guideCenterX: number; guideCenterY: number; widthScale: number; depthScale: number } {
-  let leadDist = distance(centroidX, centroidY, anchor.x, anchor.y);
-  if (leadDist > LEADER_MAX_LEAD * 2) {
-    anchor.x += (centroidX - anchor.x) * 0.5;
-    anchor.y += (centroidY - anchor.y) * 0.5;
-    leadDist = distance(centroidX, centroidY, anchor.x, anchor.y);
-  }
-
-  if (leadDist < LEADER_MAX_LEAD && distance(anchor.x, anchor.y, goalX, goalY) > 0.75) {
-    let rem = cruiseSpeed * periodTicks * Math.max(0.25, 1 - leadDist / (LEADER_MAX_LEAD * 1.4));
-    while (rem > 1e-6) {
-      if (distance(anchor.x, anchor.y, goalX, goalY) <= 0.75) {
-        break;
-      }
-      const dir = pathing.smoothDirectionAt(goalId, anchor.x, anchor.y);
-      if (dir === null || (dir.dx === 0 && dir.dy === 0)) {
-        break;
-      }
-      const dLen = Math.sqrt(dir.dx * dir.dx + dir.dy * dir.dy);
-      if (dLen <= 1e-9) {
-        break;
-      }
-      const ux = dir.dx / dLen;
-      const uy = dir.dy / dLen;
-      const step = Math.min(0.5, rem);
-      const nx = anchor.x + ux * step;
-      const ny = anchor.y + uy * step;
-      if (!terrain.inBounds(Math.floor(nx), Math.floor(ny))) {
-        break;
-      }
-      anchor.x = nx;
-      anchor.y = ny;
-      const bx = 0.65 * anchor.hx + 0.35 * ux;
-      const by = 0.65 * anchor.hy + 0.35 * uy;
-      const bLen = Math.sqrt(bx * bx + by * by);
-      if (bLen > 1e-9) {
-        anchor.hx = bx / bLen;
-        anchor.hy = by / bLen;
-      } else {
-        anchor.hx = ux;
-        anchor.hy = uy;
-      }
-      rem -= step;
-    }
-  }
-
-  let gx = anchor.x;
-  let gy = anchor.y;
-  let lookRem = GUIDE_LOOKAHEAD;
-  while (lookRem > 1e-6) {
-    if (distance(gx, gy, goalX, goalY) <= 0.75) {
-      break;
-    }
-    const dir = pathing.smoothDirectionAt(goalId, gx, gy);
-    if (dir === null || (dir.dx === 0 && dir.dy === 0)) {
-      break;
-    }
-    const dLen = Math.sqrt(dir.dx * dir.dx + dir.dy * dir.dy);
-    if (dLen <= 1e-9) {
-      break;
-    }
-    const step = Math.min(0.5, lookRem);
-    const nx = gx + (dir.dx / dLen) * step;
-    const ny = gy + (dir.dy / dLen) * step;
-    if (
-      !terrain.inBounds(Math.floor(nx), Math.floor(ny)) ||
-      !terrain.passable(clearanceAnchorCell(nx, tier), clearanceAnchorCell(ny, tier), cls, tier)
-    ) {
-      break;
-    }
-    gx = nx;
-    gy = ny;
-    lookRem -= step;
-  }
-
-  const rx = -anchor.hy;
-  const ry = anchor.hx;
-  const { availHalf, centerBias } = probeCorridorWidth(
-    terrain,
-    cls,
-    tier,
-    gx,
-    gy,
-    rx,
-    ry,
-    halfWidth,
-  );
-  const targetScale =
-    halfWidth <= 0.5 ? 1 : Math.max(MIN_WIDTH_SCALE, Math.min(1, (availHalf - 0.25) / halfWidth));
-  const blend = targetScale < anchor.widthScale ? 0.55 : 0.35;
-  anchor.widthScale = anchor.widthScale + (targetScale - anchor.widthScale) * blend;
-  const depthScale = 1 + (1 - anchor.widthScale) * 0.65;
-
-  return {
-    guideCenterX: gx + rx * centerBias,
-    guideCenterY: gy + ry * centerBias,
-    widthScale: anchor.widthScale,
-    depthScale,
-  };
-}
-
-export function computeCruiseCap(
+// Compute scalar cruise speed cap for a squad member during transit; returns 0
+// when uncapped (null distance, stray outlier, lagging behind sRef, or already
+// aligned within vCruise).
+export function computeGeodesicCruiseCap(
   memberSpeed: number,
-  mx: number,
-  my: number,
-  anchorSlotX: number,
-  anchorSlotY: number,
-  hx: number,
-  hy: number,
-  cruiseSpeed: number,
+  memberDist: number | null,
+  fwd: number,
+  pacing: GeodesicPacing,
   strayDist: number,
 ): number {
-  const dx = mx - anchorSlotX;
-  const dy = my - anchorSlotY;
-  if (dx * dx + dy * dy > strayDist * strayDist) {
+  if (memberDist === null || memberSpeed <= 0) {
     return 0;
   }
-  const ahead = dx * hx + dy * hy;
+  const station = memberDist + fwd;
+  if (Math.abs(station - pacing.sMed) > strayDist) {
+    return 0;
+  }
+  const ahead = pacing.sRef - station;
   if (ahead < -0.75) {
     return 0;
   }
-  if (memberSpeed > cruiseSpeed * 1.02 || ahead > 0.75) {
-    const base = Math.min(memberSpeed, cruiseSpeed);
-    const scale = ahead > 0.75 ? Math.max(0.55, 1 - (ahead - 0.75) * 0.15) : 1;
+  if (memberSpeed > pacing.vCruise * 1.02 || ahead > 0.65) {
+    const base = Math.min(memberSpeed, pacing.vCruise);
+    const scale = ahead > 0.65 ? Math.max(0.55, 1 - (ahead - 0.65) * 0.15) : 1;
     const cap = base * scale;
     return cap < memberSpeed * 0.985 ? cap : 0;
   }

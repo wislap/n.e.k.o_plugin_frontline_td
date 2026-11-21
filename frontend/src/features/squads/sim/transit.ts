@@ -1,7 +1,7 @@
-// Squad transit guidance: member info snapshot collection, pathing
-// probe acquisition with Heavy->Standard fallback, persistent slot
-// assignment/subset preservation, and virtual leader anchor emission
-// (ADR 0054). Pure deterministic logic (ADR 0006 purity zone).
+// Squad transit guidance: member info snapshot collection, O(1) component
+// reachability checks with Heavy->Standard fallback, persistent slot
+// assignment/subset preservation, and 1D Eikonal geodesic trimmed-median
+// cruise speed pacing (ADR 0054 / ADR 0057).
 import { distance } from '../../../core/index';
 import type { EntityId } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
@@ -16,12 +16,13 @@ import {
 } from '../../terrain/rules/index';
 import type { SquadsDeps } from './deps';
 import {
-  advanceLeaderAnchor,
-  computeCruiseCap,
   computeFormationLayout,
+  computeGeodesicCruiseCap,
+  computeGeodesicPacing,
   markFootprintCells,
   projectFormationSlots,
   type FormationMemberInfo,
+  type GeodesicSample,
 } from './formation';
 import type { Squad, SquadSlot } from './state';
 
@@ -30,6 +31,77 @@ export const ARRIVE_DIST = 2;
 export const STRAY_DIST = 10;
 
 const GUIDE_RELEASE_DIST = 7;
+
+function pickPassableRef(
+  terrain: SquadsDeps['terrain'],
+  memberInfos: readonly FormationMemberInfo[],
+  cls: number,
+  tier: ClearanceTier,
+  c: { x: number; y: number },
+): { x: number; y: number } {
+  const cx = clearanceAnchorCell(c.x, tier);
+  const cy = clearanceAnchorCell(c.y, tier);
+  if (terrain.inBounds(cx, cy) && terrain.passable(cx, cy, cls, tier)) {
+    return c;
+  }
+  for (const m of memberInfos) {
+    const mx = clearanceAnchorCell(m.x, tier);
+    const my = clearanceAnchorCell(m.y, tier);
+    if (terrain.inBounds(mx, my) && terrain.passable(mx, my, cls, tier)) {
+      return { x: m.x, y: m.y };
+    }
+  }
+  return c;
+}
+
+function isReachableAtTier(
+  terrain: SquadsDeps['terrain'],
+  pathing: SquadsDeps['pathing'],
+  cls: number,
+  tier: ClearanceTier,
+  goalX: number,
+  goalY: number,
+  memberInfos: readonly FormationMemberInfo[],
+  c: { x: number; y: number },
+): boolean {
+  const gx = clearanceAnchorCell(goalX, tier);
+  const gy = clearanceAnchorCell(goalY, tier);
+  if (!terrain.inBounds(gx, gy) || !terrain.passable(gx, gy, cls, tier)) {
+    return false;
+  }
+  const ref = pickPassableRef(terrain, memberInfos, cls, tier, c);
+  const rx = clearanceAnchorCell(ref.x, tier);
+  const ry = clearanceAnchorCell(ref.y, tier);
+  return terrain.inBounds(rx, ry) && pathing.reachable(rx, ry, gx, gy, cls, tier);
+}
+
+export function isGoalReachableWithFallback(
+  terrain: SquadsDeps['terrain'],
+  pathing: SquadsDeps['pathing'],
+  cls: number,
+  preferredTier: ClearanceTier,
+  goalX: number,
+  goalY: number,
+  memberInfos: readonly FormationMemberInfo[],
+  c: { x: number; y: number },
+): boolean {
+  if (isReachableAtTier(terrain, pathing, cls, preferredTier, goalX, goalY, memberInfos, c)) {
+    return true;
+  }
+  if (preferredTier === CLEARANCE_HEAVY) {
+    return isReachableAtTier(
+      terrain,
+      pathing,
+      cls,
+      CLEARANCE_STANDARD,
+      goalX,
+      goalY,
+      memberInfos,
+      c,
+    );
+  }
+  return false;
+}
 
 export function collectMemberInfos(
   ctx: SystemContext,
@@ -85,13 +157,18 @@ function acquireReachableProbe(
 ): number | null {
   const gx = clearanceAnchorCell(goalX, tier);
   const gy = clearanceAnchorCell(goalY, tier);
-  if (!terrain.inBounds(gx, gy) || !terrain.passable(gx, gy, cls, tier)) {
+  const rx = clearanceAnchorCell(refX, tier);
+  const ry = clearanceAnchorCell(refY, tier);
+  if (
+    !terrain.inBounds(gx, gy) ||
+    !terrain.passable(gx, gy, cls, tier) ||
+    !terrain.inBounds(rx, ry) ||
+    !pathing.reachable(rx, ry, gx, gy, cls, tier)
+  ) {
     return null;
   }
   const probe = pathing.acquireGoal(gx, gy, cls, tier);
-  const rx = clearanceAnchorCell(refX, tier);
-  const ry = clearanceAnchorCell(refY, tier);
-  if (terrain.inBounds(rx, ry) && pathing.directionAt(probe, rx, ry) !== null) {
+  if (pathing.directionAt(probe, rx, ry) !== null) {
     return probe;
   }
   pathing.releaseGoal(probe);
@@ -171,8 +248,18 @@ export function ensureSquadSlotsAndEmitMove(
   const goalTier: ClearanceTier = allHeavy ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
 
   if (fullRebuild) {
+    const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
     const probe = singleClass
-      ? acquireProbeWithFallback(deps.terrain, deps.pathing, cls, goalTier, goalX, goalY, c.x, c.y)
+      ? acquireProbeWithFallback(
+          deps.terrain,
+          deps.pathing,
+          cls,
+          goalTier,
+          goalX,
+          goalY,
+          ref.x,
+          ref.y,
+        )
       : null;
     try {
       const layout = computeFormationLayout(memberInfos);
@@ -180,12 +267,11 @@ export function ensureSquadSlotsAndEmitMove(
       const hx = dGoal > 1e-6 ? (goalX - c.x) / dGoal : 1;
       const hy = dGoal > 1e-6 ? (goalY - c.y) / dGoal : 0;
       squad.anchor = {
-        x: c.x,
-        y: c.y,
+        x: goalX,
+        y: goalY,
         hx,
         hy,
         halfWidth: layout.halfWidth,
-        widthScale: 1,
       };
       const slotsMap = projectFormationSlots(
         deps.terrain,
@@ -299,8 +385,18 @@ export function ensureSquadSlotsAndEmitMove(
   }
 
   if (missing.length > 0) {
+    const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
     const probe = singleClass
-      ? acquireProbeWithFallback(deps.terrain, deps.pathing, cls, goalTier, goalX, goalY, c.x, c.y)
+      ? acquireProbeWithFallback(
+          deps.terrain,
+          deps.pathing,
+          cls,
+          goalTier,
+          goalX,
+          goalY,
+          ref.x,
+          ref.y,
+        )
       : null;
     try {
       const layout = computeFormationLayout(memberInfos);
@@ -363,41 +459,16 @@ export function emitTransitGuide(
   if (
     (squad.phase !== 'moving' && squad.phase !== 'returning') ||
     memberInfos.length < 2 ||
-    squad.slots === undefined ||
-    squad.anchor === undefined
+    squad.slots === undefined
   ) {
     return;
   }
-
-  let vSlow = Infinity;
-  let vMax = 0;
-  for (const m of memberInfos) {
-    if (m.speed > vMax) {
-      vMax = m.speed;
-    }
-    if (distance(m.x, m.y, c.x, c.y) <= STRAY_DIST && m.speed > 0 && m.speed < vSlow) {
-      vSlow = m.speed;
-    }
-  }
-  if (!Number.isFinite(vSlow)) {
-    vSlow = vMax;
-    for (const m of memberInfos) {
-      if (m.speed > 0 && m.speed < vSlow) {
-        vSlow = m.speed;
-      }
-    }
-  }
-  if (vMax <= 0) {
-    releaseGuideIfActive(ctx, squad);
-    return;
-  }
-  const vCruise = Math.max(vSlow, vMax * 0.5);
-  const mixSpeed = vMax > vCruise * 1.02;
 
   const cls = memberInfos[0]?.cls ?? 0;
   const preferredTier: ClearanceTier = memberInfos.some((m) => m.tier === CLEARANCE_HEAVY)
     ? CLEARANCE_HEAVY
     : CLEARANCE_STANDARD;
+  const ref = pickPassableRef(deps.terrain, memberInfos, cls, preferredTier, c);
   const probe = acquireProbeWithFallback(
     deps.terrain,
     deps.pathing,
@@ -405,8 +476,8 @@ export function emitTransitGuide(
     preferredTier,
     goalX,
     goalY,
-    squad.anchor.x,
-    squad.anchor.y,
+    ref.x,
+    ref.y,
   );
   if (probe === null) {
     releaseGuideIfActive(ctx, squad);
@@ -414,74 +485,47 @@ export function emitTransitGuide(
   }
 
   try {
-    const guide = advanceLeaderAnchor(
-      deps.terrain,
-      deps.pathing,
-      probe.goalId,
-      squad.anchor,
-      goalX,
-      goalY,
-      c.x,
-      c.y,
-      cls,
-      probe.tier,
-      vCruise,
-      squad.anchor.halfWidth,
-      SQUAD_PERIOD,
-    );
-    const anchorDistToGoal = distance(squad.anchor.x, squad.anchor.y, goalX, goalY);
-    if (anchorDistToGoal <= GUIDE_RELEASE_DIST && !mixSpeed) {
+    const fwdByHandle = new Map<number, number>();
+    for (const s of squad.slots) {
+      fwdByHandle.set(s.handle, s.fwd);
+    }
+    const distByHandle = new Map<number, number | null>();
+    const samples: GeodesicSample[] = [];
+    for (const m of memberInfos) {
+      const d = deps.pathing.distanceAt(probe.goalId, m.x, m.y);
+      distByHandle.set(m.handle, d);
+      if (d !== null) {
+        samples.push({
+          handle: m.handle,
+          dist: d,
+          fwd: fwdByHandle.get(m.handle) ?? 0,
+          speed: m.speed,
+        });
+      }
+    }
+    const pacing = computeGeodesicPacing(samples, STRAY_DIST);
+    if (
+      pacing === null ||
+      (pacing.sRef <= GUIDE_RELEASE_DIST && pacing.vMax <= pacing.vCruise * 1.02)
+    ) {
       releaseGuideIfActive(ctx, squad);
       return;
     }
-    if (anchorDistToGoal > 1.0 || mixSpeed) {
-      const offsets = new Map<number, { fwd: number; right: number }>();
-      for (const s of squad.slots) {
-        offsets.set(s.handle, { fwd: s.fwd, right: s.right });
-      }
-      const wpMap = projectFormationSlots(
-        deps.terrain,
-        deps.pathing,
-        null,
-        guide.guideCenterX,
-        guide.guideCenterY,
-        squad.anchor.hx,
-        squad.anchor.hy,
-        memberInfos,
-        offsets,
-        guide.widthScale,
-        guide.depthScale,
-      );
-      const rx = -squad.anchor.hy;
-      const ry = squad.anchor.hx;
+    if (pacing.sRef > 1.0 || pacing.vMax > pacing.vCruise * 1.02) {
       const units: number[] = [];
-      const waypoints: { x: number; y: number; maxSpeed?: number }[] = [];
+      const maxSpeeds: number[] = [];
       for (const m of memberInfos) {
-        const wp = wpMap.get(m.handle) ?? { x: guide.guideCenterX, y: guide.guideCenterY };
-        const off = offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-        const anchorSlotX =
-          squad.anchor.x +
-          squad.anchor.hx * off.fwd * guide.depthScale +
-          rx * off.right * guide.widthScale;
-        const anchorSlotY =
-          squad.anchor.y +
-          squad.anchor.hy * off.fwd * guide.depthScale +
-          ry * off.right * guide.widthScale;
-        const maxSpeed = computeCruiseCap(
+        const cap = computeGeodesicCruiseCap(
           m.speed,
-          m.x,
-          m.y,
-          anchorSlotX,
-          anchorSlotY,
-          squad.anchor.hx,
-          squad.anchor.hy,
-          vCruise,
+          distByHandle.get(m.handle) ?? null,
+          fwdByHandle.get(m.handle) ?? 0,
+          pacing,
           STRAY_DIST,
         );
         units.push(m.handle);
-        waypoints.push(maxSpeed > 0 ? { x: wp.x, y: wp.y, maxSpeed } : { x: wp.x, y: wp.y });
+        maxSpeeds.push(cap);
       }
-      ctx.emit(FormationGuideIntent, { units, waypoints, active: true });
+      ctx.emit(FormationGuideIntent, { units, maxSpeeds, active: true });
       squad.guideActive = true;
     } else {
       releaseGuideIfActive(ctx, squad);

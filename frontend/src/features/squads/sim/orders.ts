@@ -28,6 +28,7 @@ import {
   collectMemberInfos,
   emitTransitGuide,
   ensureSquadSlotsAndEmitMove,
+  isGoalReachableWithFallback,
   releaseGuideIfActive,
 } from './transit';
 
@@ -296,27 +297,23 @@ export function updateSquad(
       releaseGuideIfActive(ctx, squad);
       return;
     }
-    // Re-check the original goal's reachability on every update — it is
-    // cheap while members hold that goal's flow field, and a route
-    // walled off mid-advance must be caught even without goal drift.
+    // Re-check the original goal's reachability in O(1) via component
+    // connectivity — a route walled off mid-advance must still be caught
+    // without allocating or solving a probe GoalField.
     const cls = mover.cls[ids[0] ?? 0] ?? 0;
     const probeTier: ClearanceTier = memberInfos.some((m) => m.tier === CLEARANCE_HEAVY)
       ? CLEARANCE_HEAVY
       : CLEARANCE_STANDARD;
-    const probe = acquireProbeWithFallback(
+    const reachable = isGoalReachableWithFallback(
       deps.terrain,
       deps.pathing,
       cls,
       probeTier,
       goalX,
       goalY,
-      c.x,
-      c.y,
+      memberInfos,
+      c,
     );
-    const reachable = probe !== null;
-    if (probe !== null) {
-      deps.pathing.releaseGoal(probe.goalId);
-    }
     if (reachable) {
       // Route open (again): head for the real target — ensureSquadSlotsAndEmitMove
       // no-ops when the squad already holds it.

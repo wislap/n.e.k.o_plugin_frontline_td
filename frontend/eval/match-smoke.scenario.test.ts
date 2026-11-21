@@ -22,11 +22,12 @@ const TICKS = 6000; // 5 minutes
 const SAMPLE_EVERY = 20; // 1 s
 const RESUPPLY_LIMIT = 120 * TPS; // continuous resupplying budget
 
-// Golden hash (Batch P2 / ADR 0056: watershed-proof corridor chains,
-// wall-safe slot collection, near-face MoveCommand snap, and
-// same-direction rear-unit yielding): rule changes may legitimately change
-// it — update the constant in the same commit and say why in the commit message.
-const GOLDEN_HASH = 'e29185179e12e16a';
+// Golden hash (Batch P3 / ADR 0057: scalar FormationGuide pacing, 1D
+// geodesic trimmed-median cruise synchronization, O(1) squad reachability
+// checks, and 1-tick immediate SquadsOrder/SquadsGather start): rule changes
+// may legitimately change it — update the constant in the same commit and
+// say why in the commit message.
+const GOLDEN_HASH = 'b04a3401ea69b698';
 
 describe('match smoke (proto_01, balanced bot vs director)', () => {
   it('plays 5 minutes: hash golden, waves launch, sane unit state', () => {

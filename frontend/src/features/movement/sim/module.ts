@@ -92,14 +92,14 @@ export function moverComponents(
     [Velocity, { x: 0, y: 0 }],
     [Mover, { speed, radius, cls }],
     [MoveTarget, { goal: 0, x: 0, y: 0, active: 0 }],
-    [FormationGuide, { x: 0, y: 0, maxSpeed: 0, active: 0 }],
+    [FormationGuide, { maxSpeed: 0, active: 0 }],
     [RouteFollow, { chain: 0, gate: 0, lane: 0, active: 0 }],
   ];
 }
 
 type VelView = WriteView<{ x: 'f64'; y: 'f64' }>;
 type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
-type GuideView = WriteView<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+type GuideView = WriteView<{ maxSpeed: 'f64'; active: 'u8' }>;
 
 // Release the shared goal and hold the slot: the unit steers back to its
 // slot point if separation later pushes it off.
@@ -226,7 +226,7 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
   let velW: ComponentWriter<{ x: 'f64'; y: 'f64' }>;
   let posW: ComponentWriter<{ x: 'f64'; y: 'f64' }>;
   let tgtW: ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
-  let guideW: ComponentWriter<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+  let guideW: ComponentWriter<{ maxSpeed: 'f64'; active: 'u8' }>;
   let routeW: ComponentWriter<{ chain: 'u32'; gate: 'u16'; lane: 'f64'; active: 'u8' }>;
   const routes = createRouteChainStore();
   terrain.onBlockedChange(() => {
@@ -252,8 +252,6 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const tgtActive = target.active;
     const tgtGoal = target.goal;
     const guideActive = guide.active;
-    const guideX = guide.x;
-    const guideY = guide.y;
     const guideMaxSpeed = guide.maxSpeed;
     const routeActive = route.active;
     const moverRadius = mover.radius;
@@ -334,38 +332,6 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
         dirY = routeScratch.dy;
         approachingSlot = false;
         steered = true;
-        if (gActive) {
-          const gx = guideX[id] as number;
-          const gy = guideY[id] as number;
-          const gdx = gx - px;
-          const gdy = gy - py;
-          const gDistSq = gdx * gdx + gdy * gdy;
-          if (
-            gDistSq > 0.0625 &&
-            gDistSq <= DIRECT_DIST * DIRECT_DIST &&
-            gdx * dirX + gdy * dirY > 0 &&
-            lineWalkable(terrain, cls, px, py, gx, gy, tier)
-          ) {
-            dirX = gdx;
-            dirY = gdy;
-          }
-        }
-      } else if (gActive) {
-        const gx = guideX[id] as number;
-        const gy = guideY[id] as number;
-        const gdx = gx - px;
-        const gdy = gy - py;
-        const gDistSq = gdx * gdx + gdy * gdy;
-        if (
-          gDistSq > 0.0625 &&
-          gDistSq <= DIRECT_DIST * DIRECT_DIST &&
-          lineWalkable(terrain, cls, px, py, gx, gy, tier)
-        ) {
-          dirX = gdx;
-          dirY = gdy;
-          approachingSlot = false;
-          steered = true;
-        }
       }
       if (!steered) {
         if (

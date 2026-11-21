@@ -1,7 +1,7 @@
 # movement
 
 ## 职责
-单位移动结算（ADR 0010 / ADR 0052 / ADR 0053 / ADR 0054 / ADR 0055 / ADR 0056）：沿寻路连续流向梯度、共享宽门走廊链或小队瞬态领航锚点转向、
+单位移动结算（ADR 0010 / ADR 0052 / ADR 0053 / ADR 0054 / ADR 0055 / ADR 0056 / ADR 0057）：沿寻路连续流向梯度与共享宽门走廊链转向、结合小队标量巡航限速控速、
 阻尼非对称与同向纵向后车让行均匀网格分离推挤、按净空分档的可通行性与墙体边距积分，以及 `MoveCommand` 近端来向吸附与显式槽位。
 移动命令 `frontline_td:movement.move` 在此登记。
 
@@ -12,7 +12,7 @@
   `MoveSpeed`（目前唯一的修正值统计量，ADR 0013）；
   组件 `Position` / `Mover` / `MoveTarget`。
 - `protocol.ts`：`MoveIntent`（支持可选 `slots?: { x, y }[]` 显式槽位）/
-  `StopIntent` / `FormationGuideIntent`（小队领航瞬态路径点与巡航速度上限；
+  `StopIntent` / `FormationGuideIntent`（小队标量巡航速度上限 `maxSpeeds`；
   AI 与小队驱动单位的正式路径，与 `MoveCommand` 共用同一结算函数）、
   `MoveOrdered` 事件。意图在 movement 相位开头按发出顺序结算（`MoveIntent` 与
   `StopIntent` 先结算，随后结算 `FormationGuideIntent`），校验句柄存活与 `Mover`；
@@ -26,7 +26,7 @@
 
 ## 拥有的组件
 - `Position {x,y:f64}`、`MoveTarget {goal:u32,x,y,active:u8}`（本模块写）；
-  `Velocity {x,y:f64}`、`FormationGuide {x,y,maxSpeed:f64,active:u8}` 与
+  `Velocity {x,y:f64}`、`FormationGuide {maxSpeed:f64,active:u8}` 与
   `RouteFollow {chain:u32,gate:u16,lane:f64,active:u8}` 为内部组件，仅本模块写、不在公共导出
   （走廊链存储通过 `frontline_td:movement.routes` 状态键序列化，零额外流场分配）。
 - `Mover {speed,radius,cls}`：spawn 烘入，经 `ownComponent` 声明归属本模块、
@@ -40,21 +40,19 @@
   `CLEARANCE_HEAVY = 1`、`2×2` 足迹）；若 `MoveIntent` 携带 `slots` 且与
   当前子组存在 1:1 映射，跳过螺旋搜槽直接逐一校验 `inBounds` 与
   `terrain.passable(..., cls, tier)`（非法槽位回退至组目标锚点中心）；
-  否则按移动类别与净空分档收集目标周围可通行（重型按足迹步长去重）且与目标连通的槽位（方环螺旋、半径 ≤
-  `⌈√n⌉ · step + 8`，不足则循环复用），再按保形贪心与 2-opt 分配到
+  否则优先收集距目标锚点直线可达（`lineWalkable`）且与目标连通的同侧槽位（方环螺旋、半径 ≤
+  `⌈√n⌉ · step + 8`），仅在直达槽位不足人数时由 `directionAt` 连通槽位补齐（仍不足则循环复用），再按保形贪心与 2-opt 分配到
   `clearanceAnchorCenter(c, tier)`。写完槽位后由 `assignClusterRoutes` 对多成员子组按
   `distSq <= 81`（9 格）且可行走直线划定空间簇，开阔直通或近距离（`<= 8` 格）跳过，其余簇沿
   唯一共享 `tgtGoal` 提取宽门走廊链（门距 `3.0`、最大半宽 `4.5`、`<= 6.5` 格终止）并归一化写入 `lane ∈ [-1, 1]`。
-- 转向、走廊链、瞬态领航与到达迟滞（ADR 0052 / ADR 0053 / ADR 0054 / ADR 0056）：槽位
+- 转向、走廊链、标量巡航控速与到达迟滞（ADR 0052 / ADR 0053 / ADR 0054 / ADR 0056 / ADR 0057）：槽位
   `DIRECT_DIST = 8` 格内且同档位格子直线可走（`lineWalkable(..., tier)`，
   DDA 逐步 `stepCost >= 0`）时优先直线驶向槽位并释放 `RouteFollow`；否则若 `RouteFollow.active === 1`
-  经 `steerRouteFollow` 推进共享宽门与车道偏移（支持 1 门平滑前瞻、前置门回望与预分配 `729` 槽有界
-  `12` 格局部 BFS 重入；遇 `FormationGuide` 同向共存；门失效时自动释放链）；否则若 `FormationGuide.active === 1`
-  且领航点距当前位置平方距离处于 `(0.0625, DIRECT_DIST²]` 且 `lineWalkable`，
-  则先朝领航点转向并跳过靠近槽位减速；否则消费连续流向梯度
-  `pathing.smoothDirectionAt(goal, px, py)`。巡航速度上限 `gCap` 仅在
-  `FormationGuide.active === 1` 且 `0 < gCap < statSpeed` 时夹紧 `maxSpeed`，
-  不经 `MoveSpeed` 修正值通道以避免与 `EnergyLowModifier` 叠加（ADR 0054）；
+  经 `steerRouteFollow` 推进共享宽门与车道偏移（支持 1 门平滑前瞻、前置门回望与 `256` 槽直接映射备忘表加速的 `729` 槽有界
+  `12` 格局部 BFS 重入；门失效时自动释放链）；否则在 `dist <= DIRECT_DIST` 时尝试有界局部重入，再消费连续流向梯度
+  `pathing.smoothDirectionAt(goal, px, py)`（不覆盖 2D 转向方向）。巡航速度上限 `gCap` 仅在
+  `FormationGuide.active === 1` 且 `0 < gCap < statSpeed` 时夹紧标量 `maxSpeed`，
+  不经 `MoveSpeed` 修正值通道以避免与 `EnergyLowModifier` 叠加（ADR 0054 / ADR 0057）；
   `MoveIntent`、`StopIntent`、`MoveCommand`、到点守位 `holdUnit`、
   不可达停住 `stopUnit` 与死亡 `release_dead` 均清空 `FormationGuide` 与 `RouteFollow`。
   接近槽位且距目标 `< SLOWDOWN_DIST = 0.85` 时进入平滑减速带；距槽位 ≤
@@ -88,6 +86,7 @@
   （移动意图驱动）、[ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
   （地形净空分档与连续流向梯度）、[ADR 0053](../../../../docs/adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)
   （阻尼非对称避让、到达迟滞与墙体边距）、[ADR 0054](../../../../docs/adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)
-  （小队虚拟领航锚点、混编职能分排与巡航控速）、[ADR 0055](../../../../docs/adr/0055-resumable-upwind-eikonal-and-component-reachability.md)
+  （混编职能分排与巡航控速）、[ADR 0055](../../../../docs/adr/0055-resumable-upwind-eikonal-and-component-reachability.md)
   （可恢复迎风 Eikonal 与可达性）、[ADR 0056](../../../../docs/adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)
-  （空间聚类宽门走廊链、`MoveCommand` 近端吸附与纵向后车让行）。
+  （空间聚类宽门走廊链、`MoveCommand` 近端吸附与纵向后车让行）、[ADR 0057](../../../../docs/adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)
+  （连续测地距巡航控速与纯标量 `FormationGuide`）。
