@@ -6,12 +6,17 @@ import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
-import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import {
+  commitLineBuffer,
+  createLineBuffer,
+  ensureLineCapacity,
+  type LineBuffer,
+} from '../../../render/line-buffer';
 import { factionColorHex } from '../../units/render/index';
 import { terrainY } from '../../../render/world';
 import { CapturePointsChannel } from '../protocol';
 import type { CapturePoints } from '../protocol';
-import { arcStrip, ringStrip } from '../../../render/rings';
+import { writeArcVertices, writeRingVertices } from '../../../render/rings';
 
 const RING_COLOR = new THREE.Color('#8890a0');
 const CONTESTED_COLOR = new THREE.Color('#ffd24f');
@@ -36,6 +41,7 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
     };
   }, []);
   const segsRef = useRef<THREE.LineSegments>(null);
+  const tempColorRef = useRef(new THREE.Color());
 
   useFrame(() => {
     const segs = segsRef.current;
@@ -44,50 +50,68 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
     }
     bufRef.current ??= createLineBuffer(MAX_POINTS * SEGMENTS * 4, true);
     const buf = bufRef.current;
+    const latest = client.snapshots().latest;
+    const points = latest?.channels[CapturePointsChannel.id] as CapturePoints | undefined;
+    if (points !== undefined) {
+      const pointCount = Math.min(points.handles.length, MAX_POINTS);
+      ensureLineCapacity(buf, pointCount * SEGMENTS * 6);
+    }
     segs.geometry = buf.geometry;
     const positions = buf.positions;
     const colors = buf.colors;
     if (colors === null) {
       return;
     }
-    const latest = client.snapshots().latest;
-    const points = latest?.channels[CapturePointsChannel.id] as CapturePoints | undefined;
     const observer = latest?.observer ?? null;
     let cursor = 0;
-    const color = new THREE.Color();
+    const color = tempColorRef.current;
     const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 200);
     if (points !== undefined) {
       for (let i = 0; i < points.handles.length && i < MAX_POINTS; i++) {
+        if (cursor + 6 > positions.length) {
+          break;
+        }
         const cx = points.x[i] ?? 0;
         const cy = points.y[i] ?? 0;
         const radius = points.radius[i] ?? 0;
         const y = terrainY(heights, mapWidth, mapHeight, cx, cy) + LIFT;
-        const ring = ringStrip(cx, cy, y, radius, SEGMENTS);
-        for (const v of ring) {
-          positions[cursor] = v;
-          colors[cursor] = RING_COLOR.r;
-          colors[cursor + 1] = RING_COLOR.g;
-          colors[cursor + 2] = RING_COLOR.b;
-          cursor += 1;
-        }
+        cursor = writeRingVertices(
+          positions,
+          colors,
+          cursor,
+          cx,
+          cy,
+          y,
+          radius,
+          SEGMENTS,
+          RING_COLOR.r,
+          RING_COLOR.g,
+          RING_COLOR.b,
+        );
         const frac = (points.progressBp[i] ?? 0) / 10000;
         if (frac > 0) {
+          if (cursor + 6 > positions.length) {
+            break;
+          }
           const contested = (points.contested[i] ?? 0) !== 0;
           color.set(factionColorHex(points.owner[i] ?? 0, observer));
           if (contested) {
             color.copy(CONTESTED_COLOR).multiplyScalar(pulse);
           }
-          const arc = arcStrip(cx, cy, y + 0.01, radius, frac, SEGMENTS);
-          for (const v of arc) {
-            positions[cursor] = v;
-            colors[cursor] = color.r;
-            colors[cursor + 1] = color.g;
-            colors[cursor + 2] = color.b;
-            cursor += 1;
-          }
-        }
-        if (cursor >= positions.length - SEGMENTS * 4 * 3) {
-          break;
+          cursor = writeArcVertices(
+            positions,
+            colors,
+            cursor,
+            cx,
+            cy,
+            y + 0.01,
+            radius,
+            frac,
+            SEGMENTS,
+            color.r,
+            color.g,
+            color.b,
+          );
         }
       }
     }

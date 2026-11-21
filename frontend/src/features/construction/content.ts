@@ -10,6 +10,38 @@ import { s } from '../../core/index';
 export const BUILD_CATEGORIES = ['logistics', 'production', 'military'] as const;
 export type BuildCategory = (typeof BUILD_CATEGORIES)[number];
 
+// Procedural 3D silhouette shapes for structures (ADR 0050).
+export const STRUCTURE_SILHOUETTES = [
+  'block',
+  'hq_citadel',
+  'rail_hub',
+  'twin_depot',
+  'octagon_fort',
+  'drill_rig',
+  'reactor_pair',
+  'foundry_press',
+  'turret_mount',
+  'gantry_bay',
+  'bio_spire',
+] as const;
+export type StructureSilhouette = (typeof STRUCTURE_SILHOUETTES)[number];
+
+// Procedural roof tactical glyph badges for structures (ADR 0050).
+export const STRUCTURE_GLYPHS = [
+  'none',
+  'core_star',
+  'relay_arrows',
+  'supply_cross',
+  'fort_shield',
+  'drill_tri',
+  'power_bolt',
+  'ammo_diamond',
+  'reticle',
+  'gantry_bot',
+  'bio_hazard',
+] as const;
+export type StructureGlyph = (typeof STRUCTURE_GLYPHS)[number];
+
 // Structures that can be built: cost in cargo units, build/demolish
 // times in seconds and the demolition refund share (basis points).
 // cost is converted to milli and times to ticks by the loader.
@@ -35,10 +67,12 @@ export const structureBaseFields = {
   // footprint centre while the structure is operational (outposts,
   // hive). Radius in cells.
   exclusion: s.optional(s.int({ min: 1, max: 64 })),
-  // Render-only greybox height in world units (ghost, structure box,
-  // memory silhouettes). Sim never reads it; required so render code
-  // has no per-kind fallback table.
+  // Render-only visual hints in world units (ghost, structure silhouettes,
+  // roof glyphs, memory silhouettes). Sim never reads them; `height` is
+  // required so render code has no per-kind height fallback table.
   visual: s.object({
     height: s.number({ min: 0.1, max: 20 }),
+    silhouette: s.optional(s.enumOf(STRUCTURE_SILHOUETTES)),
+    glyph: s.optional(s.enumOf(STRUCTURE_GLYPHS)),
   }),
 };

@@ -9,7 +9,7 @@ export const structures = [
     id: contentId('frontline_td:main_base'),
     vision: 12,
     footprint: { w: 4, h: 4 },
-    visual: { height: 1.6 },
+    visual: { height: 1.6, silhouette: 'hq_citadel', glyph: 'core_star' },
     hp: 1000,
     core: true,
     // Not buildable: start structures only (no `build` block).
@@ -35,7 +35,7 @@ export const structures = [
     id: contentId('frontline_td:station'),
     vision: 6,
     footprint: { w: 2, h: 2 },
-    visual: { height: 0.9 },
+    visual: { height: 0.9, silhouette: 'rail_hub', glyph: 'relay_arrows' },
     hp: 200,
     build: {
       cost: { 'frontline_td:material': 20 },
@@ -57,7 +57,7 @@ export const structures = [
     id: contentId('frontline_td:supply_depot'),
     vision: 8,
     footprint: { w: 2, h: 2 },
-    visual: { height: 1.0 },
+    visual: { height: 1.0, silhouette: 'twin_depot', glyph: 'supply_cross' },
     hp: 300,
     build: {
       cost: { 'frontline_td:material': 30 },
@@ -85,7 +85,7 @@ export const structures = [
     vision: 14,
     visionLandmark: true,
     footprint: { w: 3, h: 3 },
-    visual: { height: 1.5 },
+    visual: { height: 1.5, silhouette: 'octagon_fort', glyph: 'fort_shield' },
     hp: 800,
     // Outposts are never built: they start enemy-owned, become ruins on
     // death and are re-captured into fresh sites (no build cost → the
@@ -110,7 +110,7 @@ export const structures = [
     id: contentId('frontline_td:miner'),
     vision: 4,
     footprint: { w: 2, h: 2 },
-    visual: { height: 1.1 },
+    visual: { height: 1.1, silhouette: 'drill_rig', glyph: 'drill_tri' },
     hp: 250,
     requiresDeposit: contentId('frontline_td:ore'),
     build: {
@@ -144,7 +144,7 @@ export const structures = [
     id: contentId('frontline_td:power_plant'),
     vision: 4,
     footprint: { w: 3, h: 3 },
-    visual: { height: 1.4 },
+    visual: { height: 1.4, silhouette: 'reactor_pair', glyph: 'power_bolt' },
     hp: 250,
     build: {
       cost: { 'frontline_td:material': 30 },
@@ -177,7 +177,7 @@ export const structures = [
     id: contentId('frontline_td:ammo_factory'),
     vision: 4,
     footprint: { w: 3, h: 3 },
-    visual: { height: 1.3 },
+    visual: { height: 1.3, silhouette: 'foundry_press', glyph: 'ammo_diamond' },
     hp: 250,
     build: {
       cost: { 'frontline_td:material': 30 },
@@ -215,7 +215,7 @@ export const structures = [
     id: contentId('frontline_td:turret'),
     vision: 9,
     footprint: { w: 1, h: 1 },
-    visual: { height: 1.2 },
+    visual: { height: 1.2, silhouette: 'turret_mount', glyph: 'reticle' },
     hp: 150,
     build: {
       cost: { 'frontline_td:material': 25 },
@@ -250,7 +250,7 @@ export const structures = [
     id: contentId('frontline_td:robot_factory'),
     vision: 5,
     footprint: { w: 3, h: 3 },
-    visual: { height: 1.3 },
+    visual: { height: 1.3, silhouette: 'gantry_bay', glyph: 'gantry_bot' },
     hp: 400,
     build: {
       cost: { 'frontline_td:material': 40 },
@@ -283,7 +283,7 @@ export const structures = [
     vision: 10,
     visionLandmark: true,
     footprint: { w: 4, h: 4 },
-    visual: { height: 1.8 },
+    visual: { height: 1.8, silhouette: 'bio_spire', glyph: 'bio_hazard' },
     hp: 3000,
     core: true,
     exclusion: 16,

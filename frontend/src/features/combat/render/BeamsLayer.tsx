@@ -39,6 +39,7 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
   const active = useRef<Beam[]>([]);
   const eventCursor = useRef(0);
   const segsRef = useRef<THREE.LineSegments>(null);
+  const tempColorRef = useRef(new THREE.Color());
 
   useFrame(() => {
     const segs = segsRef.current;
@@ -47,12 +48,6 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
     }
     bufRef.current ??= createLineBuffer(MAX_BEAMS * 2, true);
     const buf = bufRef.current;
-    segs.geometry = buf.geometry;
-    const positions = buf.positions;
-    const colors = buf.colors;
-    if (colors === null) {
-      return;
-    }
     const now = performance.now();
     const delivered = client.eventsSince(eventCursor.current);
     eventCursor.current = delivered.cursor;
@@ -75,11 +70,29 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
         active.current.splice(0, active.current.length - MAX_BEAMS);
       }
     }
-    // Drop expired beams and rebuild the buffers (fade by darkening).
-    active.current = active.current.filter((b) => now - b.born < BEAM_LIFE_MS);
+    // Drop expired beams in place and rebuild the buffers (fade by darkening).
+    const beams = active.current;
+    let write = 0;
+    for (let i = 0; i < beams.length; i++) {
+      const b = beams[i];
+      if (b !== undefined && now - b.born < BEAM_LIFE_MS) {
+        beams[write] = b;
+        write += 1;
+      }
+    }
+    beams.length = write;
+
+    ensureLineCapacity(buf, beams.length * 2);
+    segs.geometry = buf.geometry;
+    const positions = buf.positions;
+    const colors = buf.colors;
+    if (colors === null) {
+      return;
+    }
+
     let count = 0;
-    const color = new THREE.Color();
-    for (const beam of active.current) {
+    const color = tempColorRef.current;
+    for (const beam of beams) {
       const fade = 1 - (now - beam.born) / BEAM_LIFE_MS;
       color.copy(BEAM_COLOR).multiplyScalar(fade);
       const base = count * 6;
@@ -97,7 +110,6 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
       colors[base + 5] = color.b;
       count += 1;
     }
-    ensureLineCapacity(buf, count * 2);
     commitLineBuffer(buf, count * 2);
     segs.visible = count > 0;
   });

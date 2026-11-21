@@ -8,7 +8,12 @@ import type { Infer } from '../core/index';
 import { MILLI, TICKS_PER_SECOND } from '../core/index';
 import { captureProfileSchema } from '../features/capture/content';
 import { weaponSchema } from '../features/combat/content';
-import { type BuildCategory, structureBaseFields } from '../features/construction/content';
+import {
+  type BuildCategory,
+  type StructureGlyph,
+  type StructureSilhouette,
+  structureBaseFields,
+} from '../features/construction/content';
 import { nodeProfileSchema, storeProfileSchema } from '../features/logistics/content';
 import { cargoClassCode } from '../features/logistics/protocol';
 import { producerSchema } from '../features/production/content';
@@ -29,7 +34,8 @@ export interface ResolvedStoreProfile {
 }
 
 interface ResolvedNodeProfile {
-  // x10 cost units (ground orthogonal step cost).
+  // `connect` is in cost units (cells × 10, ground orthogonal step cost);
+  // `service` is in cells.
   connect: number;
   service: number;
   vehicles: number;
@@ -86,8 +92,13 @@ export interface ResolvedStructure {
   capture?: ResolvedCapture;
   // Sight radius in cells while operational (M5 fog; default 4).
   vision: number;
-  // Render-only greybox height (required in content; sim never reads).
-  visual: { height: number };
+  // Render-only visual hints (sim never reads; silhouette/glyph default
+  // to 'block' / 'none' when omitted in content).
+  visual: {
+    height: number;
+    silhouette: StructureSilhouette;
+    glyph: StructureGlyph;
+  };
   // Seeded into every other faction's structure memory on the first
   // vision tick (outpost, hive).
   visionLandmark?: boolean;
@@ -293,7 +304,11 @@ export function resolveStructures(
       id: entry.id,
       index,
       footprint: entry.footprint,
-      visual: { height: entry.visual.height },
+      visual: {
+        height: entry.visual.height,
+        silhouette: entry.visual.silhouette ?? 'block',
+        glyph: entry.visual.glyph ?? 'none',
+      },
       ...(entry.hp !== undefined ? { hp: entry.hp } : {}),
       ...(build !== undefined ? { build } : {}),
       ...(requiresDeposit !== undefined ? { requiresDeposit } : {}),

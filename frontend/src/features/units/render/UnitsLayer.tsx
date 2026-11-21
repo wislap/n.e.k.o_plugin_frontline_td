@@ -2,7 +2,7 @@
 // useFrame (never React state), interpolates previous→latest positions by
 // handle, and draws a flat ring under selected units. Instance capacity
 // doubles when needed and never shrinks per frame.
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
@@ -21,6 +21,12 @@ import { factionColorHex } from './colors';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
 const RING_SCALE = 1.5;
+const DEFAULT_LOW_ENERGY_BP = 2500;
+const EMPTY_ENERGY_DIM = 0.42;
+const EMPTY_ENERGY_COLOR = '#ff5c5c';
+const LOW_ENERGY_COLOR = '#ffc14d';
+const LOW_ENERGY_TINT = new THREE.Color(LOW_ENERGY_COLOR);
+const RING_COLOR = new THREE.Color('#ffffff');
 // Render-only unit shapes (content `visual`, M4); index order matches
 // the instanced-mesh order in the JSX below.
 type UnitShape = 'cylinder' | 'box' | 'cone' | 'sphere';
@@ -45,6 +51,7 @@ export interface UnitsLayerProps {
   radii: readonly number[];
   // Render visual by content index (kind), from the content db.
   visuals: readonly UnitVisual[];
+  lowThresholdBp?: number | undefined;
 }
 
 export function UnitsLayer({
@@ -54,21 +61,29 @@ export function UnitsLayer({
   mapHeight,
   radii,
   visuals,
+  lowThresholdBp = DEFAULT_LOW_ENERGY_BP,
 }: UnitsLayerProps) {
   const [capacity, setCapacity] = useState(256);
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const ringRef = useRef<THREE.InstancedMesh>(null);
+  const energyPipRef = useRef<THREE.InstancedMesh>(null);
   const interp = useRef(new UnitInterpolator());
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const color = useMemo(() => new THREE.Color(), []);
-  const ringColor = useMemo(() => new THREE.Color('#ffffff'), []);
+  const dummyRef = useRef(new THREE.Object3D());
+  const colorRef = useRef(new THREE.Color());
+  const pipColorRef = useRef(new THREE.Color());
+  const validHandlesRef = useRef(new Set<number>());
+  const countsRef = useRef([0, 0, 0, 0]);
 
   useFrame(() => {
     const meshes = meshRefs.current;
     const ring = ringRef.current;
+    const energyPip = energyPipRef.current;
     if (meshes.some((m) => m === null)) {
       return;
     }
+    const dummy = dummyRef.current;
+    const color = colorRef.current;
+    const pipColor = pipColorRef.current;
     const pair = client.snapshots();
     const latest = interp.current.update(pair);
     if (latest === null) {
@@ -80,13 +95,17 @@ export function UnitsLayer({
       if (ring !== null) {
         ring.count = 0;
       }
+      if (energyPip !== null) {
+        energyPip.count = 0;
+      }
       return;
     }
 
     if (interp.current.prevSnapshotChanged) {
       // Drop handles that left the snapshot (units, structures, salvage —
       // selection holds every entity kind).
-      const valid = new Set<number>();
+      const valid = validHandlesRef.current;
+      valid.clear();
       for (let i = 0; i < latest.handles.length; i++) {
         valid.add(latest.handles[i] ?? 0);
       }
@@ -121,8 +140,10 @@ export function UnitsLayer({
     // before the first snapshot, when no local faction is distinguished).
     const localFaction = pair.latest?.observer ?? null;
     const selected = useSelectionStore.getState().selected;
-    const counts = [0, 0, 0, 0];
+    const counts = countsRef.current;
+    counts.fill(0);
     let rings = 0;
+    let epips = 0;
     for (let i = 0; i < n; i++) {
       const handle = latest.handles[i] ?? 0;
       const { x, y } = interp.current.interpolated(latest, i, alpha);
@@ -148,6 +169,32 @@ export function UnitsLayer({
 
       const faction = latest.faction[i] ?? 0;
       color.set(factionColorHex(faction, localFaction));
+      const energyBp = latest.energyBp[i] ?? 0xffff;
+      if (energyBp === 0) {
+        color.multiplyScalar(EMPTY_ENERGY_DIM);
+        if (energyPip !== null && epips < capacity) {
+          dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
+          dummy.scale.set(1, 1, 1);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+          energyPip.setMatrixAt(epips, dummy.matrix);
+          pipColor.set(EMPTY_ENERGY_COLOR);
+          energyPip.setColorAt(epips, pipColor);
+          epips += 1;
+        }
+      } else if (energyBp > 0 && energyBp < lowThresholdBp) {
+        color.lerp(LOW_ENERGY_TINT, 0.35);
+        if (energyPip !== null && epips < capacity) {
+          dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
+          dummy.scale.set(1, 1, 1);
+          dummy.rotation.set(0, 0, 0);
+          dummy.updateMatrix();
+          energyPip.setMatrixAt(epips, dummy.matrix);
+          pipColor.set(LOW_ENERGY_COLOR);
+          energyPip.setColorAt(epips, pipColor);
+          epips += 1;
+        }
+      }
       if (selected.has(handle)) {
         color.multiplyScalar(SELECTED_BRIGHTEN);
         if (ring !== null && rings < capacity) {
@@ -176,6 +223,13 @@ export function UnitsLayer({
     if (ring !== null) {
       ring.count = rings;
       ring.instanceMatrix.needsUpdate = true;
+    }
+    if (energyPip !== null) {
+      energyPip.count = epips;
+      energyPip.instanceMatrix.needsUpdate = true;
+      if (energyPip.instanceColor !== null) {
+        energyPip.instanceColor.needsUpdate = true;
+      }
     }
   });
 
@@ -223,7 +277,15 @@ export function UnitsLayer({
       </instancedMesh>
       <instancedMesh key={`ring-${capacity}`} ref={ringRef} args={[undefined, undefined, capacity]}>
         <ringGeometry args={[0.7, 1, 16]} />
-        <meshBasicMaterial color={ringColor} side={THREE.DoubleSide} transparent opacity={0.9} />
+        <meshBasicMaterial color={RING_COLOR} side={THREE.DoubleSide} transparent opacity={0.9} />
+      </instancedMesh>
+      <instancedMesh
+        key={`epip-${capacity}`}
+        ref={energyPipRef}
+        args={[undefined, undefined, capacity]}
+      >
+        <octahedronGeometry args={[0.13, 0]} />
+        <meshBasicMaterial />
       </instancedMesh>
     </group>
   );

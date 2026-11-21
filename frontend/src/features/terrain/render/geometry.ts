@@ -17,6 +17,10 @@ export interface Rgb {
   b: number;
 }
 
+type Corner = readonly [number, number, number];
+type QuadCorners = readonly [Corner, Corner, Corner, Corner];
+type QuadShades = readonly [number, number, number, number];
+
 export function parseHexColor(hex: string): Rgb {
   const value = Number.parseInt(hex.slice(1), 16);
   return {
@@ -26,7 +30,13 @@ export function parseHexColor(hex: string): Rgb {
   };
 }
 
-const CLIFF_DARKEN = 0.55;
+const ELEV_STEP_BOOST = 0.08;
+const RIM_BOOST = 1.13;
+const CLIFF_TOP_SHADE = 0.58;
+const CLIFF_BOT_SHADE = 0.4;
+const RAMP_LOW_SHADE = 0.86;
+const RAMP_HIGH_SHADE = 1.18;
+const RAMP_HIGH_ELEV_OFFSET = 0.06;
 const CHECKER_LIGHT = 1.04;
 const CHECKER_DARK = 0.96;
 
@@ -47,23 +57,25 @@ export function buildTerrainGeometry(
   ramps: ArrayLike<number>,
   palette: readonly Rgb[],
 ): TerrainGeometryData {
-  const quadCount = width * height * 2;
-  const positions = new Float32Array(quadCount * 4 * 3);
-  const colors = new Float32Array(quadCount * 4 * 3);
-  const indices = new Uint32Array(quadCount * 6);
+  // Up to 1 top/ramp quad + 4 cliff quads per cell.
+  const maxQuads = width * height * 5;
+  const positions = new Float32Array(maxQuads * 4 * 3);
+  const colors = new Float32Array(maxQuads * 4 * 3);
+  const indices = new Uint32Array(maxQuads * 6);
   let v = 0;
   let i = 0;
 
-  const pushQuad = (
-    corners: readonly (readonly [number, number, number])[],
-    color: Rgb,
-    shade: number,
-  ): void => {
+  const pushQuad = (corners: QuadCorners, color: Rgb, shades: QuadShades): void => {
     const base = v / 3;
-    for (const [x, y, z] of corners) {
-      positions[v] = x;
-      positions[v + 1] = y;
-      positions[v + 2] = z;
+    for (let k = 0; k < 4; k++) {
+      const corner = corners[k];
+      const shade = shades[k];
+      if (corner === undefined || shade === undefined) {
+        continue;
+      }
+      positions[v] = corner[0];
+      positions[v + 1] = corner[1];
+      positions[v + 2] = corner[2];
       colors[v] = Math.min(1, color.r * shade);
       colors[v + 1] = Math.min(1, color.g * shade);
       colors[v + 2] = Math.min(1, color.b * shade);
@@ -84,7 +96,9 @@ export function buildTerrainGeometry(
   for (let cy = 0; cy < height; cy++) {
     for (let cx = 0; cx < width; cx++) {
       const idx = cy * width + cx;
-      const h = (heights[idx] ?? 0) * HEIGHT_STEP;
+      const hLevel = heights[idx] ?? 0;
+      const h = hLevel * HEIGHT_STEP;
+      const elevBoost = 1 + hLevel * ELEV_STEP_BOOST;
       const baseColor = palette[surfaces[idx] ?? 0] ?? { r: 0.5, g: 0.5, b: 0.5 };
       const checker = (cx + cy) % 2 === 0 ? CHECKER_LIGHT : CHECKER_DARK;
 
@@ -94,43 +108,52 @@ export function buildTerrainGeometry(
         // height step.
         let dir: { dx: number; dy: number } = RAMP_DIRS[0];
         for (const d of RAMP_DIRS) {
-          if (heightAt(cx + d.dx, cy + d.dy) === (heights[idx] ?? 0) + 1) {
+          if (heightAt(cx + d.dx, cy + d.dy) === hLevel + 1) {
             dir = d;
             break;
           }
         }
         const hi = h + HEIGHT_STEP;
         // Counter-clockwise seen from above so the face normal is +Y.
-        const corners =
+        const corners: QuadCorners =
           dir.dx === 1
-            ? ([
+            ? [
                 [cx, h, cy],
                 [cx, h, cy + 1],
                 [cx + 1, hi, cy + 1],
                 [cx + 1, hi, cy],
-              ] as const)
+              ]
             : dir.dx === -1
-              ? ([
+              ? [
                   [cx, hi, cy],
                   [cx, hi, cy + 1],
                   [cx + 1, h, cy + 1],
                   [cx + 1, h, cy],
-                ] as const)
+                ]
               : dir.dy === 1
-                ? ([
+                ? [
                     [cx, h, cy],
                     [cx, hi, cy + 1],
                     [cx + 1, hi, cy + 1],
                     [cx + 1, h, cy],
-                  ] as const)
-                : ([
+                  ]
+                : [
                     [cx, hi, cy],
                     [cx, h, cy + 1],
                     [cx + 1, h, cy + 1],
                     [cx + 1, hi, cy],
-                  ] as const);
-        pushQuad(corners, baseColor, checker);
+                  ];
+        const lowShade = RAMP_LOW_SHADE * elevBoost;
+        const highShade = RAMP_HIGH_SHADE * (elevBoost + RAMP_HIGH_ELEV_OFFSET);
+        const s = (c: Corner): number => (c[1] === hi ? highShade : lowShade);
+        pushQuad(corners, baseColor, [s(corners[0]), s(corners[1]), s(corners[2]), s(corners[3])]);
       } else {
+        const cornerShade = (dx: number, dy: number): number => {
+          const nx = heightAt(cx + dx, cy);
+          const ny = heightAt(cx, cy + dy);
+          const drops = (nx >= 0 && nx < hLevel) || (ny >= 0 && ny < hLevel);
+          return checker * elevBoost * (drops ? RIM_BOOST : 1);
+        };
         pushQuad(
           [
             [cx, h, cy],
@@ -139,46 +162,49 @@ export function buildTerrainGeometry(
             [cx + 1, h, cy],
           ],
           baseColor,
-          checker,
+          [cornerShade(-1, -1), cornerShade(-1, 1), cornerShade(1, 1), cornerShade(1, -1)],
         );
       }
 
       // Cliff faces towards each lower neighbour.
+      const cliffTop = CLIFF_TOP_SHADE * elevBoost;
+      const cliffBot = CLIFF_BOT_SHADE * elevBoost;
+      const cliffShades: QuadShades = [cliffTop, cliffTop, cliffBot, cliffBot];
       for (const d of RAMP_DIRS) {
         const nh = heightAt(cx + d.dx, cy + d.dy);
-        if (nh < 0 || nh >= (heights[idx] ?? 0)) {
+        if (nh < 0 || nh >= hLevel) {
           continue;
         }
         const low = nh * HEIGHT_STEP;
-        const face =
+        const face: QuadCorners =
           d.dx === 1
-            ? ([
+            ? [
                 [cx + 1, h, cy],
                 [cx + 1, h, cy + 1],
                 [cx + 1, low, cy + 1],
                 [cx + 1, low, cy],
-              ] as const)
+              ]
             : d.dx === -1
-              ? ([
+              ? [
                   [cx, h, cy + 1],
                   [cx, h, cy],
                   [cx, low, cy],
                   [cx, low, cy + 1],
-                ] as const)
+                ]
               : d.dy === 1
-                ? ([
+                ? [
                     [cx + 1, h, cy + 1],
                     [cx, h, cy + 1],
                     [cx, low, cy + 1],
                     [cx + 1, low, cy + 1],
-                  ] as const)
-                : ([
+                  ]
+                : [
                     [cx, h, cy],
                     [cx + 1, h, cy],
                     [cx + 1, low, cy],
                     [cx, low, cy],
-                  ] as const);
-        pushQuad(face, baseColor, CLIFF_DARKEN);
+                  ];
+        pushQuad(face, baseColor, cliffShades);
       }
     }
   }

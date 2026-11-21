@@ -2,7 +2,7 @@
 // + countdown label for hostile gathering squads, and the stored route as
 // an arrow polyline (threat colour) for gathers and launched waves.
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { formatClock } from '../../../client/match-info';
@@ -51,6 +51,17 @@ function drawLabel(entry: LabelEntry, text: string): void {
   entry.texture.needsUpdate = true;
 }
 
+function getLineMaterial(ref: {
+  current: THREE.LineBasicMaterial | null;
+}): THREE.LineBasicMaterial {
+  ref.current ??= new THREE.LineBasicMaterial({
+    color: THREAT_COLOR,
+    transparent: true,
+    opacity: 0.7,
+  });
+  return ref.current;
+}
+
 export interface ThreatsLayerProps {
   client: SimClient;
   heights: ArrayLike<number>;
@@ -64,14 +75,35 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
   const arrowRef = useRef<THREE.InstancedMesh>(null);
   const labels = useRef(new Map<number, LabelEntry>());
   const lines = useRef(new Map<number, { line: THREE.Line; sig: string }>());
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const lineMaterial = useMemo(
-    () => new THREE.LineBasicMaterial({ color: THREAT_COLOR, transparent: true, opacity: 0.7 }),
-    [],
-  );
-  const coneGeometryDir = useMemo(() => new THREE.Vector3(), []);
-  const up = useMemo(() => new THREE.Vector3(0, 1, 0), []);
-  const quat = useMemo(() => new THREE.Quaternion(), []);
+  const lineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const dummyRef = useRef(new THREE.Object3D());
+  const coneDirRef = useRef(new THREE.Vector3());
+  const upRef = useRef(new THREE.Vector3(0, 1, 0));
+  const quatRef = useRef(new THREE.Quaternion());
+  const seenLabelsRef = useRef(new Set<number>());
+  const seenLinesRef = useRef(new Set<number>());
+  const routeCoordsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    const labelMap = labels.current;
+    const lineMap = lines.current;
+    const group = groupRef.current;
+    return () => {
+      for (const entry of labelMap.values()) {
+        group?.remove(entry.sprite);
+        entry.sprite.material.dispose();
+        entry.texture.dispose();
+      }
+      labelMap.clear();
+      for (const entry of lineMap.values()) {
+        group?.remove(entry.line);
+        entry.line.geometry.dispose();
+      }
+      lineMap.clear();
+      lineMatRef.current?.dispose();
+      lineMatRef.current = null;
+    };
+  }, []);
 
   useFrame(() => {
     const group = groupRef.current;
@@ -80,6 +112,10 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     if (group === null || markers === null || arrows === null) {
       return;
     }
+    const dummy = dummyRef.current;
+    const coneGeometryDir = coneDirRef.current;
+    const up = upRef.current;
+    const quat = quatRef.current;
     const latest = client.snapshots().latest;
     const observer = latest?.observer ?? -1;
     const squads = (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
@@ -89,7 +125,8 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     const pulse = 1 + 0.3 * Math.sin((performance.now() / 1000) * Math.PI * 2);
 
     // Gather markers + labels.
-    const seenLabels = new Set<number>();
+    const seenLabels = seenLabelsRef.current;
+    seenLabels.clear();
     let m = 0;
     for (const squad of gathers) {
       if (m >= MARKER_CAPACITY) {
@@ -131,7 +168,9 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     markers.instanceMatrix.needsUpdate = true;
 
     // Route polylines + arrowheads.
-    const seenLines = new Set<number>();
+    const seenLines = seenLinesRef.current;
+    seenLines.clear();
+    const positions = routeCoordsRef.current;
     let a = 0;
     for (const squad of routed) {
       const route = squad.route;
@@ -142,7 +181,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
       const sig = route.join(',');
       const entry = lines.current.get(squad.id);
       if (entry === undefined || entry.sig !== sig) {
-        const positions: number[] = [];
+        positions.length = 0;
         for (let i = 0; i + 3 < route.length; i += 2) {
           positions.push(
             route[i] ?? 0,
@@ -156,7 +195,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         if (entry === undefined) {
-          const line = new THREE.LineSegments(geometry, lineMaterial);
+          const line = new THREE.LineSegments(geometry, getLineMaterial(lineMatRef));
           lines.current.set(squad.id, { line, sig });
           group.add(line);
         } else {

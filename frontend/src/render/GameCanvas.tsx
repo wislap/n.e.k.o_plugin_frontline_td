@@ -32,8 +32,9 @@ import { FogLayer, MemoryLayer } from '../features/vision/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
-import { HpBars, type HpBarItem } from './hp-bars';
+import { HpBars, type HpBarCollector, type HpBarSink } from './hp-bars';
 import { makeDispatch } from './input-dispatch';
+import { SelectionHighlightLayer } from './SelectionHighlightLayer';
 import { terrainY } from './world';
 
 const BACKGROUND = '#0b1020';
@@ -52,22 +53,18 @@ export interface GameCanvasProps {
 }
 
 // Damaged-unit bars from the dense units channel.
-function unitHpItems(pair: SnapshotPair): HpBarItem[] {
+function unitHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
   const units = pair.latest?.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
   if (units === undefined) {
-    return [];
+    return;
   }
-  const items: HpBarItem[] = [];
   for (let i = 0; i < units.handles.length; i++) {
-    items.push({
-      x: units.x[i] ?? 0,
-      y: units.y[i] ?? 0,
-      top: UNIT_BAR_TOP,
-      w: 0.9,
-      bp: units.hpBp[i] ?? 10000,
-    });
+    const bp = units.hpBp[i] ?? 10000;
+    if (bp >= 10000) {
+      continue;
+    }
+    sink.push(units.x[i] ?? 0, units.y[i] ?? 0, UNIT_BAR_TOP, 0.9, bp);
   }
-  return items;
 }
 
 // Inside <Canvas>: pointer events feed the app-level router; the router
@@ -129,28 +126,30 @@ function InputBridge({
 }
 
 // Damaged-structure bars from the structures channel.
-function makeStructureHpItems(db: ContentDb) {
-  return (pair: SnapshotPair): HpBarItem[] => {
+function makeStructureHpItems(db: ContentDb): HpBarCollector {
+  return (pair: SnapshotPair, _alpha: number, sink: HpBarSink): void => {
     const channel = pair.latest?.channels[StructuresChannel.id] as
       ConstructionStructures | undefined;
     if (channel === undefined) {
-      return [];
+      return;
     }
-    const items: HpBarItem[] = [];
     for (let i = 0; i < channel.handles.length; i++) {
+      const bp = channel.hpBp[i] ?? 10000;
+      if (bp >= 10000) {
+        continue;
+      }
       const kind = db.structures.byIndex(channel.kind[i] ?? 0);
       if (kind === undefined) {
         continue;
       }
-      items.push({
-        x: (channel.x[i] ?? 0) + kind.footprint.w / 2,
-        y: (channel.y[i] ?? 0) + kind.footprint.h / 2,
-        top: structureKindHeight(db, channel.kind[i] ?? 0),
-        w: Math.max(kind.footprint.w, kind.footprint.h),
-        bp: channel.hpBp[i] ?? 10000,
-      });
+      sink.push(
+        (channel.x[i] ?? 0) + kind.footprint.w / 2,
+        (channel.y[i] ?? 0) + kind.footprint.h / 2,
+        structureKindHeight(db, channel.kind[i] ?? 0),
+        Math.max(kind.footprint.w, kind.footprint.h),
+        bp,
+      );
     }
-    return items;
   };
 }
 
@@ -239,6 +238,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               heights={heights}
               mapWidth={grid.width}
               mapHeight={grid.height}
+              isHostile={isHostile}
             />
             <UnitsLayer
               client={client}
@@ -247,6 +247,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapHeight={grid.height}
               radii={radii}
               visuals={unitVisuals}
+              lowThresholdBp={db.logistics.lowThresholdBp}
             />
             <ThreatsLayer
               client={client}
@@ -314,6 +315,14 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapHeight={grid.height}
             />
             <MoveMarker heights={heights} mapWidth={grid.width} mapHeight={grid.height} />
+            <SelectionHighlightLayer
+              client={client}
+              db={db}
+              heights={heights}
+              mapWidth={grid.width}
+              mapHeight={grid.height}
+              isHostile={isHostile}
+            />
             <FogLayer client={client} map={map} />
             <InputBridge
               client={client}

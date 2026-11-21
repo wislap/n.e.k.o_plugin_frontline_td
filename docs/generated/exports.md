@@ -137,7 +137,11 @@
 |---|---|---|
 | `BUILD_CATEGORIES` | const | Build menu category tabs (ADR 0049): structures with a `build` block belong to one of these groups; omitted entries default to 'production'. |
 | `BuildCategory` | type |  |
+| `STRUCTURE_GLYPHS` | const | Procedural roof tactical glyph badges for structures (ADR 0050). |
+| `STRUCTURE_SILHOUETTES` | const | Procedural 3D silhouette shapes for structures (ADR 0050). |
 | `structureBaseFields` | const |  |
+| `StructureGlyph` | type |  |
+| `StructureSilhouette` | type |  |
 
 ## src/features/construction/protocol.ts
 

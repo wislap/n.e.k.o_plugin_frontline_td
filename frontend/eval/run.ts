@@ -2,7 +2,7 @@
 // so eval can reuse the src public barrels (extensionless TS imports) without
 // a bundling step. Usage: node eval/run.ts eval/perf/movement.ts [args...]
 import { argv } from 'node:process';
-import { withViteSsr } from '../tooling/ssr';
+import { withViteSsr } from '../tooling/ssr.ts';
 
 const target = argv[2];
 if (target === undefined) {

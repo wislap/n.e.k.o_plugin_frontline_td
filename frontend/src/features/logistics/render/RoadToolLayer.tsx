@@ -70,6 +70,7 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
   const hovRef = useRef<THREE.LineSegments>(null);
   const intRef = useRef<THREE.LineSegments>(null);
   const bufsRef = useRef<{ sel: LineBuffer; hov: LineBuffer; int: LineBuffer } | null>(null);
+  const interceptedRef = useRef<number[]>([]);
   useEffect(() => {
     return () => {
       bufsRef.current?.sel.geometry.dispose();
@@ -128,7 +129,8 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
       roadMode,
     );
     draw(hov, bufs.hov, interaction.roadHover >= 0 ? [interaction.roadHover] : [], roadMode);
-    const intercepted: number[] = [];
+    const intercepted = interceptedRef.current;
+    intercepted.length = 0;
     if (network !== undefined) {
       for (let i = 0; i < network.links.a.length; i++) {
         if ((network.links.intercept[i] ?? 0) > 0) {
