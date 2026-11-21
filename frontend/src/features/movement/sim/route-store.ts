@@ -217,6 +217,7 @@ export function buildWideGate(
   py: number,
   tx: number,
   ty: number,
+  prevGate?: RouteGate,
 ): RouteGate {
   const nx = -ty;
   const ny = tx;
@@ -234,7 +235,9 @@ export function buildWideGate(
       cls,
       tier,
     ) &&
-    lineWalkable(terrain, cls, px, py, candX, candY, tier);
+    lineWalkable(terrain, cls, px, py, candX, candY, tier) &&
+    (prevGate === undefined ||
+      lineWalkable(terrain, cls, prevGate.x, prevGate.y, candX, candY, tier));
   const gx = recenter ? candX : px;
   const gy = recenter ? candY : py;
   const rClear = recenter ? probeSide(terrain, cls, tier, gx, gy, nx, ny) : rightClear;

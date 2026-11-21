@@ -252,6 +252,15 @@ export function assignClusterRoutes(
       ) {
         break;
       }
+      const prevGate = gates[gates.length - 1];
+      if (
+        prevGate !== undefined &&
+        !lineWalkable(terrain, cls, prevGate.x, prevGate.y, nxPos, nyPos, tier) &&
+        (px !== prevGate.x || py !== prevGate.y)
+      ) {
+        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, prevGate));
+        nextEmit = arc + GATE_STEP_DIST;
+      }
       px = nxPos;
       py = nyPos;
       arc += TRACE_SUBSTEP;
@@ -261,12 +270,21 @@ export function assignClusterRoutes(
       lastTx = tx;
       lastTy = ty;
       if (arc >= nextEmit) {
-        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty));
+        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, gates[gates.length - 1]));
         nextEmit = arc + GATE_STEP_DIST;
       }
     }
     if (gates.length === 0 && steps >= 2) {
       gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy));
+    }
+    for (let k = gates.length - 2; k >= 0; k--) {
+      const cur = gates[k];
+      const nxt = gates[k + 1];
+      if (cur !== undefined && nxt !== undefined) {
+        cur.leftW = Math.min(cur.leftW, nxt.leftW + 1.25);
+        cur.rightW = Math.min(cur.rightW, nxt.rightW + 1.25);
+        cur.halfW = (cur.leftW + cur.rightW) * 0.5;
+      }
     }
     const g0 = gates[0];
     if (g0 === undefined) {
@@ -370,19 +388,12 @@ export function steerRouteFollow(
     return true;
   }
 
-  const minPrev = Math.max(0, k - 2);
-  for (let j = k; j >= minPrev; j--) {
-    const gj = gates[j];
-    if (gj === undefined) {
-      continue;
-    }
-    const gdx = gj.x - px;
-    const gdy = gj.y - py;
-    if (gdx * gdx + gdy * gdy > 1e-6 && lineWalkable(terrain, cls, px, py, gj.x, gj.y, tier)) {
-      outDir.dx = gdx;
-      outDir.dy = gdy;
-      return true;
-    }
+  const gdx = gk.x - px;
+  const gdy = gk.y - py;
+  if (gdx * gdx + gdy * gdy > 1e-6 && lineWalkable(terrain, cls, px, py, gk.x, gk.y, tier)) {
+    outDir.dx = gdx;
+    outDir.dy = gdy;
+    return true;
   }
 
   if (boundedLocalRejoin(store, terrain, cls, tier, px, py, gk.x, gk.y, outDir)) {

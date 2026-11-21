@@ -8,7 +8,12 @@ import type { SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
 import { MoveIntent, StopIntent } from '../../movement/protocol';
 import { Mover, MoveTarget, Position } from '../../movement/sim/index';
-import { CLEARANCE_HEAVY, CLEARANCE_STANDARD, type ClearanceTier } from '../../terrain/rules/index';
+import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  clearanceAnchorCenter,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import { SquadsLaunched } from '../protocol';
 import type { SquadsDeps } from './deps';
 import { meanEnergyBp } from './energy';
@@ -251,12 +256,14 @@ export function updateSquad(
         ? acquireProbeWithFallback(deps.terrain, deps.pathing, moveCls, moveTier, hx, hy, c.x, c.y)
         : null;
       try {
+        const projX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : hx;
+        const projY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : hy;
         const slotsMap = projectFormationSlots(
           deps.terrain,
           deps.pathing,
           probe?.goalId ?? null,
-          hx,
-          hy,
+          projX,
+          projY,
           dirX,
           dirY,
           moveInfos,
@@ -269,12 +276,12 @@ export function updateSquad(
         const moveSlots: { x: number; y: number }[] = [];
         for (const m of moveInfos) {
           moveHandles.push(m.handle);
-          moveSlots.push(slotsMap.get(m.handle) ?? { x: hx, y: hy });
+          moveSlots.push(slotsMap.get(m.handle) ?? { x: projX, y: projY });
         }
         ctx.emit(MoveIntent, {
           units: moveHandles,
-          x: hx,
-          y: hy,
+          x: probe !== null ? probe.gx : hx,
+          y: probe !== null ? probe.gy : hy,
           slots: moveSlots,
         });
         squad.lastGoal = { x: hx, y: hy };

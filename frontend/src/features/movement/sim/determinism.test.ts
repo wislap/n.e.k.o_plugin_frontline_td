@@ -15,11 +15,12 @@ const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
 // This world installs terrain + pathing + movement + units only. The
-// golden was re-derived for Batch P3 (ADR 0057: scalar FormationGuide
-// component schema simplified to { maxSpeed, active }).
+// golden was re-derived for Batch P3 real-map hardening (ADR 0057: scalar
+// FormationGuide + sub-cell continuous DDA lineWalkable + inter-gate
+// lineWalkable/funneling + forward-only steerRouteFollow).
 // Any further change to movement or those serialized inputs legitimately
 // changes the hash; update it in the same commit with the reason.
-const GOLDEN_HASH = '3596affc0e185af6';
+const GOLDEN_HASH = 'd971229e9ae22cdd';
 
 function makeSim() {
   const db = loadContent();

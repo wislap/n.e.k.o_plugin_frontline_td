@@ -1,8 +1,9 @@
-// Supercover grid line walk between two cells: the straight line may be
-// steered directly only when every cell-to-cell step along it is legal for
-// the movement class (stepCost >= 0; stepCost already enforces no corner
-// cutting on diagonals). Positions are floored to their cells.
+// Supercover continuous sub-cell grid line walk between two world points:
+// the straight segment may be steered directly only when every cell-to-cell
+// step along it is legal for the movement class (stepCost >= 0; stepCost
+// already enforces no corner cutting on diagonals).
 import {
+  CLEARANCE_HEAVY,
   CLEARANCE_STANDARD,
   clearanceAnchorCell,
   type ClearanceTier,
@@ -22,31 +23,39 @@ export function lineWalkable(
   let cy = clearanceAnchorCell(y0, tier);
   const ex = clearanceAnchorCell(x1, tier);
   const ey = clearanceAnchorCell(y1, tier);
-  const sx = Math.sign(ex - cx);
-  const sy = Math.sign(ey - cy);
-  const adx = Math.abs(ex - cx);
-  const ady = Math.abs(ey - cy);
-  // Amanatides–Woo DDA between cell centres: tMax is the param of the next
-  // boundary crossing per axis, tDelta the param step between crossings.
-  let tMaxX = adx === 0 ? Infinity : 0.5 / adx;
-  let tMaxY = ady === 0 ? Infinity : 0.5 / ady;
-  const tDeltaX = adx === 0 ? Infinity : 1 / adx;
-  const tDeltaY = ady === 0 ? Infinity : 1 / ady;
+  if (cx === ex && cy === ey) {
+    return true;
+  }
+  const shift = tier === CLEARANCE_HEAVY ? 0.5 : 0;
+  const u0 = x0 - shift;
+  const v0 = y0 - shift;
+  const u1 = x1 - shift;
+  const v1 = y1 - shift;
+  const sx = ex > cx ? 1 : ex < cx ? -1 : 0;
+  const sy = ey > cy ? 1 : ey < cy ? -1 : 0;
+  const adx = Math.abs(u1 - u0);
+  const ady = Math.abs(v1 - v0);
+  const firstX = sx > 0 ? cx + 1 - u0 : u0 - cx;
+  const firstY = sy > 0 ? cy + 1 - v0 : v0 - cy;
+  let tMaxX = sx === 0 || adx === 0 ? Infinity : Math.max(0, firstX) / adx;
+  let tMaxY = sy === 0 || ady === 0 ? Infinity : Math.max(0, firstY) / ady;
+  const tDeltaX = sx === 0 || adx === 0 ? Infinity : 1 / adx;
+  const tDeltaY = sy === 0 || ady === 0 ? Infinity : 1 / ady;
   while (cx !== ex || cy !== ey) {
     let nx = cx;
     let ny = cy;
-    if (tMaxX < tMaxY) {
+    const canX = cx !== ex;
+    const canY = cy !== ey;
+    if (canX && canY && Math.abs(tMaxX - tMaxY) <= 1e-12) {
       nx += sx;
-      tMaxX += tDeltaX;
-    } else if (tMaxY < tMaxX) {
       ny += sy;
+      tMaxX += tDeltaX;
       tMaxY += tDeltaY;
-    } else {
-      // Exact corner crossing: step diagonally; stepCost rejects the move
-      // when either orthogonal leg is impassable.
+    } else if (canX && (!canY || tMaxX <= tMaxY)) {
       nx += sx;
-      ny += sy;
       tMaxX += tDeltaX;
+    } else {
+      ny += sy;
       tMaxY += tDeltaY;
     }
     if (terrain.stepCost(cx, cy, nx, ny, cls, tier) < 0) {

@@ -198,7 +198,9 @@ export function projectFormationSlots(
     const baseAy = Math.min(Math.max(0, clearanceAnchorCell(py, m.tier)), terrain.height - 1);
 
     let chosen: { x: number; y: number } | null = null;
+    let farChosen: { x: number; y: number } | null = null;
     let fallback: { x: number; y: number } | null = null;
+    const checkNear = goalId !== null && pathing !== null;
 
     for (const [dx, dy] of spiralOffsets(baseAx, baseAy, terrain.width, terrain.height)) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) > PROJECT_SPIRAL_RING) {
@@ -209,7 +211,7 @@ export function projectFormationSlots(
       if (!terrain.passable(ax, ay, m.cls, m.tier)) {
         continue;
       }
-      if (goalId !== null && pathing !== null && pathing.directionAt(goalId, ax, ay) === null) {
+      if (checkNear && pathing.directionAt(goalId, ax, ay) === null) {
         continue;
       }
       const cx = clearanceAnchorCenter(ax, m.tier);
@@ -217,13 +219,28 @@ export function projectFormationSlots(
       if (fallback === null) {
         fallback = { x: cx, y: cy };
       }
-      if (isFootprintFree(usedCells, terrain.width, cx, cy, m.tier)) {
+      if (!isFootprintFree(usedCells, terrain.width, cx, cy, m.tier)) {
+        continue;
+      }
+      if (checkNear) {
+        const gd = pathing.distanceAt(goalId, cx, cy);
+        const euclidSq = (cx - centerX) * (cx - centerX) + (cy - centerY) * (cy - centerY);
+        const maxGeodesic = Math.sqrt(euclidSq) * 2.5 + 2.5;
+        if (gd !== null && gd <= maxGeodesic) {
+          chosen = { x: cx, y: cy };
+          break;
+        }
+        if (farChosen === null) {
+          farChosen = { x: cx, y: cy };
+        }
+      } else {
         chosen = { x: cx, y: cy };
         break;
       }
     }
 
     const slot = chosen ??
+      farChosen ??
       fallback ?? {
         x: Math.min(Math.max(0.5, centerX), terrain.width - 0.5),
         y: Math.min(Math.max(0.5, centerY), terrain.height - 0.5),
