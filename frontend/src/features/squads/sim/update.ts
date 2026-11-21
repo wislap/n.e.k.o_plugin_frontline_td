@@ -4,15 +4,13 @@
 // on player move overrides and reinforcements on units.spawned.
 import type { EntityHandle } from '../../../core/index';
 import type { ComponentWriter, SimBuilder } from '../../../kernel/index';
-import { MoveIntent, MoveOrdered, StopIntent } from '../../movement/protocol';
+import { FormationGuideIntent, MoveIntent, MoveOrdered, StopIntent } from '../../movement/protocol';
 import { UnitsSpawned } from '../../units/protocol';
 import { SquadsLaunched } from '../protocol';
 import { SquadMember } from './components';
 import type { SquadsDeps } from './deps';
-import { updateSquad } from './orders';
+import { SQUAD_PERIOD, updateSquad } from './orders';
 import type { Squad, SquadsEnv } from './state';
-
-const SQUAD_PERIOD = 10;
 
 type MemberFields = { squad: 'u16' };
 
@@ -26,7 +24,7 @@ export function installSquadsUpdate(
     id: 'frontline_td:squads.update',
     phase: 'orders',
     reads: [MoveOrdered, UnitsSpawned],
-    emits: [MoveIntent, StopIntent, SquadsLaunched],
+    emits: [MoveIntent, StopIntent, FormationGuideIntent, SquadsLaunched],
     run(ctx) {
       const member = ctx.read(SquadMember);
 
@@ -41,6 +39,9 @@ export function installSquadsUpdate(
         const squad = env.squads.get(sid);
         if (squad !== undefined) {
           squad.members = squad.members.filter((m) => m !== h);
+          if (squad.slots !== undefined) {
+            squad.slots = squad.slots.filter((s) => s.handle !== h);
+          }
         }
         ctx.write(memberW).squad[id] = 0;
       }

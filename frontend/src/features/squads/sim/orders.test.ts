@@ -2,7 +2,7 @@
 // engage and leash, resupply, reinforcement, gather launch, retarget,
 // and the per-squad stagger.
 import { describe, expect, it } from 'vitest';
-import { handleId } from '../../../core/index';
+import { distance, handleId } from '../../../core/index';
 import type { EntityHandle } from '../../../core/index';
 import { loadContent } from '../../../content/index';
 import { Faction, InWorld } from '../../../kernel/index';
@@ -10,6 +10,7 @@ import type { SimModule } from '../../../kernel/index';
 import { Health } from '../../combat/sim/index';
 import { CargoStore } from '../../logistics/sim/index';
 import { MoveCommand } from '../../movement/protocol';
+import { CLEARANCE_HEAVY, clearanceAnchorCell } from '../../terrain/rules/index';
 import { SpawnIntent } from '../../units/protocol';
 import {
   BASE,
@@ -395,5 +396,216 @@ describe('squads AI', () => {
     // (the position probe can lag the intent tick by one).
     expect((firstMove1 + 2) % 10).toBeLessThanOrEqual(1);
     expect(firstMove0).toBe(firstMove1 + 1);
+  });
+
+  it('mixed-unit role formation places vanguard ahead of backline without invalid heavy cells', () => {
+    const db = loadContent();
+    const crawler = db.units.byId('frontline_td:crawler');
+    const spitter = db.units.byId('frontline_td:spitter');
+    if (crawler === undefined || spitter === undefined) {
+      throw new Error('crawler/spitter missing');
+    }
+    const heavy = { ...ROBOT, radius: 0.8 };
+    // Start spitters ahead of crawlers/heavies so the settled order proves
+    // role-based slot assignment rather than initial spawn order.
+    const entities = [
+      { parts: robotInit(crawler, 3, 9) },
+      { parts: robotInit(crawler, 3, 10) },
+      { parts: robotInit(heavy, 2, 7) },
+      { parts: robotInit(heavy, 2, 11) },
+      { parts: robotInit(spitter, 4, 8) },
+      { parts: robotInit(spitter, 4, 9) },
+      { parts: robotInit(spitter, 4, 10) },
+      { parts: robotInit(spitter, 4, 11) },
+    ];
+    const w = world({ entities });
+    createAll(w);
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 20, y: 10 });
+    run(w, 400);
+
+    expect(squad(w)?.order.kind).toBe('guard');
+    const slots = entities.map((_, i) => w.tgtSlot(i));
+    expect(new Set(slots).size).toBe(entities.length);
+
+    const positions = entities.map((_, i) => w.pos(i));
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const a = positions[i];
+        const b = positions[j];
+        if (a !== undefined && b !== undefined) {
+          expect(distance(a.x, a.y, b.x, b.y)).toBeGreaterThanOrEqual(0.6);
+        }
+      }
+    }
+
+    const crawlerAvgX = (w.pos(0).x + w.pos(1).x) / 2;
+    const heavyAvgX = (w.pos(2).x + w.pos(3).x) / 2;
+    const spitterAvgX = (w.pos(4).x + w.pos(5).x + w.pos(6).x + w.pos(7).x) / 4;
+    expect(crawlerAvgX).toBeGreaterThan(spitterAvgX);
+    expect(heavyAvgX).toBeGreaterThan(spitterAvgX);
+    const maxSpitterX = Math.max(w.pos(4).x, w.pos(5).x, w.pos(6).x, w.pos(7).x);
+    expect(Math.min(w.pos(0).x, w.pos(1).x)).toBeGreaterThan(maxSpitterX);
+
+    for (const i of [2, 3]) {
+      const p = w.pos(i);
+      const ax = clearanceAnchorCell(p.x, CLEARANCE_HEAVY);
+      const ay = clearanceAnchorCell(p.y, CLEARANCE_HEAVY);
+      expect(ax).toBeGreaterThanOrEqual(0);
+      expect(ax + 1).toBeLessThan(30);
+      expect(ay).toBeGreaterThanOrEqual(0);
+      expect(ay + 1).toBeLessThan(20);
+    }
+  });
+
+  it('persistent slots prevent distant reinforcements from displacing settled members', () => {
+    const entities = [
+      ...[0, 1, 2, 3, 4].map((dy) => ({ parts: robotInit(ROBOT, 6, 8 + dy) })),
+      ...[0, 1, 2, 3, 4].map((dy) => ({ parts: robotInit(ROBOT, 7, 8 + dy) })),
+      { parts: robotInit(ROBOT, 2, 10) },
+    ];
+    const w = world({ entities });
+    w.issue('frontline_td:squads.create', {
+      units: w.handles.slice(0, 10).map((h) => Number(h)),
+    });
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 16, y: 10 });
+    run(w, 200);
+    expect(squad(w)?.order.kind).toBe('guard');
+    expect(squad(w)?.phase).toBe('holding');
+
+    const beforeGoals = Array.from({ length: 10 }, (_, i) => w.tgtGoal(i));
+    const beforeSlots = Array.from({ length: 10 }, (_, i) => w.tgtSlot(i));
+    const beforePos = Array.from({ length: 10 }, (_, i) => w.pos(i));
+    expect(new Set(beforeSlots).size).toBe(10);
+
+    w.issue('frontline_td:squads.assign', { squad: 1, units: [Number(w.handles[10])] });
+    run(w, 300);
+
+    expect(squad(w)?.members?.length).toBe(11);
+    for (let i = 0; i < 10; i++) {
+      expect(w.tgtGoal(i)).toBe(beforeGoals[i]);
+      expect(w.tgtSlot(i)).toBe(beforeSlots[i]);
+      const p = w.pos(i);
+      const prev = beforePos[i];
+      if (prev !== undefined) {
+        expect(distance(p.x, p.y, prev.x, prev.y)).toBeLessThan(0.4);
+      }
+    }
+
+    const newcomerSlot = w.tgtSlot(10);
+    expect(beforeSlots).not.toContain(newcomerSlot);
+    const newcomerPos = w.pos(10);
+    expect(distance(newcomerPos.x, newcomerPos.y, 16, 10)).toBeLessThan(6);
+    for (let i = 0; i < 10; i++) {
+      const p = w.pos(i);
+      expect(distance(newcomerPos.x, newcomerPos.y, p.x, p.y)).toBeGreaterThanOrEqual(0.7);
+    }
+  });
+
+  it('chokepoint compresses formation laterally and re-expands past the gap', () => {
+    const entities = [
+      ...[0, 1, 2, 3, 4, 5].map((dy) => ({ parts: robotInit(ROBOT, 3, 7 + dy) })),
+      ...[0, 1, 2, 3, 4, 5].map((dy) => ({ parts: robotInit(ROBOT, 4, 7 + dy) })),
+    ];
+    const w = world({ rows: CORRIDOR, entities });
+    createAll(w);
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 24, y: 10 });
+
+    const spreadY = () => {
+      const ys = entities.map((_, i) => w.pos(i).y);
+      return Math.max(...ys) - Math.min(...ys);
+    };
+
+    const initialSpread = spreadY();
+    let minChokeSpread = Infinity;
+    for (let t = 0; t < 450; t++) {
+      w.sim.step();
+      const cx = squad(w)?.centroid.x ?? 0;
+      if (cx >= 13 && cx <= 17) {
+        minChokeSpread = Math.min(minChokeSpread, spreadY());
+      }
+    }
+
+    for (let i = 0; i < entities.length; i++) {
+      expect(w.pos(i).x).toBeGreaterThan(18);
+    }
+    const postChokeSpread = spreadY();
+    expect(minChokeSpread).toBeLessThan(initialSpread);
+    expect(postChokeSpread).toBeGreaterThan(2.0);
+  });
+
+  it('march cruise-speed sync keeps mixed speeds cohesive and combat releases guide', () => {
+    const db = loadContent();
+    const raider = db.units.byId('frontline_td:raider');
+    const spitter = db.units.byId('frontline_td:spitter');
+    if (raider === undefined || spitter === undefined) {
+      throw new Error('raider/spitter missing');
+    }
+    const wideRows = Array.from({ length: 20 }, () => '.'.repeat(40));
+
+    // Part 1: open march sync keeps fast raider (3.5) cohesive with slow spitter (2.2).
+    const wMarch = world({
+      rows: wideRows,
+      entities: [{ parts: robotInit(raider, 2, 9) }, { parts: robotInit(spitter, 2, 10) }],
+    });
+    createAll(wMarch);
+    wMarch.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 34, y: 10 });
+    run(wMarch, 120);
+    expect(wMarch.pos(0).x).toBeGreaterThan(10);
+    expect(wMarch.pos(1).x).toBeGreaterThan(10);
+    expect(Math.abs(wMarch.pos(0).x - wMarch.pos(1).x)).toBeLessThanOrEqual(3.5);
+
+    const savedMarch = wMarch.sim.serialize() as {
+      entities: { data: Record<string, Record<string, Record<string, number>>> };
+      moduleStates: {
+        'frontline_td:squads': { squads: Array<{ guideActive?: boolean }> };
+      };
+    };
+    expect(savedMarch.moduleStates['frontline_td:squads'].squads[0]?.guideActive).toBe(true);
+    const guideEntries = Object.values(savedMarch.entities.data).map(
+      (c) => c['frontline_td:movement.formation_guide']?.['active'] ?? 0,
+    );
+    expect(guideEntries.some((a) => a === 1)).toBe(true);
+
+    // Part 2: engaging a hostile clears FormationGuide and releases raider at full 3.5 speed.
+    const tough = (c: unknown, init: Record<string, number>) =>
+      c === Health ? { ...init, hp: 10_000_000, max: 10_000_000 } : init;
+    const wCombat = world({
+      rows: wideRows,
+      entities: [
+        { parts: robotInit(raider, 2, 9), faction: 1 },
+        { parts: robotInit(spitter, 2, 10), faction: 1 },
+        { parts: robotInit(ROBOT, 24, 10, tough), faction: 2 },
+      ],
+      factions: [1, 2],
+    });
+    wCombat.issue('frontline_td:squads.create', {
+      units: wCombat.handles.slice(0, 2).map((h) => Number(h)),
+    });
+    wCombat.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 34, y: 10 });
+    let engagedTick = -1;
+    for (let t = 0; t < 250; t++) {
+      wCombat.sim.step();
+      if (squad(wCombat)?.phase === 'engaging') {
+        engagedTick = t + 1;
+        break;
+      }
+    }
+    expect(engagedTick).toBeGreaterThan(0);
+
+    const savedEngage = wCombat.sim.serialize() as {
+      entities: { data: Record<string, Record<string, Record<string, number>>> };
+      moduleStates: {
+        'frontline_td:squads': { squads: Array<{ guideActive?: boolean }> };
+      };
+    };
+    expect(savedEngage.moduleStates['frontline_td:squads'].squads[0]?.guideActive).toBeUndefined();
+    for (const comp of Object.values(savedEngage.entities.data)) {
+      expect(comp['frontline_td:movement.formation_guide']?.['active'] ?? 0).toBe(0);
+    }
+
+    const raiderStart = wCombat.pos(0).x;
+    run(wCombat, 20);
+    // Full speed is 3.5 cells/s vs cruise 2.2 cells/s; verify clear > 2.8 cells/s advance.
+    expect(wCombat.pos(0).x - raiderStart).toBeGreaterThan(2.8);
   });
 });

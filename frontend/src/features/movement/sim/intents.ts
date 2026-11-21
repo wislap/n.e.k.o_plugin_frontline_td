@@ -17,12 +17,27 @@ import {
   spiralOffsets,
   type ClearanceTier,
 } from '../../terrain/rules/index';
-import { MoveCommand, MoveIntent, MoveOrdered, StopIntent } from '../protocol';
-import { Mover, MoveTarget, Position } from './components';
+import {
+  FormationGuideIntent,
+  MoveCommand,
+  MoveIntent,
+  MoveOrdered,
+  StopIntent,
+} from '../protocol';
+import { FormationGuide, Mover, MoveTarget, Position } from './components';
 import { assignSlots, collectSlots } from './slots';
 
 type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
 type TgtWriter = ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
+type GuideView = WriteView<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+type GuideWriter = ComponentWriter<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
+
+export function clearFormationGuide(guide: GuideView, id: number): void {
+  guide.x[id] = 0;
+  guide.y[id] = 0;
+  guide.maxSpeed[id] = 0;
+  guide.active[id] = 0;
+}
 
 // Release only a goal this unit still owns: active===1 holds a live
 // reference; active===2 (holding the slot) and active===0 already
@@ -158,21 +173,45 @@ function applyMoveGroup(
   terrain: TerrainApi,
   pathing: PathingApi,
   tgtW: TgtWriter,
+  guideW: GuideWriter,
   clsIds: readonly number[],
   cls: number,
   tier: ClearanceTier,
   x: number,
   y: number,
+  explicitSlots?: ReadonlyMap<number, { x: number; y: number }>,
 ): void {
   const target = ctx.read(MoveTarget);
   const out = ctx.write(tgtW) as TgtView;
+  const guideOut = ctx.write(guideW) as GuideView;
   const pos = ctx.read(Position);
-  // Release old goals, then one shared-goal ref per unit (the goal id is
-  // the same for the whole (cls, tier) group).
+  // Release old goals, clear stale formation guides, then one shared-goal
+  // ref per unit (the goal id is the same for the whole (cls, tier) group).
   let goal = -1;
   for (const id of clsIds) {
     releaseHeldGoal(pathing, target, id);
+    clearFormationGuide(guideOut, id);
     goal = pathing.acquireGoal(x, y, cls, tier);
+  }
+  const fallback = {
+    x: clearanceAnchorCenter(x, tier),
+    y: clearanceAnchorCenter(y, tier),
+  };
+  if (explicitSlots !== undefined && clsIds.every((id) => explicitSlots.has(id))) {
+    for (const id of clsIds) {
+      const s = explicitSlots.get(id);
+      const dest =
+        s !== undefined &&
+        terrain.inBounds(Math.floor(s.x), Math.floor(s.y)) &&
+        terrain.passable(clearanceAnchorCell(s.x, tier), clearanceAnchorCell(s.y, tier), cls, tier)
+          ? s
+          : fallback;
+      out.goal[id] = goal;
+      out.x[id] = dest.x;
+      out.y[id] = dest.y;
+      out.active[id] = 1;
+    }
+    return;
   }
   const slots = collectSlots(
     terrain,
@@ -188,10 +227,6 @@ function applyMoveGroup(
     slots,
     tier,
   );
-  const fallback = {
-    x: clearanceAnchorCenter(x, tier),
-    y: clearanceAnchorCenter(y, tier),
-  };
   for (const id of clsIds) {
     const slot = assignment.get(id) ?? fallback;
     out.goal[id] = goal;
@@ -206,24 +241,36 @@ export function installMovementIntents(
   terrain: TerrainApi,
   pathing: PathingApi,
   tgtW: TgtWriter,
+  guideW: GuideWriter,
 ): void {
-  // Resolve move/stop intents first, in emission order; a later move
-  // for the same unit overwrites the earlier one. Handle liveness
-  // and Mover are validated; faction ownership is the emitter's
-  // responsibility.
+  // Resolve move/stop/formation_guide intents first, in emission order; a
+  // later move for the same unit overwrites the earlier one, and
+  // FormationGuideIntent runs after MoveIntent/StopIntent so same-tick
+  // squad updates land cleanly. Handle liveness and Mover are validated;
+  // faction ownership is the emitter's responsibility.
   builder.system({
     id: 'frontline_td:movement.intents',
     phase: 'movement',
-    reads: [MoveIntent, StopIntent],
+    reads: [MoveIntent, StopIntent, FormationGuideIntent],
     run(ctx) {
       const mover = ctx.read(Mover);
       const target = ctx.read(MoveTarget);
       for (const p of ctx.read(MoveIntent)) {
         const ids: number[] = [];
-        for (const h of p.units) {
+        let explicitSlots: Map<number, { x: number; y: number }> | undefined;
+        const pSlots = p.slots;
+        for (let i = 0; i < p.units.length; i++) {
+          const h = p.units[i];
           const id = ctx.resolve(h as EntityHandle);
           if (id !== null && ctx.has(Mover, id) && !ids.includes(id)) {
             ids.push(id);
+            if (pSlots !== undefined && i < pSlots.length) {
+              const slot = pSlots[i];
+              if (slot !== undefined) {
+                explicitSlots ??= new Map();
+                explicitSlots.set(id, slot);
+              }
+            }
           }
         }
         if (ids.length === 0 || !terrain.inBounds(p.x, p.y)) {
@@ -258,24 +305,51 @@ export function installMovementIntents(
             terrain,
             pathing,
             tgtW,
+            guideW,
             group.ids,
             group.cls,
             group.tier,
             targetCell.x,
             targetCell.y,
+            explicitSlots,
           );
         }
       }
       for (const p of ctx.read(StopIntent)) {
+        const out = ctx.write(tgtW) as TgtView;
+        const guideOut = ctx.write(guideW) as GuideView;
         for (const h of p.units) {
           const id = ctx.resolve(h as EntityHandle);
           if (id === null || !ctx.has(Mover, id)) {
             continue;
           }
           releaseHeldGoal(pathing, target, id);
-          const out = ctx.write(tgtW) as TgtView;
+          clearFormationGuide(guideOut, id);
           out.goal[id] = 0;
           out.active[id] = 0;
+        }
+      }
+      for (const p of ctx.read(FormationGuideIntent)) {
+        const guideOut = ctx.write(guideW) as GuideView;
+        for (let i = 0; i < p.units.length; i++) {
+          const h = p.units[i];
+          const id = ctx.resolve(h as EntityHandle);
+          if (id === null || !ctx.has(Mover, id) || !ctx.has(FormationGuide, id)) {
+            continue;
+          }
+          if (!p.active) {
+            clearFormationGuide(guideOut, id);
+            continue;
+          }
+          const wp = p.waypoints?.[i];
+          if (wp === undefined || !terrain.inBounds(Math.floor(wp.x), Math.floor(wp.y))) {
+            clearFormationGuide(guideOut, id);
+            continue;
+          }
+          guideOut.x[id] = wp.x;
+          guideOut.y[id] = wp.y;
+          guideOut.maxSpeed[id] = Math.max(0, wp.maxSpeed ?? 0);
+          guideOut.active[id] = 1;
         }
       }
     },
@@ -335,12 +409,17 @@ export function installMovementIntents(
           terrain,
           pathing,
           tgtW,
+          guideW,
           group.ids,
           group.cls,
           group.tier,
           targetCell.x,
           targetCell.y,
         );
+      }
+      const guideOut = ctx.write(guideW) as GuideView;
+      for (const id of ids) {
+        clearFormationGuide(guideOut, id);
       }
       // Player override signal (squads drop these members): only the
       // command emits this; intent-driven moves do not.

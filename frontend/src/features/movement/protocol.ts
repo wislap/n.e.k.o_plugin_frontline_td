@@ -17,10 +17,19 @@ export const MoveCommand = defineCommand(
 // resolver validates handle liveness and Mover but not faction (the
 // emitter's responsibility). Shares the command's id space on purpose:
 // a command is the player-facing form of the same order.
-export const MoveIntent = defineIntent<{ units: number[]; x: number; y: number }>(
-  'frontline_td:movement.move',
-);
+export const MoveIntent = defineIntent<{
+  units: number[];
+  x: number;
+  y: number;
+  slots?: { x: number; y: number }[];
+}>('frontline_td:movement.move');
 export const StopIntent = defineIntent<{ units: number[] }>('frontline_td:movement.stop');
+// Transient squad formation waypoint + cruise speed cap (ADR 0054).
+export const FormationGuideIntent = defineIntent<{
+  units: number[];
+  waypoints?: { x: number; y: number; maxSpeed?: number }[];
+  active: boolean;
+}>('frontline_td:movement.formation_guide');
 
 // Emitted by the MoveCommand handler with the handles it applied (player
 // override — squads drop these members). Intents do not emit this.

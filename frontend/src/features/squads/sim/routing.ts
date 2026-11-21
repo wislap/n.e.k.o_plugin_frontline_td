@@ -6,14 +6,21 @@ import type { SystemContext } from '../../../kernel/index';
 import { Faction, InWorld } from '../../../kernel/index';
 import { Structure } from '../../construction/sim/index';
 import type { PathingApi } from '../../pathing/sim/index';
-import { spiralOffsets } from '../../terrain/rules/index';
+import {
+  CLEARANCE_STANDARD,
+  clearanceAnchorCell,
+  clearanceAnchorCenter,
+  clearanceFootprintSize,
+  spiralOffsets,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import type { SquadsDeps } from './deps';
 
 const ROUTE_MAX_CELLS = 512;
 const RESUPPLY_SEARCH_RADIUS = 64;
 
 // Trace the pathing descent from (sx, sy) toward the goal at (gx, gy)
-// for `cls`; returns the polyline (≤ROUTE_MAX_CELLS) or null when the
+// for `(cls, tier)`; returns the polyline (≤ROUTE_MAX_CELLS) or null when the
 // start cannot reach the goal. The probe goal is released on return.
 export function traceRoute(
   pathing: PathingApi,
@@ -22,17 +29,18 @@ export function traceRoute(
   sy: number,
   gx: number,
   gy: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): number[] | null {
-  const goal = pathing.acquireGoal(gx, gy, cls);
+  const tx = clearanceAnchorCell(gx, tier);
+  const ty = clearanceAnchorCell(gy, tier);
+  const goal = pathing.acquireGoal(tx, ty, cls, tier);
   try {
-    let x = Math.floor(sx);
-    let y = Math.floor(sy);
+    let x = clearanceAnchorCell(sx, tier);
+    let y = clearanceAnchorCell(sy, tier);
     if (pathing.directionAt(goal, x, y) === null) {
       return null;
     }
     const route: number[] = [];
-    const tx = Math.floor(gx);
-    const ty = Math.floor(gy);
     let guard = 0;
     // route stores flat (x, y) pairs, so the cap counts twice the cells.
     while ((x !== tx || y !== ty) && route.length < ROUTE_MAX_CELLS * 2) {
@@ -106,6 +114,7 @@ export function retargetStructure(
   cls: number,
   cx: number,
   cy: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): { x: number; y: number } | null {
   const st = ctx.read(Structure);
   const fac = ctx.read(Faction);
@@ -131,23 +140,25 @@ export function retargetStructure(
   if (foot.size === 0) {
     return null;
   }
-  const sx = Math.floor(cx);
-  const sy = Math.floor(cy);
+  const sx = clearanceAnchorCell(cx, tier);
+  const sy = clearanceAnchorCell(cy, tier);
   const start = sy * width + sx;
-  if (!terrain.passable(sx, sy, cls)) {
+  if (!terrain.passable(sx, sy, cls, tier)) {
     return null;
   }
+  const size = clearanceFootprintSize(tier);
   const visited = new Set<number>([start]);
   const queue = [start];
   for (let head = 0; head < queue.length; head++) {
     const cell = queue[head] ?? 0;
     const x = cell % width;
     const y = Math.floor(cell / width);
-    // A footprint cell in the 8-neighbourhood makes this a goal cell.
+    // A footprint cell in the 8-neighbourhood around the clearance footprint
+    // makes this anchor a goal cell.
     let adjacent = false;
-    for (let dy = -1; dy <= 1 && !adjacent; dy++) {
-      for (let dx = -1; dx <= 1 && !adjacent; dx++) {
-        if (dx === 0 && dy === 0) {
+    for (let dy = -1; dy <= size && !adjacent; dy++) {
+      for (let dx = -1; dx <= size && !adjacent; dx++) {
+        if (dx >= 0 && dx < size && dy >= 0 && dy < size) {
           continue;
         }
         if (foot.has((y + dy) * width + x + dx)) {
@@ -156,7 +167,7 @@ export function retargetStructure(
       }
     }
     if (adjacent) {
-      return { x: x + 0.5, y: y + 0.5 };
+      return { x: clearanceAnchorCenter(x, tier), y: clearanceAnchorCenter(y, tier) };
     }
     for (const [dx, dy] of BFS_DIRS) {
       const nx = x + dx;
@@ -165,7 +176,7 @@ export function retargetStructure(
         continue;
       }
       const ni = ny * width + nx;
-      if (visited.has(ni) || terrain.stepCost(x, y, nx, ny, cls) < 0) {
+      if (visited.has(ni) || terrain.stepCost(x, y, nx, ny, cls, tier) < 0) {
         continue;
       }
       visited.add(ni);

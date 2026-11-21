@@ -61,6 +61,15 @@ describe('assault targeting', () => {
       throw new Error('east outpost missing');
     }
     player.start?.structures?.push(moved);
+    // Handing the outpost to the player also replaces its starting enemy
+    // garrison so the outpost remains player-held until wave:1 gathers at 90s.
+    enemy.start.units = enemy.start.units.filter((u) => !(u.x === moved.x && u.y === moved.y));
+    player.start?.units.push({
+      unit: contentId('frontline_td:robot'),
+      x: moved.x,
+      y: moved.y,
+      count: 8,
+    });
     const r = resolveSetup(setup);
     if ('error' in r) {
       throw new Error(r.error);

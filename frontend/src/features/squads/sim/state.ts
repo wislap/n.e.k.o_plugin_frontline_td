@@ -19,6 +19,23 @@ interface SquadOrder {
   targetY?: number;
 }
 
+export interface SquadSlot {
+  handle: number;
+  fwd: number;
+  right: number;
+  destX: number;
+  destY: number;
+}
+
+export interface SquadAnchor {
+  x: number;
+  y: number;
+  hx: number;
+  hy: number;
+  halfWidth: number;
+  widthScale: number;
+}
+
 export interface Squad {
   id: number;
   faction: number;
@@ -36,6 +53,12 @@ export interface Squad {
   retarget?: number;
   // Stored gather→target polyline (≤512 cells) for the snapshot.
   route?: number[];
+  // Persistent role-ordered formation slots (ADR 0054).
+  slots?: SquadSlot[];
+  // Virtual leader anchor and corridor width-scaling state (ADR 0054).
+  anchor?: SquadAnchor;
+  // True while FormationGuideIntent waypoints are active on members.
+  guideActive?: boolean;
 }
 
 export interface SquadsEnv {
@@ -60,6 +83,9 @@ interface SavedSquad {
   engage?: number;
   retarget?: number;
   route?: number[];
+  slots?: Serializable;
+  anchor?: Serializable;
+  guideActive?: boolean;
 }
 
 export function saveSquads(env: SquadsEnv): Serializable {
@@ -73,7 +99,7 @@ export function saveSquads(env: SquadsEnv): Serializable {
         strength: sq.strength,
         order: sq.order as unknown as Serializable,
         phase: sq.phase,
-        lastGoal: sq.lastGoal,
+        lastGoal: { ...sq.lastGoal },
       };
       if (sq.tag !== undefined) {
         out.tag = sq.tag;
@@ -87,6 +113,15 @@ export function saveSquads(env: SquadsEnv): Serializable {
       if (sq.route !== undefined) {
         out.route = [...sq.route];
       }
+      if (sq.slots !== undefined) {
+        out.slots = sq.slots.map((s) => ({ ...s }));
+      }
+      if (sq.anchor !== undefined) {
+        out.anchor = { ...sq.anchor };
+      }
+      if (sq.guideActive !== undefined) {
+        out.guideActive = sq.guideActive;
+      }
       return out;
     }),
   };
@@ -96,21 +131,31 @@ export function loadSquads(env: SquadsEnv, data: Serializable): void {
   const saved = data as unknown as { next: number; squads: SavedSquad[] };
   env.next = saved.next;
   env.squads = new Map(
-    saved.squads.map((sq) => [
-      sq.id,
-      {
-        id: sq.id,
-        faction: sq.faction,
-        members: [...sq.members],
-        strength: sq.strength,
-        order: sq.order as unknown as SquadOrder,
-        phase: sq.phase as SquadPhase,
-        lastGoal: sq.lastGoal as unknown as { x: number; y: number },
-        ...(sq.tag !== undefined ? { tag: sq.tag } : {}),
-        ...(sq.engage !== undefined ? { engage: sq.engage } : {}),
-        ...(sq.retarget !== undefined ? { retarget: sq.retarget } : {}),
-        ...(sq.route !== undefined ? { route: [...sq.route] } : {}),
-      },
-    ]),
+    saved.squads.map((sq) => {
+      const lastGoal = sq.lastGoal as unknown as { x: number; y: number };
+      return [
+        sq.id,
+        {
+          id: sq.id,
+          faction: sq.faction,
+          members: [...sq.members],
+          strength: sq.strength,
+          order: { ...(sq.order as unknown as SquadOrder) },
+          phase: sq.phase as SquadPhase,
+          lastGoal: { x: lastGoal.x, y: lastGoal.y },
+          ...(sq.tag !== undefined ? { tag: sq.tag } : {}),
+          ...(sq.engage !== undefined ? { engage: sq.engage } : {}),
+          ...(sq.retarget !== undefined ? { retarget: sq.retarget } : {}),
+          ...(sq.route !== undefined ? { route: [...sq.route] } : {}),
+          ...(sq.slots !== undefined
+            ? { slots: (sq.slots as unknown as SquadSlot[]).map((s) => ({ ...s })) }
+            : {}),
+          ...(sq.anchor !== undefined
+            ? { anchor: { ...(sq.anchor as unknown as SquadAnchor) } }
+            : {}),
+          ...(sq.guideActive !== undefined ? { guideActive: sq.guideActive } : {}),
+        },
+      ];
+    }),
   );
 }

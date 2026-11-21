@@ -2,10 +2,11 @@
 // the movement phase in emission order, share applyMove with the
 // command, and release/acquire shared goals exactly once per unit.
 import { describe, expect, it } from 'vitest';
-import type { Serializable } from '../../../core/index';
+import type { EntityHandle, Serializable } from '../../../core/index';
 import type { SimModule } from '../../../kernel/index';
 import { makeWorld, move, run } from './test-world';
-import { MoveIntent, StopIntent } from '../protocol';
+import { FormationGuideIntent, MoveIntent, StopIntent } from '../protocol';
+import { FormationGuide } from './components';
 
 // A command-phase system emitting the queued intents each tick; the
 // movement resolver applies them in order during the same tick.
@@ -16,7 +17,7 @@ function emitter(queue: { def: never; payload: Serializable }[]): SimModule {
       builder.system({
         id: 'frontline_td:test.emitter',
         phase: 'command',
-        emits: [MoveIntent, StopIntent],
+        emits: [MoveIntent, StopIntent, FormationGuideIntent],
         run(ctx) {
           for (const item of queue.splice(0)) {
             ctx.emit(item.def, item.payload);
@@ -27,11 +28,29 @@ function emitter(queue: { def: never; payload: Serializable }[]): SimModule {
   };
 }
 
+function guideProbe(handles: () => readonly EntityHandle[], count: number): SimModule {
+  return {
+    id: 'frontline_td:test.guide_probe',
+    install(builder) {
+      for (let i = 0; i < count; i++) {
+        builder.probe(`frontline_td:test.ga${i}`, (ctx) => {
+          const id = ctx.resolve(handles()[i] ?? (0 as EntityHandle));
+          return id === null ? -1 : (ctx.read(FormationGuide).active[id] ?? -1);
+        });
+      }
+    },
+  };
+}
+
 function build(rows: string[], units: { x: number; y: number }[]) {
   const queue: { def: never; payload: Serializable }[] = [];
-  const world = makeWorld(rows, units, [emitter(queue)]);
+  const world = makeWorld(rows, units, [
+    emitter(queue),
+    guideProbe(() => world.handles, units.length),
+  ]);
   const emit = (def: never, payload: Serializable) => queue.push({ def, payload });
-  return { world, emit };
+  const guideActive = (i: number) => world.sim.probes()[`frontline_td:test.ga${i}`] ?? -1;
+  return { world, emit, guideActive };
 }
 
 const ROWS = ['.' + '.'.repeat(15)];
@@ -87,5 +106,156 @@ describe('movement intents', () => {
     emit(StopIntent as never, { units: [0, 999999] });
     run(world, 1);
     expect(world.active(0)).toBe(1);
+  });
+
+  it('MoveIntent.slots assigns explicit per-unit coordinates and falls back on invalid slots', () => {
+    const grid = ['..#..', '.....', '.....', '.....'];
+    const { world, emit } = build(grid, [
+      { x: 0, y: 1 },
+      { x: 0, y: 2 },
+    ]);
+    const h0 = Number(world.handles[0]);
+    const h1 = Number(world.handles[1]);
+    emit(MoveIntent as never, {
+      units: [h0, h1],
+      x: 4,
+      y: 1,
+      slots: [
+        { x: 3.25, y: 2.75 },
+        { x: 1.5, y: 0.5 },
+      ],
+    });
+    run(world, 1);
+    expect(world.active(0)).toBe(1);
+    expect(world.active(1)).toBe(1);
+    expect(world.slot(0)).toEqual({ x: 3.25, y: 2.75 });
+    expect(world.slot(1)).toEqual({ x: 1.5, y: 0.5 });
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(2);
+
+    // Out-of-bounds and impassable slots fall back to target anchor centre,
+    // while valid slots in the same MoveIntent retain their coordinates.
+    emit(MoveIntent as never, {
+      units: [h0, h1],
+      x: 4,
+      y: 2,
+      slots: [
+        { x: 2.5, y: 0.5 }, // impassable '#'
+        { x: 99, y: 2 }, // out-of-bounds
+      ],
+    });
+    run(world, 1);
+    expect(world.slot(0)).toEqual({ x: 4.5, y: 2.5 });
+    expect(world.slot(1)).toEqual({ x: 4.5, y: 2.5 });
+
+    emit(MoveIntent as never, {
+      units: [h0, h1],
+      x: 4,
+      y: 2,
+      slots: [
+        { x: 3.5, y: 3.5 },
+        { x: 2.5, y: 0.5 }, // impassable '#'
+      ],
+    });
+    run(world, 1);
+    expect(world.slot(0)).toEqual({ x: 3.5, y: 3.5 });
+    expect(world.slot(1)).toEqual({ x: 4.5, y: 2.5 });
+  });
+
+  it('FormationGuideIntent steers toward a walkable waypoint and caps speed at <= statSpeed', () => {
+    const grid = Array.from({ length: 5 }, () => '.'.repeat(20));
+    const { world, emit, guideActive } = build(grid, [{ x: 1, y: 2 }]);
+    const h0 = Number(world.handles[0]);
+    emit(MoveIntent as never, { units: [h0], x: 18, y: 2 });
+    emit(FormationGuideIntent as never, {
+      units: [h0],
+      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      active: true,
+    });
+    run(world, 1);
+    const v1 = world.vel(0);
+    const s1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+    expect(guideActive(0)).toBe(1);
+    // Steers upward toward waypoint (5.5, 0.5) rather than flat along y=2.5.
+    expect(v1.y).toBeLessThan(-0.01);
+    expect(s1).toBeCloseTo(0.05, 6);
+
+    // maxSpeed above statSpeed (0.125) never exceeds statSpeed.
+    emit(FormationGuideIntent as never, {
+      units: [h0],
+      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.5 }],
+      active: true,
+    });
+    run(world, 1);
+    const v2 = world.vel(0);
+    const s2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+    expect(s2).toBeCloseTo(0.125, 6);
+  });
+
+  it('clears FormationGuide and restores full speed on deactivate, StopIntent, MoveCommand, and arrival', () => {
+    const grid = Array.from({ length: 5 }, () => '.'.repeat(20));
+
+    // 1. FormationGuideIntent({ active: false }) restores full speed.
+    const a = build(grid, [{ x: 1, y: 2 }]);
+    const ha = Number(a.world.handles[0]);
+    a.emit(MoveIntent as never, { units: [ha], x: 18, y: 2 });
+    a.emit(FormationGuideIntent as never, {
+      units: [ha],
+      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      active: true,
+    });
+    run(a.world, 1);
+    expect(a.guideActive(0)).toBe(1);
+    a.emit(FormationGuideIntent as never, { units: [ha], active: false });
+    run(a.world, 1);
+    expect(a.guideActive(0)).toBe(0);
+    const va = a.world.vel(0);
+    expect(Math.sqrt(va.x * va.x + va.y * va.y)).toBeCloseTo(0.125, 6);
+
+    // 2. StopIntent clears the guide and stops the unit.
+    const b = build(grid, [{ x: 1, y: 2 }]);
+    const hb = Number(b.world.handles[0]);
+    b.emit(MoveIntent as never, { units: [hb], x: 18, y: 2 });
+    b.emit(FormationGuideIntent as never, {
+      units: [hb],
+      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      active: true,
+    });
+    run(b.world, 1);
+    expect(b.guideActive(0)).toBe(1);
+    b.emit(StopIntent as never, { units: [hb] });
+    run(b.world, 1);
+    expect(b.world.active(0)).toBe(0);
+    expect(b.guideActive(0)).toBe(0);
+    expect(b.world.vel(0)).toEqual({ x: 0, y: 0 });
+
+    // 3. Player MoveCommand clears the guide and restores full speed immediately.
+    const c = build(grid, [{ x: 1, y: 2 }]);
+    const hc = Number(c.world.handles[0]);
+    c.emit(MoveIntent as never, { units: [hc], x: 18, y: 2 });
+    c.emit(FormationGuideIntent as never, {
+      units: [hc],
+      waypoints: [{ x: 5.5, y: 0.5, maxSpeed: 0.05 }],
+      active: true,
+    });
+    run(c.world, 1);
+    expect(c.guideActive(0)).toBe(1);
+    c.world.sim.submit(move(c.world.handles, 18, 2, c.world.sim.tick + 1));
+    run(c.world, 2);
+    expect(c.guideActive(0)).toBe(0);
+    const vc = c.world.vel(0);
+    expect(Math.sqrt(vc.x * vc.x + vc.y * vc.y)).toBeCloseTo(0.125, 6);
+
+    // 4. Arrival into holdUnit (active === 2) clears the guide.
+    const d = build(grid, [{ x: 1, y: 2 }]);
+    const hd = Number(d.world.handles[0]);
+    d.emit(MoveIntent as never, { units: [hd], x: 2, y: 2 });
+    d.emit(FormationGuideIntent as never, {
+      units: [hd],
+      waypoints: [{ x: 2.5, y: 2.5, maxSpeed: 0.05 }],
+      active: true,
+    });
+    run(d.world, 30);
+    expect(d.world.active(0)).toBe(2);
+    expect(d.guideActive(0)).toBe(0);
   });
 });

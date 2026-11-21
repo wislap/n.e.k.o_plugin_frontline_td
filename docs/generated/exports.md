@@ -302,6 +302,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `FormationGuideIntent` | intent def | Transient squad formation waypoint + cruise speed cap (ADR 0054). |
 | `MoveCommand` | command def |  |
 | `MoveIntent` | intent def | Sim-internal order channel (ADR 0008): squads/AI emit these; the resolver validates handle liveness and Mover but not faction (the emitter's responsibility). |
 | `MoveOrdered` | event def | Emitted by the MoveCommand handler with the handles it applied (player override — squads drop these members). |

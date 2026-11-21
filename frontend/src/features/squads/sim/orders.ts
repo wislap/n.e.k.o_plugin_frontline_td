@@ -1,23 +1,41 @@
 // Per-squad orders update (called on the squad's stagger slot):
 // resupply, gather launch, engage split, advance arrival and
-// blocked-route retargeting, guard return, and stray recovery.
+// blocked-route retargeting, guard return, persistent role formations,
+// virtual leader anchor transit guidance, and stray recovery.
 import { distance } from '../../../core/index';
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
 import { MoveIntent, StopIntent } from '../../movement/protocol';
 import { Mover, MoveTarget, Position } from '../../movement/sim/index';
+import { CLEARANCE_HEAVY, CLEARANCE_STANDARD, type ClearanceTier } from '../../terrain/rules/index';
 import { SquadsLaunched } from '../protocol';
 import type { SquadsDeps } from './deps';
 import { meanEnergyBp } from './energy';
+import {
+  computeFormationLayout,
+  markFootprintCells,
+  projectFormationSlots,
+  type FormationMemberInfo,
+} from './formation';
 import { nearestCovered, retargetStructure } from './routing';
-import type { Squad, SquadsEnv } from './state';
+import type { Squad, SquadSlot, SquadsEnv } from './state';
+import {
+  ARRIVE_DIST,
+  SQUAD_PERIOD,
+  STRAY_DIST,
+  acquireProbeWithFallback,
+  collectMemberInfos,
+  emitTransitGuide,
+  ensureSquadSlotsAndEmitMove,
+  releaseGuideIfActive,
+} from './transit';
+
+export { SQUAD_PERIOD };
 
 const ENGAGE_RADIUS = 8;
-const ARRIVE_DIST = 2;
 const REGOAL_DRIFT = 2;
 const LEASH_EXTRA = 4;
-const STRAY_DIST = 10;
 const RESUPPLY_LEAVE_BP = 3000;
 const RESUPPLY_RETURN_BP = 8000;
 const RETARGET_PERIOD = 40;
@@ -34,10 +52,7 @@ function centroid(ctx: SystemContext, ids: readonly number[]): { x: number; y: n
   return { x: x / n, y: y / n };
 }
 
-// Move-intent dedupe: emitting a move reassigns slots, so a branch
-// emits only when its point differs from the squad's last goal, or a
-// member is idle (MoveTarget inactive — e.g. gave up on an unreachable
-// goal) and still farther than ARRIVE_DIST from it.
+// Move-intent dedupe for engaging fallback moves.
 function needsMove(ctx: SystemContext, ids: readonly number[], px: number, py: number): boolean {
   const pos = ctx.read(Position);
   const tgt = ctx.read(MoveTarget);
@@ -50,20 +65,6 @@ function needsMove(ctx: SystemContext, ids: readonly number[], px: number, py: n
     }
   }
   return false;
-}
-
-function emitMove(
-  ctx: SystemContext,
-  squad: Squad,
-  ids: readonly number[],
-  x: number,
-  y: number,
-): void {
-  if (x === squad.lastGoal.x && y === squad.lastGoal.y && !needsMove(ctx, ids, x, y)) {
-    return;
-  }
-  ctx.emit(MoveIntent, { units: [...squad.members], x, y });
-  squad.lastGoal = { x, y };
 }
 
 // One staggered update of a single squad. Emits movement intents only.
@@ -96,6 +97,7 @@ export function updateSquad(
     .map((h) => ctx.resolve(h as EntityHandle))
     .filter((id): id is EntityId => id !== null);
   const c = centroid(ctx, ids);
+  const memberInfos = collectMemberInfos(ctx, deps, ids);
 
   // Gather launch is a scheduled order transition: it fires before
   // resupply so a drained squad still launches on time.
@@ -108,6 +110,9 @@ export function updateSquad(
       radius: 0,
     };
     squad.phase = 'moving';
+    delete squad.anchor;
+    delete squad.slots;
+    releaseGuideIfActive(ctx, squad);
     ctx.emit(SquadsLaunched, {
       squad: squad.id,
       faction: squad.faction,
@@ -125,11 +130,12 @@ export function updateSquad(
     squad.phase = 'resupplying';
   }
   if (squad.phase === 'resupplying') {
+    releaseGuideIfActive(ctx, squad);
     // Re-evaluated every update: coverage can appear later, and
     // the nearest covered cell shifts as the squad moves.
     const cell = nearestCovered(ctx, deps, squad.faction as FactionId, c.x, c.y);
     if (cell !== null) {
-      emitMove(ctx, squad, ids, cell.x, cell.y);
+      ensureSquadSlotsAndEmitMove(ctx, deps, squad, memberInfos, c, cell.x, cell.y);
     }
     return;
   }
@@ -142,9 +148,11 @@ export function updateSquad(
       squad.phase = 'moving';
     }
     if (distance(0, 0, order.x - c.x, order.y - c.y) > ARRIVE_DIST) {
-      emitMove(ctx, squad, ids, order.x, order.y);
+      ensureSquadSlotsAndEmitMove(ctx, deps, squad, memberInfos, c, order.x, order.y);
+      emitTransitGuide(ctx, deps, squad, memberInfos, c, order.x, order.y);
     } else {
       squad.phase = 'holding';
+      releaseGuideIfActive(ctx, squad);
     }
     return;
   }
@@ -154,6 +162,7 @@ export function updateSquad(
   const engageRadius = order.kind === 'guard' ? order.radius : ENGAGE_RADIUS;
   const ax = order.kind === 'guard' ? order.x : c.x;
   const ay = order.kind === 'guard' ? order.y : c.y;
+  const wasEngaging = squad.phase === 'engaging';
   // Guard retention: keep chasing the engaged target while it
   // stays inside the leash (radius + LEASH_EXTRA); new targets
   // are acquired only inside the guard radius.
@@ -182,12 +191,18 @@ export function updateSquad(
   }
 
   if (hostile !== null) {
+    releaseGuideIfActive(ctx, squad);
+    delete squad.anchor;
     const hx = pos.x[hostile] ?? 0;
     const hy = pos.y[hostile] ?? 0;
     squad.phase = 'engaging';
+    const infoById = new Map<EntityId, FormationMemberInfo>();
+    for (const m of memberInfos) {
+      infoById.set(m.id, m);
+    }
     // Engage split: members in weapon range stop, the rest move.
-    const stop: number[] = [];
-    const move: number[] = [];
+    const stop: EntityId[] = [];
+    const move: EntityId[] = [];
     for (const id of ids) {
       // Same reach test combat fires with (range minus target radius).
       (deps.combat.inWeaponReach(ctx, id) ? stop : move).push(id);
@@ -198,7 +213,7 @@ export function updateSquad(
     const needStop = stop.filter((id) => (moving.active[id] ?? 0) !== 0);
     if (needStop.length > 0) {
       ctx.emit(StopIntent, {
-        units: needStop.map((id) => Number(ctx.handleOf(id as EntityId))),
+        units: needStop.map((id) => Number(ctx.handleOf(id))),
       });
     }
     if (
@@ -206,79 +221,236 @@ export function updateSquad(
       (distance(0, 0, hx - squad.lastGoal.x, hy - squad.lastGoal.y) >= REGOAL_DRIFT ||
         needsMove(ctx, move, hx, hy))
     ) {
-      ctx.emit(MoveIntent, {
-        units: move.map((id) => Number(ctx.handleOf(id as EntityId))),
-        x: hx,
-        y: hy,
-      });
-      squad.lastGoal = { x: hx, y: hy };
+      const reservedCells = new Set<number>();
+      for (const id of stop) {
+        const m = infoById.get(id);
+        if (m !== undefined) {
+          markFootprintCells(
+            reservedCells,
+            deps.terrain.width,
+            deps.terrain.height,
+            m.x,
+            m.y,
+            m.tier,
+          );
+        }
+      }
+      const moveInfos = move
+        .map((id) => infoById.get(id))
+        .filter((m): m is FormationMemberInfo => m !== undefined);
+      const layout = computeFormationLayout(moveInfos);
+      const dHostile = distance(c.x, c.y, hx, hy);
+      const dirX = dHostile > 1e-6 ? (hx - c.x) / dHostile : 1;
+      const dirY = dHostile > 1e-6 ? (hy - c.y) / dHostile : 0;
+      const moveCls = moveInfos[0]?.cls ?? 0;
+      const moveSingleCls = moveInfos.every((m) => m.cls === moveCls);
+      const moveAllHeavy = moveInfos.every((m) => m.tier === CLEARANCE_HEAVY);
+      const moveTier: ClearanceTier = moveAllHeavy ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
+      const probe = moveSingleCls
+        ? acquireProbeWithFallback(deps.terrain, deps.pathing, moveCls, moveTier, hx, hy, c.x, c.y)
+        : null;
+      try {
+        const slotsMap = projectFormationSlots(
+          deps.terrain,
+          deps.pathing,
+          probe?.goalId ?? null,
+          hx,
+          hy,
+          dirX,
+          dirY,
+          moveInfos,
+          layout.offsets,
+          1,
+          1,
+          reservedCells,
+        );
+        const moveHandles: number[] = [];
+        const moveSlots: { x: number; y: number }[] = [];
+        for (const m of moveInfos) {
+          moveHandles.push(m.handle);
+          moveSlots.push(slotsMap.get(m.handle) ?? { x: hx, y: hy });
+        }
+        ctx.emit(MoveIntent, {
+          units: moveHandles,
+          x: hx,
+          y: hy,
+          slots: moveSlots,
+        });
+        squad.lastGoal = { x: hx, y: hy };
+      } finally {
+        if (probe !== null) {
+          deps.pathing.releaseGoal(probe.goalId);
+        }
+      }
     }
     return;
   }
+
+  let movedHandles = new Set<number>();
 
   // No hostile: advance arrives → guard; guard returns to point.
   if (order.kind === 'advance') {
     if (distance(0, 0, order.x - c.x, order.y - c.y) <= ARRIVE_DIST) {
       squad.order = { kind: 'guard', x: order.x, y: order.y, radius: 6 };
       squad.phase = 'holding';
+      releaseGuideIfActive(ctx, squad);
       return;
     }
     // Re-check the original goal's reachability on every update — it is
     // cheap while members hold that goal's flow field, and a route
     // walled off mid-advance must be caught even without goal drift.
     const cls = mover.cls[ids[0] ?? 0] ?? 0;
-    const probe = deps.pathing.acquireGoal(goalX, goalY, cls);
-    const reachable = deps.pathing.directionAt(probe, Math.floor(c.x), Math.floor(c.y)) !== null;
-    deps.pathing.releaseGoal(probe);
+    const probeTier: ClearanceTier = memberInfos.some((m) => m.tier === CLEARANCE_HEAVY)
+      ? CLEARANCE_HEAVY
+      : CLEARANCE_STANDARD;
+    const probe = acquireProbeWithFallback(
+      deps.terrain,
+      deps.pathing,
+      cls,
+      probeTier,
+      goalX,
+      goalY,
+      c.x,
+      c.y,
+    );
+    const reachable = probe !== null;
+    if (probe !== null) {
+      deps.pathing.releaseGoal(probe.goalId);
+    }
     if (reachable) {
-      // Route open (again): head for the real target — emitMove no-ops
-      // when the squad already holds it.
-      emitMove(ctx, squad, ids, goalX, goalY);
+      // Route open (again): head for the real target — ensureSquadSlotsAndEmitMove
+      // no-ops when the squad already holds it.
       squad.phase = 'moving';
       delete squad.retarget;
+      movedHandles = ensureSquadSlotsAndEmitMove(
+        ctx,
+        deps,
+        squad,
+        memberInfos,
+        c,
+        goalX,
+        goalY,
+        wasEngaging,
+      );
+      emitTransitGuide(ctx, deps, squad, memberInfos, c, goalX, goalY);
     } else if (squad.retarget === undefined || ctx.tick - squad.retarget >= RETARGET_PERIOD) {
       // Blocked route: retarget to the nearest reachable hostile
       // structure, at most once per RETARGET_PERIOD. The squad keeps
       // marching on lastGoal between retargets.
       squad.retarget = ctx.tick;
-      const next = retargetStructure(ctx, deps, squad.faction as FactionId, cls, c.x, c.y);
+      let next = retargetStructure(ctx, deps, squad.faction as FactionId, cls, c.x, c.y, probeTier);
+      if (next === null && probeTier === CLEARANCE_HEAVY) {
+        next = retargetStructure(
+          ctx,
+          deps,
+          squad.faction as FactionId,
+          cls,
+          c.x,
+          c.y,
+          CLEARANCE_STANDARD,
+        );
+      }
       if (next === null) {
         squad.phase = 'holding';
+        releaseGuideIfActive(ctx, squad);
       } else {
-        emitMove(ctx, squad, ids, next.x, next.y);
         squad.phase = 'moving';
+        movedHandles = ensureSquadSlotsAndEmitMove(
+          ctx,
+          deps,
+          squad,
+          memberInfos,
+          c,
+          next.x,
+          next.y,
+          wasEngaging,
+        );
+        emitTransitGuide(ctx, deps, squad, memberInfos, c, next.x, next.y);
       }
     }
   } else if (order.kind === 'guard') {
     const far = ids.some(
       (id) => distance(0, 0, (pos.x[id] ?? 0) - order.x, (pos.y[id] ?? 0) - order.y) > order.radius,
     );
-    if (far || squad.phase === 'returning' || squad.phase === 'engaging') {
+    if (far || squad.phase === 'returning' || wasEngaging) {
       if (distance(0, 0, order.x - c.x, order.y - c.y) > ARRIVE_DIST) {
-        emitMove(ctx, squad, ids, order.x, order.y);
         squad.phase = 'moving';
+        movedHandles = ensureSquadSlotsAndEmitMove(
+          ctx,
+          deps,
+          squad,
+          memberInfos,
+          c,
+          order.x,
+          order.y,
+          wasEngaging,
+        );
+        emitTransitGuide(ctx, deps, squad, memberInfos, c, order.x, order.y);
       } else {
         squad.phase = 'holding';
+        releaseGuideIfActive(ctx, squad);
       }
     } else {
       squad.phase = 'holding';
+      releaseGuideIfActive(ctx, squad);
     }
   }
 
   // Strays (>10 cells from the centroid, e.g. reinforcements) get
-  // a move to the squad's current goal. An idle squad has no goal —
+  // a move to their persistent squad slot. An idle squad has no goal —
   // lastGoal is still the (0,0) placeholder, so skip the recall.
   if (order.kind === 'idle') {
+    releaseGuideIfActive(ctx, squad);
     return;
   }
-  const strays = ids.filter(
-    (id) => distance(0, 0, (pos.x[id] ?? 0) - c.x, (pos.y[id] ?? 0) - c.y) > STRAY_DIST,
+  const slotByHandle = new Map<number, SquadSlot>();
+  for (const s of squad.slots ?? []) {
+    slotByHandle.set(s.handle, s);
+  }
+  const hasUnassignedStray = memberInfos.some(
+    (m) =>
+      !movedHandles.has(m.handle) &&
+      distance(0, 0, m.x - c.x, m.y - c.y) > STRAY_DIST &&
+      !slotByHandle.has(m.handle),
+  );
+  if (hasUnassignedStray) {
+    const goalTargetX = order.kind === 'guard' ? order.x : squad.lastGoal.x;
+    const goalTargetY = order.kind === 'guard' ? order.y : squad.lastGoal.y;
+    const newlyMoved = ensureSquadSlotsAndEmitMove(
+      ctx,
+      deps,
+      squad,
+      memberInfos,
+      c,
+      goalTargetX,
+      goalTargetY,
+    );
+    for (const h of newlyMoved) {
+      movedHandles.add(h);
+    }
+    slotByHandle.clear();
+    for (const s of squad.slots ?? []) {
+      slotByHandle.set(s.handle, s);
+    }
+  }
+  const strays = memberInfos.filter(
+    (m) => !movedHandles.has(m.handle) && distance(0, 0, m.x - c.x, m.y - c.y) > STRAY_DIST,
   );
   if (strays.length > 0) {
+    const strayHandles: number[] = [];
+    const straySlots: { x: number; y: number }[] = [];
+    for (const m of strays) {
+      const s = slotByHandle.get(m.handle);
+      strayHandles.push(m.handle);
+      straySlots.push(
+        s !== undefined ? { x: s.destX, y: s.destY } : { x: squad.lastGoal.x, y: squad.lastGoal.y },
+      );
+    }
     ctx.emit(MoveIntent, {
-      units: strays.map((id) => Number(ctx.handleOf(id))),
+      units: strayHandles,
       x: squad.lastGoal.x,
       y: squad.lastGoal.y,
+      slots: straySlots,
     });
   }
 }

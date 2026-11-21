@@ -45,12 +45,13 @@
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | 已实现 | wislap | M1 前置 | 2026-11-15 |
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳；部分被 0043 取代（容纳关系的 ContainedIn 契约组件设计） | 已实现（调度队列已实现，尚无生产使用方） | wislap | M1 前置 | 2026-11-15 |
 | [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳；部分被 0043 取代（契约组件清单中的 ContainedIn）、部分被 0047 取代（组件归属不再只由 claimWriter 表达：新增 ownComponent，声明 spawn 即挂但无字段写者的组件） | 已实现 | wislap | M1 模拟核心 | 2026-11-15 |
-| [0034](../adr/0034-squads.md) | 小队 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
+| [0034](../adr/0034-squads.md) | 小队 | 已采纳；部分被 0054 取代（小队升级为持久职能分排阵型槽位、虚拟领航锚点、隘口柔缩/展开与行军巡航同步，经 MoveIntent.slots 与 FormationGuideIntent 驱动，仍不直写移动组件） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳；部分被 0038 取代（波次目标） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0038](../adr/0038-outposts-ruins-capture-exclusion.md) | 据点、废墟、占领与禁建区 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md) | 阻尼非对称避让、到达迟滞与墙体边距 | 已采纳 | 已实现 | wislap | S2 阻尼避让与到达迟滞 | 2026-11-21 |
+| [0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md) | 小队虚拟领航锚点、混编职能分排与巡航控速 | 已采纳 | 已实现 | wislap | S3 小队编队领航与混编协同 | 2026-11-21 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -179,3 +180,6 @@
 
 ### S2 阻尼避让与到达迟滞（2026-11-21）
 - [0053 阻尼非对称避让、到达迟滞与墙体边距](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)
+
+### S3 小队编队领航与混编协同（2026-11-21）
+- [0054 小队虚拟领航锚点、混编职能分排与巡航控速](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)

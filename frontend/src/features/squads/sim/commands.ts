@@ -6,6 +6,12 @@ import type { ComponentWriter, SimBuilder, SystemContext } from '../../../kernel
 import { Faction } from '../../../kernel/index';
 import { Mover } from '../../movement/sim/index';
 import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  clearanceTierForRadius,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
+import {
   SquadsAssign,
   SquadsCreate,
   SquadsDisband,
@@ -82,8 +88,11 @@ function removeFromSquad(
   if (squad === undefined) {
     return;
   }
-  const drop = new Set(ids);
+  const drop = new Set<number>(ids.map((id) => ctx.handleOf(id as EntityId) ?? id));
   squad.members = squad.members.filter((h) => !drop.has(h));
+  if (squad.slots !== undefined) {
+    squad.slots = squad.slots.filter((s) => !drop.has(s.handle));
+  }
   for (const id of ids) {
     writeMember(ctx, memberW, id, 0);
   }
@@ -194,6 +203,8 @@ export function installSquadCommands(
     squad.order = { kind: payload.kind, x: payload.x, y: payload.y, radius };
     squad.phase = 'moving';
     delete squad.route;
+    delete squad.anchor;
+    delete squad.slots;
   });
 
   builder.command(SquadsGather, (ctx, payload, issuer) => {
@@ -212,19 +223,42 @@ export function installSquadCommands(
       targetY: payload.targetY,
     };
     squad.phase = 'moving';
+    delete squad.anchor;
+    delete squad.slots;
     // Store the predicted gather→target route (pathing descent
     // polyline, capped at 512 cells); the snapshot shows it and the
     // advance order follows it at launchTick.
-    const first = memberIds(ctx, squad)[0];
-    const cls = first === undefined ? 0 : (ctx.read(Mover).cls[first] ?? 0);
-    const route = traceRoute(
+    const liveIds = memberIds(ctx, squad);
+    const mover = ctx.read(Mover);
+    const first = liveIds[0];
+    const cls = first === undefined ? 0 : (mover.cls[first] ?? 0);
+    let tier: ClearanceTier = CLEARANCE_STANDARD;
+    for (const id of liveIds) {
+      if (clearanceTierForRadius(mover.radius[id] ?? 0) === CLEARANCE_HEAVY) {
+        tier = CLEARANCE_HEAVY;
+        break;
+      }
+    }
+    let route = traceRoute(
       deps.pathing,
       cls,
       payload.x,
       payload.y,
       payload.targetX,
       payload.targetY,
+      tier,
     );
+    if (route === null && tier === CLEARANCE_HEAVY) {
+      route = traceRoute(
+        deps.pathing,
+        cls,
+        payload.x,
+        payload.y,
+        payload.targetX,
+        payload.targetY,
+        CLEARANCE_STANDARD,
+      );
+    }
     if (route !== null) {
       squad.route = route;
     } else {

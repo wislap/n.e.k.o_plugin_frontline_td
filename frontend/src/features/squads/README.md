@@ -2,8 +2,10 @@
 
 ## 职责
 编队指挥：把移动单位编成 squad，在 `orders` 阶段按
-`(tick + id) % 10 === 0` 错峰运行 AI，只通过 movement 的
-Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
+`(tick + id) % 10 === 0` 错峰运行 AI，维护职能分排持久阵型槽位与虚拟领航锚点
+（`sim/formation.ts`、`sim/transit.ts`），只通过 movement 的 `MoveIntent`（含显式 `slots`）/
+`StopIntent` / `FormationGuideIntent` 驱动成员，从不直写 `MoveTarget` 或
+`FormationGuide`。
 
 ## 公开接口
 - `protocol.ts`：命令 `squads.create / assign / disband /
@@ -23,7 +25,9 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   状态键 `frontline_td:squads`。
 - Squad 字段：id、tag、faction、有序成员句柄、strength、order、
   phase、engage 目标、retarget、lastGoal（≥2 格漂移才换目标）、
-  可选 route。
+  可选 route、持久职能槽位 `slots`（`handle / fwd / right / destX / destY`）、
+  虚拟领航锚点 `anchor`（`x / y / hx / hy / halfWidth / widthScale`）与
+  领航激活标记 `guideActive`。
 
 ## 不变量
 - `create`/`assign` 只校验句柄存活、同阵营、带 `Mover` 且
@@ -53,6 +57,21 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   （strength − 成员数）的小队，平局取最小 id。
 - advance 目标不可达时改打最近的可达敌对建筑（查询排除废墟，
   ADR 0038/0040），摧毁后重新评估。
+- 持久职能分排阵型与子集槽位保护（ADR 0054）：`sim/formation.ts` 按
+  `(rangeKey asc, radius desc, handle asc)` 将近程重型前排置于中心前排、
+  轻量与远程置于两翼与后排，按 `rA + rB + 0.35` 计算无碰撞间距并在目标点
+  周围螺旋分配持久 `slots`；同目标仅对缺失/早停成员做增量槽位补发（预留其余
+  已定槽位足迹），已全员在途且减员 < 30% 时不重发 `MoveIntent`，交战拆分与
+  走失召回亦显式避让已停火前排并保留各自持久槽位。
+- 虚拟领航锚点、隘口伸缩与巡航同步（ADR 0054）：`moving` / `returning`
+  期间通过 `advanceLeaderAnchor` 与 `probeCorridorWidth` 沿连续流场前瞻探测
+  通道净宽并平滑缩放 `widthScale ∈ [0.25, 1.0]`，经 `FormationGuideIntent`
+  下发瞬态路径点与巡航限速 `computeCruiseCap`（滞后与走失成员不限速）；进入
+  `resupplying` / `holding` / `engaging` / `idle` 或末段接近目标时立即释放
+  领航。
+- 净空分档寻路联动（ADR 0052 / ADR 0054）：`SquadsGather` 与
+  `routing.ts`（`traceRoute` / `retargetStructure`）均按小队最重成员的
+  `ClearanceTier` 探测并支持向 `CLEARANCE_STANDARD` 回退。
 - idle 订单的小队不触发走失成员召回（尚无目标可回）。
 
 ## 对应设计
@@ -64,6 +83,10 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   （句柄校验）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
   （`F1` 指挥模式限定与小队快捷键分层）、[ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
   （`SquadPanel` HUD 槽位布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
-  （`ThreatsLayer` `.dispose()` GPU 资源清理）。
+  （`ThreatsLayer` `.dispose()` GPU 资源清理）、
+  [ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
+  （地形净空分档与连续流向梯度）、
+  [ADR 0054](../../../../docs/adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)
+  （小队虚拟领航锚点、混编职能分排与巡航控速）。
 - [game_design.md §4.7](../../../../docs/design/game_design.md)
   （小队玩法）。

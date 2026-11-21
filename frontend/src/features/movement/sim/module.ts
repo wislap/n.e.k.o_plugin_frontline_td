@@ -20,8 +20,8 @@ import {
   type ClearanceTier,
 } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { MoveTarget, Mover, Position, Velocity } from './components';
-import { installMovementIntents, releaseHeldGoal } from './intents';
+import { FormationGuide, MoveTarget, Mover, Position, Velocity } from './components';
+import { clearFormationGuide, installMovementIntents, releaseHeldGoal } from './intents';
 import { lineWalkable } from './line';
 import { makeSeparate } from './separate';
 
@@ -81,24 +81,40 @@ export function moverComponents(
     [Velocity, { x: 0, y: 0 }],
     [Mover, { speed, radius, cls }],
     [MoveTarget, { goal: 0, x: 0, y: 0, active: 0 }],
+    [FormationGuide, { x: 0, y: 0, maxSpeed: 0, active: 0 }],
   ];
 }
 
 type VelView = WriteView<{ x: 'f64'; y: 'f64' }>;
 type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
+type GuideView = WriteView<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
 
 // Release the shared goal and hold the slot: the unit steers back to its
 // slot point if separation later pushes it off.
-function holdUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): void {
+function holdUnit(
+  pathing: PathingApi,
+  vel: VelView,
+  tgt: TgtView,
+  guide: GuideView,
+  id: number,
+): void {
   releaseHeldGoal(pathing, tgt, id);
+  clearFormationGuide(guide, id);
   tgt.active[id] = 2;
   vel.x[id] = 0;
   vel.y[id] = 0;
 }
 
 // Release the shared goal and stop the unit for good (unreachable target).
-function stopUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): void {
+function stopUnit(
+  pathing: PathingApi,
+  vel: VelView,
+  tgt: TgtView,
+  guide: GuideView,
+  id: number,
+): void {
   releaseHeldGoal(pathing, tgt, id);
+  clearFormationGuide(guide, id);
   tgt.active[id] = 0;
   vel.x[id] = 0;
   vel.y[id] = 0;
@@ -193,14 +209,17 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
   let velW: ComponentWriter<{ x: 'f64'; y: 'f64' }>;
   let posW: ComponentWriter<{ x: 'f64'; y: 'f64' }>;
   let tgtW: ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
+  let guideW: ComponentWriter<{ x: 'f64'; y: 'f64'; maxSpeed: 'f64'; active: 'u8' }>;
   const separate = makeSeparate(terrain, () => velW);
 
   function steer(ctx: SystemContext): void {
     const pos = ctx.read(Position);
     const mover = ctx.read(Mover);
     const target = ctx.read(MoveTarget);
+    const guide = ctx.read(FormationGuide);
     const vel = ctx.write(velW);
     const tgt = ctx.write(tgtW);
+    const guideOut = ctx.write(guideW);
     const ids = ctx.query([Position, Mover, MoveTarget]);
     const posX = pos.x;
     const posY = pos.y;
@@ -208,6 +227,10 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const tgtY = target.y;
     const tgtActive = target.active;
     const tgtGoal = target.goal;
+    const guideActive = guide.active;
+    const guideX = guide.x;
+    const guideY = guide.y;
+    const guideMaxSpeed = guide.maxSpeed;
     const moverRadius = mover.radius;
     const moverCls = mover.cls;
     const moverSpeed = mover.speed;
@@ -258,25 +281,45 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       }
       // active === 1 (moving)
       if (dist <= ARRIVAL_ENTER_DIST) {
-        holdUnit(pathing, vel, tgt, id);
+        holdUnit(pathing, vel, tgt, guideOut, id);
         continue;
       }
       const radius = moverRadius[id] ?? 0;
       const cls = moverCls[id] ?? 0;
       const tier = clearanceTierForRadius(radius);
-      let dirX: number;
-      let dirY: number;
-      let approachingSlot: boolean;
+      const gActive = (guideActive[id] ?? 0) === 1;
+      let dirX = 0;
+      let dirY = 0;
+      let approachingSlot = false;
+      let steered = false;
       if (dist <= DIRECT_DIST && lineWalkable(terrain, cls, px, py, tx, ty, tier)) {
         // Close enough and a legal straight line: go straight at the slot.
         dirX = dx;
         dirY = dy;
         approachingSlot = true;
-      } else {
+        steered = true;
+      } else if (gActive) {
+        const gx = guideX[id] ?? 0;
+        const gy = guideY[id] ?? 0;
+        const gdx = gx - px;
+        const gdy = gy - py;
+        const gDistSq = gdx * gdx + gdy * gdy;
+        if (
+          gDistSq > 0.0625 &&
+          gDistSq <= DIRECT_DIST * DIRECT_DIST &&
+          lineWalkable(terrain, cls, px, py, gx, gy, tier)
+        ) {
+          dirX = gdx;
+          dirY = gdy;
+          approachingSlot = false;
+          steered = true;
+        }
+      }
+      if (!steered) {
         const flow = pathing.smoothDirectionAt(tgtGoal[id] ?? 0, px, py);
         if (flow === null) {
           // Unreachable: give up and stop in place.
-          stopUnit(pathing, vel, tgt, id);
+          stopUnit(pathing, vel, tgt, guideOut, id);
           continue;
         }
         if (flow.dx === 0 && flow.dy === 0) {
@@ -298,9 +341,11 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       }
       const scx = Math.min(maxScx, Math.max(0, Math.floor(px)));
       const scy = Math.min(maxScy, Math.max(0, Math.floor(py)));
-      const maxSpeed =
+      const statSpeed =
         ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] ?? 0) *
         (terrain.speedBpAt(scx, scy) / 10000);
+      const gCap = gActive ? (guideMaxSpeed[id] ?? 0) : 0;
+      const maxSpeed = gCap > 0 && gCap < statSpeed ? gCap : statSpeed;
       const effSpeed =
         approachingSlot && dist < SLOWDOWN_DIST
           ? Math.min(maxSpeed * Math.max(0.25, dist / SLOWDOWN_DIST), dist * 0.65)
@@ -366,10 +411,11 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       velW = builder.claimWriter(Velocity);
       posW = builder.claimWriter(Position);
       tgtW = builder.claimWriter(MoveTarget);
+      guideW = builder.claimWriter(FormationGuide);
       // Mover is read-only after spawn (stats come from content).
       builder.ownComponent(Mover);
 
-      installMovementIntents(builder, terrain, pathing, tgtW);
+      installMovementIntents(builder, terrain, pathing, tgtW, guideW);
 
       builder.system({ id: 'frontline_td:movement.steer', phase: 'movement', run: steer });
       builder.system({ id: 'frontline_td:movement.separate', phase: 'movement', run: separate });
@@ -386,12 +432,14 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
         run(ctx) {
           const target = ctx.read(MoveTarget);
           const out = ctx.write(tgtW);
+          const guideOut = ctx.write(guideW);
           for (const p of ctx.read(CombatDied)) {
             const id = ctx.resolve(p.handle as EntityHandle);
             if (id === null || !ctx.has(Mover, id)) {
               continue;
             }
             releaseHeldGoal(pathing, target, id);
+            clearFormationGuide(guideOut, id);
             out.goal[id] = 0;
             out.active[id] = 0;
           }

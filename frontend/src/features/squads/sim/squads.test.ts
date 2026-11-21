@@ -2,6 +2,7 @@
 // MoveCommand, empty-squad deletion, and serialization round-trips.
 import { describe, expect, it } from 'vitest';
 import { COMMAND_REJECTED } from '../../../core/index';
+import { loadContent } from '../../../content/index';
 import { restoreSimulation } from '../../../kernel/index';
 import { MoveCommand } from '../../movement/protocol';
 import { F2, createAll, ROBOT, robotInit, robots, run, snapshot, squad, world } from './test-world';
@@ -74,5 +75,60 @@ describe('squads commands', () => {
     w.issue(MoveCommand.type, { units: [Number(w.handles[0])], x: 20, y: 4 });
     run(w, 12);
     expect(snapshot(w).squads.length).toBe(0);
+  });
+
+  it('state round-trips mid-march with persistent anchor, slots, and active guide', () => {
+    const db = loadContent();
+    const raider = db.units.byId('frontline_td:raider');
+    const spitter = db.units.byId('frontline_td:spitter');
+    if (raider === undefined || spitter === undefined) {
+      throw new Error('raider/spitter missing');
+    }
+    const ents = [
+      { parts: robotInit(raider, 3, 9) },
+      { parts: robotInit(ROBOT, 3, 10) },
+      { parts: robotInit(spitter, 2, 9) },
+      { parts: robotInit(spitter, 2, 10) },
+    ];
+    const setup = (w: World) => {
+      createAll(w);
+      w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 25, y: 10 });
+    };
+    const w = world({ entities: ents });
+    setup(w);
+    run(w, 25);
+
+    expect(squad(w)?.phase).toBe('moving');
+    const saved = w.sim.serialize();
+    const state = saved as {
+      entities: { data: Record<string, Record<string, Record<string, number>>> };
+      moduleStates: {
+        'frontline_td:squads': {
+          squads: Array<{
+            anchor?: { x: number; y: number };
+            slots?: unknown[];
+            guideActive?: boolean;
+          }>;
+        };
+      };
+    };
+    const savedSquad = state.moduleStates['frontline_td:squads'].squads[0];
+    expect(savedSquad?.anchor).toBeDefined();
+    expect(savedSquad?.slots?.length).toBe(ents.length);
+    expect(savedSquad?.guideActive).toBe(true);
+    const activeGuides = Object.values(state.entities.data).filter(
+      (c) => (c['frontline_td:movement.formation_guide']?.['active'] ?? 0) === 1,
+    );
+    expect(activeGuides.length).toBe(ents.length);
+
+    const restored = restoreSimulation(w.config, w.modules, saved);
+    for (let t = 0; t < 80; t++) {
+      restored.step();
+    }
+
+    const w2 = world({ entities: ents });
+    setup(w2);
+    run(w2, 105);
+    expect(restored.hash()).toBe(w2.sim.hash());
   });
 });

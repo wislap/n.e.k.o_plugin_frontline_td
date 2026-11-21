@@ -24,7 +24,7 @@
 
 | 系统 | 阶段 | 每 N tick | 偏移 | 读取 | 发出 |
 |---|---|---|---|---|---|
-| `frontline_td:movement.intents` | movement | 1 | 0 | `frontline_td:movement.move`、`frontline_td:movement.stop` | — |
+| `frontline_td:movement.intents` | movement | 1 | 0 | `frontline_td:movement.formation_guide`、`frontline_td:movement.move`、`frontline_td:movement.stop` | — |
 | `frontline_td:movement.steer` | movement | 1 | 0 | — | — |
 | `frontline_td:movement.separate` | movement | 1 | 0 | — | — |
 | `frontline_td:movement.integrate` | movement | 1 | 0 | — | — |
@@ -98,7 +98,7 @@
 
 | 系统 | 阶段 | 每 N tick | 偏移 | 读取 | 发出 |
 |---|---|---|---|---|---|
-| `frontline_td:squads.update` | orders | 1 | 0 | `frontline_td:movement.ordered`、`frontline_td:units.spawned` | `frontline_td:movement.move`、`frontline_td:movement.stop`、`frontline_td:squads.launched` |
+| `frontline_td:squads.update` | orders | 1 | 0 | `frontline_td:movement.ordered`、`frontline_td:units.spawned` | `frontline_td:movement.formation_guide`、`frontline_td:movement.move`、`frontline_td:movement.stop`、`frontline_td:squads.launched` |
 
 - 命令：`frontline_td:squads.assign`、`frontline_td:squads.create`、`frontline_td:squads.disband`、`frontline_td:squads.gather`、`frontline_td:squads.order`、`frontline_td:squads.set_strength`
 
@@ -170,6 +170,7 @@
 | `frontline_td:logistics.interceptor` | strengthBp: i32 | frontline_td:logistics | — |
 | `frontline_td:logistics.node` | connect: i32、service: f64、vehicles: u16、warehouse: u8、w: u8、h: u8 | frontline_td:logistics | — |
 | `frontline_td:logistics.site` | kind: u16 | frontline_td:logistics | frontline_td:logistics |
+| `frontline_td:movement.formation_guide` | x: f64、y: f64、maxSpeed: f64、active: u8 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.mover` | speed: f64、radius: f64、cls: u8 | frontline_td:movement | — |
 | `frontline_td:movement.position` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
@@ -214,6 +215,7 @@
 | `frontline_td:logistics.consume` | intent | — |
 | `frontline_td:logistics.deposit` | intent | — |
 | `frontline_td:logistics.set_priorities` | command | — |
+| `frontline_td:movement.formation_guide` | intent | — |
 | `frontline_td:movement.move` | command | — |
 | `frontline_td:movement.move` | intent | — |
 | `frontline_td:movement.ordered` | event | all |
