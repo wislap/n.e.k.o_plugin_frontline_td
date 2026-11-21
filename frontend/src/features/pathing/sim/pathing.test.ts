@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { ResolvedSurface } from '../../../content/load';
+import { contentId } from '../../../core/index';
+import { makeGrid } from '../../../testing/index';
 import { CLEARANCE_HEAVY, CLEARANCE_STANDARD } from '../../terrain/rules/index';
+import { createTerrainApi } from '../../terrain/sim/index';
+import { createPathingModule } from './index';
 import { CLS, makePathing } from './test-world';
 
 function follow(api: ReturnType<typeof makePathing>['api'], goal: number, x: number, y: number) {
@@ -71,6 +76,34 @@ describe('pathing flow fields', () => {
     // Tolerance: portal midpoint approximation can add <= 2 sector hops x
     // half a boundary width each; on flat ground cost 10 -> allow 320.
     expect(cost - optimal).toBeLessThanOrEqual(320);
+
+    // Eikonal distance & smooth trajectory across 3+ sectors stay near-Euclidean.
+    const euclid = Math.sqrt((60 - 1) * (60 - 1) + (8 - 1) * (8 - 1));
+    const d0 = api.distanceAt(goal, 1.5, 1.5);
+    expect(d0).not.toBeNull();
+    if (d0 !== null) {
+      expect(d0).toBeGreaterThanOrEqual(euclid - 0.5);
+      expect(d0).toBeLessThanOrEqual(euclid * 1.03);
+    }
+    let px = 1.5;
+    let py = 1.5;
+    let walked = 0;
+    const step = 0.25;
+    for (let k = 0; k < 500; k++) {
+      const sd = api.smoothDirectionAt(goal, px, py);
+      expect(sd).not.toBeNull();
+      if (sd === null || (sd.dx === 0 && sd.dy === 0)) {
+        break;
+      }
+      px += sd.dx * step;
+      py += sd.dy * step;
+      walked += step;
+      if (Math.sqrt((px - 60.5) * (px - 60.5) + (py - 8.5) * (py - 8.5)) <= 0.5) {
+        break;
+      }
+    }
+    expect(Math.sqrt((px - 60.5) * (px - 60.5) + (py - 8.5) * (py - 8.5))).toBeLessThanOrEqual(1);
+    expect(walked / euclid).toBeLessThanOrEqual(1.03);
   });
 
   it('returns null for an unreachable goal', () => {
@@ -315,6 +348,134 @@ describe('clearance tiers and smoothDirectionAt', () => {
           }
         }
       }
+    }
+  });
+
+  it('reachable checks connected components for both tiers, impassable/OOB cells, dynamic blockers, and matches directionAt', () => {
+    // 16x8 map with a vertical wall at x=8 that has a 1-cell gap at y=4 (passable for standard, not heavy).
+    const rows = Array.from({ length: 8 }, (_, y) => {
+      const line = '.'.repeat(16).split('');
+      if (y !== 4) {
+        line[8] = '#';
+      }
+      return line.join('');
+    });
+    const { api, terrain } = makePathing(rows);
+
+    // Connected for standard tier, disconnected across 1-cell gap for heavy tier.
+    expect(api.reachable(2, 2, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(true);
+    expect(api.reachable(2, 2, 13, 5, CLS, CLEARANCE_HEAVY)).toBe(false);
+    // Same side of wall is connected for heavy tier when anchors are passable.
+    expect(api.reachable(1, 1, 5, 4, CLS, CLEARANCE_HEAVY)).toBe(true);
+    // Impassable anchors (wall cell or heavy anchor touching wall/border).
+    expect(api.reachable(8, 1, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(false);
+    expect(api.reachable(7, 1, 5, 4, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(api.reachable(15, 1, 13, 5, CLS, CLEARANCE_HEAVY)).toBe(false);
+    // Out-of-bounds.
+    expect(api.reachable(-1, 2, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(false);
+    expect(api.reachable(2, 2, 16, 5, CLS, CLEARANCE_STANDARD)).toBe(false);
+    expect(api.reachable(2, 2, 13, 8, CLS, CLEARANCE_STANDARD)).toBe(false);
+
+    // Matches directionAt(goal, x, y) !== null across the grid.
+    const stdGoal = api.acquireGoal(13, 5, CLS, CLEARANCE_STANDARD);
+    const heavyGoal = api.acquireGoal(13, 5, CLS, CLEARANCE_HEAVY);
+    for (let y = 0; y < terrain.height; y++) {
+      for (let x = 0; x < terrain.width; x++) {
+        expect(api.reachable(x, y, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(
+          api.directionAt(stdGoal, x, y) !== null,
+        );
+        expect(api.reachable(x, y, 13, 5, CLS, CLEARANCE_HEAVY)).toBe(
+          api.directionAt(heavyGoal, x, y) !== null,
+        );
+      }
+    }
+
+    // Dynamic update via setBlocked + invalidateCells.
+    terrain.setBlocked([{ x: 8, y: 4 }], true);
+    api.invalidateCells([{ x: 8, y: 4 }]);
+    expect(api.reachable(2, 2, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(false);
+    expect(api.directionAt(stdGoal, 2, 2)).toBeNull();
+
+    terrain.setBlocked([{ x: 8, y: 4 }], false);
+    api.invalidateCells([{ x: 8, y: 4 }]);
+    expect(api.reachable(2, 2, 13, 5, CLS, CLEARANCE_STANDARD)).toBe(true);
+    expect(api.directionAt(stdGoal, 2, 2)).not.toBeNull();
+  });
+
+  it('distanceAt returns null when unreachable, 0 at goal center, accurate Euclidean on open ground, and ~2x in cost=20 forest', () => {
+    const surfaces: ResolvedSurface[] = [
+      { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
+      { id: contentId('a:x'), index: 1, costs: [-1], speedBp: 10000, color: '#000000' },
+      { id: contentId('a:f'), index: 2, costs: [20], speedBp: 10000, color: '#004400' },
+    ];
+    const w = 48;
+    const h = 48;
+    const openGrid = makeGrid(Array.from({ length: h }, () => '.'.repeat(w)));
+    const openTerrain = createTerrainApi(openGrid, surfaces);
+    const { api: openApi } = createPathingModule(openTerrain, 1);
+
+    const gx = 24;
+    const gy = 24;
+    const openGoal = openApi.acquireGoal(gx, gy, CLS, CLEARANCE_STANDARD);
+    expect(openApi.distanceAt(openGoal, gx + 0.5, gy + 0.5)).toBe(0);
+
+    const cardinalDist = openApi.distanceAt(openGoal, gx - 10 + 0.5, gy + 0.5);
+    expect(cardinalDist).not.toBeNull();
+    if (cardinalDist !== null) {
+      expect(Math.abs(cardinalDist - 10)).toBeLessThanOrEqual(0.25);
+    }
+
+    const diagDist = openApi.distanceAt(openGoal, gx - 10 + 0.5, gy - 10 + 0.5);
+    expect(diagDist).not.toBeNull();
+    if (diagDist !== null) {
+      // First-order 5-point Godunov upwind Eikonal has ~+4.8% diagonal shift (~14.825 vs 14.142).
+      expect(Math.abs(diagDist - 10 * Math.SQRT2)).toBeLessThan(0.85);
+    }
+    expect(openApi.distanceAt(openGoal, gx - 10 + 0.5, gy - 10 + 0.5)).toBe(
+      openApi.distanceAt(openGoal, gx + 10 + 0.5, gy + 10 + 0.5),
+    );
+
+    // Forest with surface cost = 20 (~2x open ground cost = 10).
+    const forestGrid = makeGrid(Array.from({ length: h }, () => '.'.repeat(w)));
+    forestGrid.surfaces.fill(2);
+    const forestTerrain = createTerrainApi(forestGrid, surfaces);
+    const { api: forestApi } = createPathingModule(forestTerrain, 1);
+    const forestGoal = forestApi.acquireGoal(gx, gy, CLS, CLEARANCE_STANDARD);
+    const forestCardinal = forestApi.distanceAt(forestGoal, gx - 10 + 0.5, gy + 0.5);
+    expect(forestCardinal).not.toBeNull();
+    if (forestCardinal !== null && cardinalDist !== null) {
+      expect(forestCardinal / cardinalDist).toBeGreaterThan(1.9);
+      expect(forestCardinal / cardinalDist).toBeLessThan(2.1);
+    }
+
+    // Unreachable cell returns null.
+    const { api: wallApi } = makePathing(['........', '########', '........']);
+    const wallGoal = wallApi.acquireGoal(6, 2, CLS);
+    expect(wallApi.distanceAt(wallGoal, 1.5, 0.5)).toBeNull();
+    expect(wallApi.distanceAt(wallGoal, -1, 0.5)).toBeNull();
+    expect(wallApi.distanceAt(999, 1.5, 0.5)).toBeNull();
+  });
+
+  it('smoothDirectionAt is bit-identical between cold-cache and warm-cache queries', () => {
+    const rows = Array.from({ length: 32 }, () => '.'.repeat(32));
+    const worldA = makePathing(rows);
+    const worldB = makePathing(rows);
+
+    const goalA = worldA.api.acquireGoal(2, 2, CLS, CLEARANCE_STANDARD);
+    const goalB = worldB.api.acquireGoal(2, 2, CLS, CLEARANCE_STANDARD);
+
+    // Cold-cache query in A.
+    const resA = worldA.api.smoothDirectionAt(goalA, 4.3, 5.7);
+    expect(resA).not.toBeNull();
+
+    // Warm-cache query in B: expand far corner first, then query (4.3, 5.7).
+    expect(worldB.api.smoothDirectionAt(goalB, 25, 25)).not.toBeNull();
+    const resB = worldB.api.smoothDirectionAt(goalB, 4.3, 5.7);
+    expect(resB).not.toBeNull();
+
+    if (resA !== null && resB !== null) {
+      expect(resA.dx === resB.dx).toBe(true);
+      expect(resA.dy === resB.dy).toBe(true);
     }
   });
 });

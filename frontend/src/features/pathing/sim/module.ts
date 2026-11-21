@@ -1,21 +1,40 @@
-// Pathing module (ADR 0010): ref-counted goals, portal-graph distances to
-// goal, and lazily computed per-(goal, sector) flow fields. Caches are
-// derived data — recomputed on demand, never serialized.
+// Pathing module (ADR 0010, ADR 0052, ADR 0055): ref-counted goals,
+// per-(cls, tier) lazy terrain baking & connected components, and resumable
+// upwind Eikonal distance/flow fields. Caches are derived data — recomputed
+// on demand, never serialized.
 import type { Serializable } from '../../../core/index';
 import type { SimModule } from '../../../kernel/index';
 import {
   CLEARANCE_HEAVY,
   CLEARANCE_STANDARD,
   CLEARANCE_TIERS,
-  clearanceAnchorCell,
-  clearanceAnchorCenter,
   type ClearanceTier,
 } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { dijkstra } from './dijkstra';
 import { UNREACHABLE } from './dijkstra';
-import { buildClassGraph, DIR_ORDER, sectorBounds, sectorDijkstra, sectorOfCell } from './graph';
-import type { ClassGraph } from './graph';
+import {
+  acquireGoalField,
+  createEikonalPools,
+  expandUntil,
+  releaseGoalField,
+  type GoalField,
+} from './eikonal';
+import {
+  COST_SCALE,
+  createSlotCache,
+  DIR_ORDER,
+  GROUND_COST_SCALED,
+  type SlotCache,
+} from './grid-cache';
+
+const INF = UNREACHABLE;
+const SCALE = COST_SCALE;
+const GROUND_SCALED = GROUND_COST_SCALED;
+const STD_TIER = CLEARANCE_STANDARD;
+const HEAVY_TIER = CLEARANCE_HEAVY;
+const TIER_COUNT = CLEARANCE_TIERS;
+const DIR_DX = new Int8Array([0, 1, 0, -1, 1, 1, -1, -1]);
+const DIR_DY = new Int8Array([-1, 0, 1, 0, -1, 1, 1, -1]);
 
 interface Direction {
   dx: number;
@@ -26,6 +45,15 @@ export interface PathingApi {
   acquireGoal(x: number, y: number, cls: number, tier?: ClearanceTier): number;
   releaseGoal(goalId: number): void;
   goalRefCount(goalId: number): number;
+  reachable(
+    sx: number,
+    sy: number,
+    gx: number,
+    gy: number,
+    cls: number,
+    tier?: ClearanceTier,
+  ): boolean;
+  distanceAt(goalId: number, px: number, py: number): number | null;
   // Reuses an internal scratch object — do not hold the result across calls.
   directionAt(goalId: number, x: number, y: number): Direction | null;
   // Reuses a separate internal scratch object — safe to interleave with directionAt.
@@ -43,50 +71,33 @@ interface Goal {
 
 const STAGE1_QUAD_OK = 1;
 const STAGE2_CARD_OK = 2;
+const STAGE1_QUAD_DONE = 4;
+const STAGE2_CARD_DONE = 8;
 
-interface SectorField {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  w: number;
-  dx: Int8Array;
-  dy: Int8Array;
-  cost: Int32Array;
-  flags: Uint8Array;
-}
-
-function edgePassableBothWays(
-  terrain: TerrainApi,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  cls: number,
-  tier: ClearanceTier,
-): boolean {
+function quadPassableBothWays(sc: SlotCache, x00: number, y00: number): boolean {
+  const w = sc.width;
+  const i00 = y00 * w + x00;
+  const i10 = i00 + 1;
+  const i01 = i00 + w;
+  const i11 = i01 + 1;
+  const m00 = sc.dirMask[i00] as number;
+  const m10 = sc.dirMask[i10] as number;
+  const m01 = sc.dirMask[i01] as number;
+  const m11 = sc.dirMask[i11] as number;
+  // DIR_ORDER bits: N=1, E=2, S=4, W=8, NE=16, SE=32, SW=64, NW=128.
   return (
-    terrain.stepCost(ax, ay, bx, by, cls, tier) >= 0 &&
-    terrain.stepCost(bx, by, ax, ay, cls, tier) >= 0
-  );
-}
-
-function quadPassableBothWays(
-  terrain: TerrainApi,
-  x00: number,
-  y00: number,
-  cls: number,
-  tier: ClearanceTier,
-): boolean {
-  const x10 = x00 + 1;
-  const y01 = y00 + 1;
-  return (
-    edgePassableBothWays(terrain, x00, y00, x10, y00, cls, tier) &&
-    edgePassableBothWays(terrain, x00, y01, x10, y01, cls, tier) &&
-    edgePassableBothWays(terrain, x00, y00, x00, y01, cls, tier) &&
-    edgePassableBothWays(terrain, x10, y00, x10, y01, cls, tier) &&
-    edgePassableBothWays(terrain, x00, y00, x10, y01, cls, tier) &&
-    edgePassableBothWays(terrain, x10, y00, x00, y01, cls, tier)
+    (m00 & 2) !== 0 &&
+    (m10 & 8) !== 0 &&
+    (m01 & 2) !== 0 &&
+    (m11 & 8) !== 0 &&
+    (m00 & 4) !== 0 &&
+    (m01 & 1) !== 0 &&
+    (m10 & 4) !== 0 &&
+    (m11 & 1) !== 0 &&
+    (m00 & 32) !== 0 &&
+    (m11 & 128) !== 0 &&
+    (m10 & 64) !== 0 &&
+    (m01 & 16) !== 0
   );
 }
 
@@ -94,312 +105,208 @@ export function createPathingModule(
   terrain: TerrainApi,
   classCount: number,
 ): { module: SimModule; api: PathingApi } {
-  const goals = new Map<number, Goal>();
+  const goalSlots: (Goal | undefined)[] = [];
   const goalByKey = new Map<number, number>();
   const freeIds: number[] = [];
   let nextId = 0;
+
   // Derived caches (never serialized).
-  const portalDists = new Map<number, Int32Array>();
-  const fields = new Map<number, SectorField>();
+  const pools = createEikonalPools();
+  const fieldSlots: (GoalField | undefined)[] = [];
+  const totalSlots = classCount * TIER_COUNT;
+  const slotCaches: (SlotCache | undefined)[] = Array.from({ length: totalSlots }, () => undefined);
   const scratch: Direction = { dx: 0, dy: 0 };
   const smoothScratch: Direction = { dx: 0, dy: 0 };
-  const totalSlots = classCount * CLEARANCE_TIERS;
-  // Portal node index by cell, per (class, tier) slot — used to continue a
-  // field across sector borders at portal cells.
-  let nodeIndexByCell: (Map<number, number> | undefined)[] = [];
-  // Rebuilt on state load: the terrain blocked overlay is restored before
-  // pathing's load runs, and graphs must reflect it (see sim-registry order).
-  // Standard tier (0) graphs build eagerly; heavy tier (1) graphs build lazily.
-  let graphs: (ClassGraph | undefined)[] = [];
-  function graphSlot(cls: number, tier: ClearanceTier): number {
-    return tier * classCount + cls;
-  }
-  function buildNodeIndex(clsGraph: ClassGraph): Map<number, number> {
-    const map = new Map<number, number>();
-    for (let n = 0; n < clsGraph.graph.nodeCell.length; n++) {
-      map.set(clsGraph.graph.nodeCell[n] ?? 0, n);
-    }
-    return map;
-  }
-  function ensureGraph(cls: number, tier: ClearanceTier): ClassGraph {
+
+  function ensureSlotCache(cls: number, tier: ClearanceTier): SlotCache {
     if (cls < 0 || cls >= classCount) {
       throw new RangeError(`unknown movement class ${cls}`);
     }
-    const slot = graphSlot(cls, tier);
-    let clsGraph = graphs[slot];
-    if (clsGraph === undefined) {
-      clsGraph = buildClassGraph(terrain, cls, tier);
-      graphs[slot] = clsGraph;
-      nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
+    const slot = tier * classCount + cls;
+    let sc = slotCaches[slot];
+    if (sc === undefined) {
+      sc = createSlotCache(terrain, cls, tier);
+      slotCaches[slot] = sc;
     }
-    return clsGraph;
+    return sc;
   }
-  function rebuildGraphs(): void {
-    graphs = Array.from({ length: totalSlots }, () => undefined);
-    nodeIndexByCell = Array.from({ length: totalSlots }, () => undefined);
-    for (let cls = 0; cls < classCount; cls++) {
-      const slot = graphSlot(cls, CLEARANCE_STANDARD);
-      const clsGraph = buildClassGraph(terrain, cls, CLEARANCE_STANDARD);
-      graphs[slot] = clsGraph;
-      nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
+
+  function recycleAllFields(): void {
+    for (let i = 0; i < fieldSlots.length; i++) {
+      const field = fieldSlots[i];
+      if (field !== undefined) {
+        releaseGoalField(pools, field);
+        fieldSlots[i] = undefined;
+      }
     }
-    portalDists.clear();
-    fields.clear();
   }
-  rebuildGraphs();
+
+  function resetCaches(): void {
+    recycleAllFields();
+    for (const sc of slotCaches) {
+      sc?.reset();
+    }
+  }
 
   function goalKey(x: number, y: number, cls: number, tier: ClearanceTier): number {
     return ((tier * classCount + cls) * terrain.height + y) * terrain.width + x;
   }
 
-  // Distance from every portal node to the goal, on the reversed portal
-  // graph, seeded with local-sector distances to the goal cell.
-  function portalDistToGoal(goalId: number, goal: Goal): Int32Array {
-    const cached = portalDists.get(goalId);
-    if (cached !== undefined) {
-      return cached;
+  function ensureGoalField(goalId: number, goal: Goal): GoalField {
+    let field = fieldSlots[goalId];
+    if (field === undefined) {
+      const sc = ensureSlotCache(goal.cls, goal.tier);
+      field = acquireGoalField(pools, terrain, sc, goal.x, goal.y, goal.cls, goal.tier);
+      fieldSlots[goalId] = field;
     }
-    const clsGraph = ensureGraph(goal.cls, goal.tier);
-    const graph = clsGraph.graph;
-    const goalCell = goal.y * terrain.width + goal.x;
-    const goalSector = sectorOfCell(terrain, goalCell);
-    // dist(x -> goal) within the goal sector = reversed local Dijkstra.
-    const local = sectorDijkstra(terrain, goal.cls, goalSector, goalCell, true, goal.tier);
-    const { x0, y0, x1 } = sectorBounds(terrain, goalSector);
-    const w = x1 - x0 + 1;
-    const seeds: [number, number][] = [];
-    const nodeCount = graph.nodeCell.length;
-    for (let n = 0; n < nodeCount; n++) {
-      if (graph.nodeSector[n] !== goalSector) {
-        continue;
-      }
-      const cell = graph.nodeCell[n] ?? 0;
-      const cx = cell % terrain.width;
-      const cy = Math.floor(cell / terrain.width);
-      const d = local[(cy - y0) * w + (cx - x0)] ?? UNREACHABLE;
-      if (d < UNREACHABLE) {
-        seeds.push([n, d]);
-      }
-    }
-    // Distance TO goal = forward Dijkstra on the transposed adjacency (radj),
-    // built once alongside adj in rebuildNodesAndEdges.
-    const dist = dijkstra(nodeCount, seeds, (node, visit) => {
-      const list = graph.radj[node] ?? [];
-      for (let i = 0; i + 1 < list.length; i += 2) {
-        visit(list[i] ?? 0, list[i + 1] ?? 0);
-      }
-    });
-    portalDists.set(goalId, dist);
-    return dist;
-  }
-
-  function fieldKey(goalId: number, sector: number): number {
-    return goalId * 4096 + sector;
-  }
-
-  // Integration field over one sector seeded with portal-node distances.
-  function sectorField(goalId: number, goal: Goal, sector: number): SectorField {
-    const key = fieldKey(goalId, sector);
-    const cached = fields.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const clsGraph = ensureGraph(goal.cls, goal.tier);
-    const slot = graphSlot(goal.cls, goal.tier);
-    const graph = clsGraph.graph;
-    const dists = portalDistToGoal(goalId, goal);
-    const { x0, y0, x1, y1 } = sectorBounds(terrain, sector);
-    const w = x1 - x0 + 1;
-    const h = y1 - y0 + 1;
-    const size = w * h;
-    const goalCell = goal.y * terrain.width + goal.x;
-    const goalSector = sectorOfCell(terrain, goalCell);
-
-    const seeds: [number, number][] = [];
-    if (sector === goalSector) {
-      const gx = goal.x - x0;
-      const gy = goal.y - y0;
-      seeds.push([gy * w + gx, 0]);
-    }
-    // Boundary portal cells seeded with the portal node's distance-to-goal.
-    for (let n = 0; n < graph.nodeCell.length; n++) {
-      if (graph.nodeSector[n] !== sector) {
-        continue;
-      }
-      const cell = graph.nodeCell[n] ?? 0;
-      const cx = cell % terrain.width;
-      const cy = Math.floor(cell / terrain.width);
-      const d = dists[n] ?? UNREACHABLE;
-      if (d < UNREACHABLE) {
-        seeds.push([(cy - y0) * w + (cx - x0), d]);
-      }
-    }
-    const integration = dijkstra(size, seeds, (local, visit) => {
-      const cx = x0 + (local % w);
-      const cy = y0 + Math.floor(local / w);
-      for (const [dx, dy] of DIR_ORDER) {
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (nx < x0 || nx > x1 || ny < y0 || ny > y1) {
-          continue;
-        }
-        // Cost to move FROM (nx,ny) INTO (cx,cy): integration is distance
-        // to goal, so neighbours relax backwards.
-        const cost = terrain.stepCost(nx, ny, cx, cy, goal.cls, goal.tier);
-        if (cost >= 0) {
-          visit((ny - y0) * w + (nx - x0), cost);
-        }
-      }
-    });
-    const dx = new Int8Array(size);
-    const dy = new Int8Array(size);
-    for (let local = 0; local < size; local++) {
-      const here = integration[local] ?? UNREACHABLE;
-      if (here >= UNREACHABLE || here === 0) {
-        continue; // unreachable or the goal cell: direction (0,0)
-      }
-      const cx = x0 + (local % w);
-      const cy = y0 + Math.floor(local / w);
-      let best = UNREACHABLE;
-      let bestDx = 0;
-      let bestDy = 0;
-      for (const [ddx, ddy] of DIR_ORDER) {
-        const nx = cx + ddx;
-        const ny = cy + ddy;
-        // Never point across an impassable step (cliff edge, corner cut).
-        const step = terrain.stepCost(cx, cy, nx, ny, goal.cls, goal.tier);
-        if (step < 0) {
-          continue;
-        }
-        let val: number;
-        if (nx < x0 || nx > x1 || ny < y0 || ny > y1) {
-          // Out-of-sector neighbour: only continue across the border through a
-          // portal node, valued by its portal-graph distance to the goal.
-          const node = nodeIndexByCell[slot]?.get(ny * terrain.width + nx);
-          if (node === undefined) {
-            continue;
-          }
-          val = dists[node] ?? UNREACHABLE;
-        } else {
-          val = integration[(ny - y0) * w + (nx - x0)] ?? UNREACHABLE;
-        }
-        if (val >= UNREACHABLE) {
-          continue;
-        }
-        const total = val + step;
-        if (total < best) {
-          best = total;
-          bestDx = ddx;
-          bestDy = ddy;
-        }
-      }
-      dx[local] = bestDx;
-      dy[local] = bestDy;
-    }
-    const flags = new Uint8Array(size);
-    for (let ly = 0; ly < h; ly++) {
-      const wy = y0 + ly;
-      const rowOffset = ly * w;
-      for (let lx = 0; lx < w; lx++) {
-        const local = rowOffset + lx;
-        const wx = x0 + lx;
-        let f = 0;
-        if (lx + 1 < w && ly + 1 < h) {
-          const c00 = integration[local] ?? UNREACHABLE;
-          const c10 = integration[local + 1] ?? UNREACHABLE;
-          const c01 = integration[local + w] ?? UNREACHABLE;
-          const c11 = integration[local + w + 1] ?? UNREACHABLE;
-          if (
-            c00 < UNREACHABLE &&
-            c10 < UNREACHABLE &&
-            c01 < UNREACHABLE &&
-            c11 < UNREACHABLE &&
-            quadPassableBothWays(terrain, wx, wy, goal.cls, goal.tier)
-          ) {
-            f |= STAGE1_QUAD_OK;
-          }
-        }
-        if (lx >= 1 && lx + 1 < w && ly >= 1 && ly + 1 < h) {
-          const cW = integration[local - 1] ?? UNREACHABLE;
-          const cE = integration[local + 1] ?? UNREACHABLE;
-          const cN = integration[local - w] ?? UNREACHABLE;
-          const cS = integration[local + w] ?? UNREACHABLE;
-          if (
-            cW < UNREACHABLE &&
-            cE < UNREACHABLE &&
-            cN < UNREACHABLE &&
-            cS < UNREACHABLE &&
-            terrain.stepCost(wx, wy, wx - 1, wy, goal.cls, goal.tier) >= 0 &&
-            terrain.stepCost(wx, wy, wx + 1, wy, goal.cls, goal.tier) >= 0 &&
-            terrain.stepCost(wx, wy, wx, wy - 1, goal.cls, goal.tier) >= 0 &&
-            terrain.stepCost(wx, wy, wx, wy + 1, goal.cls, goal.tier) >= 0
-          ) {
-            f |= STAGE2_CARD_OK;
-          }
-        }
-        flags[local] = f;
-      }
-    }
-    const field: SectorField = { x0, y0, x1, y1, w, dx, dy, cost: integration, flags };
-    fields.set(key, field);
     return field;
   }
 
+  function costAtCell(field: GoalField, sc: SlotCache, x: number, y: number): number {
+    const width = terrain.width;
+    if (x < 0 || y < 0 || x >= width || y >= terrain.height) {
+      return INF;
+    }
+    const idx = y * width + x;
+    if ((field.state[idx] as number) === 2) {
+      return field.u[idx] as number;
+    }
+    if (field.gx < 0 || field.gy < 0 || field.gx >= width || field.gy >= terrain.height) {
+      return INF;
+    }
+    const gIdx = field.gy * width + field.gx;
+    if (!sc.ensureCellBaked(x, y, idx) || !sc.ensureCellBaked(field.gx, field.gy, gIdx)) {
+      return INF;
+    }
+    if (sc.compValid && !sc.sameComponent(x, y, field.gx, field.gy)) {
+      return INF;
+    }
+    expandUntil(pools, field, sc, terrain, idx);
+    return (field.state[idx] as number) === 2 ? (field.u[idx] as number) : INF;
+  }
+
+  function ensureStage1Quad(field: GoalField, sc: SlotCache, x00: number, y00: number): boolean {
+    if (x00 < 0 || x00 + 1 >= terrain.width || y00 < 0 || y00 + 1 >= terrain.height) {
+      return false;
+    }
+    const qIdx = y00 * terrain.width + x00;
+    const flags = field.quadFlags[qIdx] as number;
+    if ((flags & STAGE1_QUAD_DONE) !== 0) {
+      return (flags & STAGE1_QUAD_OK) !== 0;
+    }
+    const c00 = costAtCell(field, sc, x00, y00);
+    const c10 = costAtCell(field, sc, x00 + 1, y00);
+    const c01 = costAtCell(field, sc, x00, y00 + 1);
+    const c11 = costAtCell(field, sc, x00 + 1, y00 + 1);
+    const ok =
+      c00 < INF && c10 < INF && c01 < INF && c11 < INF && quadPassableBothWays(sc, x00, y00);
+    field.quadFlags[qIdx] = flags | STAGE1_QUAD_DONE | (ok ? STAGE1_QUAD_OK : 0);
+    return ok;
+  }
+
   function discreteDirAt(
-    goalId: number,
+    field: GoalField,
+    sc: SlotCache,
     goal: Goal,
     x: number,
     y: number,
     out: Direction,
-  ): SectorField | null {
-    if (!terrain.inBounds(x, y)) {
-      return null;
+  ): boolean {
+    const cx = Math.floor(x);
+    const cy = Math.floor(y);
+    const width = terrain.width;
+    if (cx < 0 || cy < 0 || cx >= width || cy >= terrain.height) {
+      return false;
     }
-    const sector = sectorOfCell(terrain, y * terrain.width + x);
-    const field = sectorField(goalId, goal, sector);
-    const local = (y - field.y0) * field.w + (x - field.x0);
-    const dx = field.dx[local] ?? 0;
-    const dy = field.dy[local] ?? 0;
-    // (0,0) on a non-goal cell means unreachable.
-    if (dx === 0 && dy === 0) {
-      const isGoal = x === goal.x && y === goal.y;
-      if (!isGoal) {
-        return null;
+    const idx = cy * width + cx;
+    let here: number;
+    if ((field.state[idx] as number) === 2) {
+      here = field.u[idx] as number;
+      if (here === 0) {
+        out.dx = 0;
+        out.dy = 0;
+        return true;
+      }
+      const packed = field.dirPacked[idx] as number;
+      if (packed !== 0) {
+        out.dx = DIR_DX[packed - 1] as number;
+        out.dy = DIR_DY[packed - 1] as number;
+        return true;
+      }
+    } else {
+      here = costAtCell(field, sc, cx, cy);
+      if (here >= INF) {
+        return false;
+      }
+      if (here === 0) {
+        out.dx = 0;
+        out.dy = 0;
+        return true;
       }
     }
-    out.dx = dx;
-    out.dy = dy;
-    return field;
+
+    const mask = sc.dirMask[idx] as number;
+    let bestTotal = INF;
+    let bestDir = -1;
+    for (let d = 0; d < 8; d++) {
+      if ((mask & (1 << d)) === 0) {
+        continue;
+      }
+      const dir = DIR_ORDER[d];
+      if (dir === undefined) {
+        continue;
+      }
+      const nx = cx + dir[0];
+      const ny = cy + dir[1];
+      const ni = ny * width + nx;
+      if ((field.state[ni] as number) !== 2) {
+        continue;
+      }
+      const uNext = field.u[ni] as number;
+      if (uNext >= here) {
+        continue;
+      }
+      const step =
+        goal.tier === STD_TIER && d < 4
+          ? (sc.enterCost[ni] as number)
+          : terrain.stepCost(cx, cy, nx, ny, goal.cls, goal.tier) * SCALE;
+      const total = uNext + step;
+      if (total < bestTotal) {
+        bestTotal = total;
+        bestDir = d;
+      }
+    }
+    if (bestDir === -1) {
+      return false;
+    }
+    field.dirPacked[idx] = bestDir + 1;
+    out.dx = DIR_DX[bestDir] as number;
+    out.dy = DIR_DY[bestDir] as number;
+    return true;
   }
 
-  function acquireGoal(
-    x: number,
-    y: number,
-    cls: number,
-    tier: ClearanceTier = CLEARANCE_STANDARD,
-  ): number {
+  function acquireGoal(x: number, y: number, cls: number, tier: ClearanceTier = STD_TIER): number {
     // Goals are cells: quantize so callers may pass entity positions.
     const gx = Math.floor(x);
     const gy = Math.floor(y);
-    const resolvedTier: ClearanceTier =
-      tier === CLEARANCE_HEAVY ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
+    const resolvedTier: ClearanceTier = tier === HEAVY_TIER ? HEAVY_TIER : STD_TIER;
     const key = goalKey(gx, gy, cls, resolvedTier);
     const existing = goalByKey.get(key);
     if (existing !== undefined) {
-      const goal = goals.get(existing);
+      const goal = goalSlots[existing];
       if (goal !== undefined) {
         goal.refcount += 1;
       }
       return existing;
     }
     const id = freeIds.length > 0 ? (freeIds.shift() ?? 0) : nextId++;
-    goals.set(id, { x: gx, y: gy, cls, tier: resolvedTier, refcount: 1 });
+    goalSlots[id] = { x: gx, y: gy, cls, tier: resolvedTier, refcount: 1 };
     goalByKey.set(key, id);
     return id;
   }
 
   function releaseGoal(goalId: number): void {
-    const goal = goals.get(goalId);
+    const goal = goalSlots[goalId];
     if (goal === undefined) {
       return;
     }
@@ -407,13 +314,12 @@ export function createPathingModule(
     if (goal.refcount > 0) {
       return;
     }
-    goals.delete(goalId);
+    goalSlots[goalId] = undefined;
     goalByKey.delete(goalKey(goal.x, goal.y, goal.cls, goal.tier));
-    portalDists.delete(goalId);
-    for (const key of fields.keys()) {
-      if (Math.floor(key / 4096) === goalId) {
-        fields.delete(key);
-      }
+    const field = fieldSlots[goalId];
+    if (field !== undefined) {
+      releaseGoalField(pools, field);
+      fieldSlots[goalId] = undefined;
     }
     // Lowest-free-id reuse: keep the free list sorted.
     const insertAt = freeIds.findIndex((f) => f > goalId);
@@ -429,26 +335,68 @@ export function createPathingModule(
     releaseGoal,
 
     goalRefCount(goalId) {
-      return goals.get(goalId)?.refcount ?? 0;
+      return goalSlots[goalId]?.refcount ?? 0;
+    },
+
+    reachable(sx, sy, gx, gy, cls, tier = STD_TIER) {
+      const resolvedTier: ClearanceTier = tier === HEAVY_TIER ? HEAVY_TIER : STD_TIER;
+      const sc = ensureSlotCache(cls, resolvedTier);
+      return sc.sameComponent(Math.floor(sx), Math.floor(sy), Math.floor(gx), Math.floor(gy));
+    },
+
+    distanceAt(goalId, px, py) {
+      const goal = goalSlots[goalId];
+      if (goal === undefined) {
+        return null;
+      }
+      const isHeavy = goal.tier === HEAVY_TIER;
+      const cx = isHeavy ? Math.floor(px - 0.5) : Math.floor(px);
+      const cy = isHeavy ? Math.floor(py - 0.5) : Math.floor(py);
+      const sc = ensureSlotCache(goal.cls, goal.tier);
+      const field = ensureGoalField(goalId, goal);
+      const here = costAtCell(field, sc, cx, cy);
+      if (here >= INF) {
+        return null;
+      }
+      const halfOffset = isHeavy ? 1 : 0.5;
+      const x00 = px >= cx + halfOffset ? cx : cx - 1;
+      const y00 = py >= cy + halfOffset ? cy : cy - 1;
+      if (ensureStage1Quad(field, sc, x00, y00)) {
+        const width = terrain.width;
+        const i00 = y00 * width + x00;
+        const c00 = field.u[i00] as number;
+        const c10 = field.u[i00 + 1] as number;
+        const c01 = field.u[i00 + width] as number;
+        const c11 = field.u[i00 + width + 1] as number;
+        const tx = Math.max(0, Math.min(1, px - (x00 + halfOffset)));
+        const ty = Math.max(0, Math.min(1, py - (y00 + halfOffset)));
+        const interp = (1 - ty) * ((1 - tx) * c00 + tx * c10) + ty * ((1 - tx) * c01 + tx * c11);
+        return interp / GROUND_SCALED;
+      }
+      return here / GROUND_SCALED;
     },
 
     directionAt(goalId, x, y) {
-      const goal = goals.get(goalId);
+      const goal = goalSlots[goalId];
       if (goal === undefined) {
         return null;
       }
-      return discreteDirAt(goalId, goal, x, y, scratch) === null ? null : scratch;
+      const sc = ensureSlotCache(goal.cls, goal.tier);
+      const field = ensureGoalField(goalId, goal);
+      return discreteDirAt(field, sc, goal, x, y, scratch) ? scratch : null;
     },
 
     smoothDirectionAt(goalId, px, py) {
-      const goal = goals.get(goalId);
+      const goal = goalSlots[goalId];
       if (goal === undefined) {
         return null;
       }
-      const cx = clearanceAnchorCell(px, goal.tier);
-      const cy = clearanceAnchorCell(py, goal.tier);
-      const field = discreteDirAt(goalId, goal, cx, cy, smoothScratch);
-      if (field === null) {
+      const sc = ensureSlotCache(goal.cls, goal.tier);
+      const field = ensureGoalField(goalId, goal);
+      const isHeavy = goal.tier === HEAVY_TIER;
+      const cx = isHeavy ? Math.floor(px - 0.5) : Math.floor(px);
+      const cy = isHeavy ? Math.floor(py - 0.5) : Math.floor(py);
+      if (!discreteDirAt(field, sc, goal, cx, cy, smoothScratch)) {
         return null;
       }
       const d0x = smoothScratch.dx;
@@ -456,56 +404,71 @@ export function createPathingModule(
       if (d0x === 0 && d0y === 0) {
         return smoothScratch;
       }
-      const { x0, y0, x1, y1, w, cost, flags } = field;
+      const width = terrain.width;
+      const height = terrain.height;
 
-      // Stage 1: Intra-sector dual-quad bilinear gradient.
-      const centerX = clearanceAnchorCenter(cx, goal.tier);
-      const centerY = clearanceAnchorCenter(cy, goal.tier);
-      const x00 = px >= centerX ? cx : cx - 1;
-      const y00 = py >= centerY ? cy : cy - 1;
-      if (x00 >= x0 && x00 + 1 <= x1 && y00 >= y0 && y00 + 1 <= y1) {
-        const idx = (y00 - y0) * w + (x00 - x0);
-        if (((flags[idx] ?? 0) & STAGE1_QUAD_OK) !== 0) {
-          const c00 = cost[idx] ?? UNREACHABLE;
-          const c10 = cost[idx + 1] ?? UNREACHABLE;
-          const c01 = cost[idx + w] ?? UNREACHABLE;
-          const c11 = cost[idx + w + 1] ?? UNREACHABLE;
-          const tx = Math.max(0, Math.min(1, px - clearanceAnchorCenter(x00, goal.tier)));
-          const ty = Math.max(0, Math.min(1, py - clearanceAnchorCenter(y00, goal.tier)));
-          const gx = (1 - ty) * (c00 - c10) + ty * (c01 - c11);
-          const gy = (1 - tx) * (c00 - c01) + tx * (c10 - c11);
-          if (gx * d0x + gy * d0y > 0) {
+      // Stage 1: Full-map seamless 2x2 dual-quad bilinear gradient.
+      const halfOffset = isHeavy ? 1 : 0.5;
+      const x00 = px >= cx + halfOffset ? cx : cx - 1;
+      const y00 = py >= cy + halfOffset ? cy : cy - 1;
+      if (ensureStage1Quad(field, sc, x00, y00)) {
+        const i00 = y00 * width + x00;
+        const c00 = field.u[i00] as number;
+        const c10 = field.u[i00 + 1] as number;
+        const c01 = field.u[i00 + width] as number;
+        const c11 = field.u[i00 + width + 1] as number;
+        const tx = Math.max(0, Math.min(1, px - (x00 + halfOffset)));
+        const ty = Math.max(0, Math.min(1, py - (y00 + halfOffset)));
+        const gx = (1 - ty) * (c00 - c10) + ty * (c01 - c11);
+        const gy = (1 - tx) * (c00 - c01) + tx * (c10 - c11);
+        if (gx * d0x + gy * d0y > 0) {
+          const len = Math.sqrt(gx * gx + gy * gy);
+          if (len > 0) {
+            smoothScratch.dx = gx / len;
+            smoothScratch.dy = gy / len;
+            return smoothScratch;
+          }
+        }
+      }
+
+      // Stage 2: Full-map safe cardinal central difference.
+      if (cx >= 1 && cx + 1 < width && cy >= 1 && cy + 1 < height) {
+        const cIdx = cy * width + cx;
+        let cFlags = field.quadFlags[cIdx] as number;
+        if ((cFlags & STAGE2_CARD_DONE) === 0) {
+          const cW = costAtCell(field, sc, cx - 1, cy);
+          const cE = costAtCell(field, sc, cx + 1, cy);
+          const cN = costAtCell(field, sc, cx, cy - 1);
+          const cS = costAtCell(field, sc, cx, cy + 1);
+          const ok =
+            cW < INF &&
+            cE < INF &&
+            cN < INF &&
+            cS < INF &&
+            ((sc.dirMask[cIdx] as number) & 15) === 15;
+          cFlags |= STAGE2_CARD_DONE | (ok ? STAGE2_CARD_OK : 0);
+          field.quadFlags[cIdx] = cFlags;
+        }
+        if ((cFlags & STAGE2_CARD_OK) !== 0) {
+          const cW = field.u[cIdx - 1] as number;
+          const cE = field.u[cIdx + 1] as number;
+          const cN = field.u[cIdx - width] as number;
+          const cS = field.u[cIdx + width] as number;
+          const gx = cW - cE;
+          const gy = cN - cS;
+          const sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;
+          const sy = gy > 0 ? 1 : gy < 0 ? -1 : 0;
+          if (
+            gx * d0x + gy * d0y > 0 &&
+            (sx !== 0 || sy !== 0) &&
+            terrain.stepCost(cx, cy, cx + sx, cy + sy, goal.cls, goal.tier) >= 0
+          ) {
             const len = Math.sqrt(gx * gx + gy * gy);
             if (len > 0) {
               smoothScratch.dx = gx / len;
               smoothScratch.dy = gy / len;
               return smoothScratch;
             }
-          }
-        }
-      }
-
-      // Stage 2: Intra-sector safe cardinal central difference.
-      const localIdx = (cy - y0) * w + (cx - x0);
-      if (((flags[localIdx] ?? 0) & STAGE2_CARD_OK) !== 0) {
-        const cW = cost[localIdx - 1] ?? UNREACHABLE;
-        const cE = cost[localIdx + 1] ?? UNREACHABLE;
-        const cN = cost[localIdx - w] ?? UNREACHABLE;
-        const cS = cost[localIdx + w] ?? UNREACHABLE;
-        const gx = cW - cE;
-        const gy = cN - cS;
-        const sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;
-        const sy = gy > 0 ? 1 : gy < 0 ? -1 : 0;
-        if (
-          gx * d0x + gy * d0y > 0 &&
-          (sx !== 0 || sy !== 0) &&
-          terrain.stepCost(cx, cy, cx + sx, cy + sy, goal.cls, goal.tier) >= 0
-        ) {
-          const len = Math.sqrt(gx * gx + gy * gy);
-          if (len > 0) {
-            smoothScratch.dx = gx / len;
-            smoothScratch.dy = gy / len;
-            return smoothScratch;
           }
         }
       }
@@ -520,17 +483,10 @@ export function createPathingModule(
     },
 
     invalidateCells(cells) {
-      for (let slot = 0; slot < graphs.length; slot++) {
-        const clsGraph = graphs[slot];
-        if (clsGraph !== undefined) {
-          clsGraph.invalidate(cells);
-          nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
-        }
+      for (const sc of slotCaches) {
+        sc?.invalidate(cells);
       }
-      // Portal-node indices change on rebuild: all cached distances are
-      // stale, and every sector field derives from them.
-      portalDists.clear();
-      fields.clear();
+      recycleAllFields();
     },
   };
 
@@ -539,13 +495,25 @@ export function createPathingModule(
     install(builder) {
       builder.state('frontline_td:pathing.goals', {
         save(): Serializable {
-          const entries = [...goals.entries()]
-            .sort((a, b) => a[0] - b[0])
-            .map(([id, g]) =>
-              g.tier === CLEARANCE_STANDARD
+          const entries: {
+            id: number;
+            x: number;
+            y: number;
+            cls: number;
+            ref: number;
+            tier?: number;
+          }[] = [];
+          for (let id = 0; id < goalSlots.length; id++) {
+            const g = goalSlots[id];
+            if (g === undefined) {
+              continue;
+            }
+            entries.push(
+              g.tier === STD_TIER
                 ? { id, x: g.x, y: g.y, cls: g.cls, ref: g.refcount }
                 : { id, x: g.x, y: g.y, cls: g.cls, ref: g.refcount, tier: g.tier },
             );
+          }
           return { nextId, freeIds: [...freeIds], entries };
         },
         load(data: Serializable): void {
@@ -561,27 +529,26 @@ export function createPathingModule(
               tier?: number;
             }[];
           };
-          goals.clear();
+          goalSlots.length = 0;
           goalByKey.clear();
           freeIds.length = 0;
           freeIds.push(...saved.freeIds);
           nextId = saved.nextId;
           for (const entry of saved.entries) {
-            const rawTier = entry.tier ?? CLEARANCE_STANDARD;
-            const tier: ClearanceTier =
-              rawTier === CLEARANCE_HEAVY ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
-            goals.set(entry.id, {
+            const rawTier = entry.tier ?? STD_TIER;
+            const tier: ClearanceTier = rawTier === HEAVY_TIER ? HEAVY_TIER : STD_TIER;
+            goalSlots[entry.id] = {
               x: entry.x,
               y: entry.y,
               cls: entry.cls,
               tier,
               refcount: entry.ref,
-            });
+            };
             goalByKey.set(goalKey(entry.x, entry.y, entry.cls, tier), entry.id);
           }
-          // The blocked overlay may differ from construction time: rebuild
-          // all class graphs and derived caches against the restored terrain.
-          rebuildGraphs();
+          // The blocked overlay may differ from construction time: reset all
+          // derived caches against the restored terrain.
+          resetCaches();
         },
       });
     },

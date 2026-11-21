@@ -15,11 +15,12 @@ const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
 // This world installs terrain + pathing + movement + units only. The
-// golden was re-derived for Batch S3 (ADR 0054: FormationGuide intent &
-// movement steering integration). Any further change to movement or those
-// serialized inputs legitimately changes the hash; update it in the same
-// commit with the reason.
-const GOLDEN_HASH = '5bb891b5ccdc90c6';
+// golden was re-derived for Batch P1 (ADR 0055: single-grid resumable
+// upwind Eikonal flow fields at COST_SCALE = 32 replacing hierarchical
+// sector/portal fields).
+// Any further change to movement or those serialized inputs legitimately
+// changes the hash; update it in the same commit with the reason.
+const GOLDEN_HASH = '32705a7c68143664';
 
 function makeSim() {
   const db = loadContent();

@@ -13,6 +13,8 @@ function stubPathing(
       released.push(goalId);
     },
     goalRefCount: () => 1,
+    reachable: () => true,
+    distanceAt: () => 0,
     directionAt: (_goalId, x, y) => direction(x, y),
     smoothDirectionAt: (_goalId, x, y) => direction(Math.floor(x), Math.floor(y)),
     invalidateCells: () => {},
