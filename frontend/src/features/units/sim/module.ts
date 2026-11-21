@@ -59,6 +59,8 @@ export function createUnitsModule(
   return {
     id: 'frontline_td:units',
     install(builder) {
+      // UnitKind is baked at spawn; no system writes it.
+      builder.ownComponent(UnitKind);
       builder.onStart((ctx) => {
         const occupied = new Set<number>();
         for (const start of starts) {

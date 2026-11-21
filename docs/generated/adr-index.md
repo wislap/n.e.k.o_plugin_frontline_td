@@ -21,7 +21,7 @@
 | [0042](../adr/0042-verification-segmentation-parallel-ci.md) | 验证分段与 CI 并行 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-18 |
 | [0043](../adr/0043-review-remediation.md) | 评审整改约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-18 |
 | [0044](../adr/0044-adr-implementation-field.md) | ADR 实现状态字段 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-19 |
-| [0046](../adr/0046-doc-consistency-conventions.md) | 文档一致性约定 | 已采纳 | 部分（功能 README 尚未按第 3、4 条改写，check-docs 的链接检查未做） | wislap | 治理 | 2026-11-20 |
+| [0046](../adr/0046-doc-consistency-conventions.md) | 文档一致性约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -34,6 +34,7 @@
 | [0019](../adr/0019-factions-and-pluggable-modes.md) | 阵营模型与玩法可插拔 | 已采纳；部分被 0038 取代（归属变更方式：占领后新建实体，不改写 Faction） | 已实现 | wislap | M1 前置 | 2026-11-15 |
 | [0023](../adr/0023-grid-layers-groups-commands-rng-runtime-limits.md) | 网格图层、编组、命令 schema、RNG 登记与运行时限制 | 已采纳；部分被 0034 取代（编组可嵌套：小队为单层，嵌套编组不做） | 部分（经济收入来源注册接口未做） | wislap | M1 前置 | 2026-11-15 |
 | [0045](../adr/0045-second-review-conventions.md) | 第二轮评审整改约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
+| [0047](../adr/0047-component-ownership-manifest.md) | 组件归属声明与契约清单 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
 
 ### 模拟
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -43,7 +44,7 @@
 | [0013](../adr/0013-modifier-pipeline.md) | 修正值管线 | 已采纳 | 已实现（目前仅 MoveSpeed 使用） | wislap | M0 架构基线 | 2026-11-14 |
 | [0020](../adr/0020-numeric-time-capacity-conventions.md) | 数值、时间与容量约定 | 已采纳 | 已实现 | wislap | M1 前置 | 2026-11-15 |
 | [0021](../adr/0021-scheduled-effects-entity-relations.md) | 延迟效果与实体关系 | 已采纳；部分被 0043 取代（容纳关系的 ContainedIn 契约组件设计） | 已实现（调度队列已实现，尚无生产使用方） | wislap | M1 前置 | 2026-11-15 |
-| [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳；部分被 0043 取代（契约组件清单中的 ContainedIn） | 已实现 | wislap | M1 模拟核心 | 2026-11-15 |
+| [0026](../adr/0026-kernel-implementation-conventions.md) | 模拟内核的实现约定 | 已采纳；部分被 0043 取代（契约组件清单中的 ContainedIn）、部分被 0047 取代（组件归属不再只由 claimWriter 表达：新增 ownComponent，声明 spawn 即挂但无字段写者的组件） | 已实现 | wislap | M1 模拟核心 | 2026-11-15 |
 | [0034](../adr/0034-squads.md) | 小队 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0035](../adr/0035-assault-mode-director-victory.md) | 攻占模式、导演与胜负 | 已采纳；部分被 0038 取代（波次目标） | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
@@ -153,3 +154,4 @@
 - [0044 ADR 实现状态字段](../adr/0044-adr-implementation-field.md)
 - [0045 第二轮评审整改约定](../adr/0045-second-review-conventions.md)
 - [0046 文档一致性约定](../adr/0046-doc-consistency-conventions.md)
+- [0047 组件归属声明与契约清单](../adr/0047-component-ownership-manifest.md)

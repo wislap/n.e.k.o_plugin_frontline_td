@@ -341,14 +341,19 @@ interface ManifestLike {
       reads: string[];
       emits: string[];
     }[];
-    commands: string[];
-    effects: string[];
+    commands: { id: string; emits: string[] }[];
+    effects: { id: string; emits: string[] }[];
     channels: string[];
     states: string[];
     inspectors: string[];
     probes: string[];
   }[];
-  components: { id: string; fields: Record<string, string>; writer: string | null }[];
+  components: {
+    id: string;
+    fields: Record<string, string>;
+    owner: string | null;
+    writer: string | null;
+  }[];
   layers: { id: string; type: string; perFaction: boolean; writer: string | null }[];
   messages: { type: string; kind: string; visibility?: string }[];
 }
@@ -358,6 +363,24 @@ const EMPTY = '—';
 
 function orEmpty(items: readonly string[]): string {
   return items.length === 0 ? EMPTY : items.map((i) => `\`${i}\``).join(LIST_SEP);
+}
+
+// Every defined component must show up in the manifest with an owner:
+// a defined-but-unowned component is dead schema (ADR 0047).
+export function checkComponentOwnership(
+  manifest: ManifestLike,
+  registryIds: Iterable<string>,
+): string[] {
+  const owners = new Map(manifest.components.map((c) => [c.id, c.owner]));
+  const errors: string[] = [];
+  for (const id of registryIds) {
+    if (!owners.has(id)) {
+      errors.push(`component '${id}' is defined but does not appear in the manifest`);
+    } else if (owners.get(id) === null) {
+      errors.push(`component '${id}' is defined but no module owns it`);
+    }
+  }
+  return errors;
 }
 
 function renderContracts(manifest: ManifestLike): string {
@@ -388,20 +411,39 @@ function renderContracts(manifest: ManifestLike): string {
         out.push('', `- ${label}：${orEmpty(items)}`);
       }
     };
-    list('命令', module.commands);
-    list('延迟效果', module.effects);
+    const listEmitting = (
+      label: string,
+      items: readonly { id: string; emits: string[] }[],
+    ): void => {
+      if (items.length > 0) {
+        out.push(
+          '',
+          `- ${label}：${items
+            .map(
+              (item) =>
+                `\`${item.id}\`` +
+                (item.emits.length > 0 ? `（发出：${orEmpty(item.emits)}）` : ''),
+            )
+            .join(LIST_SEP)}`,
+        );
+      }
+    };
+    listEmitting('命令', module.commands);
+    listEmitting('延迟效果', module.effects);
     list('快照通道', module.channels);
     list('模块状态', module.states);
     list('检查器', module.inspectors);
     list('探针', module.probes);
   }
 
-  out.push('', '## 组件', '', '| 组件 | 字段 | 写者 |', '|---|---|---|');
+  out.push('', '## 组件', '', '| 组件 | 字段 | 所属 | 写者 |', '|---|---|---|---|');
   for (const c of manifest.components) {
     const fields = Object.entries(c.fields)
       .map(([name, type]) => `${name}: ${type}`)
       .join(LIST_SEP);
-    out.push(`| \`${c.id}\` | ${fields === '' ? EMPTY : fields} | ${c.writer ?? EMPTY} |`);
+    out.push(
+      `| \`${c.id}\` | ${fields === '' ? EMPTY : fields} | ${c.owner ?? EMPTY} | ${c.writer ?? EMPTY} |`,
+    );
   }
 
   out.push('', '## 网格层', '', '| 层 | 类型 | 按阵营 | 写者 |', '|---|---|---|---|');
@@ -637,7 +679,7 @@ const GENERATORS: Generator[] = [
     name: 'contracts',
     outputPath: path.join(PLUGIN_ROOT, 'docs', 'generated', 'contracts.md'),
     generate: async () => {
-      const content = await withViteSsr(async (load: SsrLoad) => {
+      const result = await withViteSsr(async (load: SsrLoad) => {
         const assault = (await load('/src/modes/assault/index.ts')) as {
           defaultSetup: (seed: number) => unknown;
         };
@@ -650,9 +692,18 @@ const GENERATORS: Generator[] = [
         if ('error' in resolved) {
           throw new Error(`resolveSetup(defaultSetup(1)) failed: ${resolved.error}`);
         }
-        return renderContracts(resolved.sim.describe());
+        // Same module instance as the sim: the registry holds every
+        // defineComponent the app transitively loaded.
+        const kernel = (await load('/src/kernel/components.ts')) as {
+          COMPONENT_REGISTRY: Map<string, unknown>;
+        };
+        const manifest = resolved.sim.describe();
+        return {
+          content: renderContracts(manifest),
+          errors: checkComponentOwnership(manifest, kernel.COMPONENT_REGISTRY.keys()),
+        };
       });
-      return { content, errors: [] };
+      return result;
     },
   },
   {

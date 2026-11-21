@@ -155,6 +155,8 @@ export function createVisionModule(
       id: 'frontline_td:vision',
       install(builder) {
         const visionW = builder.claimLayerWriter(VisionLayer);
+        // Vision fields are baked at spawn (radius/x/y from content).
+        builder.ownComponent(Vision);
 
         builder.state('frontline_td:vision', {
           save(): Serializable {

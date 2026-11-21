@@ -41,6 +41,9 @@ import {
   CargoStore,
   EnergyEmptyModifier,
   EnergyLowModifier,
+  FixedAttach,
+  Interceptor,
+  LogisticsNode,
   SiteStore,
 } from './components';
 import type { FactionState, LogisticsEnv } from './env';
@@ -217,6 +220,10 @@ export function createLogisticsModule(
       const emptyW: ModWriter = builder.claimWriter(EnergyEmptyModifier);
       const layerW: GridLayerWriter = builder.claimLayerWriter(ServiceLayer);
       const roadW: GridLayerWriter = builder.claimLayerWriter(RoadLayer);
+      // Spawn-time attach only (road segment parts); no system writes it.
+      builder.ownComponent(FixedAttach);
+      builder.ownComponent(LogisticsNode);
+      builder.ownComponent(Interceptor);
 
       env = {
         db,

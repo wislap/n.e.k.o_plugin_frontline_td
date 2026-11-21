@@ -195,6 +195,8 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
       velW = builder.claimWriter(Velocity);
       posW = builder.claimWriter(Position);
       tgtW = builder.claimWriter(MoveTarget);
+      // Mover is read-only after spawn (stats come from content).
+      builder.ownComponent(Mover);
 
       installMovementIntents(builder, terrain, pathing, tgtW);
 

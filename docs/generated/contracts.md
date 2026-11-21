@@ -30,7 +30,7 @@
 | `frontline_td:movement.integrate` | movement | 1 | 0 | — | — |
 | `frontline_td:movement.release_dead` | cleanup | 1 | 0 | `frontline_td:combat.died` | — |
 
-- 命令：`frontline_td:movement.move`
+- 命令：`frontline_td:movement.move`（发出：`frontline_td:movement.ordered`）
 
 ### `frontline_td:logistics`
 
@@ -144,35 +144,45 @@
 
 - 探针：`frontline_td:assault.hivehp.f1`、`frontline_td:assault.hivehp.f2`、`frontline_td:assault.stock.f1.ammo`、`frontline_td:assault.stock.f1.energy`、`frontline_td:assault.stock.f1.material`、`frontline_td:assault.stock.f1.ore`、`frontline_td:assault.stock.f2.ammo`、`frontline_td:assault.stock.f2.energy`、`frontline_td:assault.stock.f2.material`、`frontline_td:assault.stock.f2.ore`、`frontline_td:assault.structures.f1`、`frontline_td:assault.structures.f2`、`frontline_td:assault.units.f1`、`frontline_td:assault.units.f2`、`frontline_td:assault.waves.f1`、`frontline_td:assault.waves.f2`
 
+### `kernel`
+
+无系统。
+
+- 探针：`frontline_td:kernel.entities`、`frontline_td:kernel.tick`
+
 ## 组件
 
-| 组件 | 字段 | 写者 |
-|---|---|---|
-| `frontline_td:blueprint` | kind: u16、x: u16、y: u16、activated: u8、orderTick: u32 | frontline_td:construction |
-| `frontline_td:capture` | owner: u16、progress: u32、done: u8、kind: u16、x: u16、y: u16、leader: u16、contested: u8 | frontline_td:capture |
-| `frontline_td:combat.health` | hp: i32、max: i32 | frontline_td:combat |
-| `frontline_td:combat.targetable` | radius: f64 | — |
-| `frontline_td:combat.weapon` | range: f64、damage: i32、cooldown: u32、readyAt: u32、costCargo: u16、costAmount: i32、target: f64 | frontline_td:combat |
-| `frontline_td:construction_progress` | progress: u32、total: u32、mode: u8 | frontline_td:construction |
-| `frontline_td:core` | — | frontline_td:construction |
-| `frontline_td:faction` | id: u16 | kernel |
-| `frontline_td:in_world` | — | kernel |
-| `frontline_td:logistics.cargo_store` | cargo0: u16、cap0: i32、amt0: i32、cls0: u8、flags0: u8、since0: u32、rate0: i32、unmet0: u8、cargo1: u16、cap1: i32、amt1: i32、cls1: u8、flags1: u8、since1: u32、rate1: i32、unmet1: u8、cargo2: u16、cap2: i32、amt2: i32、cls2: u8、flags2: u8、since2: u32、rate2: i32、unmet2: u8、cargo3: u16、cap3: i32、amt3: i32、cls3: u8、flags3: u8、since3: u32、rate3: i32、unmet3: u8、bottleneck: f64 | frontline_td:logistics |
-| `frontline_td:logistics.energy_empty` | value: i32 | frontline_td:logistics |
-| `frontline_td:logistics.energy_low` | value: i32 | frontline_td:logistics |
-| `frontline_td:logistics.interceptor` | strengthBp: i32 | — |
-| `frontline_td:logistics.node` | connect: i32、service: f64、vehicles: u16、warehouse: u8、w: u8、h: u8 | — |
-| `frontline_td:logistics.site` | kind: u16 | frontline_td:logistics |
-| `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8 | frontline_td:movement |
-| `frontline_td:movement.mover` | speed: f64、radius: f64、cls: u8 | — |
-| `frontline_td:movement.position` | x: f64、y: f64 | frontline_td:movement |
-| `frontline_td:movement.velocity` | x: f64、y: f64 | frontline_td:movement |
-| `frontline_td:production.producer` | kind: u16、progress: u32、cycle: u8 | frontline_td:production |
-| `frontline_td:squads.member` | squad: u16 | frontline_td:squads |
-| `frontline_td:structure` | kind: u16、x: u16、y: u16 | frontline_td:construction |
-| `frontline_td:under_construction` | — | frontline_td:construction |
-| `frontline_td:units.kind` | kind: u16 | — |
-| `frontline_td:vision` | radius: u16、x: f64、y: f64 | — |
+| 组件 | 字段 | 所属 | 写者 |
+|---|---|---|---|
+| `frontline_td:blueprint` | kind: u16、x: u16、y: u16、activated: u8、orderTick: u32 | frontline_td:construction | frontline_td:construction |
+| `frontline_td:capture` | owner: u16、progress: u32、done: u8、kind: u16、x: u16、y: u16、leader: u16、contested: u8 | frontline_td:capture | frontline_td:capture |
+| `frontline_td:combat.health` | hp: i32、max: i32 | frontline_td:combat | frontline_td:combat |
+| `frontline_td:combat.targetable` | radius: f64 | frontline_td:combat | — |
+| `frontline_td:combat.weapon` | range: f64、damage: i32、cooldown: u32、readyAt: u32、costCargo: u16、costAmount: i32、target: f64 | frontline_td:combat | frontline_td:combat |
+| `frontline_td:construction_progress` | progress: u32、total: u32、mode: u8 | frontline_td:construction | frontline_td:construction |
+| `frontline_td:core` | — | frontline_td:construction | frontline_td:construction |
+| `frontline_td:faction` | id: u16 | kernel | kernel |
+| `frontline_td:in_world` | — | kernel | kernel |
+| `frontline_td:logistics.cargo_store` | cargo0: u16、cap0: i32、amt0: i32、cls0: u8、flags0: u8、since0: u32、rate0: i32、unmet0: u8、cargo1: u16、cap1: i32、amt1: i32、cls1: u8、flags1: u8、since1: u32、rate1: i32、unmet1: u8、cargo2: u16、cap2: i32、amt2: i32、cls2: u8、flags2: u8、since2: u32、rate2: i32、unmet2: u8、cargo3: u16、cap3: i32、amt3: i32、cls3: u8、flags3: u8、since3: u32、rate3: i32、unmet3: u8、bottleneck: f64 | frontline_td:logistics | frontline_td:logistics |
+| `frontline_td:logistics.energy_empty` | value: i32 | frontline_td:logistics | frontline_td:logistics |
+| `frontline_td:logistics.energy_low` | value: i32 | frontline_td:logistics | frontline_td:logistics |
+| `frontline_td:logistics.fixed_attach` | node: u32、gen: u32、lastMile: i32 | frontline_td:logistics | — |
+| `frontline_td:logistics.interceptor` | strengthBp: i32 | frontline_td:logistics | — |
+| `frontline_td:logistics.node` | connect: i32、service: f64、vehicles: u16、warehouse: u8、w: u8、h: u8 | frontline_td:logistics | — |
+| `frontline_td:logistics.site` | kind: u16 | frontline_td:logistics | frontline_td:logistics |
+| `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8 | frontline_td:movement | frontline_td:movement |
+| `frontline_td:movement.mover` | speed: f64、radius: f64、cls: u8 | frontline_td:movement | — |
+| `frontline_td:movement.position` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
+| `frontline_td:movement.velocity` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
+| `frontline_td:production.producer` | kind: u16、progress: u32、cycle: u8 | frontline_td:production | frontline_td:production |
+| `frontline_td:road_segment` | project: u32 | frontline_td:construction | — |
+| `frontline_td:ruin` | — | frontline_td:construction | — |
+| `frontline_td:salvage` | — | frontline_td:construction | — |
+| `frontline_td:squads.member` | squad: u16 | frontline_td:squads | frontline_td:squads |
+| `frontline_td:structure` | kind: u16、x: u16、y: u16 | frontline_td:construction | frontline_td:construction |
+| `frontline_td:under_construction` | — | kernel | frontline_td:construction |
+| `frontline_td:units.kind` | kind: u16 | frontline_td:units | — |
+| `frontline_td:vision` | radius: u16、x: f64、y: f64 | frontline_td:vision | — |
 
 ## 网格层
 
@@ -204,8 +214,8 @@
 | `frontline_td:logistics.consume` | intent | — |
 | `frontline_td:logistics.deposit` | intent | — |
 | `frontline_td:logistics.set_priorities` | command | — |
-| `frontline_td:movement.move` | intent | — |
 | `frontline_td:movement.move` | command | — |
+| `frontline_td:movement.move` | intent | — |
 | `frontline_td:movement.ordered` | event | all |
 | `frontline_td:movement.stop` | intent | — |
 | `frontline_td:squads.assign` | command | — |

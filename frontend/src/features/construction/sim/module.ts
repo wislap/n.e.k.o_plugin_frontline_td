@@ -81,6 +81,12 @@ export function createConstructionModule(
         ruinParts: options.ruinParts ?? [],
       };
 
+      // Tag/spawn-only components this module owns but never writes
+      // fields of (ADR 0047).
+      builder.ownComponent(Salvage);
+      builder.ownComponent(Ruin);
+      builder.ownComponent(RoadSegment);
+
       // Per-tick bookkeeping: commands run before systems in the command
       // phase, so this clear lands after the tick's commands and the set
       // only ever covers one tick's cancel batches.

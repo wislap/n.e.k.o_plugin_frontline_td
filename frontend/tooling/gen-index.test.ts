@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ADR_DOMAINS,
+  checkComponentOwnership,
   exportSurfaceFiles,
   renderAdrIndex,
   renderExports,
@@ -379,5 +380,25 @@ describe('scanAdrs header scoping', () => {
     const content = renderAdrIndex(result.entries);
     const row0001 = content.split('\n').find((l) => l.includes('[0001]')) ?? '';
     expect(row0001).not.toContain('部分被 0002');
+  });
+});
+
+describe('checkComponentOwnership', () => {
+  const manifest = {
+    phases: [],
+    modules: [],
+    components: [
+      { id: 'a:owned', fields: {}, owner: 'mod', writer: 'mod' },
+      { id: 'a:unowned', fields: {}, owner: null, writer: null },
+    ],
+    layers: [],
+    messages: [],
+  };
+
+  it('flags defined components missing from the manifest or without an owner', () => {
+    expect(checkComponentOwnership(manifest, ['a:owned', 'a:unowned', 'a:absent'])).toEqual([
+      "component 'a:unowned' is defined but no module owns it",
+      "component 'a:absent' is defined but does not appear in the manifest",
+    ]);
   });
 });

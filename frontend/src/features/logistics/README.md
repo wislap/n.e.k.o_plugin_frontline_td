@@ -6,26 +6,33 @@
 
 ## 公开接口
 - `sim/index.ts`：`createLogisticsModule(db, terrain, opts)`（`starts`、
-  可选 `healthBp`）、`LogisticsNode`/`CargoStore`/`SiteStore`/
-  `FixedAttach`/`Interceptor` 组件、`unitParts`/`structureParts`/
-  `roadSegmentParts` 生成部件、`LogisticsModule`
-  （`blockersChanged`、`pave`、`linkPath`、`covered`、
-  `connectsToNetwork`、`energyBp`）。
+  可选 `healthBp`）；`unitParts`/`structureParts`/`roadSegmentParts`
+  生成部件；`LogisticsModule`（`blockersChanged`、`pave`、
+  `linkPath`、`covered`、`connectsToNetwork`、`energyBp`、`stockOf`）。
 - `protocol.ts`：`SetPrioritiesCommand`、`ConsumeIntent`/`DepositIntent`
   （`frontline_td:logistics.consume` / `.deposit`，负载
   `{ handle, cargo, amount }`，cargo 为货物注册表索引）、
   货类名/码、unmet 原因码、`LogisticsNetworkChannel`、
   `ROAD_LAYER_ID` 网格层。
 - `content.ts`：货物、store、node 与全局物流配置的内容 schema
-  （含 `roadLevels`、`segmentCells`、`corridorWidth`）。
+  （含 `roadLevels`、`segmentCells`、`corridorWidth`）、
+  `lowestBuildableRoadLevel`（客户端预览与下单共用）。
+- `render/`：`LogisticsOverlay`/`RoadLayer`/`RoadToolLayer`；
+  `ui/`：`StockPanel`/`RoadPanel`；检查器（节点/链路/存储）。
+  导出全表见 [exports.md](../../../../docs/generated/exports.md) 与
+  [contracts.md](../../../../docs/generated/contracts.md)。
 
 ## 拥有的组件
-- `LogisticsNode`（footprint、connect、service、vehicles、warehouse）；
-- `CargoStore`（4 槽：cargo/cap/amt/cls/flags/since/rate/unmet）；
-- `SiteStore` 标记；`EnergyLow`/`EnergyEmpty` 修改器组件；
-- `FixedAttach`（固定挂载 node+gen+lastMile，道路工地用）；
-- `Interceptor`（拦截强度 bp，由单位内容注入）；
-- 全局 u8 道路层 `frontline_td:logistics.road`（0 土路，≥1 等级）。
+- `LogisticsNode`（footprint、connect、service、vehicles、warehouse，
+  归属本模块）、`CargoStore`（4 槽：cargo/cap/amt/cls/flags/since/
+  rate/unmet）、`SiteStore { kind: u16 }`（工地槽，本模块写）。
+- `EnergyLow`/`EnergyEmpty` 修改器组件；`FixedAttach`（固定挂载
+  node+gen+lastMile，道路工地用）、`Interceptor`（拦截强度 bp，
+  由单位内容注入）——spawn 挂载、归属本模块、无字段写者
+  （ADR 0047）。
+- 网格层：全局 u8 道路层 `frontline_td:logistics.road`（0 土路，
+  ≥1 等级）、按阵营 `frontline_td:logistics.service`（覆盖位图）。
+- 序列化状态：`frontline_td:logistics.state`、`frontline_td:logistics.roads`。
 
 ## 不变量
 - 分配每 1 秒（cycleTicks）运行一次：先 rate，再 outbound、reserve、
@@ -51,11 +58,19 @@
   距离 ≤ `corridorWidth`（含包围盒预筛）求和 strengthBp，配额系数
   `max(0, 10000 − Σ)`；unmet 仍为 `no_capacity`，链路在快照中记
   `intercept` bp。
-- `pave` 只升不降并推路层版本；`linkPath` 返回上游（仓库侧）→ 下游
-  的折线、累计代价、上游节点与 `FixedAttach` 初始值。
+- `pave` 只升不降并推路层版本；`linkPath` 返回 `LinkPath`（上游
+  仓库侧 → 下游的折线格、逐格累计代价、逐格当前道路等级、上游
+  节点与两端节点 id）；工地段用的 `FixedAttach` 初始值由内部
+  `fixedAttachInit` 另行计算。
 - 数量用整数 milli 单位；运力与原因码用核心整数辅助函数。
 - 道路工具的选择存规范化端点句柄对 `RoadLinkKey`，不存链路下标；
   每帧和下单时再解析为当前下标（ADR 0045）。
 
 ## 对应设计
-- docs/adr/0025（模型）、0030（实现约定）；docs/design/architecture.md §6.11（modifiers）。
+- [ADR 0025](../../../../docs/adr/0025-logistics-model.md)（模型）、
+  [ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)
+  （实现约定）；[architecture.md §6.11](../../../../docs/design/architecture.md)
+  （modifiers）。
+- [ADR 0013](../../../../docs/adr/0013-modifier-pipeline.md)（修正
+  值）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
+  （工地槽结算归物流）。

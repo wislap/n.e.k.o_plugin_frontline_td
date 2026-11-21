@@ -93,6 +93,9 @@ export interface SimInternals {
   componentDefs: Map<string, ComponentRef>;
   storages: Map<ComponentRef, ComponentStorage>;
   writers: Map<ComponentRef, string>;
+  // Owning module per component (ADR 0047): set by ownComponent, implied
+  // by claimWriter, 'kernel' for contract components.
+  componentOwners: Map<ComponentRef, string>;
 
   layers: Map<GridLayerRef, LayerStorage>;
   layerDefs: Map<string, GridLayerRef>;
@@ -232,6 +235,7 @@ export function createInternals(config: SimConfig): SimInternals {
     componentDefs: new Map(),
     storages: new Map(),
     writers: new Map(),
+    componentOwners: new Map(),
     layers: new Map(),
     layerDefs: new Map(),
     layerWriters: new Map(),
@@ -277,6 +281,7 @@ export function createInternals(config: SimConfig): SimInternals {
   // module declares emits.
   for (const ref of [Faction, InWorld, UnderConstruction]) {
     ensureComponent(internals, ref);
+    internals.componentOwners.set(ref, 'kernel');
   }
   internals.emitDefs.set(COMMAND_REJECTED.type, COMMAND_REJECTED);
   return internals;

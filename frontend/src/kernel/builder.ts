@@ -55,6 +55,20 @@ function registerChannelUse(
 
 export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
   return {
+    ownComponent<F extends FieldMap>(ref: ComponentRef<F>): void {
+      const existing = i.componentOwners.get(ref);
+      if (existing === 'kernel') {
+        throw new Error(`component '${ref.id}' is kernel-owned; '${moduleId}' cannot own it`);
+      }
+      if (existing !== undefined && existing !== moduleId) {
+        throw new Error(
+          `component '${ref.id}' is owned by '${existing}'; '${moduleId}' cannot also own it`,
+        );
+      }
+      i.componentOwners.set(ref, moduleId);
+      ensureComponent(i, ref);
+    },
+
     claimWriter<F extends FieldMap>(ref: ComponentRef<F>): ComponentWriter<F> {
       const existing = i.writers.get(ref);
       if (existing !== undefined) {
@@ -63,6 +77,16 @@ export function createBuilder(i: SimInternals, moduleId: string): SimBuilder {
         );
       }
       i.writers.set(ref, moduleId);
+      // claimWriter implies ownership; kernel contract components keep
+      // owner 'kernel' while recording the module as writer.
+      const owner = i.componentOwners.get(ref);
+      if (owner === undefined) {
+        i.componentOwners.set(ref, moduleId);
+      } else if (owner !== 'kernel' && owner !== moduleId) {
+        throw new Error(
+          `component '${ref.id}' is owned by '${owner}'; '${moduleId}' cannot also claim it`,
+        );
+      }
       ensureComponent(i, ref);
       const writer: ComponentWriter<F> = { ref, ownerId: moduleId };
       i.issuedWriters.add(writer);

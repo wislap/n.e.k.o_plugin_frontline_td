@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { checkDocs, checkFeatureReadme, FEATURE_README_HEADINGS } from './check-docs.ts';
+import {
+  checkDesignSection,
+  checkDocs,
+  checkFeatureReadme,
+  FEATURE_README_HEADINGS,
+} from './check-docs.ts';
 
 let root: string;
 
@@ -82,5 +87,34 @@ describe('checkFeatureReadme', () => {
     expect(checkFeatureReadme('# f\n\n## 职责\n\n## 公开接口\n')).toMatch('expected 5');
     const wrongOrder = `# f\n\n## 职责\n\n## 拥有的组件\n\n## 公开接口\n\n## 不变量\n\n## 对应设计\n`;
     expect(checkFeatureReadme(wrongOrder)).toMatch('## 公开接口');
+  });
+});
+
+describe('checkDesignSection', () => {
+  it('accepts Markdown links to ADRs and design docs', () => {
+    const text = `## 对应设计
+- [ADR 0038](../../../../docs/adr/0038-outposts-ruins-capture-exclusion.md)
+- [architecture.md §6.8](../../../../docs/design/architecture.md)
+`;
+    expect(checkDesignSection(text)).toBeNull();
+  });
+
+  it('flags a bare ADR reference', () => {
+    const text = `## 对应设计
+- 见 ADR 0038 与 ADR 0029。
+`;
+    expect(checkDesignSection(text)).toMatch('ADR');
+  });
+
+  it('flags bare docs/ paths and design doc names', () => {
+    expect(checkDesignSection('## 对应设计\n- docs/design/architecture.md §6\n')).toMatch('docs/');
+    expect(checkDesignSection('## 对应设计\n- architecture.md §6.8\n')).toMatch('architecture.md');
+  });
+
+  it('ignores bare references outside 对应设计', () => {
+    const text = `## 不变量
+- ADR 0038 在正文里提及不检查。
+`;
+    expect(checkDesignSection(text)).toBeNull();
   });
 });

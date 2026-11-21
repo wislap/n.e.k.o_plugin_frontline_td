@@ -138,6 +138,8 @@ export function createCombatModule(): CombatModule {
     install(builder) {
       const healthW = builder.claimWriter(Health);
       const weaponW = builder.claimWriter(Weapon);
+      // Targetable is spawn-only metadata (hit shape from content).
+      builder.ownComponent(Targetable);
 
       // Acquire + fire: uniform bucket grid over hostile targetables,
       // rebuilt every tick. Keeps the current target while it stays

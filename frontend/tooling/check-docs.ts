@@ -31,6 +31,11 @@ const WHITELIST: RegExp[] = [
 const AGENTS_MAX_LINES = 150;
 const LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
 const H2_RE = /^## .+$/gm;
+// In a feature README's 对应设计 section, ADR/design references must be
+// Markdown links so the link checker can guard them (ADR 0046); bare
+// mentions are an error.
+const DESIGN_SECTION_RE = /## 对应设计\r?\n([\s\S]*)$/;
+const BARE_DESIGN_REF_RE = /\bADR\s*\d{4}\b|\bdocs\/[^\s)]+|architecture\.md|game_design\.md/;
 
 export const FEATURE_README_HEADINGS = [
   '## 职责',
@@ -39,6 +44,18 @@ export const FEATURE_README_HEADINGS = [
   '## 不变量',
   '## 对应设计',
 ];
+
+// Returns an error string when the README's 对应设计 section mentions an
+// ADR or a docs/ path without a Markdown link around it.
+export function checkDesignSection(readmeText: string): string | null {
+  const section = DESIGN_SECTION_RE.exec(readmeText)?.[1];
+  if (section === undefined) {
+    return null;
+  }
+  const bare = section.replace(LINK_RE, '');
+  const hit = BARE_DESIGN_REF_RE.exec(bare);
+  return hit === null ? null : `'${hit[0]}' in 对应设计 must be a Markdown link, not bare text`;
+}
 
 // Returns an error string when the README's `##` headings differ from
 // FEATURE_README_HEADINGS (missing, extra, or out of order).
@@ -129,9 +146,14 @@ export function checkDocs(root: string = PLUGIN_ROOT): string[] {
         errors.push(`frontend/src/features/${entry.name}: missing README.md`);
         continue;
       }
-      const problem = checkFeatureReadme(readFileSync(readmePath, 'utf8'));
+      const readmeText = readFileSync(readmePath, 'utf8');
+      const problem = checkFeatureReadme(readmeText);
       if (problem !== null) {
         errors.push(`frontend/src/features/${entry.name}/README.md: ${problem}`);
+      }
+      const designProblem = checkDesignSection(readmeText);
+      if (designProblem !== null) {
+        errors.push(`frontend/src/features/${entry.name}/README.md: ${designProblem}`);
       }
     }
   }

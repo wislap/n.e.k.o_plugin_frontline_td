@@ -276,7 +276,9 @@ function stepOnce(i: SimInternals, ctx: SystemContext): void {
 const KERNEL_COMPONENTS = new Set([Faction, InWorld, UnderConstruction]);
 
 function describeManifest(i: SimInternals): SimManifest {
-  const modules: SimManifest['modules'] = i.moduleIds.map((moduleId) => {
+  // 'kernel' is appended as a synthetic module so kernel-owned probes
+  // (kernel.tick, kernel.entities) appear in the manifest.
+  const modules: SimManifest['modules'] = [...i.moduleIds, 'kernel'].map((moduleId) => {
     const systems = i.systems
       .map((system, index) => ({ system, index }))
       .filter(({ system }) => system.moduleId === moduleId)
@@ -294,11 +296,18 @@ function describeManifest(i: SimInternals): SimManifest {
         .filter(([, v]) => owner(v) === moduleId)
         .map(([k]) => k)
         .sort();
+    const pickEmitting = <V extends { moduleId: string; emits: Set<string> }>(
+      map: Map<string, V>,
+    ): { id: string; emits: string[] }[] =>
+      [...map]
+        .filter(([, v]) => v.moduleId === moduleId)
+        .map(([k, v]) => ({ id: k, emits: [...v.emits].sort() }))
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     return {
       id: moduleId,
       systems,
-      commands: pick(i.commandDefs, (v) => v.moduleId),
-      effects: pick(i.effects, (v) => v.moduleId),
+      commands: pickEmitting(i.commandDefs),
+      effects: pickEmitting(i.effects),
       channels: pick(i.snapshotChannels, (v) => v.moduleId),
       states: pick(i.moduleStates, (v) => v.moduleId),
       inspectors: pick(i.inspectors, (v) => v.moduleId),
@@ -309,6 +318,7 @@ function describeManifest(i: SimInternals): SimManifest {
     .map((ref) => ({
       id: ref.id,
       fields: { ...ref.fields },
+      owner: i.componentOwners.get(ref) ?? null,
       writer: i.writers.get(ref) ?? (KERNEL_COMPONENTS.has(ref) ? 'kernel' : null),
     }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -334,7 +344,9 @@ function describeManifest(i: SimInternals): SimManifest {
       type,
       kind: 'command' as const,
     })),
-  ].sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : 0));
+  ].sort((a, b) =>
+    a.type < b.type ? -1 : a.type > b.type ? 1 : a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0,
+  );
   return { phases: PHASES, modules, components, layers, messages };
 }
 

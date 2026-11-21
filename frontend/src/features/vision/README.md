@@ -11,24 +11,35 @@
   （outpost、hive）。
 - `protocol.ts`：`VISION_STATE_LAYER_ID`（`frontline_td:vision.state`
   按阵营分层）与 `VisionMemoryChannel`（`frontline_td:vision.memory`：
-  记住的非己方结构，列与 structures 通道相同）。
-- `sim/`：`Vision { radius, x, y }` 组件（经 `unitParts`/`structureParts`
-  注入——结构无 Position，工厂直接烘入占地中心；工地、废墟、蓝图
-  不挂视野）、`VisionApi`（`visible`/`visibleRect`；全知阵营恒真）。
+  记住的非己方结构，6 列：handles、kind、x、y、faction、state——
+  废墟 faction 记 0；不含 structures 通道的 progressBp/hpBp）。
+- `sim/index.ts`：`createVisionModule` 返回 `VisionLayer`（含
+  `VisionApi` 的 `visible`/`visibleRect`；全知阵营恒真）；
+  `unitVisionParts`/`structureVisionParts` 部件工厂（结构无
+  Position，工厂直接烘入占地中心；工地也会挂 `Vision`，只是
+  `vision.recompute` 运行时跳过带 `UnderConstruction` 的实体；
+  废墟、蓝图不挂视野）。
 - `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
-- `render/`：`FogLayer`（地形形网格 + DataTexture 明暗覆盖）、
-  `MemoryLayer`（记忆结构暗框）。
+- `render/`：`FogLayer`（单张贴合地形几何的网格 + RGBA
+  `DataTexture` 明暗覆盖，逐格上传，复用 terrain 的几何构造）、
+  `MemoryLayer`（记忆结构暗框）。导出全表见
+  [exports.md](../../../../docs/generated/exports.md) 与
+  [contracts.md](../../../../docs/generated/contracts.md)。
 
 ## 拥有的组件
-- `Vision { radius, x, y }`（视野源）；`vision.state` 网格层。
+- `Vision { radius, x, y }`（视野源；spawn 烘入，归属本模块、
+  无字段写者，ADR 0047）。
+- `vision.state` 网格层（按阵营）。
+- 序列化状态键 `frontline_td:vision`；全知开关来自
+  `MatchSetup.factions[i].vision`（如 `omniscient`，导演阵营用）。
 
 ## 不变量
 - 每 5 tick 在 `capture_fog` 阶段重算：先把 2 降为 1，再按每个
   视野源盖整数圆盘为 2；视野源位置取组件快照时的坐标。
 - `vision.memory` 只记录"见过且当前不可见"的非己方结构；重新可见后
   由 structures 通道承担实况，记忆行不重复。
-- 全知阵营（`MatchSetup.vision`，如导演）`visible` 恒真。
+- 全知阵营（`MatchSetup.factions[i].vision`，如导演）`visible` 恒真。
 - 已知限制：事件可见性仍为 `all`，隐藏格内的效果只在客户端过滤
   （非反作弊保证）。
 

@@ -124,6 +124,12 @@ export interface Controller {
 }
 
 export interface SimBuilder {
+  // Declares that this module owns the component: it is registered
+  // eagerly so the manifest always lists it (components spawned with an
+  // entity but never field-written still have an owner). Kernel contract
+  // components cannot be owned; two modules owning one ref throws.
+  // claimWriter implies ownership of non-kernel components.
+  ownComponent<F extends FieldMap>(ref: ComponentRef<F>): void;
   claimWriter<F extends FieldMap>(ref: ComponentRef<F>): ComponentWriter<F>;
   claimLayerWriter(ref: GridLayerRef): GridLayerWriter;
   system(spec: SystemSpec): void;
@@ -189,14 +195,19 @@ export interface SimManifest {
       reads: string[];
       emits: string[];
     }[];
-    commands: string[];
-    effects: string[];
+    commands: { id: string; emits: string[] }[];
+    effects: { id: string; emits: string[] }[];
     channels: string[];
     states: string[];
     inspectors: string[];
     probes: string[];
   }[];
-  components: { id: string; fields: Record<string, string>; writer: string | null }[];
+  components: {
+    id: string;
+    fields: Record<string, string>;
+    owner: string | null;
+    writer: string | null;
+  }[];
   layers: { id: string; type: string; perFaction: boolean; writer: string | null }[];
   messages: { type: string; kind: 'event' | 'intent' | 'command'; visibility?: string }[];
 }
