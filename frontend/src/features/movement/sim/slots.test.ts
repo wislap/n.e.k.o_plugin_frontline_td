@@ -3,6 +3,11 @@
 import { describe, expect, it } from 'vitest';
 import { createTerrainApi } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
+import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  clearanceAnchorCenter,
+} from '../../terrain/rules/index';
 import { lineWalkable } from './line';
 import { assignSlots, collectSlots, formationDesired } from './slots';
 import { CLS, makeWorld, move, rejections, run, SURFACES } from './test-world';
@@ -137,6 +142,22 @@ describe('lineWalkable', () => {
     // An open diagonal with both legs free still works.
     expect(lineWalkable(t, CLS, 0.5, 1.5, 1.5, 2.5)).toBe(true);
   });
+
+  it('rejects 1-cell narrow gap for CLEARANCE_HEAVY and accepts 2-cell corridor', () => {
+    const rows = Array.from({ length: 8 }, (_, y) => {
+      const line = '.'.repeat(12).split('');
+      if (y !== 1 && y !== 4 && y !== 5) {
+        line[5] = '#';
+      }
+      return line.join('');
+    });
+    const t = terrainOf(rows);
+    // 1-cell gap at y=1: walkable for standard tier=0, rejected for heavy tier=1.
+    expect(lineWalkable(t, CLS, 2.5, 1.5, 8.5, 1.5, CLEARANCE_STANDARD)).toBe(true);
+    expect(lineWalkable(t, CLS, 3.0, 2.0, 9.0, 2.0, CLEARANCE_HEAVY)).toBe(false);
+    // 2-cell corridor at y=4..5: walkable for heavy tier=1 (anchor y=4, center y=5.0).
+    expect(lineWalkable(t, CLS, 3.0, 5.0, 9.0, 5.0, CLEARANCE_HEAVY)).toBe(true);
+  });
 });
 
 describe('move slots', () => {
@@ -240,5 +261,41 @@ describe('move slots', () => {
     const cells = new Set([...assigned.values()].map((p) => `${p.x},${p.y}`));
     expect(cells.size).toBe(3);
     expect(assigned.size).toBe(6);
+  });
+
+  it('collectSlots and assignSlots for CLEARANCE_HEAVY yield non-overlapping 2x2 anchors and (x+1, y+1) centers', () => {
+    const rows = Array.from({ length: 20 }, () => '.'.repeat(20));
+    const terrain = createTerrainApi(makeGrid(rows), SURFACES);
+    const connected = () => true;
+    const slots = collectSlots(terrain, connected, CLS, 10, 10, 9, CLEARANCE_HEAVY);
+    expect(slots.length).toBe(9);
+    for (let i = 0; i < slots.length; i++) {
+      const a = slots[i] ?? { x: -1, y: -1 };
+      expect(terrain.passable(a.x, a.y, CLS, CLEARANCE_HEAVY)).toBe(true);
+      for (let j = i + 1; j < slots.length; j++) {
+        const b = slots[j] ?? { x: -1, y: -1 };
+        expect(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))).toBeGreaterThanOrEqual(2);
+      }
+    }
+
+    const units = Array.from({ length: 9 }, (_, i) => ({
+      id: i + 1,
+      x: 2 + (i % 3) * 2,
+      y: 2 + Math.floor(i / 3) * 2,
+    }));
+    const assigned = assignSlots(units, slots, CLEARANCE_HEAVY);
+    expect(assigned.size).toBe(9);
+    const expectedCenters = new Set(
+      slots.map(
+        (s) =>
+          `${clearanceAnchorCenter(s.x, CLEARANCE_HEAVY)},${clearanceAnchorCenter(s.y, CLEARANCE_HEAVY)}`,
+      ),
+    );
+    for (const s of slots) {
+      expect(clearanceAnchorCenter(s.x, CLEARANCE_HEAVY)).toBe(s.x + 1);
+      expect(clearanceAnchorCenter(s.y, CLEARANCE_HEAVY)).toBe(s.y + 1);
+    }
+    const assignedCenters = new Set([...assigned.values()].map((p) => `${p.x},${p.y}`));
+    expect(assignedCenters).toEqual(expectedCenters);
   });
 });

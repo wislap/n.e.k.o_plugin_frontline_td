@@ -143,6 +143,12 @@ describe('movement', () => {
       '........................',
       '........................',
       '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
     ];
     const units: SpawnUnit[] = [];
     for (let i = 0; i < 60; i++) {
@@ -163,5 +169,177 @@ describe('movement', () => {
     world2.sim.submit(move(world2.handles, 18, 5));
     run(world2, 900);
     expect(world2.pathingApi.goalRefCount(world2.goals.at(-1) ?? -1)).toBe(0);
+  });
+
+  it('zero post-arrival interior crowd jitter after settling', () => {
+    const rows = Array.from({ length: 24 }, () => '.'.repeat(24));
+    const units: SpawnUnit[] = [];
+    for (let i = 0; i < 36; i++) {
+      units.push({ x: 2 + (i % 6), y: 2 + Math.floor(i / 6), radius: 0.35 });
+    }
+    const world = makeWorld(rows, units);
+    world.sim.submit(move(world.handles, 14, 14));
+    run(world, 600);
+    for (let i = 0; i < 36; i++) {
+      expect(world.active(i)).toBe(2);
+      expect(world.vel(i)).toEqual({ x: 0, y: 0 });
+    }
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
+
+    const prev = Array.from({ length: 36 }, (_, i) => world.pos(i));
+    let maxDelta = 0;
+    for (let t = 0; t < 20; t++) {
+      world.sim.step();
+      for (let i = 0; i < 36; i++) {
+        const cur = world.pos(i);
+        const p = prev[i] ?? { x: cur.x, y: cur.y };
+        maxDelta = Math.max(maxDelta, Math.abs(cur.x - p.x), Math.abs(cur.y - p.y));
+        prev[i] = cur;
+      }
+    }
+    expect(maxDelta).toBe(0);
+  });
+
+  it('asymmetric r^2 * state yielding: heavy mover parts holding lights', () => {
+    const rows = Array.from({ length: 7 }, () => '.'.repeat(16));
+    const world = makeWorld(rows, [
+      { x: 5, y: 2, radius: 0.35 },
+      { x: 5, y: 3, radius: 0.35 },
+      { x: 1, y: 2, radius: 0.8 },
+    ]);
+    // Settle both light units into active === 2 (holding) at (5,2) and (5,3).
+    world.sim.submit(move([world.handles[0] ?? (0 as EntityHandle)], 5, 2));
+    world.sim.submit(move([world.handles[1] ?? (0 as EntityHandle)], 5, 3));
+    run(world, 10);
+    expect(world.active(0)).toBe(2);
+    expect(world.active(1)).toBe(2);
+
+    // Order the heavy unit straight through (5,2) to (11,2).
+    world.sim.submit(move([world.handles[2] ?? (0 as EntityHandle)], 11, 2, 11));
+    run(world, 250);
+
+    const heavyPos = world.pos(2);
+    expect(world.active(2)).toBe(2);
+    expect(heavyPos.x).toBeGreaterThan(11);
+    expect(Math.abs(heavyPos.x - 12)).toBeLessThan(0.3);
+    expect(Math.abs(heavyPos.y - 3)).toBeLessThan(0.3);
+
+    // Light holders returned cleanly to hold near their assigned slots.
+    expect(world.active(0)).toBe(2);
+    expect(world.active(1)).toBe(2);
+    expect(Math.abs(world.pos(0).x - 5.5)).toBeLessThan(0.4);
+    expect(Math.abs(world.pos(0).y - 2.5)).toBeLessThan(0.4);
+    expect(Math.abs(world.pos(1).x - 5.5)).toBeLessThan(0.4);
+    expect(Math.abs(world.pos(1).y - 3.5)).toBeLessThan(0.4);
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
+  });
+
+  it('asymmetric r^2 * state yielding: rear mover wraps around stopped frontline ally', () => {
+    const rows = Array.from({ length: 7 }, () => '.'.repeat(12));
+    const world = makeWorld(rows, [
+      { x: 5, y: 3, radius: 0.35 },
+      { x: 2, y: 3, radius: 0.35 },
+    ]);
+    expect(world.active(0)).toBe(0);
+    world.sim.submit(move([world.handles[1] ?? (0 as EntityHandle)], 8, 3));
+    run(world, 200);
+
+    const p1 = world.pos(1);
+    expect(world.active(1)).toBe(2);
+    expect(Math.abs(p1.x - 8.5)).toBeLessThan(0.25);
+    expect(Math.abs(p1.y - 3.5)).toBeLessThan(0.25);
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
+  });
+
+  it('wall and convex corner margin clamping keeps safe distance from rock boundaries', () => {
+    const rows = [
+      '............',
+      '............',
+      '............',
+      '......#.....',
+      '......#####.',
+      '......#####.',
+      '......#####.',
+      '......#####.',
+      '......#####.',
+      '............',
+    ];
+    const margin = Math.min(0.35 * 0.75, 0.3);
+    const world = makeWorld(rows, [{ x: 5, y: 6, radius: 0.35 }]);
+    world.sim.submit(move(world.handles, 8, 2));
+
+    let minWallGap = Infinity;
+    let minCornerDist = Infinity;
+    for (let t = 0; t < 200; t++) {
+      world.sim.step();
+      const p = world.pos(0);
+      const cx = Math.floor(p.x);
+      const cy = Math.floor(p.y);
+      if (!world.terrain.passable(cx - 1, cy, 0)) {
+        minWallGap = Math.min(minWallGap, p.x - cx);
+        expect(p.x - cx).toBeGreaterThanOrEqual(margin - 1e-6);
+      }
+      if (!world.terrain.passable(cx + 1, cy, 0)) {
+        minWallGap = Math.min(minWallGap, cx + 1 - p.x);
+        expect(cx + 1 - p.x).toBeGreaterThanOrEqual(margin - 1e-6);
+      }
+      if (!world.terrain.passable(cx, cy - 1, 0)) {
+        minWallGap = Math.min(minWallGap, p.y - cy);
+        expect(p.y - cy).toBeGreaterThanOrEqual(margin - 1e-6);
+      }
+      if (!world.terrain.passable(cx, cy + 1, 0)) {
+        minWallGap = Math.min(minWallGap, cy + 1 - p.y);
+        expect(cy + 1 - p.y).toBeGreaterThanOrEqual(margin - 1e-6);
+      }
+      // Check convex rock corners (including (6,3), (7,3), and (6,4)).
+      for (const [vx, vy] of [
+        [6, 3],
+        [7, 3],
+        [6, 4],
+      ] as const) {
+        const dx = p.x - vx;
+        const dy = p.y - vy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        minCornerDist = Math.min(minCornerDist, d);
+        expect(d).toBeGreaterThanOrEqual(margin - 1e-6);
+      }
+    }
+    const end = world.pos(0);
+    expect(world.active(0)).toBe(2);
+    expect(Math.abs(end.x - 8.5)).toBeLessThan(0.25);
+    expect(Math.abs(end.y - 2.5)).toBeLessThan(0.25);
+    expect(minWallGap).toBeLessThan(0.5);
+    expect(minCornerDist).toBeLessThan(1.0);
+  });
+
+  it('heavy tier=1 (2x2) unit routes through a 2-cell corridor and avoids 1-cell gaps', () => {
+    const rows = Array.from({ length: 10 }, (_, y) => {
+      const line = '.'.repeat(20).split('');
+      if (y !== 1 && y !== 6 && y !== 7) {
+        line[10] = '#';
+      }
+      return line.join('');
+    });
+    const world = makeWorld(rows, [{ x: 2, y: 1, radius: 0.8 }]);
+    world.sim.submit(move(world.handles, 14, 1));
+    let minCrossY = Infinity;
+    let maxCrossY = -Infinity;
+    for (let t = 0; t < 400; t++) {
+      world.sim.step();
+      const p = world.pos(0);
+      if (p.x >= 10 && p.x <= 12) {
+        minCrossY = Math.min(minCrossY, p.y);
+        maxCrossY = Math.max(maxCrossY, p.y);
+      }
+    }
+    const p = world.pos(0);
+    expect(minCrossY).toBeGreaterThanOrEqual(6);
+    expect(maxCrossY).toBeLessThanOrEqual(8);
+    expect(world.active(0)).toBe(2);
+    expect(p.x).toBeGreaterThanOrEqual(14.5);
+    expect(p.y).toBeGreaterThanOrEqual(1);
+    expect(Math.abs(p.x - 15)).toBeLessThan(0.3);
+    expect(Math.abs(p.y - 2)).toBeLessThan(0.3);
+    expect(world.pathingApi.goalRefCount(world.goals.at(-1) ?? -1)).toBe(0);
   });
 });

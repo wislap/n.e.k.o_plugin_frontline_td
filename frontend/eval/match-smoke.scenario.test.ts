@@ -22,9 +22,11 @@ const TICKS = 6000; // 5 minutes
 const SAMPLE_EVERY = 20; // 1 s
 const RESUPPLY_LIMIT = 120 * TPS; // continuous resupplying budget
 
-// Golden hash: rule changes may legitimately change it — update the
-// constant in the same commit and say why in the commit message.
-const GOLDEN_HASH = 'c918982105751a6e';
+// Golden hash (Batch S2 / ADR 0053: damped asymmetric avoidance, arrival
+// hysteresis, smooth flow gradients, and wall/corner margins): rule
+// changes may legitimately change it — update the constant in the same
+// commit and say why in the commit message.
+const GOLDEN_HASH = 'fcf3153dfa6e6d76';
 
 describe('match smoke (proto_01, balanced bot vs director)', () => {
   it('plays 5 minutes: hash golden, waves launch, sane unit state', () => {

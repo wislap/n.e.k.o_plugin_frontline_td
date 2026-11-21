@@ -41,10 +41,19 @@ interface Goal {
   refcount: number;
 }
 
+const STAGE1_QUAD_OK = 1;
+const STAGE2_CARD_OK = 2;
+
 interface SectorField {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  w: number;
   dx: Int8Array;
   dy: Int8Array;
   cost: Int32Array;
+  flags: Uint8Array;
 }
 
 function edgePassableBothWays(
@@ -287,7 +296,51 @@ export function createPathingModule(
       dx[local] = bestDx;
       dy[local] = bestDy;
     }
-    const field = { dx, dy, cost: integration };
+    const flags = new Uint8Array(size);
+    for (let ly = 0; ly < h; ly++) {
+      const wy = y0 + ly;
+      const rowOffset = ly * w;
+      for (let lx = 0; lx < w; lx++) {
+        const local = rowOffset + lx;
+        const wx = x0 + lx;
+        let f = 0;
+        if (lx + 1 < w && ly + 1 < h) {
+          const c00 = integration[local] ?? UNREACHABLE;
+          const c10 = integration[local + 1] ?? UNREACHABLE;
+          const c01 = integration[local + w] ?? UNREACHABLE;
+          const c11 = integration[local + w + 1] ?? UNREACHABLE;
+          if (
+            c00 < UNREACHABLE &&
+            c10 < UNREACHABLE &&
+            c01 < UNREACHABLE &&
+            c11 < UNREACHABLE &&
+            quadPassableBothWays(terrain, wx, wy, goal.cls, goal.tier)
+          ) {
+            f |= STAGE1_QUAD_OK;
+          }
+        }
+        if (lx >= 1 && lx + 1 < w && ly >= 1 && ly + 1 < h) {
+          const cW = integration[local - 1] ?? UNREACHABLE;
+          const cE = integration[local + 1] ?? UNREACHABLE;
+          const cN = integration[local - w] ?? UNREACHABLE;
+          const cS = integration[local + w] ?? UNREACHABLE;
+          if (
+            cW < UNREACHABLE &&
+            cE < UNREACHABLE &&
+            cN < UNREACHABLE &&
+            cS < UNREACHABLE &&
+            terrain.stepCost(wx, wy, wx - 1, wy, goal.cls, goal.tier) >= 0 &&
+            terrain.stepCost(wx, wy, wx + 1, wy, goal.cls, goal.tier) >= 0 &&
+            terrain.stepCost(wx, wy, wx, wy - 1, goal.cls, goal.tier) >= 0 &&
+            terrain.stepCost(wx, wy, wx, wy + 1, goal.cls, goal.tier) >= 0
+          ) {
+            f |= STAGE2_CARD_OK;
+          }
+        }
+        flags[local] = f;
+      }
+    }
+    const field: SectorField = { x0, y0, x1, y1, w, dx, dy, cost: integration, flags };
     fields.set(key, field);
     return field;
   }
@@ -304,9 +357,7 @@ export function createPathingModule(
     }
     const sector = sectorOfCell(terrain, y * terrain.width + x);
     const field = sectorField(goalId, goal, sector);
-    const { x0, y0, x1 } = sectorBounds(terrain, sector);
-    const w = x1 - x0 + 1;
-    const local = (y - y0) * w + (x - x0);
+    const local = (y - field.y0) * field.w + (x - field.x0);
     const dx = field.dx[local] ?? 0;
     const dy = field.dy[local] ?? 0;
     // (0,0) on a non-goal cell means unreachable.
@@ -405,9 +456,7 @@ export function createPathingModule(
       if (d0x === 0 && d0y === 0) {
         return smoothScratch;
       }
-      const sector = sectorOfCell(terrain, cy * terrain.width + cx);
-      const { x0, y0, x1, y1 } = sectorBounds(terrain, sector);
-      const w = x1 - x0 + 1;
+      const { x0, y0, x1, y1, w, cost, flags } = field;
 
       // Stage 1: Intra-sector dual-quad bilinear gradient.
       const centerX = clearanceAnchorCenter(cx, goal.tier);
@@ -415,19 +464,12 @@ export function createPathingModule(
       const x00 = px >= centerX ? cx : cx - 1;
       const y00 = py >= centerY ? cy : cy - 1;
       if (x00 >= x0 && x00 + 1 <= x1 && y00 >= y0 && y00 + 1 <= y1) {
-        const lx = x00 - x0;
-        const ly = y00 - y0;
-        const c00 = field.cost[ly * w + lx] ?? UNREACHABLE;
-        const c10 = field.cost[ly * w + (lx + 1)] ?? UNREACHABLE;
-        const c01 = field.cost[(ly + 1) * w + lx] ?? UNREACHABLE;
-        const c11 = field.cost[(ly + 1) * w + (lx + 1)] ?? UNREACHABLE;
-        if (
-          c00 < UNREACHABLE &&
-          c10 < UNREACHABLE &&
-          c01 < UNREACHABLE &&
-          c11 < UNREACHABLE &&
-          quadPassableBothWays(terrain, x00, y00, goal.cls, goal.tier)
-        ) {
+        const idx = (y00 - y0) * w + (x00 - x0);
+        if (((flags[idx] ?? 0) & STAGE1_QUAD_OK) !== 0) {
+          const c00 = cost[idx] ?? UNREACHABLE;
+          const c10 = cost[idx + 1] ?? UNREACHABLE;
+          const c01 = cost[idx + w] ?? UNREACHABLE;
+          const c11 = cost[idx + w + 1] ?? UNREACHABLE;
           const tx = Math.max(0, Math.min(1, px - clearanceAnchorCenter(x00, goal.tier)));
           const ty = Math.max(0, Math.min(1, py - clearanceAnchorCenter(y00, goal.tier)));
           const gx = (1 - ty) * (c00 - c10) + ty * (c01 - c11);
@@ -444,38 +486,26 @@ export function createPathingModule(
       }
 
       // Stage 2: Intra-sector safe cardinal central difference.
-      if (cx - 1 >= x0 && cx + 1 <= x1 && cy - 1 >= y0 && cy + 1 <= y1) {
-        const lx = cx - x0;
-        const ly = cy - y0;
-        const cW = field.cost[ly * w + (lx - 1)] ?? UNREACHABLE;
-        const cE = field.cost[ly * w + (lx + 1)] ?? UNREACHABLE;
-        const cN = field.cost[(ly - 1) * w + lx] ?? UNREACHABLE;
-        const cS = field.cost[(ly + 1) * w + lx] ?? UNREACHABLE;
+      const localIdx = (cy - y0) * w + (cx - x0);
+      if (((flags[localIdx] ?? 0) & STAGE2_CARD_OK) !== 0) {
+        const cW = cost[localIdx - 1] ?? UNREACHABLE;
+        const cE = cost[localIdx + 1] ?? UNREACHABLE;
+        const cN = cost[localIdx - w] ?? UNREACHABLE;
+        const cS = cost[localIdx + w] ?? UNREACHABLE;
+        const gx = cW - cE;
+        const gy = cN - cS;
+        const sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;
+        const sy = gy > 0 ? 1 : gy < 0 ? -1 : 0;
         if (
-          cW < UNREACHABLE &&
-          cE < UNREACHABLE &&
-          cN < UNREACHABLE &&
-          cS < UNREACHABLE &&
-          terrain.stepCost(cx, cy, cx - 1, cy, goal.cls, goal.tier) >= 0 &&
-          terrain.stepCost(cx, cy, cx + 1, cy, goal.cls, goal.tier) >= 0 &&
-          terrain.stepCost(cx, cy, cx, cy - 1, goal.cls, goal.tier) >= 0 &&
-          terrain.stepCost(cx, cy, cx, cy + 1, goal.cls, goal.tier) >= 0
+          gx * d0x + gy * d0y > 0 &&
+          (sx !== 0 || sy !== 0) &&
+          terrain.stepCost(cx, cy, cx + sx, cy + sy, goal.cls, goal.tier) >= 0
         ) {
-          const gx = cW - cE;
-          const gy = cN - cS;
-          const sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;
-          const sy = gy > 0 ? 1 : gy < 0 ? -1 : 0;
-          if (
-            gx * d0x + gy * d0y > 0 &&
-            (sx !== 0 || sy !== 0) &&
-            terrain.stepCost(cx, cy, cx + sx, cy + sy, goal.cls, goal.tier) >= 0
-          ) {
-            const len = Math.sqrt(gx * gx + gy * gy);
-            if (len > 0) {
-              smoothScratch.dx = gx / len;
-              smoothScratch.dy = gy / len;
-              return smoothScratch;
-            }
+          const len = Math.sqrt(gx * gx + gy * gy);
+          if (len > 0) {
+            smoothScratch.dx = gx / len;
+            smoothScratch.dy = gy / len;
+            return smoothScratch;
           }
         }
       }

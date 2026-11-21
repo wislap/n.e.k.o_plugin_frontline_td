@@ -3,7 +3,13 @@
 // target, then assigns slots so the group's formation shape is preserved
 // (nearest-slot greedy matching against a scaled formation offset).
 import type { TerrainApi } from '../../terrain/sim/index';
-import { spiralOffsets } from '../../terrain/rules/index';
+import {
+  CLEARANCE_STANDARD,
+  clearanceAnchorCenter,
+  clearanceFootprintSize,
+  spiralOffsets,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 
 // Spiral rings beyond this radius around the target are not considered.
 const SLOT_RING_MARGIN = 8;
@@ -18,16 +24,21 @@ export function collectSlots(
   tx: number,
   ty: number,
   n: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): { x: number; y: number }[] {
   const slots: { x: number; y: number }[] = [];
-  const maxRing = Math.ceil(Math.sqrt(n)) + SLOT_RING_MARGIN;
+  const step = clearanceFootprintSize(tier);
+  const maxRing = Math.ceil(Math.sqrt(n)) * step + SLOT_RING_MARGIN;
   for (const [dx, dy] of spiralOffsets(tx, ty, terrain.width, terrain.height)) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) > maxRing || slots.length >= n) {
       break;
     }
     const x = tx + dx;
     const y = ty + dy;
-    if (!terrain.passable(x, y, cls) || !connected(x, y)) {
+    if (!terrain.passable(x, y, cls, tier) || !connected(x, y)) {
+      continue;
+    }
+    if (step > 1 && slots.some((s) => Math.max(Math.abs(x - s.x), Math.abs(y - s.y)) < step)) {
       continue;
     }
     slots.push({ x, y });
@@ -50,12 +61,13 @@ export interface SlotUnit {
 export function formationDesired(
   units: readonly SlotUnit[],
   slotCells: readonly { x: number; y: number }[],
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): { x: number; y: number }[] {
   const n = units.length;
   // Slots are reused cyclically in spiral order when fewer than n qualify.
   const points = Array.from({ length: n }, (_, i) => {
     const c = slotCells[i % slotCells.length] ?? { x: 0, y: 0 };
-    return { x: c.x + 0.5, y: c.y + 0.5 };
+    return { x: clearanceAnchorCenter(c.x, tier), y: clearanceAnchorCenter(c.y, tier) };
   });
 
   let ux = 0;
@@ -99,13 +111,14 @@ export function formationDesired(
 export function assignSlots(
   units: readonly SlotUnit[],
   slotCells: readonly { x: number; y: number }[],
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): Map<number, { x: number; y: number }> {
   const n = units.length;
   const points = Array.from({ length: n }, (_, i) => {
     const c = slotCells[i % slotCells.length] ?? { x: 0, y: 0 };
-    return { x: c.x + 0.5, y: c.y + 0.5 };
+    return { x: clearanceAnchorCenter(c.x, tier), y: clearanceAnchorCenter(c.y, tier) };
   });
-  const want = formationDesired(units, slotCells);
+  const want = formationDesired(units, slotCells, tier);
 
   let cx = 0;
   let cy = 0;

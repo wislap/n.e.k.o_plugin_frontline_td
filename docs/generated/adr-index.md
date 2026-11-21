@@ -50,12 +50,13 @@
 | [0036](../adr/0036-controller-state-save-load.md) | 控制者状态与存档 | 已采纳 | 已实现 | wislap | M4 MVP 收尾 | 2026-11-17 |
 | [0038](../adr/0038-outposts-ruins-capture-exclusion.md) | 据点、废墟、占领与禁建区 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
+| [0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md) | 阻尼非对称避让、到达迟滞与墙体边距 | 已采纳 | 已实现 | wislap | S2 阻尼避让与到达迟滞 | 2026-11-21 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|---|
 | [0010](../adr/0010-terrain-model-sector-flowfields.md) | 地形模型与分区流场 | 已采纳；部分被 0052 取代（补齐按移动类别 × 净空分档 1×1 标准档 / 2×2 重型档的门户流场，并在离散 8 向流场之上新增扇区内对偶双线性连续流向梯度查询 smoothDirectionAt） | 部分（分区失效仍是全局：invalidateCells 清全图 fields/portalDists，rebuildNodesAndEdges 全局重编号） | wislap | M0 架构基线 | 2026-11-14 |
-| [0027](../adr/0027-map-terrain-flowfield-movement.md) | 地图格式、地形规则、分区流场与移动的实现约定 | 已采纳 | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
+| [0027](../adr/0027-map-terrain-flowfield-movement.md) | 地图格式、地形规则、分区流场与移动的实现约定 | 已采纳；部分被 0053 取代（转向接入连续流向梯度 smoothDirectionAt 并引入到达减速带与守位迟滞死区；分离改为双斜率过阻尼排斥、r²×状态非对称让路、友军/对向切向绕行与单 tick 推挤限幅；积分增加按净空分档的平面墙距与凸角圆弧夹紧；移动编组与出兵按 (cls, tier) 分档） | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
 | [0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md) | 地形净空分档与连续流场方向梯度 | 已采纳 | 已实现 | wislap | S1 地形净空与连续流场 | 2026-11-21 |
 
 ### 战斗
@@ -175,3 +176,6 @@
 
 ### S1 地形净空与连续流场（2026-11-21）
 - [0052 地形净空分档与连续流场方向梯度](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
+
+### S2 阻尼避让与到达迟滞（2026-11-21）
+- [0053 阻尼非对称避让、到达迟滞与墙体边距](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)

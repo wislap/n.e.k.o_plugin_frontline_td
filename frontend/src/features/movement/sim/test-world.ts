@@ -8,9 +8,15 @@ import { createSimulation } from '../../../kernel/index';
 import type { SimConfig, SimModule } from '../../../kernel/index';
 import type { PathingApi } from '../../pathing/sim/index';
 import { createPathingModule } from '../../pathing/sim/index';
+import {
+  clearanceAnchorCell,
+  clearanceAnchorCenter,
+  clearanceTierForRadius,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import { createTerrainApi } from '../../terrain/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
-import { MoveTarget, Mover, Position } from './components';
+import { MoveTarget, Mover, Position, Velocity } from './components';
 import { createMovementModule, moverComponents } from './module';
 import { MoveCommand } from '../protocol';
 import { makeGrid } from '../../../testing/index';
@@ -31,6 +37,8 @@ export interface SpawnUnit {
   x: number;
   y: number;
   faction?: number;
+  radius?: number;
+  speed?: number;
 }
 
 export interface World {
@@ -42,6 +50,7 @@ export interface World {
   goals: number[];
   released: number[];
   pos(i: number): { x: number; y: number };
+  vel(i: number): { x: number; y: number };
   active(i: number): number;
   slot(i: number): { x: number; y: number };
 }
@@ -62,8 +71,8 @@ export function makeWorld(
   const released: number[] = [];
   const pathingApi: PathingApi = {
     ...pathing.api,
-    acquireGoal(x: number, y: number, cls: number): number {
-      const id = pathing.api.acquireGoal(x, y, cls);
+    acquireGoal(x: number, y: number, cls: number, tier?: ClearanceTier): number {
+      const id = pathing.api.acquireGoal(x, y, cls, tier);
       goals.push(id);
       return id;
     },
@@ -79,11 +88,20 @@ export function makeWorld(
     install(builder) {
       builder.onStart((ctx) => {
         for (const u of units) {
+          const radius = u.radius ?? RADIUS;
+          const speed = u.speed ?? SPEED;
+          const tier = clearanceTierForRadius(radius);
           handles.push(
             ctx.spawn([
               [Faction, { id: u.faction ?? 1 }],
               [InWorld],
-              ...moverComponents(u.x + 0.5, u.y + 0.5, SPEED, RADIUS, CLS),
+              ...moverComponents(
+                clearanceAnchorCenter(u.x, tier),
+                clearanceAnchorCenter(u.y, tier),
+                speed,
+                radius,
+                CLS,
+              ),
             ]),
           );
         }
@@ -96,6 +114,14 @@ export function makeWorld(
         builder.probe(`frontline_td:test.u${i}y`, (ctx) => {
           const id = ctx.resolve(handles[i] ?? (0 as EntityHandle));
           return id === null ? -1 : (ctx.read(Position).y[id] ?? -1);
+        });
+        builder.probe(`frontline_td:test.u${i}vx`, (ctx) => {
+          const id = ctx.resolve(handles[i] ?? (0 as EntityHandle));
+          return id === null ? 0 : (ctx.read(Velocity).x[id] ?? 0);
+        });
+        builder.probe(`frontline_td:test.u${i}vy`, (ctx) => {
+          const id = ctx.resolve(handles[i] ?? (0 as EntityHandle));
+          return id === null ? 0 : (ctx.read(Velocity).y[id] ?? 0);
         });
         builder.probe(`frontline_td:test.u${i}a`, (ctx) => {
           const id = ctx.resolve(handles[i] ?? (0 as EntityHandle));
@@ -110,9 +136,9 @@ export function makeWorld(
           return id === null ? -1 : (ctx.read(MoveTarget).y[id] ?? -1);
         });
       });
-      // Passability property (B5): every unit's cell must stay passable, and
-      // a height change is only legal when one of the two cells is a ramp
-      // (i.e. no cliff crossing, including from separation pushes).
+      // Passability property (B5 + S2): every unit's clearance anchor must
+      // stay passable, and anchor transitions must be legal steps (no cliff
+      // crossing or narrow-gap squeeze, including from separation pushes).
       const prevCell = new Map<number, number>();
       builder.system({
         id: 'frontline_td:test.check',
@@ -121,9 +147,11 @@ export function makeWorld(
           const pos = ctx.read(Position);
           const mover = ctx.read(Mover);
           for (const id of ctx.query([Position, Mover])) {
-            const cx = Math.floor(pos.x[id] ?? 0);
-            const cy = Math.floor(pos.y[id] ?? 0);
-            if (!terrain.passable(cx, cy, mover.cls[id] ?? 0)) {
+            const cls = mover.cls[id] ?? 0;
+            const tier = clearanceTierForRadius(mover.radius[id] ?? 0);
+            const cx = clearanceAnchorCell(pos.x[id] ?? 0, tier);
+            const cy = clearanceAnchorCell(pos.y[id] ?? 0, tier);
+            if (!terrain.passable(cx, cy, cls, tier)) {
               throw new Error(`entity ${id} in impassable cell ${cx},${cy}`);
             }
             const prev = prevCell.get(id);
@@ -132,9 +160,9 @@ export function makeWorld(
               const pcx = prev % grid.width;
               const pcy = Math.floor(prev / grid.width);
               if (
-                terrain.heightAt(pcx, pcy) !== terrain.heightAt(cx, cy) &&
-                (grid.ramps[prev] ?? 0) === 0 &&
-                (grid.ramps[cell] ?? 0) === 0
+                Math.abs(cx - pcx) <= 1 &&
+                Math.abs(cy - pcy) <= 1 &&
+                terrain.stepCost(pcx, pcy, cx, cy, cls, tier) < 0
               ) {
                 throw new Error(`entity ${id} crossed a cliff ${pcx},${pcy} -> ${cx},${cy}`);
               }
@@ -166,6 +194,13 @@ export function makeWorld(
       return {
         x: probes[`frontline_td:test.u${i}x`] ?? -1,
         y: probes[`frontline_td:test.u${i}y`] ?? -1,
+      };
+    },
+    vel(i) {
+      const probes = sim.probes();
+      return {
+        x: probes[`frontline_td:test.u${i}vx`] ?? 0,
+        y: probes[`frontline_td:test.u${i}vy`] ?? 0,
       };
     },
     active(i) {

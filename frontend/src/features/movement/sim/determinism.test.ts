@@ -15,12 +15,12 @@ const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
 // This world installs terrain + pathing + movement + units only. The
-// golden was last re-derived when the terrain module gained its
-// serialized blocked overlay + blocked layer and proto_01 gained
-// ore_field surface cells — same code paths, different content. Any
-// further change to those serialized inputs legitimately changes the
-// hash; update it in the same commit with the reason.
-const GOLDEN_HASH = '07d7e364079afcdd';
+// golden was re-derived for Batch S2 (ADR 0053: smooth flow gradients,
+// two-slope damped asymmetric separation, arrival hysteresis, and
+// clearance-tier wall/corner margin clamping). Any further change to
+// movement or those serialized inputs legitimately changes the hash;
+// update it in the same commit with the reason.
+const GOLDEN_HASH = 'b078e15a293e01ac';
 
 function makeSim() {
   const db = loadContent();

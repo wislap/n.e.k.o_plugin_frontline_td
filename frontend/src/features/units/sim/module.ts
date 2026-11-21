@@ -5,8 +5,15 @@ import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { ContentDb, ResolvedUnit } from '../../../content/index';
 import { Faction, InWorld } from '../../../kernel/index';
 import type { SimModule, SpawnInit, SystemContext, VisibilityQuery } from '../../../kernel/index';
-import { MoveTarget, moverComponents, Position } from '../../movement/sim/index';
-import { spiralOffsets } from '../../terrain/rules/index';
+import { MoveTarget, Mover, moverComponents, Position } from '../../movement/sim/index';
+import {
+  CLEARANCE_HEAVY,
+  clearanceAnchorCell,
+  clearanceAnchorCenter,
+  clearanceFootprintSize,
+  clearanceTierForRadius,
+  spiralOffsets,
+} from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { DenseUnitsChannel, SpawnIntent, UnitsSpawned } from '../protocol';
 import type { DenseUnits } from '../protocol';
@@ -45,6 +52,46 @@ export interface UnitReadouts {
   visible?: VisibilityQuery;
 }
 
+function isFootprintFree(
+  occupied: ReadonlySet<number>,
+  width: number,
+  x: number,
+  y: number,
+  size: 1 | 2,
+): boolean {
+  for (let oy = 0; oy < size; oy++) {
+    for (let ox = 0; ox < size; ox++) {
+      if (occupied.has((y + oy) * width + (x + ox))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function markFootprintOccupied(
+  occupied: Set<number>,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  size: 1 | 2,
+): void {
+  for (let oy = 0; oy < size; oy++) {
+    const cy = y + oy;
+    if (cy < 0 || cy >= height) {
+      continue;
+    }
+    for (let ox = 0; ox < size; ox++) {
+      const cx = x + ox;
+      if (cx < 0 || cx >= width) {
+        continue;
+      }
+      occupied.add(cy * width + cx);
+    }
+  }
+}
+
 export function createUnitsModule(
   db: ContentDb,
   terrain: TerrainApi,
@@ -70,6 +117,8 @@ export function createUnitsModule(
               throw new Error(`units: unknown kind index ${group.kind}`);
             }
             const cls = unit.movementClass;
+            const tier = clearanceTierForRadius(unit.radius);
+            const size = clearanceFootprintSize(tier);
             let placed = 0;
             for (const [dx, dy] of spiralOffsets(group.x, group.y, terrain.width, terrain.height)) {
               if (placed >= group.count) {
@@ -77,16 +126,24 @@ export function createUnitsModule(
               }
               const x = group.x + dx;
               const y = group.y + dy;
-              const key = y * terrain.width + x;
-              if (occupied.has(key) || !terrain.passable(x, y, cls)) {
+              if (
+                !terrain.passable(x, y, cls, tier) ||
+                !isFootprintFree(occupied, terrain.width, x, y, size)
+              ) {
                 continue;
               }
-              occupied.add(key);
+              markFootprintOccupied(occupied, terrain.width, terrain.height, x, y, size);
               ctx.spawn([
                 [Faction, { id: start.faction }],
                 [InWorld],
                 [UnitKind, { kind: group.kind }],
-                ...moverComponents(x + 0.5, y + 0.5, unit.cellsPerTick, unit.radius, cls),
+                ...moverComponents(
+                  clearanceAnchorCenter(x, tier),
+                  clearanceAnchorCenter(y, tier),
+                  unit.cellsPerTick,
+                  unit.radius,
+                  cls,
+                ),
                 ...unitParts.flatMap((part) => part(unit)),
               ]);
               placed += 1;
@@ -111,35 +168,63 @@ export function createUnitsModule(
         emits: [UnitsSpawned],
         run(ctx) {
           const pos = ctx.read(Position);
-          // Cells holding a live entity centre count as occupied (the
+          const mover = ctx.read(Mover);
+          // Cells holding a live entity footprint count as occupied (the
           // blocked overlay already covers structures).
           const occupied = new Set<number>();
           for (const id of ctx.query([Position, InWorld])) {
-            occupied.add(Math.floor(pos.y[id] ?? 0) * terrain.width + Math.floor(pos.x[id] ?? 0));
+            const px = pos.x[id] ?? 0;
+            const py = pos.y[id] ?? 0;
+            if (
+              ctx.has(Mover, id as EntityId) &&
+              clearanceTierForRadius(mover.radius[id] ?? 0) === CLEARANCE_HEAVY
+            ) {
+              markFootprintOccupied(
+                occupied,
+                terrain.width,
+                terrain.height,
+                clearanceAnchorCell(px, CLEARANCE_HEAVY),
+                clearanceAnchorCell(py, CLEARANCE_HEAVY),
+                2,
+              );
+            } else {
+              markFootprintOccupied(
+                occupied,
+                terrain.width,
+                terrain.height,
+                Math.floor(px),
+                Math.floor(py),
+                1,
+              );
+            }
           }
           for (const p of ctx.read(SpawnIntent)) {
             const kind = db.units.byId(p.kind);
             if (kind === undefined) {
               continue;
             }
+            const tier = clearanceTierForRadius(kind.radius);
+            const size = clearanceFootprintSize(tier);
             const cx = Math.floor(p.x);
             const cy = Math.floor(p.y);
             let handle: EntityHandle | null = null;
             for (const [dx, dy] of spiralOffsets(cx, cy, terrain.width, terrain.height)) {
               const x = cx + dx;
               const y = cy + dy;
-              const key = y * terrain.width + x;
-              if (occupied.has(key) || !terrain.passable(x, y, kind.movementClass)) {
+              if (
+                !terrain.passable(x, y, kind.movementClass, tier) ||
+                !isFootprintFree(occupied, terrain.width, x, y, size)
+              ) {
                 continue;
               }
-              occupied.add(key);
+              markFootprintOccupied(occupied, terrain.width, terrain.height, x, y, size);
               handle = ctx.spawn([
                 [Faction, { id: p.faction }],
                 [InWorld],
                 [UnitKind, { kind: kind.index }],
                 ...moverComponents(
-                  x + 0.5,
-                  y + 0.5,
+                  clearanceAnchorCenter(x, tier),
+                  clearanceAnchorCenter(y, tier),
                   kind.cellsPerTick,
                   kind.radius,
                   kind.movementClass,

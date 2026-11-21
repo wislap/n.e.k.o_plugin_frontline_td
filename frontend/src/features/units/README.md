@@ -27,7 +27,10 @@
   无字段写者，ADR 0047）。Position/Velocity/Mover 归 movement 所有。
 
 ## 不变量
-- 开局单位按方形螺旋顺序放置，一格一个，只落在可通行且未占用的格。
+- 开局与运行期 spawn 按方形螺旋顺序查找足迹：`tier = 0`（`r ≤ 0.45`）占 `1×1`
+  单格、生成于 `(x + 0.5, y + 0.5)`；`tier = 1`（`r > 0.45`）按 `size × size = 2×2`
+  校验 `terrain.passable(x, y, cls, tier)` 且四格均未占用、生成于
+  `clearanceAnchorCenter`（ADR 0052 / ADR 0053）。
 - 密集通道按实体 id 升序输出，数组等长；接受注入的
   `VisibilityQuery`（迷雾：己方恒见，他阵营按所在格可见，
   ADR 0039）。
@@ -40,4 +43,7 @@
   （内容 ID）、[ADR 0028](../../../../docs/adr/0028-rendering-camera-picking.md)
   （渲染实例）、[ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)
   （通道过滤）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
-  （低/空电量视觉指示标牌、底盘暗化与 GPU 资源生命周期）。
+  （低/空电量视觉指示标牌、底盘暗化与 GPU 资源生命周期）、
+  [ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
+  （两档地形净空）、[ADR 0053](../../../../docs/adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)
+  （重型足迹出兵占格）。

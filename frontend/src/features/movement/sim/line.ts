@@ -2,6 +2,11 @@
 // steered directly only when every cell-to-cell step along it is legal for
 // the movement class (stepCost >= 0; stepCost already enforces no corner
 // cutting on diagonals). Positions are floored to their cells.
+import {
+  CLEARANCE_STANDARD,
+  clearanceAnchorCell,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 
 export function lineWalkable(
@@ -11,11 +16,12 @@ export function lineWalkable(
   y0: number,
   x1: number,
   y1: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): boolean {
-  let cx = Math.floor(x0);
-  let cy = Math.floor(y0);
-  const ex = Math.floor(x1);
-  const ey = Math.floor(y1);
+  let cx = clearanceAnchorCell(x0, tier);
+  let cy = clearanceAnchorCell(y0, tier);
+  const ex = clearanceAnchorCell(x1, tier);
+  const ey = clearanceAnchorCell(y1, tier);
   const sx = Math.sign(ex - cx);
   const sy = Math.sign(ey - cy);
   const adx = Math.abs(ex - cx);
@@ -43,7 +49,7 @@ export function lineWalkable(
       tMaxX += tDeltaX;
       tMaxY += tDeltaY;
     }
-    if (terrain.stepCost(cx, cy, nx, ny, cls) < 0) {
+    if (terrain.stepCost(cx, cy, nx, ny, cls, tier) < 0) {
       return false;
     }
     cx = nx;

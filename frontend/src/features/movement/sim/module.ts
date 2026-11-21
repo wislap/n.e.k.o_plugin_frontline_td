@@ -12,6 +12,13 @@ import type {
 } from '../../../kernel/index';
 import { defineStat } from '../../../kernel/index';
 import type { PathingApi } from '../../pathing/sim/index';
+import {
+  CLEARANCE_HEAVY,
+  clearanceAnchorCell,
+  clearanceFootprintSize,
+  clearanceTierForRadius,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { MoveTarget, Mover, Position, Velocity } from './components';
 import { installMovementIntents, releaseHeldGoal } from './intents';
@@ -22,11 +29,44 @@ import { makeSeparate } from './separate';
 // 0025). With no modifiers stat() returns the base unchanged.
 export const MoveSpeed = defineStat('frontline_td:movement.speed');
 
-// A unit has arrived when this close to its slot point.
-const ARRIVAL_DIST = 0.3;
+// Arrival hysteresis thresholds (ADR 0053): moving units enter hold inside
+// ARRIVAL_ENTER_DIST and only steer back when pushed beyond HOLD_DEADBAND_DIST.
+const ARRIVAL_ENTER_DIST = 0.18;
+const HOLD_DEADBAND_DIST = 0.36;
+// Smooth arrival slowdown distance next to the slot point.
+const SLOWDOWN_DIST = 0.85;
 // Within this distance a unit may steer straight at its slot when the cell
 // line is walkable (skips flow-field detours next to the goal).
 const DIRECT_DIST = 8;
+
+const marginScratch = { x: 0, y: 0 };
+
+function clampCornerMargin(
+  terrain: TerrainApi,
+  cls: number,
+  tier: ClearanceTier,
+  acx: number,
+  acy: number,
+  ox: number,
+  oy: number,
+  cxCorner: number,
+  cyCorner: number,
+  margin: number,
+  marginSq: number,
+): void {
+  const dx = marginScratch.x - cxCorner;
+  const dy = marginScratch.y - cyCorner;
+  const d2 = dx * dx + dy * dy;
+  if (
+    d2 < marginSq &&
+    d2 > 1e-12 &&
+    terrain.stepCost(acx, acy, acx + ox, acy + oy, cls, tier) < 0
+  ) {
+    const d = Math.sqrt(d2);
+    marginScratch.x = cxCorner + (dx / d) * margin;
+    marginScratch.y = cyCorner + (dy / d) * margin;
+  }
+}
 
 // Spawn tuples for a movable entity: callers add Faction/InWorld/UnitKind.
 export function moverComponents(
@@ -64,18 +104,89 @@ function stopUnit(pathing: PathingApi, vel: VelView, tgt: TgtView, id: number): 
   vel.y[id] = 0;
 }
 
-// Same-cell moves are always fine; stepCost only rates cell crossings.
+// Same-anchor moves are always fine; stepCost only rates anchor crossings.
 function canStep(
   terrain: TerrainApi,
   cls: number,
+  tier: ClearanceTier,
   ccx: number,
   ccy: number,
   tx: number,
   ty: number,
 ): boolean {
-  const tcx = Math.floor(tx);
-  const tcy = Math.floor(ty);
-  return (tcx === ccx && tcy === ccy) || terrain.stepCost(ccx, ccy, tcx, tcy, cls) >= 0;
+  const tcx = clearanceAnchorCell(tx, tier);
+  const tcy = clearanceAnchorCell(ty, tier);
+  return (tcx === ccx && tcy === ccy) || terrain.stepCost(ccx, ccy, tcx, tcy, cls, tier) >= 0;
+}
+
+// Allocation-free wall and convex-corner margin clamping per clearance tier.
+// Writes into module-private marginScratch; callers read .x/.y immediately.
+function clampFootprintMargin(
+  terrain: TerrainApi,
+  cls: number,
+  tier: ClearanceTier,
+  radius: number,
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  let nx = x;
+  let ny = y;
+  const margin =
+    tier === CLEARANCE_HEAVY ? Math.min(radius * 0.85, 0.75) : Math.min(radius * 0.75, 0.3);
+  if (margin <= 0) {
+    marginScratch.x = nx;
+    marginScratch.y = ny;
+    return marginScratch;
+  }
+  const acx = clearanceAnchorCell(nx, tier);
+  const acy = clearanceAnchorCell(ny, tier);
+  const size = clearanceFootprintSize(tier);
+  const nearW = nx < acx + margin;
+  const nearE = nx > acx + size - margin;
+  const nearN = ny < acy + margin;
+  const nearS = ny > acy + size - margin;
+  if (!nearW && !nearE && !nearN && !nearS) {
+    marginScratch.x = nx;
+    marginScratch.y = ny;
+    return marginScratch;
+  }
+  if (!terrain.passable(acx, acy, cls, tier)) {
+    marginScratch.x = nx;
+    marginScratch.y = ny;
+    return marginScratch;
+  }
+  const wClosed = nearW && terrain.stepCost(acx, acy, acx - 1, acy, cls, tier) < 0;
+  if (wClosed) {
+    nx = acx + margin;
+  }
+  const eClosed = nearE && terrain.stepCost(acx, acy, acx + 1, acy, cls, tier) < 0;
+  if (eClosed) {
+    nx = acx + size - margin;
+  }
+  const nClosed = nearN && terrain.stepCost(acx, acy, acx, acy - 1, cls, tier) < 0;
+  if (nClosed) {
+    ny = acy + margin;
+  }
+  const sClosed = nearS && terrain.stepCost(acx, acy, acx, acy + 1, cls, tier) < 0;
+  if (sClosed) {
+    ny = acy + size - margin;
+  }
+  marginScratch.x = nx;
+  marginScratch.y = ny;
+  const marginSq = margin * margin;
+  if (nearW && nearN && !wClosed && !nClosed) {
+    clampCornerMargin(terrain, cls, tier, acx, acy, -1, -1, acx, acy, margin, marginSq);
+  }
+  if (nearE && nearN && !eClosed && !nClosed) {
+    clampCornerMargin(terrain, cls, tier, acx, acy, 1, -1, acx + size, acy, margin, marginSq);
+  }
+  if (nearW && nearS && !wClosed && !sClosed) {
+    clampCornerMargin(terrain, cls, tier, acx, acy, -1, 1, acx, acy + size, margin, marginSq);
+  }
+  if (nearE && nearS && !eClosed && !sClosed) {
+    clampCornerMargin(terrain, cls, tier, acx, acy, 1, 1, acx + size, acy + size, margin, marginSq);
+  }
+  return marginScratch;
 }
 
 export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): SimModule {
@@ -91,70 +202,111 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const vel = ctx.write(velW);
     const tgt = ctx.write(tgtW);
     const ids = ctx.query([Position, Mover, MoveTarget]);
-    for (const id of ids) {
-      const active = target.active[id] ?? 0;
-      const px = pos.x[id] ?? 0;
-      const py = pos.y[id] ?? 0;
-      const tx = target.x[id] ?? 0;
-      const ty = target.y[id] ?? 0;
+    const posX = pos.x;
+    const posY = pos.y;
+    const tgtX = target.x;
+    const tgtY = target.y;
+    const tgtActive = target.active;
+    const tgtGoal = target.goal;
+    const moverRadius = mover.radius;
+    const moverCls = mover.cls;
+    const moverSpeed = mover.speed;
+    const velX = vel.x;
+    const velY = vel.y;
+    const maxScx = terrain.width - 1;
+    const maxScy = terrain.height - 1;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i] ?? 0;
+      const active = tgtActive[id] ?? 0;
+      if (active === 0) {
+        velX[id] = 0;
+        velY[id] = 0;
+        continue;
+      }
+      const px = posX[id] ?? 0;
+      const py = posY[id] ?? 0;
+      const tx = tgtX[id] ?? 0;
+      const ty = tgtY[id] ?? 0;
       const dx = tx - px;
       const dy = ty - py;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (active === 0) {
-        vel.x[id] = 0;
-        vel.y[id] = 0;
+      if (active === 2) {
+        // Holding the slot: deadband prevents separation oscillation; steer smoothly back when pushed out.
+        if (dist <= HOLD_DEADBAND_DIST) {
+          velX[id] = 0;
+          velY[id] = 0;
+          continue;
+        }
+        const scx = Math.min(maxScx, Math.max(0, Math.floor(px)));
+        const scy = Math.min(maxScy, Math.max(0, Math.floor(py)));
+        const maxSpeed =
+          ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] ?? 0) *
+          (terrain.speedBpAt(scx, scy) / 10000);
+        const returnScale = Math.min(1, (dist - HOLD_DEADBAND_DIST) / SLOWDOWN_DIST);
+        const effSpeed = Math.min(
+          maxSpeed * (0.2 + 0.8 * returnScale),
+          (dist - ARRIVAL_ENTER_DIST * 0.5) * 0.5,
+        );
+        if (effSpeed <= 0) {
+          velX[id] = 0;
+          velY[id] = 0;
+        } else {
+          velX[id] = (dx / dist) * effSpeed;
+          velY[id] = (dy / dist) * effSpeed;
+        }
         continue;
       }
-      const cx = Math.floor(px);
-      const cy = Math.floor(py);
+      // active === 1 (moving)
+      if (dist <= ARRIVAL_ENTER_DIST) {
+        holdUnit(pathing, vel, tgt, id);
+        continue;
+      }
+      const radius = moverRadius[id] ?? 0;
+      const cls = moverCls[id] ?? 0;
+      const tier = clearanceTierForRadius(radius);
       let dirX: number;
       let dirY: number;
-      if (active === 2) {
-        // Holding the slot: steer straight back when pushed off it.
-        if (dist <= ARRIVAL_DIST) {
-          vel.x[id] = 0;
-          vel.y[id] = 0;
-          continue;
-        }
+      let approachingSlot: boolean;
+      if (dist <= DIRECT_DIST && lineWalkable(terrain, cls, px, py, tx, ty, tier)) {
+        // Close enough and a legal straight line: go straight at the slot.
         dirX = dx;
         dirY = dy;
+        approachingSlot = true;
       } else {
-        if (dist <= ARRIVAL_DIST) {
-          holdUnit(pathing, vel, tgt, id);
+        const flow = pathing.smoothDirectionAt(tgtGoal[id] ?? 0, px, py);
+        if (flow === null) {
+          // Unreachable: give up and stop in place.
+          stopUnit(pathing, vel, tgt, id);
           continue;
         }
-        if (dist <= DIRECT_DIST && lineWalkable(terrain, mover.cls[id] ?? 0, px, py, tx, ty)) {
-          // Close enough and a legal straight line: go straight at the slot.
+        if (flow.dx === 0 && flow.dy === 0) {
+          // On the goal cell: steer straight at the slot.
           dirX = dx;
           dirY = dy;
+          approachingSlot = true;
         } else {
-          const flow = pathing.directionAt(target.goal[id] ?? 0, cx, cy);
-          if (flow === null) {
-            // Unreachable: give up and stop in place.
-            stopUnit(pathing, vel, tgt, id);
-            continue;
-          }
-          if (flow.dx === 0 && flow.dy === 0) {
-            // On the goal cell: steer straight at the slot.
-            dirX = dx;
-            dirY = dy;
-          } else {
-            dirX = flow.dx;
-            dirY = flow.dy;
-          }
+          dirX = flow.dx;
+          dirY = flow.dy;
+          approachingSlot = false;
         }
       }
-      const len = Math.sqrt(dirX * dirX + dirY * dirY);
+      const len = approachingSlot ? dist : Math.sqrt(dirX * dirX + dirY * dirY);
       if (len <= 0) {
-        vel.x[id] = 0;
-        vel.y[id] = 0;
+        velX[id] = 0;
+        velY[id] = 0;
         continue;
       }
-      const speed =
-        ctx.stat(MoveSpeed, id as EntityId, mover.speed[id] ?? 0) *
-        (terrain.speedBpAt(cx, cy) / 10000);
-      vel.x[id] = (dirX / len) * speed;
-      vel.y[id] = (dirY / len) * speed;
+      const scx = Math.min(maxScx, Math.max(0, Math.floor(px)));
+      const scy = Math.min(maxScy, Math.max(0, Math.floor(py)));
+      const maxSpeed =
+        ctx.stat(MoveSpeed, id as EntityId, moverSpeed[id] ?? 0) *
+        (terrain.speedBpAt(scx, scy) / 10000);
+      const effSpeed =
+        approachingSlot && dist < SLOWDOWN_DIST
+          ? Math.min(maxSpeed * Math.max(0.25, dist / SLOWDOWN_DIST), dist * 0.65)
+          : maxSpeed;
+      velX[id] = (dirX / len) * effSpeed;
+      velY[id] = (dirY / len) * effSpeed;
     }
   }
 
@@ -164,28 +316,47 @@ export function createMovementModule(terrain: TerrainApi, pathing: PathingApi): 
     const vel = ctx.read(Velocity);
     const mover = ctx.read(Mover);
     const out = ctx.write(posW);
+    const posX = pos.x;
+    const posY = pos.y;
+    const velX = vel.x;
+    const velY = vel.y;
+    const moverRadius = mover.radius;
+    const moverCls = mover.cls;
+    const outX = out.x;
+    const outY = out.y;
     const maxX = terrain.width - 1e-9;
     const maxY = terrain.height - 1e-9;
-    for (const id of ids) {
-      const px = pos.x[id] ?? 0;
-      const py = pos.y[id] ?? 0;
-      const cls = mover.cls[id] ?? 0;
-      const ccx = Math.floor(px);
-      const ccy = Math.floor(py);
-      let nx = px + (vel.x[id] ?? 0);
-      let ny = py + (vel.y[id] ?? 0);
-      if (!canStep(terrain, cls, ccx, ccy, nx, ny)) {
-        if (canStep(terrain, cls, ccx, ccy, nx, py)) {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i] ?? 0;
+      const px = posX[id] ?? 0;
+      const py = posY[id] ?? 0;
+      const vx = velX[id] ?? 0;
+      const vy = velY[id] ?? 0;
+      if (vx === 0 && vy === 0) {
+        outX[id] = px;
+        outY[id] = py;
+        continue;
+      }
+      const radius = moverRadius[id] ?? 0;
+      const cls = moverCls[id] ?? 0;
+      const tier = clearanceTierForRadius(radius);
+      const ccx = clearanceAnchorCell(px, tier);
+      const ccy = clearanceAnchorCell(py, tier);
+      let nx = px + vx;
+      let ny = py + vy;
+      if (!canStep(terrain, cls, tier, ccx, ccy, nx, ny)) {
+        if (canStep(terrain, cls, tier, ccx, ccy, nx, py)) {
           ny = py;
-        } else if (canStep(terrain, cls, ccx, ccy, px, ny)) {
+        } else if (canStep(terrain, cls, tier, ccx, ccy, px, ny)) {
           nx = px;
         } else {
           nx = px;
           ny = py;
         }
       }
-      out.x[id] = Math.min(Math.max(nx, 0), maxX);
-      out.y[id] = Math.min(Math.max(ny, 0), maxY);
+      const clamped = clampFootprintMargin(terrain, cls, tier, radius, nx, ny);
+      outX[id] = Math.min(Math.max(clamped.x, 0), maxX);
+      outY[id] = Math.min(Math.max(clamped.y, 0), maxY);
     }
   }
 
