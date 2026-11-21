@@ -1,8 +1,8 @@
-// Build menu (M3 D, bottom centre): every buildable structure kind with
-// a localized name and its materialized cost. Clicking selects the kind
-// into the build store; Esc or right-click leaves build mode.
+// Build menu (ADR 0048, bottom centre): shown only in build primary
+// mode (F2). Renders every buildable structure kind with localized name
+// and cost, plus the [Demolish C] secondary tool toggle.
 import { useTranslation } from 'react-i18next';
-import { useBuildStore } from '../../../client/build-store';
+import { useInteractionStore } from '../../../client/interaction-store';
 import { useIntentRouter } from '../../../client/intent';
 import { localName, type ContentDb } from '../../../content/index';
 
@@ -24,9 +24,15 @@ const menu = {
 export function BuildMenu({ db }: { db: ContentDb }) {
   const { t } = useTranslation();
   const router = useIntentRouter();
-  const active = useBuildStore((s) => s.kind);
-  const roadMode = useBuildStore((s) => s.roadMode);
+  const mode = useInteractionStore((s) => s.mode);
+  const tool = useInteractionStore((s) => s.tool);
+
+  if (mode !== 'build') {
+    return null;
+  }
+
   const buildables = db.structures.list.filter((s) => s.build !== undefined);
+  const demolishing = tool.kind === 'demolish';
 
   return (
     <div style={menu}>
@@ -38,7 +44,7 @@ export function BuildMenu({ db }: { db: ContentDb }) {
             return `${Math.floor(c.milli / 1000)} ${t(`cargo.${localName(cargoId)}`, { defaultValue: localName(cargoId) })}`;
           })
           .join(', ');
-        const selected = active === kind.id;
+        const selected = tool.kind === 'place' && tool.structureKindId === kind.id;
         return (
           <button
             key={kind.id}
@@ -46,7 +52,7 @@ export function BuildMenu({ db }: { db: ContentDb }) {
             title={cost}
             onClick={() => {
               router.dispatch(
-                selected ? { kind: 'build.cancel' } : { kind: 'build.select', kindId: kind.id },
+                selected ? { kind: 'tool.exit' } : { kind: 'build.select', kindId: kind.id },
               );
             }}
             style={{
@@ -64,20 +70,20 @@ export function BuildMenu({ db }: { db: ContentDb }) {
       })}
       <button
         type="button"
-        title={t('road.button_hint')}
+        title={t('build.demolish_hint')}
         onClick={() => {
-          router.dispatch({ kind: 'road.toggle' });
+          router.dispatch({ kind: 'demolish.press' });
         }}
         style={{
           cursor: 'pointer',
           padding: '4px 8px',
-          border: roadMode ? '1px solid #ffd166' : '1px solid #555',
-          background: roadMode ? 'rgba(255,209,102,0.25)' : 'rgba(30,30,30,0.9)',
+          border: demolishing ? '1px solid #ff8a7a' : '1px solid #555',
+          background: demolishing ? 'rgba(255,138,122,0.25)' : 'rgba(30,30,30,0.9)',
           color: '#fff',
         }}
       >
-        {t('road.button')}
-        <div style={{ fontSize: 10, color: '#bbb' }}>R</div>
+        {t('build.demolish_button')}
+        <div style={{ fontSize: 10, color: '#bbb' }}>{'C'}</div>
       </button>
     </div>
   );

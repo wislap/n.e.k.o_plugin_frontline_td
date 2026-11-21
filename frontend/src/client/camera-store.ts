@@ -1,8 +1,10 @@
-// Camera UI state (M2 C4): mode, map-space center, zoom, and the
-// auto-tactical-on-pause behavior. Zoom means "spectate distance" in
-// spectate and "visible ground height" in tactical.
+// Camera UI state (ADR 0028, ADR 0048): mode, map-space center, zoom,
+// perspective lock, and primary-mode-driven auto-tactical switching.
+// Zoom means "spectate distance" in spectate and "visible ground height"
+// in tactical.
 import { create } from 'zustand';
 import { clampSpectateDist, clampTacticalHeight, matchZoomForMode } from './camera-math';
+import type { PrimaryMode } from './interaction-store';
 
 type CameraMode = 'spectate' | 'tactical';
 
@@ -10,10 +12,11 @@ export interface CameraState {
   mode: CameraMode;
   center: { x: number; y: number };
   zoom: number;
-  autoTacticalOnPause: boolean;
-  // True when the current tactical view was entered automatically on pause
-  // (resume returns to spectate only in that case).
+  // True when the current tactical view was entered automatically by
+  // entering build or logistics mode (returning to command restores
+  // spectate only in that case).
   autoSwitch: boolean;
+  locked: boolean;
   setCenter(center: { x: number; y: number }): void;
   panBy(dx: number, dy: number): void;
   setZoom(zoom: number): void;
@@ -21,7 +24,9 @@ export interface CameraState {
   zoomToward(delta: number, ground: { x: number; y: number } | null): void;
   toggleMode(): void;
   setMode(mode: CameraMode, auto: boolean): void;
-  setAutoTacticalOnPause(on: boolean): void;
+  toggleLocked(): void;
+  setLocked(locked: boolean): void;
+  syncForPrimaryMode(mode: PrimaryMode): void;
   reset(): void;
 }
 
@@ -29,8 +34,8 @@ export const useCameraStore = create<CameraState>((set, get) => ({
   mode: 'spectate',
   center: { x: 0, y: 0 },
   zoom: 30,
-  autoTacticalOnPause: true,
   autoSwitch: false,
+  locked: false,
   setCenter: (center) => {
     set({ center });
   },
@@ -79,16 +84,34 @@ export const useCameraStore = create<CameraState>((set, get) => ({
       };
     });
   },
-  setAutoTacticalOnPause: (on) => {
-    set({ autoTacticalOnPause: on });
+  toggleLocked: () => {
+    set((state) => ({ locked: !state.locked }));
+  },
+  setLocked: (locked) => {
+    set({ locked });
+  },
+  syncForPrimaryMode: (mode) => {
+    const state = get();
+    if (state.locked) {
+      return;
+    }
+    if (mode === 'build' || mode === 'logistics') {
+      if (state.mode === 'spectate') {
+        get().setMode('tactical', true);
+      }
+      return;
+    }
+    if (state.mode === 'tactical' && state.autoSwitch) {
+      get().setMode('spectate', false);
+    }
   },
   reset: () => {
     set({
       mode: 'spectate',
       center: { x: 0, y: 0 },
       zoom: 30,
-      autoTacticalOnPause: true,
       autoSwitch: false,
+      locked: false,
     });
   },
 }));

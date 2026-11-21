@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import type { SquadView } from '../features/squads/protocol';
+import { describe, expect, it, vi } from 'vitest';
+import { toFactionId, toTick, type Snapshot } from '../core/index';
+import { MoveCommand } from '../features/movement/protocol';
+import { SquadsChannel, SquadsOrder, type SquadView } from '../features/squads/protocol';
+import type { SimClient } from './sim-client';
 import {
   digitForTag,
   digitPress,
   playerSquadTag,
   routeMoveSelection,
   squadForDigit,
+  submitMoveOrder,
 } from './squad-controls';
 
 function squad(over: Partial<SquadView>): SquadView {
@@ -71,6 +75,71 @@ describe('routeMoveSelection', () => {
     const r = routeMoveSelection([40, 41], squads, 1);
     expect(r.squads).toEqual([]);
     expect(r.plain).toEqual([40, 41]);
+  });
+});
+
+describe('submitMoveOrder', () => {
+  function fakeClient(): { client: SimClient; submitted: { type: string; payload: unknown }[] } {
+    const submitted: { type: string; payload: unknown }[] = [];
+    const client: SimClient = {
+      start: vi.fn(),
+      restart: vi.fn(),
+      submit: (cmd) => {
+        submitted.push(cmd);
+      },
+      setSpeedIndex: vi.fn(),
+      togglePause: vi.fn(),
+      snapshots: () => ({ previous: null, latest: null, receivedAt: 0, intervalMs: 0 }),
+      inspect: vi.fn(),
+      inspection: () => null,
+      eventsSince: () => ({ events: [], cursor: 0 }),
+    };
+    return { client, submitted };
+  }
+
+  it('submits SquadsOrder for covered squads and MoveCommand for plain units', () => {
+    const { client, submitted } = fakeClient();
+    const snapshot: Snapshot = {
+      tick: toTick(1),
+      observer: toFactionId(1),
+      channels: {
+        [SquadsChannel.id]: {
+          squads: [squad({ id: 7, faction: 1, members: [11, 12] })],
+        },
+      },
+      events: [],
+      layers: {},
+      changedLayers: [],
+    };
+
+    submitMoveOrder(client, snapshot, [11, 30], 12.8, 7.2, true);
+    expect(submitted).toEqual([
+      {
+        type: SquadsOrder.type,
+        payload: { squad: 7, kind: 'guard', x: 12, y: 7 },
+      },
+      {
+        type: MoveCommand.type,
+        payload: { units: [30], x: 12, y: 7 },
+      },
+    ]);
+  });
+
+  it('uses advance when guard is false and falls back to plain MoveCommand when snapshot is null', () => {
+    const { client, submitted } = fakeClient();
+    submitMoveOrder(client, null, [5, 6], 4.1, 9.9, false);
+    expect(submitted).toEqual([
+      {
+        type: MoveCommand.type,
+        payload: { units: [5, 6], x: 4, y: 9 },
+      },
+    ]);
+  });
+
+  it('does nothing when selection is empty', () => {
+    const { client, submitted } = fakeClient();
+    submitMoveOrder(client, null, [], 4, 5, false);
+    expect(submitted).toEqual([]);
   });
 });
 

@@ -2,7 +2,11 @@
 // cursor hover picking over the logistics network channel. Links are
 // indexed into the channel's links arrays; a/b are node indices into the
 // nodes arrays. Pure so the extension rules are unit-testable.
-import type { RoadLinkKey } from '../protocol';
+import type { ContentDb } from '../../../content/index';
+import type { Snapshot } from '../../../core/index';
+import { StructuresChannel, type ConstructionStructures } from '../../construction/protocol';
+import { LogisticsNetworkChannel, type LogisticsNetwork, type RoadLinkKey } from '../protocol';
+import { linkFlow } from '../render/link-flow';
 
 export type { RoadLinkKey };
 
@@ -187,4 +191,49 @@ export function linkIndices(network: KeyedNetwork, keys: readonly RoadLinkKey[])
     }
   }
   return out;
+}
+
+// Extends a clicked link into a route over the current snapshot, using
+// smoothed link flow and stopping at warehouse or leaf nodes, then maps
+// the selected link indices back to stable handle-pair keys.
+export function extendRoadSelection(
+  db: ContentDb,
+  snapshot: Snapshot | null,
+  clickedLink: number,
+): RoadLinkKey[] {
+  if (snapshot === null) {
+    return [];
+  }
+  const net = snapshot.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined;
+  if (net === undefined || clickedLink < 0 || clickedLink >= net.links.a.length) {
+    return [];
+  }
+  const structures = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+  const warehouses = new Set<number>();
+  if (structures !== undefined) {
+    for (let i = 0; i < structures.handles.length; i++) {
+      const kind = db.structures.byIndex(structures.kind[i] ?? 0);
+      if (kind?.node?.warehouse === true) {
+        warehouses.add(structures.handles[i] ?? 0);
+      }
+    }
+  }
+  const warehouseNodes = new Set<number>();
+  for (let i = 0; i < net.nodes.handles.length; i++) {
+    if (warehouses.has(net.nodes.handles[i] ?? 0)) {
+      warehouseNodes.add(i);
+    }
+  }
+  const vol = linkFlow(snapshot, net).vol;
+  const links: RoadLinkInfo[] = [];
+  for (let i = 0; i < net.links.a.length; i++) {
+    links.push({
+      a: net.links.a[i] ?? 0,
+      b: net.links.b[i] ?? 0,
+      flow: vol[i] ?? 0,
+    });
+  }
+  const route = extendRoute(links, clickedLink, warehouseNodes);
+  const selected = route.includes(clickedLink) ? route : [clickedLink];
+  return selected.map((i) => linkKey(net, i)).filter((k): k is RoadLinkKey => k !== null);
 }

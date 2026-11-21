@@ -139,4 +139,28 @@ export const SalvageChannel = defineSnapshotChannel<ConstructionSalvage>(
   'frontline_td:construction.salvage',
 );
 
-// Placement reject codes shared by commands and inspector.
+// Inspector section id for construction entities.
+export const CONSTRUCTION_INSPECTOR_ID = 'frontline_td:construction';
+
+// String state names corresponding to StructuresChannel row states.
+export type ConstructionStateName = (typeof STATE_NAMES)[number];
+
+// Delivered vs required cargo amounts for a single construction site slot.
+export type ConstructionSiteSlot = {
+  cargo: number;
+  required: number;
+  delivered: number;
+};
+
+// Inspector section payload emitted by frontline_td:construction.
+export type ConstructionInspection = {
+  state: ConstructionStateName;
+  kind: string;
+  x: number;
+  y: number;
+  progress: number;
+  total: number;
+  progressBp: number;
+  waiting?: string | null;
+  slots?: ConstructionSiteSlot[];
+};

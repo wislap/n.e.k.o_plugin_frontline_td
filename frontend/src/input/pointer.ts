@@ -1,8 +1,8 @@
-// Canvas pointer listeners → intents (M2 C5). Left click selects, left
-// drag >4px draws a box selection, right click issues a move command,
-// middle drag pans (ground-anchored), wheel zooms, Shift = additive.
-// Helpers are pure so the drag threshold and box normalization are
-// unit-testable; the installer is duck-typed like installKeyboard.
+// Canvas pointer listeners -> intents (ADR 0048). Secondary tools
+// (place, demolish, road) suppress box drag and emit tool clicks on left
+// release and tool.exit on right release. In tool='none', left click/drag
+// selects, while right click issues move orders only in command mode.
+import type { PrimaryMode, SecondaryTool } from '../client/interaction-store';
 import type { Intent } from './intents';
 
 export const DRAG_THRESHOLD_PX = 4;
@@ -55,11 +55,14 @@ interface PointerTarget {
   releasePointerCapture?(pointerId: number): void;
 }
 
-type PointerMode = 'normal' | 'build' | 'road';
+export interface PointerContext {
+  mode: PrimaryMode;
+  tool: SecondaryTool['kind'];
+}
 
 export interface PointerOptions {
-  // Build mode reroutes clicks to build.place / build.cancel.
-  getMode?: () => PointerMode;
+  // Mode + secondary tool context for routing clicks and drag-box gating.
+  getContext?: () => PointerContext;
   // Receives the 'blur' listener that cancels an in-flight drag when the
   // window loses focus; defaults to `window` when available.
   blurTarget?: PointerTarget | null;
@@ -81,6 +84,9 @@ export function installPointer(
   let lastY = 0;
   let boxing = false;
   let panning = false;
+
+  const currentContext = (): PointerContext =>
+    options.getContext?.() ?? { mode: 'command', tool: 'none' };
 
   const down = (event: PointerEventLike): void => {
     if (downButton !== -1) {
@@ -116,7 +122,11 @@ export function installPointer(
       lastY = pos.y;
       return;
     }
-    if (downButton === 0 && (boxing || dragExceeded(pos.x - downX, pos.y - downY))) {
+    if (
+      downButton === 0 &&
+      currentContext().tool === 'none' &&
+      (boxing || dragExceeded(pos.x - downX, pos.y - downY))
+    ) {
       boxing = true;
       onBox(normalizeBox(downX, downY, pos.x, pos.y));
     }
@@ -128,18 +138,24 @@ export function installPointer(
     }
     const pos = getPos(event);
     const additive = event.shiftKey;
-    const mode = options.getMode?.();
-    if (mode === 'build') {
+    const { mode, tool } = currentContext();
+    if (tool === 'place') {
       if (downButton === 0) {
         dispatch({ kind: 'build.place', x: pos.x, y: pos.y, blueprint: additive });
       } else if (downButton === 2) {
-        dispatch({ kind: 'build.cancel' });
+        dispatch({ kind: 'tool.exit' });
       }
-    } else if (mode === 'road') {
+    } else if (tool === 'demolish') {
+      if (downButton === 0) {
+        dispatch({ kind: 'demolish.click', x: pos.x, y: pos.y });
+      } else if (downButton === 2) {
+        dispatch({ kind: 'tool.exit' });
+      }
+    } else if (tool === 'road') {
       if (downButton === 0) {
         dispatch({ kind: 'road.click', x: pos.x, y: pos.y, additive });
       } else if (downButton === 2) {
-        dispatch({ kind: 'build.cancel' });
+        dispatch({ kind: 'tool.exit' });
       }
     } else if (downButton === 0) {
       if (boxing) {
@@ -147,7 +163,7 @@ export function installPointer(
       } else {
         dispatch({ kind: 'select.click', x: pos.x, y: pos.y, additive });
       }
-    } else if (downButton === 2) {
+    } else if (downButton === 2 && mode === 'command') {
       dispatch({
         kind: 'command.move_to',
         x: pos.x,

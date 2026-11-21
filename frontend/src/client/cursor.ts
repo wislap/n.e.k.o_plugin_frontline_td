@@ -1,12 +1,45 @@
-// Latest ground point under the cursor in map coordinates, updated by the
-// canvas dispatch on cursor.move and read by the build ghost each frame.
-// Mutable module state, never React/zustand (per-frame reads).
-export const cursorGround: { x: number; y: number; valid: boolean } = {
-  x: 0,
-  y: 0,
-  valid: false,
-};
+// Latest ground and screen cursor positions, updated on pointer move and
+// read per frame by the build ghost and HTML overlays. Encapsulated behind
+// cursorState so callers never mutate module globals directly.
+export interface GroundCursor {
+  x: number;
+  y: number;
+  valid: boolean;
+}
 
-// Latest cursor position in screen pixels, used by HTML overlays (e.g.
-// the road-tool link tooltip) to anchor themselves to the pointer.
-export const cursorScreen: { x: number; y: number } = { x: 0, y: 0 };
+export interface ScreenCursor {
+  x: number;
+  y: number;
+}
+
+const groundPoint: GroundCursor = { x: 0, y: 0, valid: false };
+const screenPoint: ScreenCursor = { x: 0, y: 0 };
+
+export const cursorState = {
+  ground(): Readonly<GroundCursor> {
+    return groundPoint;
+  },
+  screen(): Readonly<ScreenCursor> {
+    return screenPoint;
+  },
+  setGround(point: { x: number; y: number } | null): void {
+    if (point === null) {
+      groundPoint.valid = false;
+      return;
+    }
+    groundPoint.x = point.x;
+    groundPoint.y = point.y;
+    groundPoint.valid = true;
+  },
+  setScreen(x: number, y: number): void {
+    screenPoint.x = x;
+    screenPoint.y = y;
+  },
+  reset(): void {
+    groundPoint.x = 0;
+    groundPoint.y = 0;
+    groundPoint.valid = false;
+    screenPoint.x = 0;
+    screenPoint.y = 0;
+  },
+};

@@ -10,6 +10,11 @@ import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import type { CargoRead } from '../../logistics/sim/index';
 import { Position } from '../../movement/sim/index';
 import { SpawnIntent } from '../../units/protocol';
+import {
+  PRODUCTION_INSPECTOR_ID,
+  type ProductionInspection,
+  type ProductionStateName,
+} from '../protocol';
 import { Producer } from './components';
 
 // Total amount of a cargo across the store's slots.
@@ -128,7 +133,7 @@ export function createProductionModule(db: ContentDb): SimModule {
       });
 
       // Inspector: producing / waiting for inputs (which) / output full.
-      builder.inspector('frontline_td:production', (ctx, id) => {
+      builder.inspector(PRODUCTION_INSPECTOR_ID, (ctx, id) => {
         if (!ctx.has(Producer, id)) {
           return null;
         }
@@ -155,23 +160,29 @@ export function createProductionModule(db: ContentDb): SimModule {
         const full = recipe.outputs
           .filter((output) => !hasExportRoom(store, id, output.cargo, output.milli))
           .map((output) => output.cargo);
-        return {
-          state:
-            progress > 0
-              ? 'producing'
-              : missing.length > 0
-                ? 'waiting_inputs'
-                : full.length > 0
-                  ? 'output_full'
-                  : 'ready',
+        const state: ProductionStateName =
+          progress > 0
+            ? 'producing'
+            : missing.length > 0
+              ? 'waiting_inputs'
+              : full.length > 0
+                ? 'output_full'
+                : 'ready';
+        const nextUnit =
+          unitOutput !== undefined && unitOutput.length > 0
+            ? unitOutput[(prodR.cycle[id] ?? 0) % unitOutput.length]
+            : undefined;
+        const base = {
+          state,
           progress,
           total: timeTicks,
           missing,
           full,
-          ...(unitOutput !== undefined && unitOutput.length > 0
-            ? { nextUnit: unitOutput[(prodR.cycle[id] ?? 0) % unitOutput.length] }
-            : {}),
         };
+        if (nextUnit !== undefined) {
+          return { ...base, nextUnit } satisfies ProductionInspection;
+        }
+        return base satisfies ProductionInspection;
       });
     },
   };

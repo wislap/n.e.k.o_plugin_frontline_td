@@ -7,6 +7,9 @@
 ## 公开接口
 - `sim/index.ts`：`createProductionModule(db)`、`structureParts`
   （为带 `producer` 配方的结构注入 `Producer` 组件）。
+- `protocol.ts`：`PRODUCTION_INSPECTOR_ID`（`frontline_td:production`）、
+  `PRODUCTION_STATES`/`ProductionStateName` 与 `ProductionInspection`
+  检查器契约类型。
 - `content.ts`：`producerSchema`（`inputs`/`outputs` 货物表 +
   `time` 秒；loader 换成货物索引、milli 与 tick），以及两个可选
   字段：`producer.unitOutput`（替代 cargo 输出的单位产出表，按

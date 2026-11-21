@@ -85,7 +85,8 @@
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|---|
 | [0016](../adr/0016-i18n-strategy.md) | 多语言策略 | 已采纳 | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
-| [0028](../adr/0028-rendering-camera-picking.md) | 渲染、镜头与拾取 | 已采纳 | 部分（关闭"暂停自动切指挥视角"的设置没有界面；建造模式不会自动切到指挥视角） | wislap | M2 第一个参考实现 | 2026-11-16 |
+| [0028](../adr/0028-rendering-camera-picking.md) | 渲染、镜头与拾取 | 已采纳；部分被 0048 取代（按 V 切换视角改为 Tab；删除暂停自动切指挥视角，改为进入建造/物流模式自动切 2D 且可锁定视角；点选拆分为己方可控选中集合与可固定检视对象） | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
+| [0048](../adr/0048-interaction-modes-and-inspector-contract.md) | 客户端交互模式、检视焦点与强类型检查器契约 | 已采纳 | 已实现 | wislap | F1 客户端交互底座 | 2026-11-20 |
 
 ## 已取代 / 已废弃
 
@@ -155,3 +156,6 @@
 - [0045 第二轮评审整改约定](../adr/0045-second-review-conventions.md)
 - [0046 文档一致性约定](../adr/0046-doc-consistency-conventions.md)
 - [0047 组件归属声明与契约清单](../adr/0047-component-ownership-manifest.md)
+
+### F1 客户端交互底座（2026-11-20）
+- [0048 客户端交互模式、检视焦点与强类型检查器契约](../adr/0048-interaction-modes-and-inspector-contract.md)

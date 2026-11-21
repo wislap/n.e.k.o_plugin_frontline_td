@@ -1,27 +1,32 @@
-// Canvas input dispatch (M3 D): the canvas-dependent half of the single
-// intent router — screen-space intents that need the camera/raycaster
-// turn into picks, selections, build placements, and commands. Global
-// intents are handled by app/dispatch.ts, which forwards these here.
+// Canvas input dispatch (ADR 0048): the canvas-dependent half of the single
+// intent router — screen-space intents that need the camera/raycaster turn
+// into hover subjects, selections, pinned inspection targets, build/demolish/road
+// tool clicks, and move orders.
 import * as THREE from 'three';
-import { useBuildStore } from '../client/build-store';
+import { visibleGroundHeight } from '../client/camera-math';
 import { useCameraStore } from '../client/camera-store';
-import { cursorGround, cursorScreen } from '../client/cursor';
-import { pickAt, structuresChannel } from '../client/pick';
+import { cursorState } from '../client/cursor';
+import { useInspectorStore, type PinnableSubject } from '../client/inspector-store';
+import { useInteractionStore } from '../client/interaction-store';
+import { pickDemolishableAt, pickSubjectAt, structuresChannel } from '../client/pick';
 import { submitRoadOrder } from '../client/road-order';
-import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
+import type { SimClient } from '../client/sim-client';
+import { submitMoveOrder } from '../client/squad-controls';
 import type { ContentDb } from '../content/index';
-import { PlaceCommand } from '../features/construction/protocol';
+import type { Snapshot } from '../core/index';
+import {
+  CancelCommand,
+  PlaceCommand,
+  RoadWorksChannel,
+  type RoadWorks,
+} from '../features/construction/protocol';
+import { centeredFootprint } from '../features/construction/rules/index';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
-import { linkFlow } from '../features/logistics/render/index';
-import { extendRoute, linkKey, nearestLink, sameKey } from '../features/logistics/ui/index';
-import { MoveCommand } from '../features/movement/protocol';
-import { SquadsChannel, SquadsOrder, type SquadsSnapshot } from '../features/squads/protocol';
-import { routeMoveSelection } from '../client/squad-controls';
+import { extendRoadSelection, linkKey, nearestLink, sameKey } from '../features/logistics/ui/index';
 import type { Intent } from '../input/intents';
 import { pickGround, type Ray } from './picking';
 import { interpolatedUnits } from './unit-pos';
-import { visibleGroundHeight } from '../client/camera-math';
 import { terrainY } from './world';
 
 const CLICK_RADIUS_CELLS = 0.6;
@@ -38,6 +43,35 @@ export interface DispatchEnv {
   rect: () => { left: number; top: number; width: number; height: number };
 }
 
+function ownSubjectForHandle(
+  snapshot: Snapshot | null,
+  observer: number,
+  units: ReadonlyMap<number, { x: number; y: number; faction: number }>,
+  handle: number,
+): PinnableSubject {
+  const unit = units.get(handle);
+  if (unit !== undefined && unit.faction === observer) {
+    return { kind: 'own_unit', handle };
+  }
+  const structures = structuresChannel(snapshot);
+  if (structures !== null) {
+    for (let i = 0; i < structures.handles.length; i++) {
+      if (structures.handles[i] === handle && (structures.faction[i] ?? 0) === observer) {
+        return { kind: 'own_structure', handle };
+      }
+    }
+  }
+  const roadWorks = (snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
+  if (roadWorks !== null) {
+    for (let i = 0; i < roadWorks.segments.handles.length; i++) {
+      if (roadWorks.segments.handles[i] === handle) {
+        return { kind: 'road_segment', handle };
+      }
+    }
+  }
+  return { kind: 'own_unit', handle };
+}
+
 export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
   const { client, db, mapWidth, mapHeight, heights } = env;
   const raycaster = new THREE.Raycaster();
@@ -49,46 +83,6 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
 
   const roadLinks = (): LogisticsNetwork['links'] | { a: []; pathOffsets: []; pathCells: [] } => {
     return roadNetwork()?.links ?? { a: [], pathOffsets: [], pathCells: [] };
-  };
-
-  // Smoothed per-link flow (volOut + volIn) from the shared holder that
-  // also feeds the overlay, updated once per snapshot.
-  const flowedLinks = (): { a: number; b: number; flow: number }[] => {
-    const latest = client.snapshots().latest;
-    const net = roadNetwork();
-    if (latest === null || net === null) {
-      return [];
-    }
-    const vol = linkFlow(latest, net).vol;
-    const out: { a: number; b: number; flow: number }[] = [];
-    for (let i = 0; i < net.links.a.length; i++) {
-      out.push({ a: net.links.a[i] ?? 0, b: net.links.b[i] ?? 0, flow: vol[i] ?? 0 });
-    }
-    return out;
-  };
-
-  // Node indices (into the network's nodes arrays) of the observer's
-  // warehouse structures: extension never continues past them.
-  const warehouseNodes = (): Set<number> => {
-    const net = roadNetwork();
-    const structures = structuresChannel(client.snapshots().latest);
-    if (net === null || structures === null) {
-      return new Set();
-    }
-    const warehouses = new Set<number>();
-    for (let i = 0; i < structures.handles.length; i++) {
-      const kind = db.structures.byIndex(structures.kind[i] ?? 0);
-      if (kind?.node?.warehouse === true) {
-        warehouses.add(structures.handles[i] ?? 0);
-      }
-    }
-    const nodes = new Set<number>();
-    for (let i = 0; i < net.nodes.handles.length; i++) {
-      if (warehouses.has(net.nodes.handles[i] ?? 0)) {
-        nodes.add(i);
-      }
-    }
-    return nodes;
   };
 
   const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
@@ -138,21 +132,40 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         return;
       }
       case 'cursor.move': {
-        cursorScreen.x = intent.x;
-        cursorScreen.y = intent.y;
+        cursorState.setScreen(intent.x, intent.y);
         const ground = groundAt(intent.x, intent.y);
-        cursorGround.valid = ground !== null;
-        if (ground !== null) {
-          cursorGround.x = ground.x;
-          cursorGround.y = ground.y;
-        }
-        const build = useBuildStore.getState();
-        if (build.roadMode) {
+        cursorState.setGround(ground);
+        const latest = client.snapshots().latest;
+        const observer = latest?.observer ?? -1;
+        const units = interpolatedUnits(client.snapshots(), now);
+        const picked =
+          ground !== null
+            ? pickSubjectAt(
+                db,
+                { width: mapWidth, height: mapHeight },
+                latest,
+                observer,
+                units,
+                ground.x,
+                ground.y,
+                CLICK_RADIUS_CELLS,
+              )
+            : { ownHandle: null, subject: null };
+        useInspectorStore.getState().setHovered(picked.subject);
+
+        const interaction = useInteractionStore.getState();
+        if (interaction.tool.kind === 'road') {
           const link =
             ground === null ? -1 : nearestLink(roadLinks(), mapWidth, ground.x, ground.y);
-          if (link !== build.roadHover) {
-            build.setRoadHover(link);
-          }
+          interaction.setRoadHover(link);
+        } else if (interaction.tool.kind === 'demolish') {
+          const hit =
+            ground === null
+              ? null
+              : pickDemolishableAt(db, latest, observer, ground.x, ground.y, CLICK_RADIUS_CELLS);
+          interaction.setDemolishHover(
+            hit === null ? null : { handle: hit.handle, refunds: hit.refunds },
+          );
         }
         return;
       }
@@ -161,7 +174,7 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         if (ground === null) {
           return;
         }
-        const build = useBuildStore.getState();
+        const interaction = useInteractionStore.getState();
         const link = nearestLink(roadLinks(), mapWidth, ground.x, ground.y);
         if (link === -1) {
           return;
@@ -172,69 +185,127 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
           return;
         }
         if (intent.additive) {
-          build.toggleRoadLink(key);
+          interaction.toggleRoadLink(key);
           return;
         }
-        if (build.roadSel.some((k) => sameKey(k, key.a, key.b))) {
+        if (interaction.roadSel.some((k) => sameKey(k, key.a, key.b))) {
           submitRoadOrder(client, db);
           return;
         }
-        const route = extendRoute(flowedLinks(), link, warehouseNodes());
-        const keys = (route.includes(link) ? route : [link])
-          .map((i) => (net === null ? null : linkKey(net, i)))
-          .filter((k): k is NonNullable<typeof k> => k !== null);
-        build.setRoadSel(keys);
+        const latest = client.snapshots().latest;
+        interaction.setRoadSel(extendRoadSelection(db, latest, link));
         return;
       }
       case 'build.place': {
-        const ground = groundAt(intent.x, intent.y);
-        const kind = useBuildStore.getState().kind;
-        if (ground === null || kind === null) {
+        const interaction = useInteractionStore.getState();
+        if (interaction.tool.kind !== 'place') {
           return;
         }
+        const ground = groundAt(intent.x, intent.y);
+        if (ground === null) {
+          return;
+        }
+        const kind = interaction.tool.structureKindId;
         const resolved = db.structures.byId(kind);
         if (resolved === undefined) {
-          useBuildStore.getState().cancel();
+          interaction.exitTool();
           return;
         }
-        // Top-left of the footprint centred on the cursor cell.
-        const x = Math.floor(ground.x - resolved.footprint.w / 2);
-        const y = Math.floor(ground.y - resolved.footprint.h / 2);
+        const { x, y } = centeredFootprint(ground.x, ground.y, resolved.footprint);
         client.submit({
           type: PlaceCommand.type,
           payload: { kind, x, y, blueprint: intent.blueprint },
         });
-        // Blueprint placement (Shift) stays in build mode; a direct site
-        // placement ends it.
+        // Blueprint placement (Shift) stays in place tool; direct placement exits it.
         if (!intent.blueprint) {
-          useBuildStore.getState().cancel();
+          interaction.exitTool();
+        }
+        return;
+      }
+      case 'demolish.click': {
+        const ground = groundAt(intent.x, intent.y);
+        if (ground === null) {
+          return;
+        }
+        const latest = client.snapshots().latest;
+        const observer = latest?.observer ?? -1;
+        const hit = pickDemolishableAt(
+          db,
+          latest,
+          observer,
+          ground.x,
+          ground.y,
+          CLICK_RADIUS_CELLS,
+        );
+        if (hit !== null) {
+          client.submit({
+            type: CancelCommand.type,
+            payload: { targets: [hit.handle] },
+          });
         }
         return;
       }
       case 'select.click': {
         const ground = groundAt(intent.x, intent.y);
-        const store = useSelectionStore.getState();
+        const selection = useSelectionStore.getState();
+        const inspector = useInspectorStore.getState();
         if (ground === null) {
           if (!intent.additive) {
-            store.clear();
+            selection.clear();
+            inspector.unpin();
+            useInteractionStore.getState().clearDemolishConfirm();
           }
           return;
         }
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
         const units = interpolatedUnits(client.snapshots(), now);
-        // Unit wins; structure/blueprint/salvage only when no unit is near.
-        const picked = pickAt(db, latest, observer, units, ground.x, ground.y, CLICK_RADIUS_CELLS);
-        if (picked !== null) {
-          store.setSelection(new Set([picked]), intent.additive);
-        } else if (!intent.additive) {
-          store.clear();
+        const picked = pickSubjectAt(
+          db,
+          { width: mapWidth, height: mapHeight },
+          latest,
+          observer,
+          units,
+          ground.x,
+          ground.y,
+          CLICK_RADIUS_CELLS,
+        );
+        if (picked.subject === null) {
+          if (!intent.additive) {
+            selection.clear();
+            inspector.unpin();
+            useInteractionStore.getState().clearDemolishConfirm();
+          }
+          return;
         }
+        if (picked.ownHandle !== null && picked.subject.kind !== 'cell') {
+          selection.setSelection(new Set([picked.ownHandle]), intent.additive);
+          useInteractionStore.getState().clearDemolishConfirm();
+          const nextSelected = useSelectionStore.getState().selected;
+          if (nextSelected.size > 1) {
+            inspector.pin({ kind: 'multi_own', count: nextSelected.size });
+          } else {
+            inspector.pin(picked.subject);
+          }
+          return;
+        }
+        if (picked.subject.kind === 'cell') {
+          if (!intent.additive) {
+            selection.clear();
+            useInteractionStore.getState().clearDemolishConfirm();
+          }
+          inspector.unpin();
+          return;
+        }
+        // Hostile / ruin / salvage / memory: pin for inspection without altering own selection.
+        useInteractionStore.getState().clearDemolishConfirm();
+        inspector.pin(picked.subject);
         return;
       }
       case 'select.box': {
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
+        const mode = useInteractionStore.getState().mode;
         const units = interpolatedUnits(client.snapshots(), now);
         const box = {
           x0: Math.min(intent.x0, intent.x1),
@@ -245,17 +316,19 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         const inside = (px: number, py: number): boolean =>
           px >= box.x0 && px <= box.x1 && py >= box.y0 && py <= box.y1;
         const picked = new Set<number>();
-        for (const [handle, u] of units) {
-          if (u.faction !== observer) {
-            continue;
-          }
-          const p = project(u.x, u.y);
-          if (inside(p.x, p.y)) {
-            picked.add(handle);
+
+        if (mode !== 'build') {
+          for (const [handle, u] of units) {
+            if (u.faction !== observer) {
+              continue;
+            }
+            const p = project(u.x, u.y);
+            if (inside(p.x, p.y)) {
+              picked.add(handle);
+            }
           }
         }
-        if (picked.size === 0) {
-          // No units in the box: own structures/blueprints by centre.
+        if (mode === 'build' || picked.size === 0) {
           const structures = structuresChannel(latest);
           if (structures !== null) {
             for (let i = 0; i < structures.handles.length; i++) {
@@ -275,7 +348,21 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
             }
           }
         }
-        useSelectionStore.getState().setSelection(picked, intent.additive);
+        const selection = useSelectionStore.getState();
+        selection.setSelection(picked, intent.additive);
+        useInteractionStore.getState().clearDemolishConfirm();
+        const nextSelected = useSelectionStore.getState().selected;
+        const inspector = useInspectorStore.getState();
+        if (nextSelected.size > 1) {
+          inspector.pin({ kind: 'multi_own', count: nextSelected.size });
+        } else if (nextSelected.size === 1) {
+          const single = [...nextSelected][0];
+          if (single !== undefined) {
+            inspector.pin(ownSubjectForHandle(latest, observer, units, single));
+          }
+        } else {
+          inspector.unpin();
+        }
         return;
       }
       case 'command.move_to': {
@@ -287,28 +374,14 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         if (selected.length === 0) {
           return;
         }
-        const x = Math.floor(ground.x);
-        const y = Math.floor(ground.y);
-        // Squad members are ordered through their squad — a plain
-        // MoveCommand on a member removes it from the squad (M4).
-        const latest = client.snapshots().latest;
-        const squads =
-          (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
-        const routing = routeMoveSelection(selected, squads, latest?.observer ?? -1);
-        for (const squad of routing.squads) {
-          client.submit({
-            type: SquadsOrder.type,
-            payload: intent.guard
-              ? { squad, kind: 'guard', x, y }
-              : { squad, kind: 'advance', x, y },
-          });
-        }
-        if (routing.plain.length > 0) {
-          client.submit({
-            type: MoveCommand.type,
-            payload: { units: routing.plain, x, y },
-          });
-        }
+        submitMoveOrder(
+          client,
+          client.snapshots().latest,
+          selected,
+          Math.floor(ground.x),
+          Math.floor(ground.y),
+          intent.guard,
+        );
         useSelectionStore.getState().markMoveTarget(ground.x, ground.y, now);
         return;
       }

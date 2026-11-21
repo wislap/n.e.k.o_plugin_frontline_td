@@ -21,10 +21,28 @@
     "speed": "Speed ×{{n}}",
     "camera": {
       "spectate": "Spectate",
-      "tactical": "Tactical"
+      "tactical": "Tactical",
+      "toggle_hint": "Toggle camera view (Tab)",
+      "locked": "Lock View: On",
+      "unlocked": "Lock View: Off"
     },
+    "mode": {
+      "command": "Command",
+      "build": "Build",
+      "logistics": "Logistics"
+    },
+    "tool": {
+      "place": "Placing {{name}} · Click to build / Shift+Click blueprint / Right-click or Esc to exit",
+      "demolish": "Demolish tool · Click own structure or road segment / Right-click or Esc to exit",
+      "road": "Road tool · Click link to extend / Shift+Click toggle / Enter confirm / Right-click or Esc to exit",
+      "exit": "Exit (Esc)"
+    },
+    "demolish_confirm_prompt": "Demolish {{count}} operational building(s)? Press C/Del again or click to confirm",
+    "demolish_confirm_btn": "Confirm Demolish",
+    "demolish_cancel_btn": "Cancel",
     "selected": "{{count}} selected",
-    "hints": "Space pause | -/= speed | 1-9 squad | Ctrl+1-9 create squad | V camera | WASD pan | Right-click move | Ctrl+right-click guard | G activate | X demolish | L logistics | R roads | Esc cancel | ` debug",
+    "hints": "F1-F3 modes | Tab camera | WASD pan | Space pause | -/= speed | L logistics | ` debug | ? keys",
+    "help_button_hint": "Keybindings (?)",
     "threat": "Enemy gathering · ~{{count}} · attacks in {{time}}",
     "fullscreen": "Fullscreen",
     "fullscreen_unsupported": "Fullscreen is only available inside the NEKO panel",
@@ -39,6 +57,80 @@
       "no_units": "no controllable units",
       "other": "unknown reason"
     }
+  },
+  "help": {
+    "title": "Keybindings",
+    "close": "Close",
+    "group": {
+      "global": "Global",
+      "command": "Command Mode (F1)",
+      "build": "Build Mode (F2)",
+      "logistics": "Logistics Mode (F3)"
+    },
+    "key": {
+      "pause": "Pause / Resume",
+      "speed": "Step simulation speed",
+      "camera": "Toggle Spectate / Tactical view",
+      "pan": "Pan camera",
+      "modes": "Switch primary mode",
+      "logistics_overlay": "Toggle logistics overlay",
+      "debug": "Toggle debug panel",
+      "escape": "Exit tool / Close help / Unpin inspector",
+      "help": "Toggle keybindings help",
+      "squad_select": "Select bound squad (double-press centers)",
+      "squad_create": "Bind selection to squad",
+      "move": "Move order",
+      "guard": "Guard order",
+      "build_category": "Build category slot (reserved)",
+      "place_blueprint": "Place blueprint (keep tool)",
+      "activate": "Activate selected blueprints",
+      "demolish": "Demolish / cancel selection (or toggle demolish tool)",
+      "exit_tool": "Exit active secondary tool",
+      "road_tool": "Toggle road tool",
+      "road_toggle_link": "Toggle single link",
+      "road_confirm": "Submit road upgrade order"
+    }
+  },
+  "build": {
+    "demolish_button": "Demolish",
+    "demolish_hint": "Demolish / Cancel (C / Del): toggles demolish tool if nothing is selected; operational buildings require confirmation"
+  },
+  "inspector": {
+    "preview": "Preview",
+    "pinned": "Pinned",
+    "unpin": "Unpin (Esc)",
+    "activate_btn": "G Activate",
+    "demolish_btn": "C Demolish",
+    "confirm_demolish_btn": "Confirm Demolish",
+    "cell_coords": "Terrain ({{x}}, {{y}})",
+    "unexplored": "Unexplored",
+    "fog_memory": "Fog Memory",
+    "surface_label": "Surface: {{name}}",
+    "unknown": "Unknown",
+    "height": "Height {{h}}",
+    "ramp": "Ramp",
+    "deposit": "Deposit: {{cargo}}",
+    "road_level": "Road Lv.{{level}}",
+    "covered": "In service coverage",
+    "uncovered": "Outside service coverage",
+    "hostile_zone": "Inside hostile exclusion zone",
+    "hostile_tag": "Hostile",
+    "unit_moving": "Moving",
+    "unit_idle": "Idle",
+    "energy": "Energy {{pct}}%",
+    "salvage": "Salvage",
+    "road_segment": "Road Segment",
+    "capture_progress": "Capture {{pct}}%",
+    "node_summary": "Node connect {{connect}} · service {{service}} · vehicles {{vehicles}}",
+    "warehouse_tag": "Warehouse"
+  },
+  "surface": {
+    "ground": "Ground",
+    "forest": "Forest",
+    "shallow_water": "Shallow Water",
+    "deep_water": "Deep Water",
+    "rock": "Rock",
+    "ore_field": "Ore Field"
   },
   "cargo": {
     "ore": "Ore",
@@ -135,11 +227,12 @@
   },
   "stock": {
     "title": "Warehouse",
+    "rate": "{{value}}/s",
     "priorities": "Priority: {{order}} (click to swap)"
   },
   "panel": {
     "selected": "{{count}} selected",
-    "multi_hint": "G activate blueprints | X demolish/cancel",
+    "multi_hint": "In Build mode: G activate blueprints | C/Del demolish/cancel",
     "loading": "Inspecting…",
     "hp": "HP {{hp}}/{{max}}",
     "weapon_ready": "Weapon ready",

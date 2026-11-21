@@ -107,3 +107,36 @@ export interface LogisticsNetwork {
 export const LogisticsNetworkChannel = defineSnapshotChannel<LogisticsNetwork>(
   'frontline_td:logistics.network',
 );
+
+// Inspector section id for logistics entities.
+export const LOGISTICS_INSPECTOR_ID = 'frontline_td:logistics';
+
+// String unmet-demand reason names corresponding to UNMET_* codes.
+type UnmetReasonName = (typeof UNMET_REASONS)[number];
+
+// Single CargoStore slot summary inside a logistics inspection.
+export type LogisticsSlotInspection = {
+  cargo: string | number;
+  capacity: number;
+  amount: number;
+  class: CargoClassName;
+  export: boolean;
+  site: boolean;
+  unmet: UnmetReasonName;
+};
+
+// LogisticsNode summary inside a logistics inspection.
+type LogisticsNodeInspection = {
+  connect: number;
+  service: number;
+  vehicles: number;
+  warehouse: boolean;
+};
+
+// Inspector section payload emitted by frontline_td:logistics.
+export type LogisticsInspection = {
+  slots: LogisticsSlotInspection[];
+  bottleneck: number;
+  attachedNode: number | null;
+  node: LogisticsNodeInspection | null;
+};

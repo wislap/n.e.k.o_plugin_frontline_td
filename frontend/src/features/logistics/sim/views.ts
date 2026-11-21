@@ -4,7 +4,7 @@ import type { EntityId, Serializable } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
 import { Faction } from '../../../kernel/index';
 import { Position } from '../../movement/sim/index';
-import type { LogisticsNetwork } from '../protocol';
+import type { LogisticsInspection, LogisticsNetwork, LogisticsSlotInspection } from '../protocol';
 import { CARGO_CLASSES, CARGO_RESERVE, SLOT_EXPORT, SLOT_SITE, UNMET_REASONS } from '../protocol';
 import { CARGO_SLOTS, CargoStore, EMPTY_CARGO, LogisticsNode } from './components';
 import type { LogisticsEnv } from './env';
@@ -32,7 +32,7 @@ export function inspectLogistics(
       attached = Number(ctx.handleOf(topo.nodes[a.node]?.id as EntityId) ?? 0);
     }
   }
-  const slots: Record<string, unknown>[] = [];
+  const slots: LogisticsSlotInspection[] = [];
   if (hasStore) {
     for (let i = 0; i < CARGO_SLOTS; i++) {
       const cargo = sget(store, 'cargo', i, id);
@@ -65,7 +65,7 @@ export function inspectLogistics(
             vehicles: node.vehicles[id] ?? 0,
             warehouse: (node.warehouse[id] ?? 0) === 1,
           },
-  } as unknown as Serializable;
+  } satisfies LogisticsInspection;
 }
 
 export function networkSnapshot(

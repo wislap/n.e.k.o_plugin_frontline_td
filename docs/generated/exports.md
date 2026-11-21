@@ -104,7 +104,9 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `COMBAT_INSPECTOR_ID` | const | Inspector section id for combat entities. |
 | `CombatDied` | event def |  |
+| `CombatInspection` | type | Inspector section payload emitted by frontline_td:combat. |
 | `CombatShot` | event def |  |
 | `DamageIntent` | intent def |  |
 | `DamagePayload` | type | target = entity handle, amount = milli damage. |
@@ -141,9 +143,13 @@
 |---|---|---|
 | `ActivateCommand` | command def | construction.activate: activate blueprint handles for auto-start. |
 | `CancelCommand` | command def | construction.cancel: blueprint -> despawn; build site -> salvage of delivered materials; finished building -> demolition. |
+| `CONSTRUCTION_INSPECTOR_ID` | const | Inspector section id for construction entities. |
 | `ConstructionCompleted` | event def |  |
 | `ConstructionCompletedPayload` | type |  |
+| `ConstructionInspection` | type | Inspector section payload emitted by frontline_td:construction. |
 | `ConstructionSalvage` | interface |  |
+| `ConstructionSiteSlot` | type | Delivered vs required cargo amounts for a single construction site slot. |
+| `ConstructionStateName` | type | String state names corresponding to StructuresChannel row states. |
 | `ConstructionStructures` | interface |  |
 | `PlaceCommand` | command def | construction.place: kind is a structure content id; blueprint spawns a reservation instead of a site. |
 | `RoadSegmentDesc` | interface | Data handed to the injected road-segment parts factories (logistics contributes site slots + FixedAttach, combat Health + Targetable). |
@@ -175,8 +181,11 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `centeredFootprint` | function | Top-left cell of a footprint centered on (groundX, groundY). |
 | `checkFootprint` | function | One pass per check category so the reason precedence is the code order above, independent of which cell fails first. |
 | `checkRange` | function |  |
+| `classifyCancelSelection` | function | Classify selected handles into cancellable targets, operational buildings that require demolition confirmation, and aggregated demolition refunds. |
+| `demolishRefund` | function | Refund slots for a demolished building: build cost x salvageBp. |
 | `FOOTPRINT_CODES` | const |  |
 | `makePlacementView` | function |  |
 | `PlacementRule` | interface |  |
@@ -224,8 +233,11 @@
 | `CargoClassName` | type |  |
 | `ConsumeIntent` | intent def |  |
 | `DepositIntent` | intent def |  |
+| `LOGISTICS_INSPECTOR_ID` | const | Inspector section id for logistics entities. |
+| `LogisticsInspection` | type | Inspector section payload emitted by frontline_td:logistics. |
 | `LogisticsNetwork` | interface |  |
 | `LogisticsNetworkChannel` | channel def |  |
+| `LogisticsSlotInspection` | type | Single CargoStore slot summary inside a logistics inspection. |
 | `ROAD_LAYER_ID` | const | Global road-level layer id (u8): 0 = dirt, >=1 paved level. |
 | `RoadLinkKey` | interface | Stable link identity: the normalized pair of endpoint node handles (smaller first). |
 | `SERVICE_LAYER_ID` | const | Per-faction coverage layer id (u8, perFaction). |
@@ -244,7 +256,6 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `linkFlow` | function |  |
 | `LogisticsOverlay` | function |  |
 | `RoadLayer` | function |  |
 | `RoadToolLayer` | function |  |
@@ -274,7 +285,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `extendRoute` | function | Extends a clicked link into a route: from each endpoint greedily pick the incident unselected link with the highest flow (ties by link index), continuing while the candidate flow is >= half the clicked link's flow and the far node is neither a warehouse nor a leaf. |
+| `extendRoadSelection` | function | Extends a clicked link into a route over the current snapshot, using smoothed link flow and stopping at warehouse or leaf nodes, then maps the selected link indices back to stable handle-pair keys. |
 | `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
 | `RoadPanel` | function |  |
@@ -317,6 +328,15 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `producerSchema` | const |  |
+
+## src/features/production/protocol.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `PRODUCTION_INSPECTOR_ID` | const | Inspector section id for production entities. |
+| `PRODUCTION_STATES` | const | Possible producer operational states. |
+| `ProductionInspection` | type | Inspector section payload emitted by frontline_td:production. |
+| `ProductionStateName` | type | String state name union derived from PRODUCTION_STATES. |
 
 ## src/features/production/sim/index.ts
 

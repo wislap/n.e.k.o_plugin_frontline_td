@@ -13,7 +13,8 @@
   `healthFraction(ctx, id)`（bp，供物流运力档位与快照通道）。
 - `protocol.ts`：`DamageIntent`（`frontline_td:combat.damage`，
   `{target: handle, amount: milli}`，由本模块回读）、`CombatShot`
-  /`CombatDied` 事件（均 `all` 可见）。
+  /`CombatDied` 事件（均 `all` 可见）、`COMBAT_INSPECTOR_ID`
+  （`frontline_td:combat`）与 `CombatInspection` 检查器契约类型。
 - `content.ts`：`weaponSchema`（range 格、damage 单位、cooldown 秒、
   `cost?: {cargo, amount}`，loader 换成索引与 milli/tick）。
 - `render/`：`BeamsLayer`（弹道瞬时线，经客户端事件游标消费

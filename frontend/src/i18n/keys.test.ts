@@ -1,13 +1,15 @@
-// i18n coverage for protocol codes (M3 D): every code the UI can render
-// must have a translation in BOTH locales — reason codes, cargo classes,
-// entity states, production states, cargo ids and modifier sources.
+// i18n coverage for protocol codes, surfaces, and keybinding help metadata
+// (ADR 0048): every code/label the UI can render must have a translation in
+// BOTH locales.
 import { describe, expect, it } from 'vitest';
+import { loadContent, localName } from '../content/index';
+import { STATE_NAMES } from '../features/construction/protocol';
+import { FOOTPRINT_CODES, RANGE_CODES } from '../features/construction/rules/index';
+import { CARGO_CLASSES, UNMET_REASONS } from '../features/logistics/protocol';
+import { PRODUCTION_STATES } from '../features/production/protocol';
+import { KEYBINDING_GROUPS } from '../input/keymap';
 import en from './locales/en.json';
 import zhCN from './locales/zh-CN.json';
-import { FOOTPRINT_CODES, RANGE_CODES } from '../features/construction/rules/index';
-import { STATE_NAMES } from '../features/construction/protocol';
-import { CARGO_CLASSES, UNMET_REASONS } from '../features/logistics/protocol';
-import { loadContent, localName } from '../content/index';
 
 // Command reject reasons emitted by sim command handlers.
 const REJECT_CODES = [
@@ -31,7 +33,6 @@ const WAITING_CODES = [
   'units_in_way',
   'terrain',
 ] as const;
-const PROD_STATES = ['ready', 'producing', 'waiting_inputs', 'output_full'] as const;
 const MOD_SOURCES = ['energy_low', 'energy_empty'] as const;
 
 type Messages = Record<string, unknown>;
@@ -62,9 +63,11 @@ const db = loadContent();
 const cargoNames = db.cargos.list.map((c) => localName(c.id));
 const structureNames = db.structures.list.map((s) => localName(s.id));
 const unitNames = db.units.list.map((u) => localName(u.id));
+const surfaceNames = db.surfaces.list.map((s) => localName(s.id));
+const helpKeys = KEYBINDING_GROUPS.flatMap((g) => [g.titleKey, ...g.entries.map((e) => e.descKey)]);
 
 describe('i18n protocol-code coverage', () => {
-  it('covers every code/name key in English and Chinese', () => {
+  it('covers every code/name/surface/help key in English and Chinese', () => {
     for (const bundle of [en, zhCN] as Messages[]) {
       assertKeys(
         bundle,
@@ -83,7 +86,7 @@ describe('i18n protocol-code coverage', () => {
       );
       assertKeys(
         bundle,
-        PROD_STATES.map((s) => `prod.${s}`),
+        PRODUCTION_STATES.map((s) => `prod.${s}`),
         'prod',
       );
       assertKeys(
@@ -106,6 +109,12 @@ describe('i18n protocol-code coverage', () => {
         unitNames.map((u) => `unit.${u}`),
         'unit',
       );
+      assertKeys(
+        bundle,
+        surfaceNames.map((s) => `surface.${s}`),
+        'surface',
+      );
+      assertKeys(bundle, helpKeys, 'help');
       // Suggestion text exists for every unmet reason the stock panel shows.
       assertKeys(
         bundle,

@@ -5,20 +5,23 @@
 import type { ContentDb } from '../content/index';
 import { UpgradeLinksCommand } from '../features/construction/protocol';
 import { lowestBuildableRoadLevel } from '../features/logistics/content';
-import { useBuildStore } from './build-store';
+import { useInteractionStore } from './interaction-store';
 import type { SimClient } from './sim-client';
 
 export function submitRoadOrder(client: SimClient, db: ContentDb): void {
-  const build = useBuildStore.getState();
-  if (build.roadSel.length === 0) {
+  const interaction = useInteractionStore.getState();
+  if (interaction.roadSel.length === 0) {
     return;
   }
   // roadSel already holds normalized node-handle pairs, which is the
   // command payload's link identity — no index resolution needed.
   client.submit({
     type: UpgradeLinksCommand.type,
-    payload: { links: build.roadSel, level: lowestBuildableRoadLevel(db.logistics.roadLevels) },
+    payload: {
+      links: interaction.roadSel,
+      level: lowestBuildableRoadLevel(db.logistics.roadLevels),
+    },
   });
   // Stay in road mode after submitting.
-  build.setRoadSel([]);
+  interaction.setRoadSel([]);
 }

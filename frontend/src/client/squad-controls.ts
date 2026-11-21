@@ -2,7 +2,15 @@
 // command routing, and double-press detection. Digit→squad bindings live
 // only in the squads channel tags (`player:<digit>`), so they rebuild
 // themselves after any load or restart — no separate persistence.
-import type { SquadView } from '../features/squads/protocol';
+import type { Snapshot } from '../core/index';
+import { MoveCommand } from '../features/movement/protocol';
+import {
+  SquadsChannel,
+  SquadsOrder,
+  type SquadsSnapshot,
+  type SquadView,
+} from '../features/squads/protocol';
+import type { SimClient } from './sim-client';
 
 const PLAYER_SQUAD_PREFIX = 'player:';
 const DOUBLE_PRESS_MS = 400;
@@ -60,6 +68,35 @@ export function routeMoveSelection(
     }
   }
   return { squads: squadsToOrder, plain: selected.filter((h) => !covered.has(h)) };
+}
+
+export function submitMoveOrder(
+  client: SimClient,
+  snapshot: Snapshot | null,
+  selected: readonly number[],
+  x: number,
+  y: number,
+  guard: boolean,
+): void {
+  if (selected.length === 0) {
+    return;
+  }
+  const cellX = Math.floor(x);
+  const cellY = Math.floor(y);
+  const squads = (snapshot?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+  const routing = routeMoveSelection(selected, squads, snapshot?.observer ?? -1);
+  for (const squad of routing.squads) {
+    client.submit({
+      type: SquadsOrder.type,
+      payload: { squad, kind: guard ? 'guard' : 'advance', x: cellX, y: cellY },
+    });
+  }
+  if (routing.plain.length > 0) {
+    client.submit({
+      type: MoveCommand.type,
+      payload: { units: routing.plain, x: cellX, y: cellY },
+    });
+  }
 }
 
 export interface DigitPress {

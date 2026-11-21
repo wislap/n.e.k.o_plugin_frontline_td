@@ -13,12 +13,14 @@
   （`frontline_td:logistics.consume` / `.deposit`，负载
   `{ handle, cargo, amount }`，cargo 为货物注册表索引）、
   货类名/码、unmet 原因码、`LogisticsNetworkChannel`、
-  `ROAD_LAYER_ID` 网格层。
+  `ROAD_LAYER_ID` 网格层、`LOGISTICS_INSPECTOR_ID` 与检查器契约类型
+  （`LogisticsInspection`/`LogisticsSlotInspection`）。
 - `content.ts`：货物、store、node 与全局物流配置的内容 schema
   （含 `roadLevels`、`segmentCells`、`corridorWidth`）、
   `lowestBuildableRoadLevel`（客户端预览与下单共用）。
 - `render/`：`LogisticsOverlay`/`RoadLayer`/`RoadToolLayer`；
-  `ui/`：`StockPanel`/`RoadPanel`；检查器（节点/链路/存储）。
+  `ui/`：`StockPanel`/`RoadPanel` 与 `extendRoadSelection`/
+  `nearestLink`/`linkKey`/`sameKey`；检查器（节点/链路/存储）。
   导出全表见 [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

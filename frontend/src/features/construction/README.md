@@ -13,10 +13,14 @@
   （activate/cancel 数组上限 256）、`UpgradeLinksCommand`
   （`links: [{a,b}]` 上限 64、`level`）、`ConstructionCompleted` 事件
   （issuer 可见）、`StructuresChannel`/`SalvageChannel`/
-  `RoadWorksChannel`。
+  `RoadWorksChannel`、`CONSTRUCTION_INSPECTOR_ID` 与检查器契约类型
+  （`ConstructionInspection`/`ConstructionSiteSlot`/
+  `ConstructionStateName`）。
 - `rules/`：`checkFootprint`/`checkRange` 与 `PlacementView` 纯放置
   规则（不依赖 sim）；`makePlacementView` 快照侧适配器，建造幽灵
-  预览与 eval 机器人共用。放置/等待原因码在这里定义。
+  预览与 eval 机器人共用；`centeredFootprint`/`demolishRefund`/
+  `classifyCancelSelection` 纯拆除退款与取消选区分类规则。
+  放置/等待原因码在这里定义。
 - `render/`/`ui/`/`inspector`：建造幽灵与废墟覆盖、`BuildMenu`、
   工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与

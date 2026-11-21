@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useBuildStore } from '../../../client/build-store';
+import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ResolvedMap } from '../../../content/index';
@@ -113,13 +113,21 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
     };
     // Store reads happen per frame via getState — the visuals are
     // imperative, so subscribing would only add React re-renders.
-    const build = useBuildStore.getState();
-    const roadMode = build.roadMode;
-    const overlayOn = useUiStore.getState().logisticsOverlay || roadMode || build.kind !== null;
+    const interaction = useInteractionStore.getState();
+    const roadMode = interaction.tool.kind === 'road';
+    const overlayOn =
+      useUiStore.getState().logisticsOverlay ||
+      interaction.mode === 'logistics' ||
+      interaction.tool.kind === 'place';
     // roadSel stores handle pairs (stable across network rebuilds);
     // resolve to current link indices here, dropping dead links.
-    draw(sel, bufs.sel, network === undefined ? [] : linkIndices(network, build.roadSel), roadMode);
-    draw(hov, bufs.hov, build.roadHover >= 0 ? [build.roadHover] : [], roadMode);
+    draw(
+      sel,
+      bufs.sel,
+      network === undefined ? [] : linkIndices(network, interaction.roadSel),
+      roadMode,
+    );
+    draw(hov, bufs.hov, interaction.roadHover >= 0 ? [interaction.roadHover] : [], roadMode);
     const intercepted: number[] = [];
     if (network !== undefined) {
       for (let i = 0; i < network.links.a.length; i++) {

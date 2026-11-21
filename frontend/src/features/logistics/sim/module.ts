@@ -16,6 +16,7 @@ import type {
 import type { TerrainApi } from '../../terrain/sim/index';
 import {
   ADJUSTABLE_CLASSES,
+  LOGISTICS_INSPECTOR_ID,
   LogisticsNetworkChannel,
   SERVICE_LAYER_ID,
   SetPrioritiesCommand,
@@ -375,7 +376,7 @@ export function createLogisticsModule(
         stateOf(issuer).priorities = want.map((c) => cargoClassCode(c as CargoClassName));
       });
 
-      builder.inspector('frontline_td:logistics', (ctx, id) => inspectLogistics(env, ctx, id));
+      builder.inspector(LOGISTICS_INSPECTOR_ID, (ctx, id) => inspectLogistics(env, ctx, id));
 
       builder.snapshotChannel(LogisticsNetworkChannel, (ctx, observer) =>
         networkSnapshot(env, ctx, observer),

@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { DRAG_THRESHOLD_PX, dragExceeded, normalizeBox } from './pointer';
+import type { Intent } from './intents';
+import {
+  DRAG_THRESHOLD_PX,
+  dragExceeded,
+  installPointer,
+  normalizeBox,
+  type PointerContext,
+} from './pointer';
 
 describe('pointer helpers', () => {
   it('drag threshold is exclusive beyond DRAG_THRESHOLD_PX', () => {
     expect(dragExceeded(0, 0)).toBe(false);
     expect(dragExceeded(DRAG_THRESHOLD_PX, 0)).toBe(false);
     expect(dragExceeded(DRAG_THRESHOLD_PX + 0.1, 0)).toBe(true);
-    expect(dragExceeded(3, 3)).toBe(true); // √(9+9) > 4
+    expect(dragExceeded(3, 3)).toBe(true); // sqrt(9+9) > 4
   });
 
   it('normalizeBox orders corners regardless of drag direction', () => {
@@ -14,10 +21,6 @@ describe('pointer helpers', () => {
     expect(normalizeBox(5, 8, 10, 20)).toEqual({ x0: 5, y0: 8, x1: 10, y1: 20 });
   });
 });
-
-// Build-mode rerouting and hover tracking (M3 D).
-import { installPointer } from './pointer';
-import type { Intent } from './intents';
 
 interface FakeTarget {
   listeners: Map<string, EventListener>;
@@ -40,52 +43,120 @@ function fakeTarget(): FakeTarget {
   };
 }
 
-function makePointer(mode: () => 'normal' | 'build') {
+function makePointer(getContext: () => PointerContext) {
   const target = fakeTarget();
   const intents: Intent[] = [];
+  const boxes: unknown[] = [];
   installPointer(
     target,
     (i) => intents.push(i),
-    () => {},
+    (b) => boxes.push(b),
     (e) => ({ x: (e as { clientX: number }).clientX, y: (e as { clientY: number }).clientY }),
-    { getMode: mode },
+    { getContext },
   );
-  const press = (button: number, x: number, y: number, shiftKey = false) => {
-    target.fire('pointerdown', { button, clientX: x, clientY: y, shiftKey, preventDefault() {} });
-    target.fire('pointerup', { button, clientX: x, clientY: y, shiftKey, preventDefault() {} });
+  const press = (
+    button: number,
+    x: number,
+    y: number,
+    mods: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {},
+  ) => {
+    const shiftKey = mods.shiftKey ?? false;
+    target.fire('pointerdown', {
+      button,
+      clientX: x,
+      clientY: y,
+      shiftKey,
+      ...mods,
+      preventDefault() {},
+    });
+    target.fire('pointerup', {
+      button,
+      clientX: x,
+      clientY: y,
+      shiftKey,
+      ...mods,
+      preventDefault() {},
+    });
   };
-  return { target, intents, press };
+  return { target, intents, boxes, press };
 }
 
-describe('pointer modes', () => {
+describe('pointer modes and secondary tools', () => {
   it('emits cursor.move on hover with no button held', () => {
-    const { target, intents } = makePointer(() => 'normal');
+    const { target, intents } = makePointer(() => ({ mode: 'command', tool: 'none' }));
     target.fire('pointermove', { clientX: 9, clientY: 7 });
     expect(intents).toEqual([{ kind: 'cursor.move', x: 9, y: 7 }]);
   });
 
-  it('routes left click to build.place and right click to build.cancel in build mode', () => {
-    const { intents, press } = makePointer(() => 'build');
+  it('routes left click to build.place and right click to tool.exit in place tool', () => {
+    const { intents, press } = makePointer(() => ({ mode: 'build', tool: 'place' }));
     press(0, 30, 40);
-    press(0, 50, 60, true);
+    press(0, 50, 60, { shiftKey: true });
     press(2, 70, 80);
     expect(intents).toEqual([
       { kind: 'build.place', x: 30, y: 40, blueprint: false },
       { kind: 'build.place', x: 50, y: 60, blueprint: true },
-      { kind: 'build.cancel' },
+      { kind: 'tool.exit' },
     ]);
   });
 
-  it('never boxes or move-orders while in build mode', () => {
-    const target = fakeTarget();
-    const intents: Intent[] = [];
-    installPointer(
-      target,
-      (i) => intents.push(i),
-      () => {},
-      (e) => ({ x: (e as { clientX: number }).clientX, y: (e as { clientY: number }).clientY }),
-      { getMode: () => 'build' },
-    );
+  it('routes left click to demolish.click and right click to tool.exit in demolish tool', () => {
+    const { intents, press } = makePointer(() => ({ mode: 'build', tool: 'demolish' }));
+    press(0, 12, 34);
+    press(2, 56, 78);
+    expect(intents).toEqual([{ kind: 'demolish.click', x: 12, y: 34 }, { kind: 'tool.exit' }]);
+  });
+
+  it('routes left click to road.click and right click to tool.exit in road tool', () => {
+    const { intents, press } = makePointer(() => ({ mode: 'logistics', tool: 'road' }));
+    press(0, 10, 20);
+    press(0, 15, 25, { shiftKey: true });
+    press(2, 30, 40);
+    expect(intents).toEqual([
+      { kind: 'road.click', x: 10, y: 20, additive: false },
+      { kind: 'road.click', x: 15, y: 25, additive: true },
+      { kind: 'tool.exit' },
+    ]);
+  });
+
+  it.each(['place', 'demolish', 'road'] as const)(
+    'never boxes or calls onBox with a rect while %s tool is active',
+    (tool) => {
+      const { target, intents, boxes } = makePointer(() => ({ mode: 'build', tool }));
+      target.fire('pointerdown', {
+        button: 0,
+        clientX: 0,
+        clientY: 0,
+        shiftKey: false,
+        preventDefault() {},
+      });
+      target.fire('pointermove', { clientX: 50, clientY: 50, shiftKey: false });
+      target.fire('pointerup', { button: 0, clientX: 50, clientY: 50, shiftKey: false });
+      expect(boxes.filter((b) => b !== null)).toHaveLength(0);
+      expect(intents).toHaveLength(1);
+    },
+  );
+
+  it('right click issues command.move_to in command mode, and is a no-op in build/logistics', () => {
+    const cmd = makePointer(() => ({ mode: 'command', tool: 'none' }));
+    cmd.press(2, 10, 20);
+    cmd.press(2, 30, 40, { ctrlKey: true });
+    expect(cmd.intents).toEqual([
+      { kind: 'command.move_to', x: 10, y: 20, guard: false },
+      { kind: 'command.move_to', x: 30, y: 40, guard: true },
+    ]);
+
+    const build = makePointer(() => ({ mode: 'build', tool: 'none' }));
+    build.press(2, 10, 20);
+    expect(build.intents).toEqual([]);
+
+    const logistics = makePointer(() => ({ mode: 'logistics', tool: 'none' }));
+    logistics.press(2, 10, 20);
+    expect(logistics.intents).toEqual([]);
+  });
+
+  it('left drag >4px emits select.box when tool is none', () => {
+    const { target, intents, boxes } = makePointer(() => ({ mode: 'build', tool: 'none' }));
     target.fire('pointerdown', {
       button: 0,
       clientX: 0,
@@ -93,9 +164,10 @@ describe('pointer modes', () => {
       shiftKey: false,
       preventDefault() {},
     });
-    target.fire('pointermove', { clientX: 50, clientY: 50, shiftKey: false });
-    target.fire('pointerup', { button: 0, clientX: 50, clientY: 50, shiftKey: false });
-    expect(intents).toEqual([{ kind: 'build.place', x: 50, y: 50, blueprint: false }]);
+    target.fire('pointermove', { clientX: 20, clientY: 30, shiftKey: false });
+    target.fire('pointerup', { button: 0, clientX: 20, clientY: 30, shiftKey: true });
+    expect(boxes).toEqual([{ x0: 0, y0: 0, x1: 20, y1: 30 }, null]);
+    expect(intents).toEqual([{ kind: 'select.box', x0: 0, y0: 0, x1: 20, y1: 30, additive: true }]);
   });
 });
 
@@ -153,9 +225,7 @@ describe('pointer drag cancellation', () => {
     h.target.fire(type, {});
     h.target.fire('pointerup', { button: 0, clientX: 50, clientY: 50, shiftKey: false });
     expect(h.intents.filter((i) => i.kind === 'select.box')).toHaveLength(0);
-    // The overlay was shown during the drag, then cleared on cancel.
     expect(h.boxes.at(-1)).toBeNull();
-    // The next click is a fresh click, not a stale release.
     h.target.fire('pointerdown', {
       button: 0,
       clientX: 1,

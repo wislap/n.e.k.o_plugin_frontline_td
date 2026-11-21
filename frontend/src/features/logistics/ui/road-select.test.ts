@@ -1,5 +1,17 @@
 import { describe, expect, test } from 'vitest';
-import { extendRoute, linkIndices, linkKey, nearestLink, type RoadLinkInfo } from './road-select';
+import { loadContent } from '../../../content/index';
+import { toFactionId, toTick, type Snapshot } from '../../../core/index';
+import { must } from '../../../testing/index';
+import { StructuresChannel, type ConstructionStructures } from '../../construction/protocol';
+import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
+import {
+  extendRoadSelection,
+  extendRoute,
+  linkIndices,
+  linkKey,
+  nearestLink,
+  type RoadLinkInfo,
+} from './road-select';
 
 function linksOf(edges: [number, number][], flows: number[]): RoadLinkInfo[] {
   return edges.map(([a, b], i) => ({ a, b, flow: flows[i] ?? 0 }));
@@ -189,5 +201,131 @@ describe('link keys', () => {
     // The (10-20) link is gone: only (20-30) resolves.
     const shrunk = net([1], [2], [10, 20, 30]);
     expect(linkIndices(shrunk, keys)).toEqual([0]);
+  });
+});
+
+describe('extendRoadSelection', () => {
+  const db = loadContent();
+  const mainBase = must(db.structures.byId('frontline_td:main_base'), 'main_base');
+  const station = must(db.structures.byId('frontline_td:station'), 'station');
+
+  function makeNetwork(
+    nodeHandles: number[],
+    edges: [number, number][],
+    flows: number[],
+  ): LogisticsNetwork {
+    const n = edges.length;
+    return {
+      stock: [],
+      nodes: {
+        handles: new Float64Array(nodeHandles),
+        x: new Float32Array(nodeHandles.length),
+        y: new Float32Array(nodeHandles.length),
+      },
+      links: {
+        a: new Uint16Array(edges.map(([a]) => a)),
+        b: new Uint16Array(edges.map(([, b]) => b)),
+        outBp: new Uint16Array(n),
+        inBp: new Uint16Array(n),
+        outSat: new Uint8Array(n),
+        inSat: new Uint8Array(n),
+        pathOffsets: new Uint32Array(n + 1),
+        pathCells: new Uint32Array(0),
+        m: new Uint32Array(n),
+        quotaOut: new Int32Array(n),
+        quotaIn: new Int32Array(n),
+        volOut: new Int32Array(flows),
+        volIn: new Int32Array(n),
+        intercept: new Uint16Array(n),
+      },
+      unmet: [],
+      unmetExport: [],
+      priorities: [],
+    };
+  }
+
+  function makeSnapshot(
+    tick: number,
+    network: LogisticsNetwork,
+    structures?: { handle: number; kind: number }[],
+  ): Snapshot {
+    const channels: Record<string, unknown> = {
+      [LogisticsNetworkChannel.id]: network,
+    };
+    if (structures !== undefined) {
+      const m = structures.length;
+      const ch: ConstructionStructures = {
+        handles: new Float64Array(structures.map((s) => s.handle)),
+        kind: new Uint16Array(structures.map((s) => s.kind)),
+        x: new Uint16Array(m),
+        y: new Uint16Array(m),
+        faction: new Uint16Array(m).fill(1),
+        state: new Uint8Array(m).fill(3),
+        progressBp: new Uint16Array(m).fill(10000),
+        hpBp: new Uint16Array(m).fill(10000),
+      };
+      channels[StructuresChannel.id] = ch;
+    }
+    return {
+      tick: toTick(tick),
+      observer: toFactionId(1),
+      channels,
+      events: [],
+      layers: {},
+      changedLayers: [],
+    };
+  }
+
+  test('returns empty when snapshot or link is missing', () => {
+    expect(extendRoadSelection(db, null, 0)).toEqual([]);
+    const snap = makeSnapshot(1, makeNetwork([10, 20], [[0, 1]], [100]));
+    expect(extendRoadSelection(db, snap, -1)).toEqual([]);
+    expect(extendRoadSelection(db, snap, 1)).toEqual([]);
+  });
+
+  test('extends along highest-flow branch and stops at warehouse nodes', () => {
+    // Nodes: 10 (station) - 20 (station) - 30 (warehouse) - 40 (station),
+    // plus low-flow spur 20 - 50 (station).
+    const net = makeNetwork(
+      [10, 20, 30, 40, 50],
+      [
+        [0, 1], // 0: 10-20
+        [1, 2], // 1: 20-30 (to warehouse)
+        [2, 3], // 2: 30-40 (beyond warehouse, must not extend)
+        [1, 4], // 3: 20-50 (low flow, below threshold)
+      ],
+      [1000, 900, 900, 100],
+    );
+    const structures = [
+      { handle: 10, kind: station.index },
+      { handle: 20, kind: station.index },
+      { handle: 30, kind: mainBase.index },
+      { handle: 40, kind: station.index },
+      { handle: 50, kind: station.index },
+    ];
+    // First snapshot primes linkFlow for this network key; second advances EMA.
+    extendRoadSelection(db, makeSnapshot(1, net, structures), 0);
+    const keys = extendRoadSelection(db, makeSnapshot(2, net, structures), 0);
+    expect(keys).toEqual([
+      { a: 10, b: 20 },
+      { a: 20, b: 30 },
+    ]);
+  });
+
+  test('works without StructuresChannel (no warehouse stops)', () => {
+    const net = makeNetwork(
+      [100, 200, 300],
+      [
+        [0, 1],
+        [1, 2],
+      ],
+      [500, 500],
+    );
+    extendRoadSelection(db, makeSnapshot(10, net), 0);
+    const keys = extendRoadSelection(db, makeSnapshot(11, net), 0);
+    expect(keys).toEqual([
+      { a: 100, b: 200 },
+      { a: 200, b: 300 },
+    ]);
   });
 });

@@ -2,7 +2,7 @@
 // faction-private: they only appear in the owner's channel and can
 // only be inspected by the owner.
 import type { ContentDb } from '../../../content/index';
-import type { EntityId, FactionId, Serializable } from '../../../core/index';
+import type { EntityId, FactionId } from '../../../core/index';
 import { floorDiv } from '../../../core/index';
 import type { SimBuilder, SystemContext, VisibilityQuery } from '../../../kernel/index';
 import { Faction, InWorld } from '../../../kernel/index';
@@ -10,6 +10,7 @@ import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import { SLOT_SITE } from '../../logistics/protocol';
 import { Position } from '../../movement/sim/index';
 import {
+  CONSTRUCTION_INSPECTOR_ID,
   SalvageChannel,
   StructuresChannel,
   STATE_BLUEPRINT,
@@ -20,7 +21,12 @@ import {
   STATE_RUIN,
   STATE_WAITING,
 } from '../protocol';
-import type { ConstructionSalvage, ConstructionStructures } from '../protocol';
+import type {
+  ConstructionInspection,
+  ConstructionSalvage,
+  ConstructionSiteSlot,
+  ConstructionStructures,
+} from '../protocol';
 import { Blueprint, Construction, MODE_DEMOLISH, Ruin, Salvage, Structure } from './components';
 import type { ConstructionEnv } from './env';
 import { buildBlocker } from './spawn';
@@ -168,7 +174,7 @@ export function registerConstructionViews(
 
   // Inspector: state, progress, site required vs delivered, waiting
   // reason for activated blueprints.
-  builder.inspector('frontline_td:construction', (ctx, id, observer) => {
+  builder.inspector(CONSTRUCTION_INSPECTOR_ID, (ctx, id, observer) => {
     const fac = ctx.read(Faction);
     const bp = ctx.read(Blueprint);
     const st = ctx.read(Structure);
@@ -192,30 +198,29 @@ export function registerConstructionViews(
         total: 0,
         progressBp: 0,
         waiting,
-      };
+      } satisfies ConstructionInspection;
     }
     if (!ctx.has(Structure, id)) {
       return null;
     }
     const kind = db.structures.byIndex(st.kind[id] ?? 0);
     const state = structureStateOf(ctx, id);
-    const section: Record<string, unknown> = {
-      state: STATE_NAMES[state],
+    const total = cons.total[id] ?? 0;
+    const progress = cons.progress[id] ?? 0;
+    const progressBp = total > 0 ? Math.min(10000, floorDiv(progress * 10000, total)) : 10000;
+    const base = {
+      state: STATE_NAMES[state] ?? 'operational',
       kind: kind?.id ?? 'unknown',
       x: st.x[id] ?? 0,
       y: st.y[id] ?? 0,
-      progress: cons.progress[id] ?? 0,
-      total: cons.total[id] ?? 0,
-      progressBp: 10000,
+      progress,
+      total,
+      progressBp,
     };
-    const total = cons.total[id] ?? 0;
-    if (total > 0) {
-      section['progressBp'] = Math.min(10000, floorDiv((cons.progress[id] ?? 0) * 10000, total));
-    }
     // Site: required vs delivered per build-cost cargo.
     if (state === STATE_SITE && ctx.has(CargoStore, id)) {
       const store = ctx.read(CargoStore);
-      const slots: { cargo: number; required: number; delivered: number }[] = [];
+      const slots: ConstructionSiteSlot[] = [];
       for (let i = 0; i < CARGO_SLOTS; i++) {
         if ((sget(store, 'flags', i, id) & SLOT_SITE) !== 0) {
           slots.push({
@@ -225,8 +230,8 @@ export function registerConstructionViews(
           });
         }
       }
-      section['slots'] = slots;
+      return { ...base, slots } satisfies ConstructionInspection;
     }
-    return section as Serializable;
+    return base satisfies ConstructionInspection;
   });
 }

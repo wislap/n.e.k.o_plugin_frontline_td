@@ -1,15 +1,15 @@
 // Combat module (ADR 0011): acquire+fire in combat_intent, damage
 // resolution in resolve, despawns in cleanup. Registered after movement
 // and construction so their cleanup-phase death readers run first.
-import type { EntityHandle, EntityId, FactionId, Serializable } from '../../../core/index';
+import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import { floorDiv } from '../../../core/index';
 import type { ReadonlyNumberArray, SimModule, SystemContext } from '../../../kernel/index';
 import { Faction, InWorld, OPERATIONAL_EXCLUDE } from '../../../kernel/index';
 import { ConsumeIntent } from '../../logistics/protocol';
 import { CARGO_SLOTS, CargoStore, sget } from '../../logistics/sim/index';
 import { Position } from '../../movement/sim/index';
-import { CombatDied, CombatShot, DamageIntent } from '../protocol';
-import type { DamagePayload } from '../protocol';
+import { COMBAT_INSPECTOR_ID, CombatDied, CombatShot, DamageIntent } from '../protocol';
+import type { CombatInspection, DamagePayload } from '../protocol';
 import { FREE_COST_CARGO, Health, Targetable, Weapon } from './components';
 
 // Uniform bucket-grid cell size for target lookups (cells).
@@ -323,14 +323,14 @@ export function createCombatModule(): CombatModule {
       });
 
       // Inspector: hp, weapon ready/target, cost cargo stock.
-      builder.inspector('frontline_td:combat', (ctx, id) => {
+      builder.inspector(COMBAT_INSPECTOR_ID, (ctx, id) => {
         if (!ctx.has(Health, id) && !ctx.has(Weapon, id)) {
           return null;
         }
         const h = ctx.read(Health);
         const wp = ctx.read(Weapon);
         const store = ctx.read(CargoStore);
-        const section: Record<string, unknown> = {
+        const base = {
           hp: h.hp[id] ?? 0,
           max: h.max[id] ?? 0,
         };
@@ -344,12 +344,15 @@ export function createCombatModule(): CombatModule {
               }
             }
           }
-          section['readyIn'] = Math.max(0, (wp.readyAt[id] ?? 0) - ctx.tick);
-          section['target'] = wp.target[id] ?? 0;
-          section['costCargo'] = costCargo === FREE_COST_CARGO ? -1 : costCargo;
-          section['costStock'] = costStock;
+          return {
+            ...base,
+            readyIn: Math.max(0, (wp.readyAt[id] ?? 0) - ctx.tick),
+            target: wp.target[id] ?? 0,
+            costCargo: costCargo === FREE_COST_CARGO ? -1 : costCargo,
+            costStock,
+          } satisfies CombatInspection;
         }
-        return section as Serializable;
+        return base satisfies CombatInspection;
       });
     },
   };

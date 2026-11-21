@@ -205,14 +205,6 @@ export function siteRefund(ctx: SystemContext, id: number): { cargo: number; mil
   return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([cargo, milli]) => ({ cargo, milli }));
 }
 
-// Refund slots for a demolished building: build cost x salvageBp.
-export function demolishRefund(kind: ResolvedStructure): { cargo: number; milli: number }[] {
-  const bp = kind.build?.salvageBp ?? 0;
-  return (kind.build?.cost ?? [])
-    .map((c) => ({ cargo: c.cargo, milli: floorDiv(c.milli * bp, 10000) }))
-    .filter((c) => c.milli > 0);
-}
-
 // Spawn a salvage pile: export slots carry the refund home. Skipped when
 // the refund is all zero.
 export function spawnSalvage(

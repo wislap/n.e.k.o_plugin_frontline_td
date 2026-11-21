@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useBuildStore } from '../../../client/build-store';
+import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
@@ -56,7 +56,7 @@ export function ExclusionLayer({
     bufRef.current ??= createLineBuffer(MAX_CIRCLES * SEGMENTS * 2, true);
     const buf = bufRef.current;
     segs.geometry = buf.geometry;
-    const building = useBuildStore.getState().kind !== null;
+    const building = useInteractionStore.getState().tool.kind === 'place';
     const latest = client.snapshots().latest;
     if (!building || latest === null) {
       segs.visible = false;

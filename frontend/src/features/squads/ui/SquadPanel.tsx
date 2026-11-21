@@ -1,11 +1,11 @@
-// Squad panel (M4): one row per own squad — digit binding, members vs
-// strength with −/+ controls, localized phase/order, mean battery, and
-// disband. Snapshot data is polled into local state (rows change
-// seconds-scale, not per frame).
-import { useEffect, useState } from 'react';
+// Squad panel (ADR 0048): visible only in command primary mode (F1)
+// when at least one own squad exists. Driven by useSnapshotValue.
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SimClient } from '../../../client/sim-client';
+import { useInteractionStore } from '../../../client/interaction-store';
+import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import { digitForTag } from '../../../client/squad-controls';
+import { useSnapshotValue } from '../../../client/use-snapshot';
 import {
   SquadsChannel,
   SquadsDisband,
@@ -36,37 +36,44 @@ const btn = {
   border: '1px solid #555',
 } as const;
 
-function useOwnSquads(client: SimClient): { squads: SquadView[]; observer: number } {
-  const [state, setState] = useState<{ squads: SquadView[]; observer: number }>({
-    squads: [],
-    observer: -1,
-  });
-  useEffect(() => {
-    const id = setInterval(() => {
-      const latest = client.snapshots().latest;
-      const observer = latest?.observer ?? -1;
-      const all = (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
-      setState({ squads: all.filter((s) => s.faction === observer), observer });
-    }, 200);
-    return () => {
-      clearInterval(id);
-    };
-  }, [client]);
-  return state;
+interface SquadSlice {
+  tick: number;
+  observer: number;
+  squads: SquadView[];
+}
+
+function sameSquadSlice(a: SquadSlice, b: SquadSlice): boolean {
+  return a.tick === b.tick && a.observer === b.observer && a.squads.length === b.squads.length;
 }
 
 export function SquadPanel({ client }: { client: SimClient }) {
   const { t } = useTranslation();
-  const { squads } = useOwnSquads(client);
-  if (squads.length === 0) {
+  const mode = useInteractionStore((s) => s.mode);
+
+  const selectSquads = useCallback((pair: SnapshotPair): SquadSlice => {
+    const latest = pair.latest;
+    const observer = latest?.observer ?? -1;
+    const all = (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+    return {
+      tick: latest?.tick ?? -1,
+      observer,
+      squads: all.filter((s) => s.faction === observer),
+    };
+  }, []);
+
+  const { squads } = useSnapshotValue(client, selectSquads, sameSquadSlice, 200);
+
+  if (mode !== 'command' || squads.length === 0) {
     return null;
   }
+
   const setStrength = (squad: SquadView, delta: number): void => {
     const strength = Math.min(64, Math.max(1, squad.strength + delta));
     if (strength !== squad.strength) {
       client.submit({ type: SquadsSetStrength.type, payload: { squad: squad.id, strength } });
     }
   };
+
   return (
     <div style={panel}>
       {squads.map((squad) => {

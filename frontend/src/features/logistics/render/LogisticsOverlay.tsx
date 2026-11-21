@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useBuildStore } from '../../../client/build-store';
+import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
@@ -39,8 +39,8 @@ export interface LogisticsOverlayProps {
 
 export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
   const toggled = useUiStore((s) => s.logisticsOverlay);
-  const placing = useBuildStore((s) => s.kind !== null || s.roadMode);
-  const on = toggled || placing;
+  const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');
+  const on = toggled || modeOn;
   const coverRef = useRef<THREE.InstancedMesh>(null);
   const linkRef = useRef<THREE.LineSegments>(null);
   const ringRef = useRef<THREE.InstancedMesh>(null);

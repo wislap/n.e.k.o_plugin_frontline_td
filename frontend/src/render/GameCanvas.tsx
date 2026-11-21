@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBoxStore } from '../client/box-store';
-import { useBuildStore } from '../client/build-store';
+import { useInteractionStore } from '../client/interaction-store';
 import { useIntentRouter, type IntentRouter } from '../client/intent';
 import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
@@ -113,12 +113,9 @@ function InputBridge({
       },
       (event) => ({ x: event.clientX, y: event.clientY }),
       {
-        getMode: () => {
-          const build = useBuildStore.getState();
-          if (build.kind !== null) {
-            return 'build';
-          }
-          return build.roadMode ? 'road' : 'normal';
+        getContext: () => {
+          const s = useInteractionStore.getState();
+          return { mode: s.mode, tool: s.tool.kind };
         },
       },
     );

@@ -1,12 +1,10 @@
 // Camera rig (M2 C4): owns the perspective + orthographic cameras, applies
-// held-key panning and zoom every frame, animates 400 ms ease-in-out mode
-// transitions (pitch to 90°, swap, pitch back down), and implements the
-// auto-tactical-on-pause behavior.
+// held-key panning and zoom every frame, and animates 400 ms ease-in-out
+// mode transitions (pitch to 90°, swap, pitch back down).
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
-import { useRuntimeStore } from '../../client/runtime-store';
 import type { PanTracker } from '../../input/pan';
 import {
   CAMERA_UP,
@@ -83,24 +81,6 @@ export function CameraRig({
     c.persp.aspect = size.width / size.height;
     c.persp.updateProjectionMatrix();
   }, [size]);
-
-  // Auto tactical on pause / restore on resume.
-  useEffect(() => {
-    let wasPaused = useRuntimeStore.getState().stats?.paused ?? false;
-    return useRuntimeStore.subscribe((state) => {
-      const paused = state.stats?.paused ?? false;
-      if (paused === wasPaused) {
-        return;
-      }
-      wasPaused = paused;
-      const cam = useCameraStore.getState();
-      if (paused && cam.autoTacticalOnPause && cam.mode !== 'tactical') {
-        cam.setMode('tactical', true);
-      } else if (!paused && cam.autoSwitch) {
-        cam.setMode('spectate', false);
-      }
-    });
-  }, []);
 
   useFrame((_, delta) => {
     const c = cameras.current;

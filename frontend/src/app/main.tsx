@@ -3,7 +3,8 @@ import '../i18n';
 import { useCameraStore } from '../client/camera-store';
 import { makeIsHostile } from '../client/hostility';
 import { IntentContext } from '../client/intent';
-import { resetClientState } from '../client/reset';
+import { useInteractionStore } from '../client/interaction-store';
+import { resetClientState } from '../client/session';
 import { useRuntimeStore } from '../client/runtime-store';
 import { createSimClient } from '../client/sim-client';
 import { loadContent, type ResolvedMap } from '../content/index';
@@ -11,7 +12,6 @@ import type { MatchSetup } from '../protocol/index';
 import { installVisibilityPause } from '../host/visibility';
 import { createPanTracker, installPanTracking } from '../input/pan';
 import { installKeyboard } from '../input/keyboard';
-import { DEFAULT_KEYMAP } from '../input/keymap';
 import { App } from './App';
 import { createIntentRouter } from './dispatch';
 import { defaultSetup } from '../modes/assault/index';
@@ -50,7 +50,7 @@ centerOnStart(setup);
 const panTracker = createPanTracker();
 const router = createIntentRouter({ client, db });
 
-installKeyboard(window, DEFAULT_KEYMAP, router.dispatch);
+installKeyboard(window, () => useInteractionStore.getState().mode, router.dispatch);
 installPanTracking(window, panTracker);
 // Auto-pause when the tab hides; never auto-resumes (M3 E5).
 installVisibilityPause(document, () => {

@@ -6,14 +6,19 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useBuildStore } from '../../../client/build-store';
-import { cursorGround } from '../../../client/cursor';
+import { cursorState } from '../../../client/cursor';
+import { useInteractionStore } from '../../../client/interaction-store';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
-import { makePlacementView } from '../rules/index';
+import {
+  centeredFootprint,
+  checkFootprint,
+  checkRange,
+  makePlacementView,
+  type PlacementRule,
+} from '../rules/index';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { terrainY } from '../../../render/world';
-import { checkFootprint, checkRange, type PlacementRule } from '../rules/index';
 import { StructuresChannel, STATE_OPERATIONAL, type ConstructionStructures } from '../protocol';
 import { structureKindHeight } from './StructuresLayer';
 
@@ -56,15 +61,17 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     const linkBuf = linkBufRef.current;
     links.geometry = linkBuf.geometry;
     const positions = linkBuf.positions;
-    const kindId = useBuildStore.getState().kind;
+    const interaction = useInteractionStore.getState();
+    const kindId = interaction.tool.kind === 'place' ? interaction.tool.structureKindId : null;
     const kind = kindId === null ? undefined : db.structures.byId(kindId);
     const snapshot = client.snapshots().latest;
-    if (kind === undefined || snapshot === null || !cursorGround.valid) {
+    const ground = cursorState.ground();
+    if (kind === undefined || snapshot === null || !ground.valid) {
       box.visible = false;
       ring.visible = false;
       links.visible = false;
-      if (useBuildStore.getState().ghost !== null) {
-        useBuildStore.getState().setGhost(null);
+      if (interaction.ghost !== null) {
+        interaction.setGhost(null);
       }
       return;
     }
@@ -74,8 +81,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
 
     const w = kind.footprint.w;
     const h = kind.footprint.h;
-    const tx = Math.floor(cursorGround.x - w / 2);
-    const ty = Math.floor(cursorGround.y - h / 2);
+    const { x: tx, y: ty } = centeredFootprint(ground.x, ground.y, kind.footprint);
     const view = makePlacementView(db, map, snapshot, snapshot.observer, (f) =>
       isHostile(snapshot.observer, f),
     );
@@ -102,7 +108,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     const key = `${tx},${ty},${code}`;
     if (key !== lastGhost.current) {
       lastGhost.current = key;
-      useBuildStore.getState().setGhost({ x: tx, y: ty, code });
+      interaction.setGhost({ x: tx, y: ty, code });
     }
 
     if (kind.node !== undefined) {

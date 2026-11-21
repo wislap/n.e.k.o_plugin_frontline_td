@@ -21,10 +21,28 @@
     "speed": "速度 ×{{n}}",
     "camera": {
       "spectate": "观战视角",
-      "tactical": "战术视角"
+      "tactical": "战术视角",
+      "toggle_hint": "切换视角 (Tab)",
+      "locked": "视角锁定：开",
+      "unlocked": "视角锁定：关"
     },
+    "mode": {
+      "command": "指挥",
+      "build": "建造",
+      "logistics": "物流"
+    },
+    "tool": {
+      "place": "放置 {{name}} · 点击建造 / Shift+点击蓝图 / 右键或 Esc 退出",
+      "demolish": "拆除工具 · 点击己方建筑或路段拆除 / 右键或 Esc 退出",
+      "road": "道路工具 · 点击路段延伸 / Shift+点击单选 / Enter 下单 / 右键或 Esc 退出",
+      "exit": "退出 (Esc)"
+    },
+    "demolish_confirm_prompt": "确认拆除 {{count}} 个运转中建筑？再按 C/Del 或点击确认",
+    "demolish_confirm_btn": "确认拆除",
+    "demolish_cancel_btn": "取消",
     "selected": "已选中 {{count}} 个",
-    "hints": "Space 暂停 | -/= 速度 | 1-9 选小队 | Ctrl+1-9 编小队 | V 视角 | WASD 平移 | 右键 移动 | Ctrl+右键 驻守 | G 开工 | X 拆除 | L 物流 | R 道路 | Esc 取消 | ` 调试",
+    "hints": "F1-F3 模式 | Tab 视角 | WASD 平移 | Space 暂停 | -/= 速度 | L 物流 | ` 调试 | ? 快捷键",
+    "help_button_hint": "快捷键说明 (?)",
     "threat": "敌军集结中 · 约 {{count}} · {{time}} 后进攻",
     "fullscreen": "全屏",
     "fullscreen_unsupported": "仅在 NEKO 面板内可用",
@@ -39,6 +57,80 @@
       "no_units": "没有可指挥的单位",
       "other": "未知原因"
     }
+  },
+  "help": {
+    "title": "快捷键说明",
+    "close": "关闭",
+    "group": {
+      "global": "全局",
+      "command": "指挥模式 (F1)",
+      "build": "建造模式 (F2)",
+      "logistics": "物流模式 (F3)"
+    },
+    "key": {
+      "pause": "暂停 / 继续",
+      "speed": "调整游戏速度",
+      "camera": "切换观战 / 战术视角",
+      "pan": "平移镜头",
+      "modes": "切换主交互模式",
+      "logistics_overlay": "开关物流覆盖层",
+      "debug": "开关调试面板",
+      "escape": "退出工具 / 关闭帮助 / 取消固定",
+      "help": "打开 / 关闭快捷键说明",
+      "squad_select": "选中绑定小队（双击居中）",
+      "squad_create": "将当前选中单位编为小队",
+      "move": "移动指令",
+      "guard": "驻守指令",
+      "build_category": "建筑分类栏位（预留）",
+      "place_blueprint": "放置蓝图（保持放置工具）",
+      "activate": "开工已选蓝图",
+      "demolish": "拆除 / 取消已选（或进入拆除工具）",
+      "exit_tool": "退出当前副工具",
+      "road_tool": "开关道路工具",
+      "road_toggle_link": "单选 / 取消单段链路",
+      "road_confirm": "提交道路升级订单"
+    }
+  },
+  "build": {
+    "demolish_button": "拆除",
+    "demolish_hint": "拆除 / 取消 (C / Del)：无选中时进入拆除工具，选中运转中建筑需二次确认"
+  },
+  "inspector": {
+    "preview": "预览",
+    "pinned": "已固定",
+    "unpin": "取消固定 (Esc)",
+    "activate_btn": "G 开工",
+    "demolish_btn": "C 拆除",
+    "confirm_demolish_btn": "确认拆除",
+    "cell_coords": "地形 ({{x}}, {{y}})",
+    "unexplored": "未探索区域",
+    "fog_memory": "迷雾记忆",
+    "surface_label": "地表：{{name}}",
+    "unknown": "未知",
+    "height": "高度 {{h}}",
+    "ramp": "斜坡",
+    "deposit": "矿脉：{{cargo}}",
+    "road_level": "道路等级 {{level}}",
+    "covered": "物流已覆盖",
+    "uncovered": "不在物流覆盖范围内",
+    "hostile_zone": "位于敌方禁区内",
+    "hostile_tag": "敌方",
+    "unit_moving": "移动中",
+    "unit_idle": "待命",
+    "energy": "能量 {{pct}}%",
+    "salvage": "回收残骸",
+    "road_segment": "道路施工段",
+    "capture_progress": "占领进度 {{pct}}%",
+    "node_summary": "节点 连接 {{connect}} · 服务 {{service}} · 车辆 {{vehicles}}",
+    "warehouse_tag": "仓库"
+  },
+  "surface": {
+    "ground": "平地",
+    "forest": "森林",
+    "shallow_water": "浅水",
+    "deep_water": "深水",
+    "rock": "岩石",
+    "ore_field": "矿脉区"
   },
   "cargo": {
     "ore": "矿石",
@@ -135,11 +227,12 @@
   },
   "stock": {
     "title": "仓库",
+    "rate": "{{value}}/秒",
     "priorities": "优先级：{{order}}（点击交换）"
   },
   "panel": {
     "selected": "已选中 {{count}} 个",
-    "multi_hint": "G 开工蓝图 | X 拆除/取消",
+    "multi_hint": "建造模式下：G 开工蓝图 | C/Del 拆除/取消",
     "loading": "正在读取…",
     "hp": "HP {{hp}}/{{max}}",
     "weapon_ready": "武器就绪",

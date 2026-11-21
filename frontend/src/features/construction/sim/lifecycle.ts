@@ -9,7 +9,8 @@ import { Position } from '../../movement/sim/index';
 import { Blueprint, Structure } from './components';
 import type { ConstructionEnv } from './env';
 import { setFootprintBlocked } from './env';
-import { demolishRefund, removeBlueprint, siteRefund, spawnSalvage, spawnStructure } from './spawn';
+import { demolishRefund } from '../rules/index';
+import { removeBlueprint, siteRefund, spawnSalvage, spawnStructure } from './spawn';
 
 // Start a site's build for a blueprint: move its reservation to
 // occupancy, spawn the site entity, despawn the blueprint.

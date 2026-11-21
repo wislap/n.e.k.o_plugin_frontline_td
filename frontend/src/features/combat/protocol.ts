@@ -22,3 +22,16 @@ export const CombatShot = defineEvent<ShotPayload>('frontline_td:combat.shot', '
 // own despawn runs.
 export type DiedPayload = { handle: number; faction: number };
 export const CombatDied = defineEvent<DiedPayload>('frontline_td:combat.died', 'all');
+
+// Inspector section id for combat entities.
+export const COMBAT_INSPECTOR_ID = 'frontline_td:combat';
+
+// Inspector section payload emitted by frontline_td:combat.
+export type CombatInspection = {
+  hp: number;
+  max: number;
+  readyIn?: number;
+  target?: number;
+  costCargo?: number;
+  costStock?: number;
+};

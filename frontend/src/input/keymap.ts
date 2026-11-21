@@ -1,26 +1,108 @@
+// Mode-layered key bindings, keyed by KeyboardEvent.code (layout-independent)
+// plus declarative help metadata for the `?` overlay (ADR 0048).
+import type { PrimaryMode } from '../client/interaction-store';
 import type { Intent } from './intents';
 
-// Default key bindings, keyed by KeyboardEvent.code (layout-independent).
-export const DEFAULT_KEYMAP: Readonly<Record<string, Intent>> = {
+const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+function squadDigitMap(): Readonly<Record<string, Intent>> {
+  const map: Record<string, Intent> = {};
+  for (const digit of DIGITS) {
+    map[`Digit${digit}`] = { kind: 'squad.digit', digit, ctrl: false };
+  }
+  return map;
+}
+
+function buildCategoryDigitMap(): Readonly<Record<string, Intent>> {
+  const map: Record<string, Intent> = {};
+  for (const slot of DIGITS) {
+    map[`Digit${slot}`] = { kind: 'build.category_digit', slot };
+  }
+  return map;
+}
+
+export const GLOBAL_KEYMAP: Readonly<Record<string, Intent>> = {
   Space: { kind: 'runtime.toggle_pause' },
   Minus: { kind: 'runtime.speed_step', delta: -1 },
   Equal: { kind: 'runtime.speed_step', delta: 1 },
-  Digit1: { kind: 'squad.digit', digit: 1, ctrl: false },
-  Digit2: { kind: 'squad.digit', digit: 2, ctrl: false },
-  Digit3: { kind: 'squad.digit', digit: 3, ctrl: false },
-  Digit4: { kind: 'squad.digit', digit: 4, ctrl: false },
-  Digit5: { kind: 'squad.digit', digit: 5, ctrl: false },
-  Digit6: { kind: 'squad.digit', digit: 6, ctrl: false },
-  Digit7: { kind: 'squad.digit', digit: 7, ctrl: false },
-  Digit8: { kind: 'squad.digit', digit: 8, ctrl: false },
-  Digit9: { kind: 'squad.digit', digit: 9, ctrl: false },
-  Backquote: { kind: 'dev.toggle_panel' },
-  KeyV: { kind: 'camera.toggle_mode' },
-  KeyG: { kind: 'selection.activate' },
-  KeyX: { kind: 'selection.cancel' },
-  Delete: { kind: 'selection.cancel' },
+  Tab: { kind: 'camera.toggle_mode' },
+  F1: { kind: 'mode.select', mode: 'command' },
+  F2: { kind: 'mode.select', mode: 'build' },
+  F3: { kind: 'mode.select', mode: 'logistics' },
   KeyL: { kind: 'overlay.toggle_logistics' },
-  KeyR: { kind: 'road.toggle' },
-  Enter: { kind: 'road.confirm' },
-  Escape: { kind: 'build.cancel' },
+  Backquote: { kind: 'dev.toggle_panel' },
+  Escape: { kind: 'escape' },
 };
+
+export const MODE_KEYMAPS: Readonly<Record<PrimaryMode, Readonly<Record<string, Intent>>>> = {
+  command: {
+    ...squadDigitMap(),
+  },
+  build: {
+    // 1-9 in build mode are explicitly reserved for build categories and
+    // never select squads.
+    ...buildCategoryDigitMap(),
+    KeyG: { kind: 'selection.activate' },
+    KeyC: { kind: 'demolish.press' },
+    Delete: { kind: 'demolish.press' },
+  },
+  logistics: {
+    KeyR: { kind: 'road.toggle' },
+    Enter: { kind: 'road.confirm' },
+  },
+};
+
+interface KeybindingEntry {
+  readonly keys: string;
+  readonly descKey: string;
+}
+
+export interface KeybindingGroup {
+  readonly titleKey: string;
+  readonly entries: readonly KeybindingEntry[];
+}
+
+export const KEYBINDING_GROUPS: readonly KeybindingGroup[] = [
+  {
+    titleKey: 'help.group.global',
+    entries: [
+      { keys: 'Space', descKey: 'help.key.pause' },
+      { keys: '- / =', descKey: 'help.key.speed' },
+      { keys: 'Tab', descKey: 'help.key.camera' },
+      { keys: 'WASD / Arrows', descKey: 'help.key.pan' },
+      { keys: 'F1 / F2 / F3', descKey: 'help.key.modes' },
+      { keys: 'L', descKey: 'help.key.logistics_overlay' },
+      { keys: '`', descKey: 'help.key.debug' },
+      { keys: 'Esc', descKey: 'help.key.escape' },
+      { keys: '?', descKey: 'help.key.help' },
+    ],
+  },
+  {
+    titleKey: 'help.group.command',
+    entries: [
+      { keys: '1-9', descKey: 'help.key.squad_select' },
+      { keys: 'Ctrl+1-9', descKey: 'help.key.squad_create' },
+      { keys: 'Right-click', descKey: 'help.key.move' },
+      { keys: 'Ctrl+Right-click', descKey: 'help.key.guard' },
+    ],
+  },
+  {
+    titleKey: 'help.group.build',
+    entries: [
+      { keys: '1-9', descKey: 'help.key.build_category' },
+      { keys: 'Shift+Click', descKey: 'help.key.place_blueprint' },
+      { keys: 'G', descKey: 'help.key.activate' },
+      { keys: 'C / Del', descKey: 'help.key.demolish' },
+      { keys: 'Right-click', descKey: 'help.key.exit_tool' },
+    ],
+  },
+  {
+    titleKey: 'help.group.logistics',
+    entries: [
+      { keys: 'R', descKey: 'help.key.road_tool' },
+      { keys: 'Shift+Click', descKey: 'help.key.road_toggle_link' },
+      { keys: 'Enter', descKey: 'help.key.road_confirm' },
+      { keys: 'Right-click', descKey: 'help.key.exit_tool' },
+    ],
+  },
+];
