@@ -14,6 +14,7 @@ function stubPathing(
     },
     goalRefCount: () => 1,
     directionAt: (_goalId, x, y) => direction(x, y),
+    smoothDirectionAt: (_goalId, x, y) => direction(Math.floor(x), Math.floor(y)),
     invalidateCells: () => {},
   };
 }

@@ -417,8 +417,17 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `CLEARANCE_HEAVY` | const |  |
+| `CLEARANCE_STANDARD` | const |  |
+| `CLEARANCE_TIERS` | const |  |
+| `clearanceAnchorCell` | function |  |
+| `clearanceAnchorCenter` | function |  |
+| `clearanceFootprintSize` | function |  |
+| `ClearanceTier` | type |  |
+| `clearanceTierForRadius` | function |  |
 | `heightStepPassable` | function | The 8-neighbour edge rule (ADR 0015): a step is allowed when both cells are passable for the class and either the heights are equal, or \|dh\| = 1 and the LOWER cell is a ramp. |
 | `spiralOffsets` | function | Square spiral offsets around (cx,cy), ring by ring, fixed traversal order. |
+| `STANDARD_RADIUS_MAX` | const |  |
 
 ## src/features/terrain/sim/index.ts
 

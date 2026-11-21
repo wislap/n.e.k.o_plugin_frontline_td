@@ -2,6 +2,7 @@
 // every sector boundary, intra-sector edge tables, and sector-scoped
 // invalidation. All costs are integers via TerrainApi.
 import type { TerrainApi } from '../../terrain/sim/index';
+import { CLEARANCE_HEAVY, CLEARANCE_STANDARD, type ClearanceTier } from '../../terrain/rules/index';
 import { UNREACHABLE, dijkstra } from './dijkstra';
 
 const SECTOR_SIZE = 16;
@@ -110,6 +111,7 @@ function scanBoundary(
   cls: number,
   vertical: boolean,
   coord: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): Portal[] {
   const portals: Portal[] = [];
   let run: [number, number, number, number][] = []; // [ax,ay,bx,by]
@@ -138,8 +140,8 @@ function scanBoundary(
         b: cellIndex(terrain, mid[2], mid[3]),
         sectorA: sectorOfCell(terrain, cellIndex(terrain, mid[0], mid[1])),
         sectorB: sectorOfCell(terrain, cellIndex(terrain, mid[2], mid[3])),
-        costAB: terrain.stepCost(mid[0], mid[1], mid[2], mid[3], cls),
-        costBA: terrain.stepCost(mid[2], mid[3], mid[0], mid[1], cls),
+        costAB: terrain.stepCost(mid[0], mid[1], mid[2], mid[3], cls, tier),
+        costBA: terrain.stepCost(mid[2], mid[3], mid[0], mid[1], cls, tier),
       });
       segStart = segEnd;
     }
@@ -152,7 +154,8 @@ function scanBoundary(
     const bx = vertical ? coord : t;
     const by = vertical ? t : coord;
     const bothWays =
-      terrain.stepCost(ax, ay, bx, by, cls) >= 0 && terrain.stepCost(bx, by, ax, ay, cls) >= 0;
+      terrain.stepCost(ax, ay, bx, by, cls, tier) >= 0 &&
+      terrain.stepCost(bx, by, ax, ay, cls, tier) >= 0;
     if (bothWays) {
       run.push([ax, ay, bx, by]);
     } else {
@@ -171,6 +174,7 @@ export function sectorDijkstra(
   sector: number,
   from: number,
   reverse = false,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): Int32Array {
   const { x0, y0, x1, y1 } = sectorBounds(terrain, sector);
   const w = x1 - x0 + 1;
@@ -188,8 +192,8 @@ export function sectorDijkstra(
         continue;
       }
       const cost = reverse
-        ? terrain.stepCost(nx, ny, cx, cy, cls)
-        : terrain.stepCost(cx, cy, nx, ny, cls);
+        ? terrain.stepCost(nx, ny, cx, cy, cls, tier)
+        : terrain.stepCost(cx, cy, nx, ny, cls, tier);
       if (cost >= 0) {
         visit((ny - y0) * w + (nx - x0), cost);
       }
@@ -209,10 +213,11 @@ function computeSectorEdges(
   cls: number,
   sector: number,
   cells: Iterable<number>,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
 ): { a: number; b: number; cost: number }[] {
   const edges: { a: number; b: number; cost: number }[] = [];
   for (const cell of cells) {
-    const dist = sectorDijkstra(terrain, cls, sector, cell);
+    const dist = sectorDijkstra(terrain, cls, sector, cell, false, tier);
     const { x0, y0, x1 } = sectorBounds(terrain, sector);
     const w = x1 - x0 + 1;
     for (const other of cells) {
@@ -236,7 +241,11 @@ export interface ClassGraph {
   invalidate(touched: readonly { x: number; y: number }[]): void;
 }
 
-export function buildClassGraph(terrain: TerrainApi, cls: number): ClassGraph {
+export function buildClassGraph(
+  terrain: TerrainApi,
+  cls: number,
+  tier: ClearanceTier = CLEARANCE_STANDARD,
+): ClassGraph {
   const { cols, rows } = sectorDims(terrain);
   const data: ClassData = {
     boundaryPortals: new Map(),
@@ -344,14 +353,14 @@ export function buildClassGraph(terrain: TerrainApi, cls: number): ClassGraph {
 
   // Initial full build: scan all boundaries, compute all sector tables.
   for (let bx = SECTOR_SIZE; bx < terrain.width; bx += SECTOR_SIZE) {
-    data.boundaryPortals.set(boundaryKey(true, bx), scanBoundary(terrain, cls, true, bx));
+    data.boundaryPortals.set(boundaryKey(true, bx), scanBoundary(terrain, cls, true, bx, tier));
   }
   for (let by = SECTOR_SIZE; by < terrain.height; by += SECTOR_SIZE) {
-    data.boundaryPortals.set(boundaryKey(false, by), scanBoundary(terrain, cls, false, by));
+    data.boundaryPortals.set(boundaryKey(false, by), scanBoundary(terrain, cls, false, by, tier));
   }
   const bySector = collectPortalCells();
   for (let s = 0; s < cols * rows; s++) {
-    data.sectorEdges.set(s, computeSectorEdges(terrain, cls, s, bySector[s] ?? []));
+    data.sectorEdges.set(s, computeSectorEdges(terrain, cls, s, bySector[s] ?? [], tier));
   }
   rebuildNodesAndEdges();
 
@@ -361,8 +370,11 @@ export function buildClassGraph(terrain: TerrainApi, cls: number): ClassGraph {
     },
     invalidate(touched) {
       const affected = new Set<number>();
-      for (const cell of touched) {
-        const s = sectorOfCell(terrain, cellIndex(terrain, cell.x, cell.y));
+      const markSectorAndNeighbors = (cx: number, cy: number): void => {
+        if (!terrain.inBounds(cx, cy)) {
+          return;
+        }
+        const s = sectorOfCell(terrain, cellIndex(terrain, cx, cy));
         const sx = s % cols;
         const sy = Math.floor(s / cols);
         for (const [dx, dy] of [
@@ -378,6 +390,19 @@ export function buildClassGraph(terrain: TerrainApi, cls: number): ClassGraph {
             affected.add(nsy * cols + nsx);
           }
         }
+      };
+      for (const cell of touched) {
+        if (tier === CLEARANCE_HEAVY) {
+          // A 2x2 footprint anchored at (x - ox, y - oy) overlaps (x, y);
+          // expanding before sector lookup covers diagonal corner blockers.
+          for (let oy = 0; oy <= 1; oy++) {
+            for (let ox = 0; ox <= 1; ox++) {
+              markSectorAndNeighbors(cell.x - ox, cell.y - oy);
+            }
+          }
+        } else {
+          markSectorAndNeighbors(cell.x, cell.y);
+        }
       }
       // Rescan every boundary touching an affected sector.
       const boundaries = new Map<BoundaryKey, { vertical: boolean; coord: number }>();
@@ -387,11 +412,11 @@ export function buildClassGraph(terrain: TerrainApi, cls: number): ClassGraph {
         }
       }
       for (const [key, b] of boundaries) {
-        data.boundaryPortals.set(key, scanBoundary(terrain, cls, b.vertical, b.coord));
+        data.boundaryPortals.set(key, scanBoundary(terrain, cls, b.vertical, b.coord, tier));
       }
       const updatedCells = collectPortalCells();
       for (const s of affected) {
-        data.sectorEdges.set(s, computeSectorEdges(terrain, cls, s, updatedCells[s] ?? []));
+        data.sectorEdges.set(s, computeSectorEdges(terrain, cls, s, updatedCells[s] ?? [], tier));
       }
       rebuildNodesAndEdges();
     },

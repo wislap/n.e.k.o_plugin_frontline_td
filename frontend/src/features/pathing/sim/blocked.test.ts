@@ -8,6 +8,7 @@ import { createSimulation, restoreSimulation } from '../../../kernel/index';
 import type { SimConfig, SimModule } from '../../../kernel/index';
 import { baseConfig } from '../../../kernel/testing/helpers';
 import { createTerrainModule } from '../../terrain/sim/index';
+import { CLEARANCE_HEAVY, CLEARANCE_STANDARD } from '../../terrain/rules/index';
 import type { TerrainGrid } from '../../terrain/content';
 import { dijkstra, UNREACHABLE } from './dijkstra';
 import { createPathingModule } from './module';
@@ -114,6 +115,151 @@ describe('pathing vs blocked cells', () => {
       const db = b.pathing.api.directionAt(goal, x, y);
       expect(db === null ? null : { dx: db.dx, dy: db.dy }).toEqual(
         da === null ? null : { dx: da.dx, dy: da.dy },
+      );
+    }
+    simB.step();
+    expect(simB.hash()).toBe(simA.hash());
+  });
+
+  it('tier=1 invalidates cross-sector boundary portals when blocking x=16', () => {
+    // 32x16 grid: wall at x=16 except a 2-cell opening at y=7..8.
+    const rows = Array.from({ length: 16 }, (_, y) => {
+      const line = '.'.repeat(32).split('');
+      if (y !== 7 && y !== 8) {
+        line[16] = '#';
+      }
+      return line.join('');
+    });
+    const grid = makeGrid(rows);
+    const terrain = createTerrainModule(grid, ROCK);
+    const pathing = createPathingModule(terrain.api, 1);
+    terrain.api.onBlockedChange((cells) => {
+      pathing.api.invalidateCells(cells);
+    });
+
+    const goal = pathing.api.acquireGoal(24, 7, CLS, CLEARANCE_HEAVY);
+    // Before blocking, tier=1 routes across portal (15, 7) <-> (16, 7).
+    expect(pathing.api.directionAt(goal, 2, 7)).not.toBeNull();
+    // Blocking (16, 7) invalidates anchor (15, 7) and closes the portal.
+    terrain.api.setBlocked([{ x: 16, y: 7 }], true);
+    expect(pathing.api.directionAt(goal, 2, 7)).toBeNull();
+    // Unblocking reopens the portal.
+    terrain.api.setBlocked([{ x: 16, y: 7 }], false);
+    expect(pathing.api.directionAt(goal, 2, 7)).not.toBeNull();
+  });
+
+  it('tier=1 invalidates diagonal sector (0,0) anchor (15,15) when blocking corner (16,16)', () => {
+    // 32x32 map where the ONLY path from sector (1,0) to sector (0,1) passes
+    // through sector (0,0)'s corner anchor (15,15) — which touches (16,16) in sector (1,1):
+    // - Channel along x=15 (columns 15..16, rows 5..16) and y=15 (rows 15..16, cols 5..16).
+    // - Wall x=17 (y=7..16) leaves v16 open only at portal (15,5)<->(16,5).
+    // - Wall y=17 (x=7..16) leaves h16 open only at portal (5,15)<->(5,16).
+    const gridRows = Array.from({ length: 32 }, () => '.'.repeat(32).split(''));
+    const setCell = (x: number, y: number, ch: string): void => {
+      const row = gridRows[y];
+      if (row !== undefined) {
+        row[x] = ch;
+      }
+    };
+    for (let i = 0; i <= 14; i++) {
+      setCell(14, i, '#');
+      setCell(i, 14, '#');
+    }
+    for (let y = 0; y < 32; y++) {
+      if (y < 5 || y > 16) {
+        setCell(16, y, '#');
+      }
+    }
+    for (let x = 0; x < 32; x++) {
+      if (x < 5 || x > 16) {
+        setCell(x, 16, '#');
+      }
+    }
+    for (let y = 7; y <= 16; y++) {
+      setCell(17, y, '#');
+    }
+    for (let x = 7; x <= 16; x++) {
+      setCell(x, 17, '#');
+    }
+
+    const grid = makeGrid(gridRows.map((r) => r.join('')));
+    const terrain = createTerrainModule(grid, ROCK);
+    const pathing = createPathingModule(terrain.api, 1);
+    terrain.api.onBlockedChange((cells) => {
+      pathing.api.invalidateCells(cells);
+    });
+
+    // Goal in sector (0,1) at (5,20); query from sector (1,0) at (20,5).
+    const goal = pathing.api.acquireGoal(5, 20, CLS, CLEARANCE_HEAVY);
+    expect(pathing.api.directionAt(goal, 20, 5)).not.toBeNull();
+
+    // Blocking (16,16) in sector (1,1) invalidates anchor (15,15) in diagonal sector (0,0).
+    terrain.api.setBlocked([{ x: 16, y: 16 }], true);
+    expect(pathing.api.directionAt(goal, 20, 5)).toBeNull();
+
+    // Unblocking (16,16) restores the route through (15,15).
+    terrain.api.setBlocked([{ x: 16, y: 16 }], false);
+    expect(pathing.api.directionAt(goal, 20, 5)).not.toBeNull();
+  });
+
+  it('save/restore with tier=0 and tier=1 preserves hash and omits tier=0 in saved entries', () => {
+    const grid = makeGrid(['..........', '..........', '..........', '..........', '..........']);
+    const make = () => {
+      const terrain = createTerrainModule(grid, ROCK);
+      const pathing = createPathingModule(terrain.api, 1);
+      terrain.api.onBlockedChange((cells) => {
+        pathing.api.invalidateCells(cells);
+      });
+      const modules: SimModule[] = [terrain.module, pathing.module];
+      return { terrain, pathing, modules };
+    };
+    const a = make();
+    const simA = createSimulation(config(grid), a.modules);
+    simA.step();
+    const g0 = a.pathing.api.acquireGoal(8, 2, CLS, CLEARANCE_STANDARD);
+    const g1 = a.pathing.api.acquireGoal(7, 2, CLS, CLEARANCE_HEAVY);
+    a.pathing.api.directionAt(g0, 1, 1);
+    a.pathing.api.directionAt(g1, 1, 1);
+    simA.step();
+
+    const saved = simA.serialize();
+    const savedGoals =
+      (
+        saved as {
+          moduleStates: Record<string, { entries: Array<Record<string, unknown>> }>;
+        }
+      ).moduleStates['frontline_td:pathing.goals']?.entries ?? [];
+    expect(savedGoals).toHaveLength(2);
+    const entry0 = savedGoals.find((e) => e['id'] === g0);
+    const entry1 = savedGoals.find((e) => e['id'] === g1);
+    expect(entry0).toBeDefined();
+    expect(entry1).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(entry0, 'tier')).toBe(false);
+    expect(entry1?.['tier']).toBe(CLEARANCE_HEAVY);
+
+    simA.step();
+
+    const b = make();
+    const simB = restoreSimulation(config(grid), b.modules, saved);
+    for (const [x, y] of [
+      [1, 1],
+      [4, 2],
+      [7, 2],
+    ] as const) {
+      const da0 = a.pathing.api.directionAt(g0, x, y);
+      const db0 = b.pathing.api.directionAt(g0, x, y);
+      expect(db0 === null ? null : { dx: db0.dx, dy: db0.dy }).toEqual(
+        da0 === null ? null : { dx: da0.dx, dy: da0.dy },
+      );
+      const da1 = a.pathing.api.directionAt(g1, x, y);
+      const db1 = b.pathing.api.directionAt(g1, x, y);
+      expect(db1 === null ? null : { dx: db1.dx, dy: db1.dy }).toEqual(
+        da1 === null ? null : { dx: da1.dx, dy: da1.dy },
+      );
+      const sa1 = a.pathing.api.smoothDirectionAt(g1, x + 0.8, y + 0.8);
+      const sb1 = b.pathing.api.smoothDirectionAt(g1, x + 0.8, y + 0.8);
+      expect(sb1 === null ? null : { dx: sb1.dx, dy: sb1.dy }).toEqual(
+        sa1 === null ? null : { dx: sa1.dx, dy: sa1.dy },
       );
     }
     simB.step();

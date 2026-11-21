@@ -3,6 +3,14 @@
 // derived data — recomputed on demand, never serialized.
 import type { Serializable } from '../../../core/index';
 import type { SimModule } from '../../../kernel/index';
+import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  CLEARANCE_TIERS,
+  clearanceAnchorCell,
+  clearanceAnchorCenter,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { dijkstra } from './dijkstra';
 import { UNREACHABLE } from './dijkstra';
@@ -15,11 +23,13 @@ interface Direction {
 }
 
 export interface PathingApi {
-  acquireGoal(x: number, y: number, cls: number): number;
+  acquireGoal(x: number, y: number, cls: number, tier?: ClearanceTier): number;
   releaseGoal(goalId: number): void;
   goalRefCount(goalId: number): number;
   // Reuses an internal scratch object — do not hold the result across calls.
   directionAt(goalId: number, x: number, y: number): Direction | null;
+  // Reuses a separate internal scratch object — safe to interleave with directionAt.
+  smoothDirectionAt(goalId: number, px: number, py: number): Direction | null;
   invalidateCells(cells: readonly { x: number; y: number }[]): void;
 }
 
@@ -27,12 +37,48 @@ interface Goal {
   x: number;
   y: number;
   cls: number;
+  tier: ClearanceTier;
   refcount: number;
 }
 
 interface SectorField {
   dx: Int8Array;
   dy: Int8Array;
+  cost: Int32Array;
+}
+
+function edgePassableBothWays(
+  terrain: TerrainApi,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cls: number,
+  tier: ClearanceTier,
+): boolean {
+  return (
+    terrain.stepCost(ax, ay, bx, by, cls, tier) >= 0 &&
+    terrain.stepCost(bx, by, ax, ay, cls, tier) >= 0
+  );
+}
+
+function quadPassableBothWays(
+  terrain: TerrainApi,
+  x00: number,
+  y00: number,
+  cls: number,
+  tier: ClearanceTier,
+): boolean {
+  const x10 = x00 + 1;
+  const y01 = y00 + 1;
+  return (
+    edgePassableBothWays(terrain, x00, y00, x10, y00, cls, tier) &&
+    edgePassableBothWays(terrain, x00, y01, x10, y01, cls, tier) &&
+    edgePassableBothWays(terrain, x00, y00, x00, y01, cls, tier) &&
+    edgePassableBothWays(terrain, x10, y00, x10, y01, cls, tier) &&
+    edgePassableBothWays(terrain, x00, y00, x10, y01, cls, tier) &&
+    edgePassableBothWays(terrain, x10, y00, x00, y01, cls, tier)
+  );
 }
 
 export function createPathingModule(
@@ -47,12 +93,18 @@ export function createPathingModule(
   const portalDists = new Map<number, Int32Array>();
   const fields = new Map<number, SectorField>();
   const scratch: Direction = { dx: 0, dy: 0 };
-  // Portal node index by cell, per class — used to continue a field across
-  // sector borders at portal cells.
-  let nodeIndexByCell: Map<number, number>[] = [];
+  const smoothScratch: Direction = { dx: 0, dy: 0 };
+  const totalSlots = classCount * CLEARANCE_TIERS;
+  // Portal node index by cell, per (class, tier) slot — used to continue a
+  // field across sector borders at portal cells.
+  let nodeIndexByCell: (Map<number, number> | undefined)[] = [];
   // Rebuilt on state load: the terrain blocked overlay is restored before
   // pathing's load runs, and graphs must reflect it (see sim-registry order).
-  let graphs: ClassGraph[] = [];
+  // Standard tier (0) graphs build eagerly; heavy tier (1) graphs build lazily.
+  let graphs: (ClassGraph | undefined)[] = [];
+  function graphSlot(cls: number, tier: ClearanceTier): number {
+    return tier * classCount + cls;
+  }
   function buildNodeIndex(clsGraph: ClassGraph): Map<number, number> {
     const map = new Map<number, number>();
     for (let n = 0; n < clsGraph.graph.nodeCell.length; n++) {
@@ -60,19 +112,35 @@ export function createPathingModule(
     }
     return map;
   }
-  function rebuildGraphs(): void {
-    graphs = [];
-    for (let cls = 0; cls < classCount; cls++) {
-      graphs.push(buildClassGraph(terrain, cls));
+  function ensureGraph(cls: number, tier: ClearanceTier): ClassGraph {
+    if (cls < 0 || cls >= classCount) {
+      throw new RangeError(`unknown movement class ${cls}`);
     }
-    nodeIndexByCell = graphs.map(buildNodeIndex);
+    const slot = graphSlot(cls, tier);
+    let clsGraph = graphs[slot];
+    if (clsGraph === undefined) {
+      clsGraph = buildClassGraph(terrain, cls, tier);
+      graphs[slot] = clsGraph;
+      nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
+    }
+    return clsGraph;
+  }
+  function rebuildGraphs(): void {
+    graphs = Array.from({ length: totalSlots }, () => undefined);
+    nodeIndexByCell = Array.from({ length: totalSlots }, () => undefined);
+    for (let cls = 0; cls < classCount; cls++) {
+      const slot = graphSlot(cls, CLEARANCE_STANDARD);
+      const clsGraph = buildClassGraph(terrain, cls, CLEARANCE_STANDARD);
+      graphs[slot] = clsGraph;
+      nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
+    }
     portalDists.clear();
     fields.clear();
   }
   rebuildGraphs();
 
-  function goalKey(x: number, y: number, cls: number): number {
-    return (cls * terrain.height + y) * terrain.width + x;
+  function goalKey(x: number, y: number, cls: number, tier: ClearanceTier): number {
+    return ((tier * classCount + cls) * terrain.height + y) * terrain.width + x;
   }
 
   // Distance from every portal node to the goal, on the reversed portal
@@ -82,15 +150,12 @@ export function createPathingModule(
     if (cached !== undefined) {
       return cached;
     }
-    const clsGraph = graphs[goal.cls];
-    if (clsGraph === undefined) {
-      throw new RangeError(`unknown movement class ${goal.cls}`);
-    }
+    const clsGraph = ensureGraph(goal.cls, goal.tier);
     const graph = clsGraph.graph;
     const goalCell = goal.y * terrain.width + goal.x;
     const goalSector = sectorOfCell(terrain, goalCell);
     // dist(x -> goal) within the goal sector = reversed local Dijkstra.
-    const local = sectorDijkstra(terrain, goal.cls, goalSector, goalCell, true);
+    const local = sectorDijkstra(terrain, goal.cls, goalSector, goalCell, true, goal.tier);
     const { x0, y0, x1 } = sectorBounds(terrain, goalSector);
     const w = x1 - x0 + 1;
     const seeds: [number, number][] = [];
@@ -130,10 +195,8 @@ export function createPathingModule(
     if (cached !== undefined) {
       return cached;
     }
-    const clsGraph = graphs[goal.cls];
-    if (clsGraph === undefined) {
-      throw new RangeError(`unknown movement class ${goal.cls}`);
-    }
+    const clsGraph = ensureGraph(goal.cls, goal.tier);
+    const slot = graphSlot(goal.cls, goal.tier);
     const graph = clsGraph.graph;
     const dists = portalDistToGoal(goalId, goal);
     const { x0, y0, x1, y1 } = sectorBounds(terrain, sector);
@@ -173,7 +236,7 @@ export function createPathingModule(
         }
         // Cost to move FROM (nx,ny) INTO (cx,cy): integration is distance
         // to goal, so neighbours relax backwards.
-        const cost = terrain.stepCost(nx, ny, cx, cy, goal.cls);
+        const cost = terrain.stepCost(nx, ny, cx, cy, goal.cls, goal.tier);
         if (cost >= 0) {
           visit((ny - y0) * w + (nx - x0), cost);
         }
@@ -195,7 +258,7 @@ export function createPathingModule(
         const nx = cx + ddx;
         const ny = cy + ddy;
         // Never point across an impassable step (cliff edge, corner cut).
-        const step = terrain.stepCost(cx, cy, nx, ny, goal.cls);
+        const step = terrain.stepCost(cx, cy, nx, ny, goal.cls, goal.tier);
         if (step < 0) {
           continue;
         }
@@ -203,7 +266,7 @@ export function createPathingModule(
         if (nx < x0 || nx > x1 || ny < y0 || ny > y1) {
           // Out-of-sector neighbour: only continue across the border through a
           // portal node, valued by its portal-graph distance to the goal.
-          const node = nodeIndexByCell[goal.cls]?.get(ny * terrain.width + nx);
+          const node = nodeIndexByCell[slot]?.get(ny * terrain.width + nx);
           if (node === undefined) {
             continue;
           }
@@ -224,16 +287,52 @@ export function createPathingModule(
       dx[local] = bestDx;
       dy[local] = bestDy;
     }
-    const field = { dx, dy };
+    const field = { dx, dy, cost: integration };
     fields.set(key, field);
     return field;
   }
 
-  function acquireGoal(x: number, y: number, cls: number): number {
+  function discreteDirAt(
+    goalId: number,
+    goal: Goal,
+    x: number,
+    y: number,
+    out: Direction,
+  ): SectorField | null {
+    if (!terrain.inBounds(x, y)) {
+      return null;
+    }
+    const sector = sectorOfCell(terrain, y * terrain.width + x);
+    const field = sectorField(goalId, goal, sector);
+    const { x0, y0, x1 } = sectorBounds(terrain, sector);
+    const w = x1 - x0 + 1;
+    const local = (y - y0) * w + (x - x0);
+    const dx = field.dx[local] ?? 0;
+    const dy = field.dy[local] ?? 0;
+    // (0,0) on a non-goal cell means unreachable.
+    if (dx === 0 && dy === 0) {
+      const isGoal = x === goal.x && y === goal.y;
+      if (!isGoal) {
+        return null;
+      }
+    }
+    out.dx = dx;
+    out.dy = dy;
+    return field;
+  }
+
+  function acquireGoal(
+    x: number,
+    y: number,
+    cls: number,
+    tier: ClearanceTier = CLEARANCE_STANDARD,
+  ): number {
     // Goals are cells: quantize so callers may pass entity positions.
     const gx = Math.floor(x);
     const gy = Math.floor(y);
-    const key = goalKey(gx, gy, cls);
+    const resolvedTier: ClearanceTier =
+      tier === CLEARANCE_HEAVY ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
+    const key = goalKey(gx, gy, cls, resolvedTier);
     const existing = goalByKey.get(key);
     if (existing !== undefined) {
       const goal = goals.get(existing);
@@ -243,7 +342,7 @@ export function createPathingModule(
       return existing;
     }
     const id = freeIds.length > 0 ? (freeIds.shift() ?? 0) : nextId++;
-    goals.set(id, { x: gx, y: gy, cls, refcount: 1 });
+    goals.set(id, { x: gx, y: gy, cls, tier: resolvedTier, refcount: 1 });
     goalByKey.set(key, id);
     return id;
   }
@@ -258,7 +357,7 @@ export function createPathingModule(
       return;
     }
     goals.delete(goalId);
-    goalByKey.delete(goalKey(goal.x, goal.y, goal.cls));
+    goalByKey.delete(goalKey(goal.x, goal.y, goal.cls, goal.tier));
     portalDists.delete(goalId);
     for (const key of fields.keys()) {
       if (Math.floor(key / 4096) === goalId) {
@@ -284,33 +383,120 @@ export function createPathingModule(
 
     directionAt(goalId, x, y) {
       const goal = goals.get(goalId);
-      if (goal === undefined || !terrain.inBounds(x, y)) {
+      if (goal === undefined) {
         return null;
       }
-      const sector = sectorOfCell(terrain, y * terrain.width + x);
-      const field = sectorField(goalId, goal, sector);
-      const { x0, y0, x1 } = sectorBounds(terrain, sector);
+      return discreteDirAt(goalId, goal, x, y, scratch) === null ? null : scratch;
+    },
+
+    smoothDirectionAt(goalId, px, py) {
+      const goal = goals.get(goalId);
+      if (goal === undefined) {
+        return null;
+      }
+      const cx = clearanceAnchorCell(px, goal.tier);
+      const cy = clearanceAnchorCell(py, goal.tier);
+      const field = discreteDirAt(goalId, goal, cx, cy, smoothScratch);
+      if (field === null) {
+        return null;
+      }
+      const d0x = smoothScratch.dx;
+      const d0y = smoothScratch.dy;
+      if (d0x === 0 && d0y === 0) {
+        return smoothScratch;
+      }
+      const sector = sectorOfCell(terrain, cy * terrain.width + cx);
+      const { x0, y0, x1, y1 } = sectorBounds(terrain, sector);
       const w = x1 - x0 + 1;
-      const local = (y - y0) * w + (x - x0);
-      const dx = field.dx[local] ?? 0;
-      const dy = field.dy[local] ?? 0;
-      // (0,0) on a non-goal cell means unreachable.
-      if (dx === 0 && dy === 0) {
-        const isGoal = x === goal.x && y === goal.y;
-        if (!isGoal) {
-          return null;
+
+      // Stage 1: Intra-sector dual-quad bilinear gradient.
+      const centerX = clearanceAnchorCenter(cx, goal.tier);
+      const centerY = clearanceAnchorCenter(cy, goal.tier);
+      const x00 = px >= centerX ? cx : cx - 1;
+      const y00 = py >= centerY ? cy : cy - 1;
+      if (x00 >= x0 && x00 + 1 <= x1 && y00 >= y0 && y00 + 1 <= y1) {
+        const lx = x00 - x0;
+        const ly = y00 - y0;
+        const c00 = field.cost[ly * w + lx] ?? UNREACHABLE;
+        const c10 = field.cost[ly * w + (lx + 1)] ?? UNREACHABLE;
+        const c01 = field.cost[(ly + 1) * w + lx] ?? UNREACHABLE;
+        const c11 = field.cost[(ly + 1) * w + (lx + 1)] ?? UNREACHABLE;
+        if (
+          c00 < UNREACHABLE &&
+          c10 < UNREACHABLE &&
+          c01 < UNREACHABLE &&
+          c11 < UNREACHABLE &&
+          quadPassableBothWays(terrain, x00, y00, goal.cls, goal.tier)
+        ) {
+          const tx = Math.max(0, Math.min(1, px - clearanceAnchorCenter(x00, goal.tier)));
+          const ty = Math.max(0, Math.min(1, py - clearanceAnchorCenter(y00, goal.tier)));
+          const gx = (1 - ty) * (c00 - c10) + ty * (c01 - c11);
+          const gy = (1 - tx) * (c00 - c01) + tx * (c10 - c11);
+          if (gx * d0x + gy * d0y > 0) {
+            const len = Math.sqrt(gx * gx + gy * gy);
+            if (len > 0) {
+              smoothScratch.dx = gx / len;
+              smoothScratch.dy = gy / len;
+              return smoothScratch;
+            }
+          }
         }
       }
-      scratch.dx = dx;
-      scratch.dy = dy;
-      return scratch;
+
+      // Stage 2: Intra-sector safe cardinal central difference.
+      if (cx - 1 >= x0 && cx + 1 <= x1 && cy - 1 >= y0 && cy + 1 <= y1) {
+        const lx = cx - x0;
+        const ly = cy - y0;
+        const cW = field.cost[ly * w + (lx - 1)] ?? UNREACHABLE;
+        const cE = field.cost[ly * w + (lx + 1)] ?? UNREACHABLE;
+        const cN = field.cost[(ly - 1) * w + lx] ?? UNREACHABLE;
+        const cS = field.cost[(ly + 1) * w + lx] ?? UNREACHABLE;
+        if (
+          cW < UNREACHABLE &&
+          cE < UNREACHABLE &&
+          cN < UNREACHABLE &&
+          cS < UNREACHABLE &&
+          terrain.stepCost(cx, cy, cx - 1, cy, goal.cls, goal.tier) >= 0 &&
+          terrain.stepCost(cx, cy, cx + 1, cy, goal.cls, goal.tier) >= 0 &&
+          terrain.stepCost(cx, cy, cx, cy - 1, goal.cls, goal.tier) >= 0 &&
+          terrain.stepCost(cx, cy, cx, cy + 1, goal.cls, goal.tier) >= 0
+        ) {
+          const gx = cW - cE;
+          const gy = cN - cS;
+          const sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;
+          const sy = gy > 0 ? 1 : gy < 0 ? -1 : 0;
+          if (
+            gx * d0x + gy * d0y > 0 &&
+            (sx !== 0 || sy !== 0) &&
+            terrain.stepCost(cx, cy, cx + sx, cy + sy, goal.cls, goal.tier) >= 0
+          ) {
+            const len = Math.sqrt(gx * gx + gy * gy);
+            if (len > 0) {
+              smoothScratch.dx = gx / len;
+              smoothScratch.dy = gy / len;
+              return smoothScratch;
+            }
+          }
+        }
+      }
+
+      // Stage 3: Safe discrete unit fallback.
+      const len = Math.sqrt(d0x * d0x + d0y * d0y);
+      if (len > 0) {
+        smoothScratch.dx = d0x / len;
+        smoothScratch.dy = d0y / len;
+      }
+      return smoothScratch;
     },
 
     invalidateCells(cells) {
-      for (const clsGraph of graphs) {
-        clsGraph.invalidate(cells);
+      for (let slot = 0; slot < graphs.length; slot++) {
+        const clsGraph = graphs[slot];
+        if (clsGraph !== undefined) {
+          clsGraph.invalidate(cells);
+          nodeIndexByCell[slot] = buildNodeIndex(clsGraph);
+        }
       }
-      nodeIndexByCell = graphs.map(buildNodeIndex);
       // Portal-node indices change on rebuild: all cached distances are
       // stale, and every sector field derives from them.
       portalDists.clear();
@@ -325,14 +511,25 @@ export function createPathingModule(
         save(): Serializable {
           const entries = [...goals.entries()]
             .sort((a, b) => a[0] - b[0])
-            .map(([id, g]) => ({ id, x: g.x, y: g.y, cls: g.cls, ref: g.refcount }));
+            .map(([id, g]) =>
+              g.tier === CLEARANCE_STANDARD
+                ? { id, x: g.x, y: g.y, cls: g.cls, ref: g.refcount }
+                : { id, x: g.x, y: g.y, cls: g.cls, ref: g.refcount, tier: g.tier },
+            );
           return { nextId, freeIds: [...freeIds], entries };
         },
         load(data: Serializable): void {
           const saved = data as {
             nextId: number;
             freeIds: number[];
-            entries: { id: number; x: number; y: number; cls: number; ref: number }[];
+            entries: {
+              id: number;
+              x: number;
+              y: number;
+              cls: number;
+              ref: number;
+              tier?: number;
+            }[];
           };
           goals.clear();
           goalByKey.clear();
@@ -340,13 +537,17 @@ export function createPathingModule(
           freeIds.push(...saved.freeIds);
           nextId = saved.nextId;
           for (const entry of saved.entries) {
+            const rawTier = entry.tier ?? CLEARANCE_STANDARD;
+            const tier: ClearanceTier =
+              rawTier === CLEARANCE_HEAVY ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
             goals.set(entry.id, {
               x: entry.x,
               y: entry.y,
               cls: entry.cls,
+              tier,
               refcount: entry.ref,
             });
-            goalByKey.set(goalKey(entry.x, entry.y, entry.cls), entry.id);
+            goalByKey.set(goalKey(entry.x, entry.y, entry.cls, tier), entry.id);
           }
           // The blocked overlay may differ from construction time: rebuild
           // all class graphs and derived caches against the restored terrain.

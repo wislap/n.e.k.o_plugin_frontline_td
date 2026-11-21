@@ -3,6 +3,7 @@ import { contentId } from '../../../core/index';
 import type { ResolvedSurface } from '../../../content/load';
 import { loadContent } from '../../../content/load';
 import type { TerrainGrid } from '../content';
+import { CLEARANCE_HEAVY, CLEARANCE_STANDARD } from '../rules/index';
 import { createTerrainApi } from './terrain-api';
 
 const CLS = 0;
@@ -10,6 +11,7 @@ const CLS = 0;
 const SURFACES: ResolvedSurface[] = [
   { id: contentId('a:g'), index: 0, costs: [10], speedBp: 10000, color: '#000000' },
   { id: contentId('a:x'), index: 1, costs: [-1], speedBp: 10000, color: '#000000' },
+  { id: contentId('a:m'), index: 2, costs: [25], speedBp: 5000, color: '#111111' },
 ];
 
 function makeGrid(
@@ -120,5 +122,146 @@ describe('proto_01', () => {
         expect(seen.has(p.y * 96 + p.x), `${name} reachable`).toBe(true);
       }
     }
+  });
+});
+
+describe('TerrainApi heavy clearance (tier = 1)', () => {
+  it('rejects a 1-cell gap while allowing a 2-cell corridor', () => {
+    // 3x3: walls at y=0 and y=2 except x=0..2 open at y=1 -> 1-cell corridor
+    const oneCellGap = createTerrainApi(
+      makeGrid(
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 0, 0, 0, 1, 1, 1],
+        3,
+      ),
+      SURFACES,
+    );
+    expect(oneCellGap.passable(0, 1, CLS, CLEARANCE_STANDARD)).toBe(true);
+    expect(oneCellGap.stepCost(0, 1, 1, 1, CLS, CLEARANCE_STANDARD)).toBe(10);
+    expect(oneCellGap.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(oneCellGap.passable(0, 1, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(oneCellGap.stepCost(0, 1, 1, 1, CLS, CLEARANCE_HEAVY)).toBe(-1);
+
+    // 3x4: 2-cell wide horizontal corridor at y=1..2
+    const twoCellCorridor = createTerrainApi(
+      makeGrid(
+        new Array<number>(12).fill(0),
+        new Array<number>(12).fill(0),
+        [1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+        3,
+      ),
+      SURFACES,
+    );
+    expect(twoCellCorridor.passable(0, 1, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(twoCellCorridor.passable(1, 1, CLS, CLEARANCE_HEAVY)).toBe(true);
+    // Out-of-bounds 2x2 anchor at x=2 (would need x=3)
+    expect(twoCellCorridor.passable(2, 1, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(twoCellCorridor.stepCost(0, 1, 1, 1, CLS, CLEARANCE_HEAVY)).toBe(10);
+  });
+
+  it('rejects cliff straddling inside a 2x2 footprint', () => {
+    // 2x2: (1,0) is height 1 without ramp, creating an internal cliff edge
+    const cliffStraddle = createTerrainApi(
+      makeGrid([0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], 2),
+      SURFACES,
+    );
+    expect(cliffStraddle.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(cliffStraddle.staticPassable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+  });
+
+  it('allows a 2-wide ramp both up and down and rejects a 1-wide ramp', () => {
+    // 4x2: x=0..1 height 0 (x=1 is ramp), x=2..3 height 1
+    const twoWideRamp = createTerrainApi(
+      makeGrid([0, 0, 1, 1, 0, 0, 1, 1], [0, 1, 0, 0, 0, 1, 0, 0], new Array<number>(8).fill(0), 4),
+      SURFACES,
+    );
+    expect(twoWideRamp.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(twoWideRamp.passable(1, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(twoWideRamp.passable(2, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(twoWideRamp.stepCost(0, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(10);
+    expect(twoWideRamp.stepCost(1, 0, 2, 0, CLS, CLEARANCE_HEAVY)).toBe(10);
+    // Down over the same 2-wide ramp
+    expect(twoWideRamp.stepCost(2, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(10);
+    expect(twoWideRamp.stepCost(1, 0, 0, 0, CLS, CLEARANCE_HEAVY)).toBe(10);
+
+    // 1-wide ramp: (1,1) is NOT a ramp, so (1,0) heavy anchor straddles a cliff at y=1
+    const oneWideRamp = createTerrainApi(
+      makeGrid([0, 0, 1, 1, 0, 0, 1, 1], [0, 1, 0, 0, 0, 0, 0, 0], new Array<number>(8).fill(0), 4),
+      SURFACES,
+    );
+    expect(oneWideRamp.passable(1, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(oneWideRamp.stepCost(0, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(-1);
+  });
+
+  it('forbids diagonal corner cutting for tier = 1 and scales open diagonal cost', () => {
+    // 3x3 open ground: (0,0) -> (1,1) diagonal heavy move
+    const open = createTerrainApi(
+      makeGrid(
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        3,
+      ),
+      SURFACES,
+    );
+    expect(open.stepCost(0, 0, 1, 1, CLS, CLEARANCE_HEAVY)).toBe(14);
+    expect(open.stepCost(0, 0, 0, 0, CLS, CLEARANCE_HEAVY)).toBe(-1);
+    expect(open.stepCost(0, 0, 2, 0, CLS, CLEARANCE_HEAVY)).toBe(-1);
+
+    // 3x3 with corner rock at (2,0): anchor (1,0) is impassable, blocking diagonal (0,0)->(1,1)
+    const cornerRock = createTerrainApi(
+      makeGrid(
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        [0, 0, 1, 0, 0, 0, 0, 0, 0],
+        3,
+      ),
+      SURFACES,
+    );
+    expect(cornerRock.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(cornerRock.passable(1, 1, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(cornerRock.passable(1, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(cornerRock.stepCost(0, 0, 1, 1, CLS, CLEARANCE_HEAVY)).toBe(-1);
+  });
+
+  it('takes the max integer step cost across heterogeneous surfaces', () => {
+    // 3x3: cell (2,1) has mud surface (cost 25), others have grass (cost 10)
+    const mudPatch = createTerrainApi(
+      makeGrid(
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        [0, 0, 0, 0, 0, 2, 0, 0, 0],
+        3,
+      ),
+      SURFACES,
+    );
+    // (0,0) -> (1,0): sub-cell (1,1)->(2,1) lands on mud (25), others land on grass (10)
+    expect(mudPatch.stepCost(0, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(25);
+    // Diagonal (0,0) -> (1,1): sub-cell (1,0)->(2,1) lands on mud -> floorDiv(25*14, 10) = 35
+    expect(mudPatch.stepCost(0, 0, 1, 1, CLS, CLEARANCE_HEAVY)).toBe(35);
+  });
+
+  it('affects passable and stepCost on dynamic setBlocked(x+1, y+1) without changing staticPassable', () => {
+    const api = createTerrainApi(
+      makeGrid(
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        new Array<number>(9).fill(0),
+        3,
+      ),
+      SURFACES,
+    );
+    expect(api.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(api.staticPassable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+
+    api.setBlocked([{ x: 1, y: 1 }], true);
+    expect(api.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(false);
+    expect(api.staticPassable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(api.stepCost(0, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(-1);
+
+    api.setBlocked([{ x: 1, y: 1 }], false);
+    expect(api.passable(0, 0, CLS, CLEARANCE_HEAVY)).toBe(true);
+    expect(api.stepCost(0, 0, 1, 0, CLS, CLEARANCE_HEAVY)).toBe(10);
   });
 });

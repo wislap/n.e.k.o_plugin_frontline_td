@@ -54,8 +54,9 @@
 ### 地形
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|---|
-| [0010](../adr/0010-terrain-model-sector-flowfields.md) | 地形模型与分区流场 | 已采纳 | 部分（分区失效仍是全局：invalidateCells 清全图 fields/portalDists，rebuildNodesAndEdges 全局重编号） | wislap | M0 架构基线 | 2026-11-14 |
+| [0010](../adr/0010-terrain-model-sector-flowfields.md) | 地形模型与分区流场 | 已采纳；部分被 0052 取代（补齐按移动类别 × 净空分档 1×1 标准档 / 2×2 重型档的门户流场，并在离散 8 向流场之上新增扇区内对偶双线性连续流向梯度查询 smoothDirectionAt） | 部分（分区失效仍是全局：invalidateCells 清全图 fields/portalDists，rebuildNodesAndEdges 全局重编号） | wislap | M0 架构基线 | 2026-11-14 |
 | [0027](../adr/0027-map-terrain-flowfield-movement.md) | 地图格式、地形规则、分区流场与移动的实现约定 | 已采纳 | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
+| [0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md) | 地形净空分档与连续流场方向梯度 | 已采纳 | 已实现 | wislap | S1 地形净空与连续流场 | 2026-11-21 |
 
 ### 战斗
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -171,3 +172,6 @@
 
 ### R1 场景视锥裁剪与深度精度治理（2026-11-21）
 - [0051 全图批次视锥裁剪契约、动态深度窗口与地表贴花层级](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)
+
+### S1 地形净空与连续流场（2026-11-21）
+- [0052 地形净空分档与连续流场方向梯度](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)

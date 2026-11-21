@@ -2,6 +2,13 @@
 // on the real proto_01 map and are intentionally heavy (scenario tier).
 import { describe, expect, it } from 'vitest';
 import { loadContent } from '../../../content/load';
+import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  clearanceAnchorCell,
+  clearanceAnchorCenter,
+  type ClearanceTier,
+} from '../../terrain/rules/index';
 import { createTerrainApi } from '../../terrain/sim/index';
 import { createPathingModule } from './index';
 import { CLS, makePathing } from './test-world';
@@ -104,4 +111,155 @@ describe('direction soundness (property)', () => {
     expect(x).toBe(2);
     expect(y).toBe(4);
   });
+
+  it('every tier=1 direction on proto_01 is a passable heavy step and reaches the goal', () => {
+    const db = loadContent();
+    const map = db.maps.byId('frontline_td:proto_01');
+    expect(map).toBeDefined();
+    if (map === undefined) {
+      return;
+    }
+    const terrain = createTerrainApi(map.grid, db.surfaces.list);
+    const { api } = createPathingModule(terrain, db.movementClasses.list.length);
+    const ground = db.movementClasses.byId('frontline_td:ground')?.index ?? 0;
+    const candidates = [
+      map.points['player_start'],
+      map.points['enemy_north'],
+      map.points['enemy_east'],
+      { x: 60, y: 47 },
+    ];
+    let testedGoals = 0;
+    for (const g of candidates) {
+      if (g === undefined || !terrain.passable(g.x, g.y, ground, CLEARANCE_HEAVY)) {
+        continue;
+      }
+      testedGoals += 1;
+      const goal = api.acquireGoal(g.x, g.y, ground, CLEARANCE_HEAVY);
+      let reachableCells = 0;
+      for (let y = 0; y < terrain.height; y++) {
+        for (let x = 0; x < terrain.width; x++) {
+          const d = api.directionAt(goal, x, y);
+          if (d === null || (d.dx === 0 && d.dy === 0)) {
+            continue;
+          }
+          reachableCells += 1;
+          const step = terrain.stepCost(x, y, x + d.dx, y + d.dy, ground, CLEARANCE_HEAVY);
+          expect(
+            step,
+            `impassable heavy direction at ${x},${y} -> ${x + d.dx},${y + d.dy}`,
+          ).toBeGreaterThanOrEqual(0);
+          let cx = x;
+          let cy = y;
+          const limit = terrain.width * terrain.height;
+          let k = 0;
+          while (k < limit) {
+            const dd = api.directionAt(goal, cx, cy);
+            expect(dd, `heavy dead end at ${cx},${cy} for goal ${g.x},${g.y}`).not.toBeNull();
+            if (dd === null || (dd.dx === 0 && dd.dy === 0)) {
+              break;
+            }
+            cx += dd.dx;
+            cy += dd.dy;
+            k++;
+          }
+          expect(
+            cx === g.x && cy === g.y,
+            `heavy field from ${x},${y} did not reach goal ${g.x},${g.y} (ended ${cx},${cy})`,
+          ).toBe(true);
+        }
+      }
+      expect(reachableCells).toBeGreaterThan(0);
+      api.releaseGoal(goal);
+    }
+    expect(testedGoals).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('continuous sub-cell integration along smoothDirectionAt converges on proto_01 for tier=0 and tier=1', () => {
+    const db = loadContent();
+    const map = db.maps.byId('frontline_td:proto_01');
+    expect(map).toBeDefined();
+    if (map === undefined) {
+      return;
+    }
+    const terrain = createTerrainApi(map.grid, db.surfaces.list);
+    const { api } = createPathingModule(terrain, db.movementClasses.list.length);
+    const ground = db.movementClasses.byId('frontline_td:ground')?.index ?? 0;
+    const goalCandidates = [map.points['player_start'], { x: 60, y: 47 }];
+    const stepSize = 0.25;
+
+    for (const tier of [
+      CLEARANCE_STANDARD,
+      CLEARANCE_HEAVY,
+    ] as const satisfies readonly ClearanceTier[]) {
+      let testedGoals = 0;
+      for (const g of goalCandidates) {
+        if (g === undefined || !terrain.passable(g.x, g.y, ground, tier)) {
+          continue;
+        }
+        testedGoals += 1;
+        const goal = api.acquireGoal(g.x, g.y, ground, tier);
+        let testedStarts = 0;
+        const maxSteps = (terrain.width + terrain.height) * 8;
+        for (let sy = 2; sy < terrain.height - 2; sy += 6) {
+          for (let sx = 2; sx < terrain.width - 2; sx += 6) {
+            if (api.directionAt(goal, sx, sy) === null) {
+              continue;
+            }
+            testedStarts += 1;
+            let px = clearanceAnchorCenter(sx, tier);
+            let py = clearanceAnchorCenter(sy, tier);
+            let prevAx = sx;
+            let prevAy = sy;
+            let sameCellSteps = 0;
+            let reached = false;
+            for (let k = 0; k < maxSteps; k++) {
+              const d = api.smoothDirectionAt(goal, px, py);
+              expect(
+                d,
+                `smoothDirectionAt returned null at (${px.toFixed(2)}, ${py.toFixed(2)}) tier=${tier}`,
+              ).not.toBeNull();
+              if (d === null) {
+                break;
+              }
+              const ax = clearanceAnchorCell(px, tier);
+              const ay = clearanceAnchorCell(py, tier);
+              if (d.dx === 0 && d.dy === 0) {
+                expect(ax).toBe(g.x);
+                expect(ay).toBe(g.y);
+                reached = true;
+                break;
+              }
+              expect(Math.sqrt(d.dx * d.dx + d.dy * d.dy)).toBeCloseTo(1, 5);
+              px += d.dx * stepSize;
+              py += d.dy * stepSize;
+              const nax = clearanceAnchorCell(px, tier);
+              const nay = clearanceAnchorCell(py, tier);
+              expect(
+                terrain.passable(nax, nay, ground, tier),
+                `stepped onto impassable anchor (${nax},${nay}) from (${px.toFixed(2)},${py.toFixed(2)}) tier=${tier}`,
+              ).toBe(true);
+              if (nax === prevAx && nay === prevAy) {
+                sameCellSteps += 1;
+                expect(
+                  sameCellSteps,
+                  `stalled inside anchor (${nax},${nay}) tier=${tier}`,
+                ).toBeLessThanOrEqual(16);
+              } else {
+                prevAx = nax;
+                prevAy = nay;
+                sameCellSteps = 0;
+              }
+            }
+            expect(
+              reached,
+              `particle from (${sx},${sy}) tier=${tier} failed to converge to (${g.x},${g.y})`,
+            ).toBe(true);
+          }
+        }
+        expect(testedStarts).toBeGreaterThan(0);
+        api.releaseGoal(goal);
+      }
+      expect(testedGoals).toBeGreaterThan(0);
+    }
+  }, 30_000);
 });

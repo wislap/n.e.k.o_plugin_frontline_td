@@ -5,7 +5,12 @@
 import { floorDiv } from '../../../core/index';
 import type { Serializable } from '../../../core/index';
 import type { ResolvedSurface } from '../../../content/load';
-import { heightStepPassable } from '../rules/index';
+import {
+  CLEARANCE_HEAVY,
+  CLEARANCE_STANDARD,
+  type ClearanceTier,
+  heightStepPassable,
+} from '../rules/index';
 import type { TerrainGrid } from '../content';
 
 export interface TerrainApi {
@@ -19,13 +24,20 @@ export interface TerrainApi {
   depositAt(x: number, y: number): number;
   // True on ramp cells (the only legal height transitions).
   isRamp(x: number, y: number): boolean;
-  passable(x: number, y: number, cls: number): boolean;
+  passable(x: number, y: number, cls: number, tier?: ClearanceTier): boolean;
   // Static passability ignoring the dynamic blocked overlay (placement
   // rules distinguish 'terrain' from 'occupied').
-  staticPassable(x: number, y: number, cls: number): boolean;
+  staticPassable(x: number, y: number, cls: number, tier?: ClearanceTier): boolean;
   // Integer step cost from (ax,ay) to (bx,by) for movement-class index cls;
   // -1 when the step is not allowed.
-  stepCost(ax: number, ay: number, bx: number, by: number, cls: number): number;
+  stepCost(
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    cls: number,
+    tier?: ClearanceTier,
+  ): number;
   speedBpAt(x: number, y: number): number;
   // Dynamic blocker overlay: blocked cells are impassable for every class.
   blocked(x: number, y: number): boolean;
@@ -77,10 +89,13 @@ function buildApi(
     return surface?.costs[cls] ?? -1;
   }
 
-  function edgePassable(ax: number, ay: number, bx: number, by: number, cls: number): boolean {
-    if (blockedAt(ax, ay) || blockedAt(bx, by)) {
-      return false;
-    }
+  function staticEdgePassable(
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    cls: number,
+  ): boolean {
     if (costAt(ax, ay, cls) < 0 || costAt(bx, by, cls) < 0) {
       return false;
     }
@@ -90,6 +105,97 @@ function buildApi(
       grid.ramps[idx(ax, ay)] ?? 0,
       grid.ramps[idx(bx, by)] ?? 0,
     );
+  }
+
+  function edgePassable(ax: number, ay: number, bx: number, by: number, cls: number): boolean {
+    if (blockedAt(ax, ay) || blockedAt(bx, by)) {
+      return false;
+    }
+    return staticEdgePassable(ax, ay, bx, by, cls);
+  }
+
+  function passableHeavy(x: number, y: number, cls: number): boolean {
+    if (!inBounds(x, y) || !inBounds(x + 1, y + 1)) {
+      return false;
+    }
+    return (
+      edgePassable(x, y, x + 1, y, cls) &&
+      edgePassable(x, y, x, y + 1, cls) &&
+      edgePassable(x + 1, y, x + 1, y + 1, cls) &&
+      edgePassable(x, y + 1, x + 1, y + 1, cls)
+    );
+  }
+
+  function staticPassableHeavy(x: number, y: number, cls: number): boolean {
+    if (!inBounds(x, y) || !inBounds(x + 1, y + 1)) {
+      return false;
+    }
+    return (
+      staticEdgePassable(x, y, x + 1, y, cls) &&
+      staticEdgePassable(x, y, x, y + 1, cls) &&
+      staticEdgePassable(x + 1, y, x + 1, y + 1, cls) &&
+      staticEdgePassable(x, y + 1, x + 1, y + 1, cls)
+    );
+  }
+
+  function stepCost0(ax: number, ay: number, bx: number, by: number, cls: number): number {
+    if (ax === bx && ay === by) {
+      return -1;
+    }
+    const dx = Math.abs(bx - ax);
+    const dy = Math.abs(by - ay);
+    if (dx > 1 || dy > 1) {
+      return -1;
+    }
+    if (!inBounds(ax, ay) || !inBounds(bx, by)) {
+      return -1;
+    }
+    if (!edgePassable(ax, ay, bx, by, cls)) {
+      return -1;
+    }
+    const cost = costAt(bx, by, cls);
+    if (dx === 1 && dy === 1) {
+      // No corner cutting: both orthogonal legs must be passable.
+      if (!edgePassable(ax, ay, bx, ay, cls) || !edgePassable(ax, ay, ax, by, cls)) {
+        return -1;
+      }
+      return floorDiv(cost * DIAGONAL_SCALE_NUM, DIAGONAL_SCALE_DEN);
+    }
+    return cost;
+  }
+
+  function stepCostHeavy(ax: number, ay: number, bx: number, by: number, cls: number): number {
+    if (ax === bx && ay === by) {
+      return -1;
+    }
+    const dx = Math.abs(bx - ax);
+    const dy = Math.abs(by - ay);
+    if (dx > 1 || dy > 1) {
+      return -1;
+    }
+    if (!passableHeavy(ax, ay, cls) || !passableHeavy(bx, by, cls)) {
+      return -1;
+    }
+    if (dx === 1 && dy === 1 && (!passableHeavy(bx, ay, cls) || !passableHeavy(ax, by, cls))) {
+      return -1;
+    }
+    const c00 = stepCost0(ax, ay, bx, by, cls);
+    if (c00 < 0) {
+      return -1;
+    }
+    const c10 = stepCost0(ax + 1, ay, bx + 1, by, cls);
+    if (c10 < 0) {
+      return -1;
+    }
+    const c01 = stepCost0(ax, ay + 1, bx, by + 1, cls);
+    if (c01 < 0) {
+      return -1;
+    }
+    const c11 = stepCost0(ax + 1, ay + 1, bx + 1, by + 1, cls);
+    if (c11 < 0) {
+      return -1;
+    }
+    return Math.max(c00, c10, c01, c11);
   }
 
   const api: TerrainApi = {
@@ -110,36 +216,23 @@ function buildApi(
     isRamp(x, y) {
       return inBounds(x, y) && (grid.ramps[idx(x, y)] ?? 0) !== 0;
     },
-    passable(x, y, cls) {
+    passable(x, y, cls, tier = CLEARANCE_STANDARD) {
+      if (tier === CLEARANCE_HEAVY) {
+        return passableHeavy(x, y, cls);
+      }
       return inBounds(x, y) && !blockedAt(x, y) && costAt(x, y, cls) >= 0;
     },
-    staticPassable(x, y, cls) {
+    staticPassable(x, y, cls, tier = CLEARANCE_STANDARD) {
+      if (tier === CLEARANCE_HEAVY) {
+        return staticPassableHeavy(x, y, cls);
+      }
       return inBounds(x, y) && costAt(x, y, cls) >= 0;
     },
-    stepCost(ax, ay, bx, by, cls) {
-      if (ax === bx && ay === by) {
-        return -1;
+    stepCost(ax, ay, bx, by, cls, tier = CLEARANCE_STANDARD) {
+      if (tier === CLEARANCE_HEAVY) {
+        return stepCostHeavy(ax, ay, bx, by, cls);
       }
-      const dx = Math.abs(bx - ax);
-      const dy = Math.abs(by - ay);
-      if (dx > 1 || dy > 1) {
-        return -1;
-      }
-      if (!inBounds(ax, ay) || !inBounds(bx, by)) {
-        return -1;
-      }
-      if (!edgePassable(ax, ay, bx, by, cls)) {
-        return -1;
-      }
-      const cost = costAt(bx, by, cls);
-      if (dx === 1 && dy === 1) {
-        // No corner cutting: both orthogonal legs must be passable.
-        if (!edgePassable(ax, ay, bx, ay, cls) || !edgePassable(ax, ay, ax, by, cls)) {
-          return -1;
-        }
-        return floorDiv(cost * DIAGONAL_SCALE_NUM, DIAGONAL_SCALE_DEN);
-      }
-      return cost;
+      return stepCost0(ax, ay, bx, by, cls);
     },
     speedBpAt(x, y) {
       const surface = surfaces[grid.surfaces[idx(x, y)] ?? 0];
