@@ -18,7 +18,7 @@
 - `content.ts`：`weaponSchema`（range 格、damage 单位、cooldown 秒、
   `cost?: {cargo, amount}`，loader 换成索引与 milli/tick）。
 - `render/`：`BeamsLayer`（弹道瞬时线，经客户端事件游标消费
-  `combat.shot`）。
+  `combat.shot`；武器射程圈由公共 `SelectionHighlightLayer` 消费快照射程绘制）。
 - 部件工厂 `unitParts`/`structureParts`/`roadSegmentParts`（Health
   满血、Targetable、Weapon）经 `app/` 注入。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
@@ -56,4 +56,6 @@
 - [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（事件
   可见性限制）。
 - [ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
-  （id 回收下的 `ctx.has` 校验）。
+  （id 回收下的 `ctx.has` 校验）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
+  （强类型 `CombatInspection` 检查器契约）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （`SelectionHighlightLayer` 武器射程圈反馈与 GPU 资源清理）。

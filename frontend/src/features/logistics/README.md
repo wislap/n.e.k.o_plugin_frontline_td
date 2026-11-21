@@ -18,9 +18,11 @@
 - `content.ts`：货物、store、node 与全局物流配置的内容 schema
   （含 `roadLevels`、`segmentCells`、`corridorWidth`）、
   `lowestBuildableRoadLevel`（客户端预览与下单共用）。
-- `render/`：`LogisticsOverlay`/`RoadLayer`/`RoadToolLayer`；
-  `ui/`：`StockPanel`/`RoadPanel` 与 `extendRoadSelection`/
-  `nearestLink`/`linkKey`/`sameKey`；检查器（节点/链路/存储）。
+- `render/`：`LogisticsOverlay`（以单张全图 `DataTexture` 渲染服务覆盖层并配合
+  `.dispose()` 生命周期释放，消除格数上限）/`RoadLayer`/`RoadToolLayer`；
+  `ui/`：`StockPanel`（集成 `stock-rate.ts` 展示 `/s` 净收支速率与缺货建议）/
+  `RoadPanel` 与 `extendRoadSelection`/`nearestLink`/`linkKey`/`sameKey`；
+  检查器（节点/链路/存储）。
   导出全表见 [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -75,4 +77,8 @@
   （modifiers）。
 - [ADR 0013](../../../../docs/adr/0013-modifier-pipeline.md)（修正
   值）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
-  （工地槽结算归物流）。
+  （工地槽结算归物流）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
+  （`F3` 物流模式、`R` 道路工具与强类型 `LogisticsInspection`）、
+  [ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
+  （`StockPanel` 净收支速率与 HUD 槽位布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （`LogisticsOverlay` `DataTexture` 服务覆盖层与 `.dispose()` GPU 治理）。

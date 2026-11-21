@@ -17,7 +17,8 @@
   （"结构下缘中心"是 production 侧计算的出口位置，不是本模块内建
   逻辑），运行时找不到可通行空格则静默跳过该次产出，`onStart`
   期放不下全部请求数量视为配置错误直接抛错。
-- `render/`：`UnitsLayer`（按 shape 的实例网格）、`factionColorHex`。
+- `render/`：`UnitsLayer`（按 shape 的实例网格；支持 `lowThresholdBp` 低电/空电
+  视觉指示 pip 与底盘变暗/着色，及卸载 `.dispose()`）、`factionColorHex`。
   导出全表见 [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -38,4 +39,5 @@
 - [ADR 0022](../../../../docs/adr/0022-match-setup-content-ids-packs.md)
   （内容 ID）、[ADR 0028](../../../../docs/adr/0028-rendering-camera-picking.md)
   （渲染实例）、[ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)
-  （通道过滤）。
+  （通道过滤）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （低/空电量视觉指示标牌、底盘暗化与 GPU 资源生命周期）。

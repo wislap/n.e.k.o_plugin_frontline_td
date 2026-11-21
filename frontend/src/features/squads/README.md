@@ -11,8 +11,9 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   `SquadsLaunched`，以及快照通道 `SquadsChannel`（己方全量，
   敌方公开视图：集结点、launchTick、目标与存储路径）。
 - `sim/index.ts`：`createSquadsModule(deps)`。
-- `render/`：`ThreatsLayer`/`bannerThreat`（敌方小队预警横幅）；
-  `ui/`：`SquadPanel`。导出全表见
+- `render/`：`ThreatsLayer`/`bannerThreat`（敌方小队预警横幅；卸载时 `.dispose()`
+  释放标签纹理、材质与航线几何）；`ui/`：`SquadPanel`（仅在 `F1` 指挥模式渲染）。
+  导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -60,6 +61,9 @@ Move/StopIntent 驱动成员，从不直写 `MoveTarget`。
   [ADR 0034](../../../../docs/adr/0034-squads.md)（移动意图驱动）、
   [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（敌方
   视图过滤）、[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
-  （句柄校验）。
+  （句柄校验）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
+  （`F1` 指挥模式限定与小队快捷键分层）、[ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
+  （`SquadPanel` HUD 槽位布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （`ThreatsLayer` `.dispose()` GPU 资源清理）。
 - [game_design.md §4.7](../../../../docs/design/game_design.md)
   （小队玩法）。

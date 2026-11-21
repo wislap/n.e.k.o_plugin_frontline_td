@@ -18,8 +18,9 @@
   `MovementClassContent`。
 - `rules/index.ts`: `heightStepPassable`、`spiralOffsets`（纯规则，
   客户端共享）。
-- `render/`：`TerrainMesh`/`buildTerrainGeometry`（贴合高度的地形
-  网格，vision 的 `FogLayer` 复用同一几何）。导出全表见
+- `render/`：`TerrainMesh`/`buildTerrainGeometry`（含基于 `fwidth` 的自适应
+  地形网格着色器及高程/悬崖/坡道明暗对比；vision 的 `FogLayer` 复用同一几何，
+  并在卸载时 `.dispose()`）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -46,4 +47,5 @@
 - [ADR 0010](../../../../docs/adr/0010-terrain-model-sector-flowfields.md)
   （模型）、[ADR 0027](../../../../docs/adr/0027-map-terrain-flowfield-movement.md)
   （地图/移动约定）、[ADR 0028](../../../../docs/adr/0028-rendering-camera-picking.md)
-  （地形渲染）。
+  （地形渲染）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （自适应 `fwidth` 网格着色器、高程/悬崖/坡道对比与资源释放）。

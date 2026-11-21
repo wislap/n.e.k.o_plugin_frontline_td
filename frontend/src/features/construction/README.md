@@ -23,8 +23,13 @@
   放置/等待原因码在这里定义。
 - `content.ts`：`structureBaseFields`、`BUILD_CATEGORIES` 与
   `BuildCategory`（`logistics` / `production` / `military`，`build.category`
-  省略时由内容加载器回退为 `production`）。
-- `render/`/`ui/`/`inspector`：建造幽灵与废墟覆盖、`BuildMenu`、
+  省略时由内容加载器回退为 `production`）、`STRUCTURE_SILHOUETTES` /
+  `StructureSilhouette` 与 `STRUCTURE_GLYPHS` / `StructureGlyph`
+  （通过 `visual.silhouette` 与 `visual.glyph` 声明程序化轮廓与屋顶图标）。
+- `render/`/`ui/`/`inspector`：`StructuresLayer`（分离 `STATE_BLUEPRINT`
+  稳定半透明与 `STATE_WAITING` 预警脉冲，绘制程序化轮廓与 `CanvasTexture`
+  屋顶徽章）、`GhostPreview`（使用目标建筑轮廓并同时绘制物流连接/服务双圈、
+  预测连线与武器射程圈）、`ExclusionLayer`、`RoadWorksLayer`、`BuildMenu`、
   工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
@@ -84,5 +89,8 @@
 - [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（通道
   可见性）、[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
   （句柄校验）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
-  （注入部件工厂）、[ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
-  （建造分类与 HUD 布局）。
+  （注入部件工厂）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
+  （建造模式、`C`/`Delete` 双形态拆除与强类型 `ConstructionInspection`）、
+  [ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
+  （建造分类与 HUD 布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
+  （程序化轮廓/屋顶图标、`STATE_BLUEPRINT`/`STATE_WAITING` 分离、幽灵双圈与 GPU 资源释放）。

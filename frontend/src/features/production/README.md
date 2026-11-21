@@ -43,6 +43,7 @@
 - [ADR 0025](../../../../docs/adr/0025-logistics-model.md)（物流
   模型）、[ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)
   （实现约定）、[ADR 0035](../../../../docs/adr/0035-assault-mode-director-victory.md)
-  （胜负判定的生产链路）。
+  （胜负判定的生产链路）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
+  （强类型 `ProductionInspection` 检查器契约）。
 - [game_design.md §4.6](../../../../docs/design/game_design.md)
   （生产与补给节奏）。

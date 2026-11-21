@@ -41,12 +41,12 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 ### 1.4 下一步候选
 没有固定顺序，由负责人排优先级。开工前先确认，不要自行挑一项开始做。
 
-- **人工验证**：在预览里确认"再来一局"能完整重置（结算画面消失、新局正常）和迷雾显示；e2e 都覆盖不到。
+- **人工验证**：在预览里确认"再来一局"能完整重置（结算画面消失、新局正常）、迷雾视觉观感与多局重开 WebGL 显存；Playwright `e2e/` 现已覆盖冒烟及 HUD/模式/小地图/多分辨率防重叠交互，仍覆盖不到上述视觉与内存项。
 - **试玩验证核心循环**（§1.3 第 4 条），据此决定 Rogue 奖励（`game_design.md` 中为【建议｜未实现】）与局外成长。
 - **玩法设计讨论**：怪物生态（`game_design.md` §8、§9.1）；`game_design.md` 中负责人不认可的【已定】条目待重新梳理；`game_design.md` §8 第 10–15 条待负责人决定。
 - **内容扩充**：更多据点类型（目标一局 6–10 次攻占）、更多防御建筑与兵种、中立据点、对拍机器人学会占点（见 §13）。
 - **ADR 缺口**：[ADR 索引](../generated/adr-index.md)「实现」列中标为"部分"或"未实现"的条目。
-- **前端正式化重构（F1–F5）**：[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 起分五批将灰盒前端升级为与模拟层同级工程规范的客户端（交互模式状态机、Hover/Pin 检视与强类型契约、九宫格战术 HUD、战略小地图、电子沙盘渲染与 GPU 治理）。
+- **前端正式化重构（F1–F5，已完成落地）**：[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md) 已完成交互模式状态机、Hover/Pin 检视与强类型契约、九宫格战术 HUD、战略小地图、电子沙盘程序化渲染与 GPU 生命周期治理及 E2E 验证；后续可选扩充（如 `F2` 建造模式下 `1–9` 建造分类快捷抽屉绑定）留待后续需求定夺。
 - **低优先级工程项**：命令日志随对局只增不减且参与存档与哈希；性能评估缺"大量建造与阻挡变化"场景，其他性能推断等有数据再决定；铺满全图的图层是否关闭视锥裁剪；NEKO 宿主隐藏面板时是否触发 `visibilitychange`（§3.1）。
 
 ---
@@ -200,9 +200,9 @@ frontend/src/
 ├── content/     内容数据（建筑、怪物、地图）+ 拼装 schema + 校验
 ├── protocol/    拼装各功能通道 + 编解码
 ├── runtime/     Worker 入口、时钟与变速、快照缓冲
-├── client/      快照读取与插值、zustand store、选中状态
-├── render/      渲染公共设施：画布、镜头、实例化图层、地面信息层
-├── ui/          UI 外壳与组件库
+├── client/      快照读取与插值、共享节流时钟、三态分离 store（interaction / selection / inspector）、视角与小队/小地图模型、集中会话重置
+├── render/      渲染公共设施：画布、镜头、高亮圈层（SelectionHighlightLayer）、线缓冲、单位插值与输入分发
+├── ui/          九宫格战术 HUD 外壳（HudShell）、快捷键引导栏、战略小地图、战情检视器与离线原语组件库（kit/styles）
 ├── input/       键鼠 → 意图 → 命令
 ├── i18n/        zh-CN / en 文案与类型化取词
 ├── host/        NEKO 桥接（显示模式；以后接解说）
@@ -276,12 +276,13 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 - 局内解锁状态（"本局可用内容"）由占领模块写入，建造、小队模块读取。（存档当前保存 u16 内容索引，与内容版本绑定；包补丁、别名与局内解锁尚未实现，ADR 0014、0022 实现：部分）
 
 ### 6.13 客户端
-- 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。
-- zustand 只存 UI 状态（选中、建造模式、面板）、设置、低频游戏摘要（节流）。逐 tick 实体状态不进 zustand。
-- 输入分三段：按键 / 鼠标 → 意图 → 命令。组件中不直接监听具体按键。
-- 建造预览由客户端依据快照网格层与 `rules/` 先行判断，最终由模拟层裁决；不合法时模拟层发出拒绝事件。
-- 镜头：M2 起就是同一个摄像机在 3D 观战与正交指挥之间切换（设计清单 A6 ⑤，ADR 0033），场景从一开始按 3D 构建。切换的具体方式（缩放过渡、快捷键、暂停时自动切换）见 [ADR 0028](../adr/0028-rendering-camera-picking.md)。
-- 信息层（补给状态、阵营）同时用颜色与形状 / 图案区分，照顾色盲。
+- 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh 与缓冲区，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。`render/` 与 `features/*/render/` 的命令式 Three.js 资源（`BufferGeometry`、`Material`、`CanvasTexture`、`DataTexture`、`LineBuffer`）遵守统一的 `.dispose()` 生命周期，在卸载或容量重建前显式释放（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）。
+- 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：`useInteractionStore` 管理平级一级模式（`F1 command` / `F2 build` / `F3 logistics`）与互斥二级工具（`place` / `demolish` / `road`）；`useSelectionStore` 仅持己方可控实体句柄；`useInspectorStore` 持有 `hovered` 与 `pinned`（地形格仅可悬停不可固定，严守迷雾零泄密），并以 `client/inspect-subject.ts` 提供 0ms 观察者快照即时解析与 80ms 防抖强类型 `*Inspection` 深度查询。所有 UI 面板通过共享 `subscribeSnapshotClock` / `useSnapshotValue` 节流订阅快照（禁止自建 `setInterval`），跨局重置收口于 `client/session.ts`。
+- 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)）：`HudShell` 采用九宫格流式槽位（无 `position: fixed` 硬编码互盖），集成左上时间/视角/全屏与 `ToastStack`、左中可折叠 `KeyGuideRail`（`K`/`?` 开关、`Esc` 不关闭）、左下模式栏与战略小地图 `Minimap`、底中小队/建造/道路工作台、右上 `StockPanel`（含净速率 `/s`）与默认收起的调试面板（`` ` ``），以及右下 `InspectorPanel`。全部 UI 原语与模式联动主题色收口于 `src/ui/kit/` 与 `src/ui/styles/`，100% 离线零外部字体/图标依赖。
+- 输入分三段：按键 / 鼠标 → 意图 → 命令，由数据驱动的 `input/keymap.ts` 按通用层与当前模式分层解析，组件中不直接监听具体按键。
+- 建造预览（`GhostPreview`）由客户端依据快照网格层与 `rules/` 先行判断，显示程序化建筑轮廓、连接与服务双圈、武器射程圈及阻塞原因，最终由模拟层裁决；不合法时模拟层发出 `COMMAND_REJECTED` 并由 `ToastStack` 提示。
+- 镜头：M2 起就是同一个摄像机在 3D 观战与 2D 正交战术视角之间切换（设计清单 A6 ⑤，[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0033](../adr/0033-design-checklist-referenced-items.md)），场景从一开始按 3D 构建；F1 阶段按 [ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 改为 `Tab` 键手动切换、取消暂停自动切视角，并在未开启「视角锁定」时于进入 `F2` / `F3` 自动切 2D、返回 `F1` 自动恢复 3D。
+- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）：建筑采用程序化多部件轮廓（`visual.silhouette`）与离线 `CanvasTexture` 屋顶战术图标（`visual.glyph`），蓝图（`STATE_BLUEPRINT`）与等待阻塞（`STATE_WAITING`）视觉分离；`UnitsLayer` 显示低电/断电标牌；`SelectionHighlightLayer` 绘制地面四角框、武器射程圈与物流连接/服务双圈；`TerrainMesh` 使用基于 `fwidth` 的自适应网格着色器强化高程、悬崖与坡道对比；`LogisticsOverlay` 服务覆盖层以单张 `DataTexture` 绘制；所有信息层同时以颜色与形状/图案区分，照顾色盲。
 
 ### 6.14 Python 薄壳
 只声明 static 面板与插件元数据（含 i18n）。将来如接入 NEKO 解说 / 语音，参照 `neko_survivors` 的 `game_event → /chat → speak` 模式，经事件流驱动。
@@ -382,7 +383,7 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 - **代码测试只管正确性**：确定性与状态哈希、场景行为、内容 schema 与引用完整性、运行时不变量（无 NaN、无悬空句柄）、阵营对称性。性能与平衡不写成代码测试，由评估框架负责（ADR 0024）。
 - **无头运行器** `runScenario(地图, 种子, 命令序列, tick 数, 探针) → 统计` 由测试与评估框架共用，不为评估另写模拟逻辑。
 - 测试直接调用 sim，不经 Worker。
-- 浏览器冒烟由 Playwright 覆盖（ADR 0041）；以后再加：视觉回归。
+- 浏览器端到端检查由 Playwright 覆盖（[ADR 0041](../adr/0041-governance-and-indexes-v2.md)），包含基础冒烟与 HUD/交互模式/小地图/多分辨率防重叠检查（`e2e/`）；视觉回归（像素/美感）与多局重开显存仍留待以后或人工验证。
 
 ---
 
@@ -392,7 +393,7 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟，仅 Chromium）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
 
 ### 11.2 CI
-`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器冒烟（`npm run e2e`，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估运行器（`eval:perf`/`eval:balance`）不进 CI 门槛；`eval/` 下的 `*.scenario.test.ts` 是普通测试，随 `npm run test` 进 CI。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
+`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器端到端检查（`npm run e2e`，含冒烟与 HUD/模式/小地图/防重叠测试，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估运行器（`eval:perf`/`eval:balance`）不进 CI 门槛；`eval/` 下的 `*.scenario.test.ts` 是普通测试，随 `npm run test` 进 CI。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
 
 ### 11.3 防腐化机制
 腐化的根源是 AI 追求完成眼前任务，单次合理的改动不断累积。防线设在"累积"这一层：
@@ -435,7 +436,7 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 | 关闭 / 切换面板时 iframe 是否销毁 | 原型不处理；以后做存档时一并解决 |
 | 具体规模数值（地图格数、预期单位数） | 随地图设计确定；全局单位按千级以上考虑（设计清单 D16，见 [ADR 0033](../adr/0033-design-checklist-referenced-items.md)），不设上限 |
 | 重复代码检测（jscpd）、许可证白名单检查、CODEOWNERS | 出现实际需要时引入 |
-| React 组件测试 | 未覆盖；目前只有无头 sim / 纯函数测试与 Playwright 浏览器冒烟（ADR 0041） |
+| React 组件测试 | 未单设组件级 DOM 单测；目前由无头 sim / 纯函数测试与覆盖冒烟及 HUD/模式/小地图/防重叠的 Playwright E2E 共同保障（ADR 0041） |
 | 平衡调试工具 | `eval:perf` / `eval:balance` 运行器与 `runScenario` 已就位；交互式调试工具未做 |
 | 物流后续：铁路（第二档道路）、线路剪枝与手动关闭、手动指派车辆、突袭怪破坏道路或车辆、多仓库与产地直供、道路同时加速单位移动 | 以后 |
 | 物流拓扑的节点集合增量重建：阻挡变化已按敏感集跳过（ADR 0030），节点增减仍整阵营重建 | 以后 |
@@ -446,7 +447,7 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 | 事件可见性不过滤 | 已知限制（[ADR 0039](../adr/0039-vision-fog-of-war.md)）：事件以 `all` 下发，客户端表现层隐藏；如需按观察者过滤事件再定 |
 | 视野重算成本 | 以后；proto_01 实测约占系统时间 9.8%（ADR 0039），更大规模需重测 |
 | Rogue 奖励改变规则而不只是数值（奖励 = 给实体加组件或具名行为） | M4 未涉及，顺延；定时需与 ADR 0014 对齐 |
-| 通知与事件聚合：事件 → 聚合 → 通知，NEKO 解说读同一份 | 暂缓：M4 只有集结警告横幅与结束画面两处消费者，尚无聚合需求；出现第二个事件源时定 |
+| 通知与事件聚合：事件 → 聚合 → 通知，NEKO 解说读同一份 | 暂缓：当前 `Hud.tsx` 的 `ToastStack` 已承接命令拒绝（`COMMAND_REJECTED`）与 Worker 致命报错展示，另有集结警告横幅与结束画面，尚无跨源聚合管线需求；引入 NEKO 解说等新消费者时再定 |
 | 剧本、教程、地图触发事件：具名代码行为还是受限触发器数据 | 做教程或剧本时定，需与 ADR 0014 对齐 |
 | 复现包：构建 ID + 对局启动参数 + 命令日志 + 周期性状态哈希，Worker 崩溃时自动导出；与 PVP 不同步检测共用 | 以后 |
 | 热循环禁止分配对象（约定或 lint） | 依据评估框架的性能数据决定 |

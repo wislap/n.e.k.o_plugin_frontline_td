@@ -22,7 +22,7 @@
 - 只做任务要求的改动，顺手发现的问题列出来汇报，不顺手改。新增模块、改模块边界或公共接口前，先简述方案。
 - 每个里程碑做完停下评审，通过后再开始下一个。下一步候选见 [architecture.md §1.4](docs/design/architecture.md#14-下一步候选)，开工前确认优先级。
 - 处理外部评审：先确认它基于哪个提交；逐条在当前代码里核实，分成"已修 / 属实 / 不实 / 需负责人定"；属实的每条配回归测试；黄金哈希变化逐条说明原因；结论沉淀为 ADR（如 0043、0045）。
-- 交付时如实报告跑了哪些检查、结果如何。e2e 覆盖不到的路径（如"再来一局"、迷雾观感）列为人工验证项请负责人确认，不写成"已验证"。交付前通读一遍自己的 diff。
+- 交付时如实报告跑了哪些检查、结果如何。Playwright `e2e/` 覆盖冒烟与 HUD/模式/小地图/防重叠交互；迷雾视觉观感、"再来一局"、多局重开 WebGL 显存等仍列为人工验证项（Human Gate），不写成"已验证"。交付前通读一遍自己的 diff。
 
 ## 分层与依赖（工具强制，见 ADR 0007）
 - 模拟层（`core/`、`kernel/`、`features/*/sim/`、`features/*/rules/`）是无头游戏核心，只通过命令、快照、事件与外界交互（ADR 0004）。
@@ -58,6 +58,9 @@
 
 ## 客户端规则
 - 逐 tick 的实体状态不进 React state，也不进 zustand。渲染在 `useFrame` 里直接读快照缓冲。
+- 三态分离：`interactionStore`（一级模式 + 互斥二级工具）、`selectionStore`（仅己方可控句柄）、`inspectorStore`（`hovered`/`pinned`，地形格不可 Pin），跨局重置集中于 `client/session.ts`（[ADR 0048](docs/adr/0048-interaction-modes-and-inspector-contract.md)）。
+- UI 快照订阅走共享 `subscribeSnapshotClock` / `useSnapshotValue`（selector 返回引用稳定切片，禁止面板自建 `setInterval`）；检查器读强类型 `*Inspection` 契约。
+- UI 原语与离线 Token 统一收口在 `src/ui/kit/` 与 `src/ui/styles/`（[ADR 0049](docs/adr/0049-hud-design-system-and-layout.md)）；`render/` 与 `features/*/render/` 的命令式 Three.js 资源必须在卸载或替换时 `.dispose()`（[ADR 0050](docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）。
 - 用户可见文本一律通过 i18next 的键获取，禁止写字面量。新增键时同时更新 `zh-CN` 和 `en`。
 - 输入的流程是"按键或鼠标 → 意图 → 命令"，不要在组件里直接监听某个具体按键。
 - 事件用各自的游标从 `sim-client` 的事件日志读取（`eventsSince`）；一份快照可能带多个 tick 的事件（ADR 0045）。
@@ -88,7 +91,7 @@
 ```bash
 npm ci
 npm run verify   # = verify:static && test && verify:build（提交前跑全量）
-npm run e2e      # 浏览器冒烟（首次需 npx playwright install chromium）；不进 verify
+npm run e2e      # 浏览器端到端（冒烟 + HUD/模式/小地图/防重叠，首次需 npx playwright install chromium）；不进 verify
 ```
 - 日常迭代用分段命令：`npm run verify:static`、`npm run test:unit`、`npx vitest --changed`。
 - 测试分两层：全对局/耗时 >~3 s 的测试命名 `*.scenario.test.ts`（`npm run test:scenario`），其余为 unit。
