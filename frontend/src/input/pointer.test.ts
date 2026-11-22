@@ -246,3 +246,74 @@ describe('pointer drag cancellation', () => {
     expect(h.boxes.at(-1)).toBeNull();
   });
 });
+
+describe('camera orbit and grab-pan gestures', () => {
+  it('middle drag and Alt+left drag emit camera.orbit_px without triggering clicks or boxes', () => {
+    const { target, intents, boxes } = makePointer(() => ({ mode: 'build', tool: 'place' }));
+
+    target.fire('pointerdown', {
+      button: 1,
+      clientX: 100,
+      clientY: 100,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointermove', { clientX: 120, clientY: 90, shiftKey: false });
+    target.fire('pointerup', { button: 1, clientX: 120, clientY: 90, shiftKey: false });
+
+    target.fire('pointerdown', {
+      button: 0,
+      clientX: 50,
+      clientY: 50,
+      shiftKey: false,
+      altKey: true,
+      preventDefault() {},
+    });
+    target.fire('pointermove', { clientX: 62, clientY: 58, shiftKey: false, altKey: true });
+    target.fire('pointerup', {
+      button: 0,
+      clientX: 62,
+      clientY: 58,
+      shiftKey: false,
+      altKey: true,
+    });
+
+    expect(intents).toEqual([
+      { kind: 'camera.orbit_px', dx: 20, dy: -10 },
+      { kind: 'camera.orbit_px', dx: 12, dy: 8 },
+    ]);
+    expect(boxes.filter((b) => b !== null)).toHaveLength(0);
+  });
+
+  it('Shift+middle drag and Shift+Alt+left drag emit camera.pan_start and camera.pan_px', () => {
+    const { target, intents } = makePointer(() => ({ mode: 'command', tool: 'none' }));
+
+    target.fire('pointerdown', {
+      button: 1,
+      clientX: 200,
+      clientY: 150,
+      shiftKey: true,
+      preventDefault() {},
+    });
+    target.fire('pointermove', { clientX: 215, clientY: 165, shiftKey: true });
+    target.fire('pointerup', { button: 1, clientX: 215, clientY: 165, shiftKey: true });
+
+    target.fire('pointerdown', {
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      shiftKey: true,
+      altKey: true,
+      preventDefault() {},
+    });
+    target.fire('pointermove', { clientX: 18, clientY: 25, shiftKey: true, altKey: true });
+    target.fire('pointerup', { button: 0, clientX: 18, clientY: 25, shiftKey: true, altKey: true });
+
+    expect(intents).toEqual([
+      { kind: 'camera.pan_start', x: 200, y: 150 },
+      { kind: 'camera.pan_px', prevX: 200, prevY: 150, x: 215, y: 165 },
+      { kind: 'camera.pan_start', x: 10, y: 20 },
+      { kind: 'camera.pan_px', prevX: 10, prevY: 20, x: 18, y: 25 },
+    ]);
+  });
+});

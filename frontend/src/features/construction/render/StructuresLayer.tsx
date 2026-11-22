@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { effectiveSpectatePitchDeg } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
@@ -134,8 +135,10 @@ function bindGpuToMeshes(
 function updateGlyphOpacity(
   glyphs: Record<ActiveGlyph, GlyphMaterialEntry>,
   mode: 'spectate' | 'tactical',
+  pitchDeg: number,
 ): void {
-  const opacity = mode === 'tactical' ? 0.94 : 0.68;
+  const t = Math.max(0, Math.min(1, (pitchDeg - 26) / (70 - 26)));
+  const opacity = mode === 'tactical' ? 0.94 : 0.45 + t * (0.72 - 0.45);
   for (const g of ACTIVE_STRUCTURE_GLYPHS) {
     glyphs[g].material.opacity = opacity;
   }
@@ -221,7 +224,7 @@ export function StructuresLayer({
     };
   }, []);
 
-  useFrame(() => {
+  useFrame(({ camera }) => {
     const bpMesh = blueprintRef.current;
     const waitMesh = waitingRef.current;
     const crates = crateRef.current;
@@ -262,7 +265,13 @@ export function StructuresLayer({
     let bpCount = 0;
     let waitCount = 0;
 
-    updateGlyphOpacity(gpu.glyphs, useCameraStore.getState().mode);
+    const cam = useCameraStore.getState();
+    const glyphYawRot = camera.rotation.y;
+    updateGlyphOpacity(
+      gpu.glyphs,
+      cam.mode,
+      effectiveSpectatePitchDeg(cam.zoom, cam.pitchOffsetDeg),
+    );
 
     if (channel !== undefined) {
       for (let i = 0; i < channel.handles.length; i++) {
@@ -283,6 +292,7 @@ export function StructuresLayer({
 
         if (state === STATE_BLUEPRINT) {
           dummy.position.set(cx, groundY + (full * 0.5) / 2, cy);
+          dummy.rotation.set(0, 0, 0);
           dummy.scale.set(w * 0.9, full * 0.5, h * 0.9);
           dummy.updateMatrix();
           bpMesh.setMatrixAt(bpCount, dummy.matrix);
@@ -294,6 +304,7 @@ export function StructuresLayer({
 
         if (state === STATE_WAITING) {
           dummy.position.set(cx, groundY + (full * 0.5) / 2, cy);
+          dummy.rotation.set(0, 0, 0);
           dummy.scale.set(w * 0.9, full * 0.5, h * 0.9);
           dummy.updateMatrix();
           waitMesh.setMatrixAt(waitCount, dummy.matrix);
@@ -316,6 +327,7 @@ export function StructuresLayer({
         if (silMesh !== undefined && silMesh !== null) {
           const slot = silCounts[silhouette];
           dummy.position.set(cx, groundY, cy);
+          dummy.rotation.set(0, 0, 0);
           dummy.scale.set(w * 0.92, full * heightScale, h * 0.92);
           dummy.updateMatrix();
           silMesh.setMatrixAt(slot, dummy.matrix);
@@ -343,6 +355,7 @@ export function StructuresLayer({
             const gSlot = glyphCounts[glyph];
             const badgeSize = Math.max(0.7, Math.min(w, h) * 0.66);
             dummy.position.set(cx, groundY + full + 0.06, cy);
+            dummy.rotation.set(0, glyphYawRot, 0);
             dummy.scale.set(badgeSize, 1, badgeSize);
             dummy.updateMatrix();
             gMesh.setMatrixAt(gSlot, dummy.matrix);
@@ -378,6 +391,7 @@ export function StructuresLayer({
         const y = salvage.y[i] ?? 0;
         const groundY = terrainY(heights, mapWidth, mapHeight, x, y);
         dummy.position.set(x, groundY + SALVAGE_SIZE / 2, y);
+        dummy.rotation.set(0, 0, 0);
         dummy.scale.set(SALVAGE_SIZE, SALVAGE_SIZE, SALVAGE_SIZE);
         dummy.updateMatrix();
         crates.setMatrixAt(i, dummy.matrix);

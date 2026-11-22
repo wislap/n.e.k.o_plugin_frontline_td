@@ -3,12 +3,18 @@
 // into hover subjects, selections, pinned inspection targets, build/demolish/road
 // tool clicks, and move orders.
 import * as THREE from 'three';
-import { visibleGroundHeight } from '../client/camera-math';
+import {
+  clampCenter,
+  intersectHorizontalPlane,
+  rotatePanVector,
+  visibleGroundHeight,
+} from '../client/camera-math';
 import { useCameraStore } from '../client/camera-store';
 import { cursorState } from '../client/cursor';
 import { useInspectorStore, type PinnableSubject } from '../client/inspector-store';
 import { useInteractionStore } from '../client/interaction-store';
-import { pickDemolishableAt, pickSubjectAt, structuresChannel } from '../client/pick';
+import { structuresChannel } from '../client/pick';
+import { pickDemolishableByRay, pickSubjectByRay } from '../client/pick-ray';
 import { submitRoadOrder } from '../client/road-order';
 import { useSelectionStore } from '../client/selection-store';
 import type { SimClient } from '../client/sim-client';
@@ -27,7 +33,7 @@ import { extendRoadSelection, linkKey, nearestLink, sameKey } from '../features/
 import type { Intent } from '../input/intents';
 import { pickGround, type Ray } from './picking';
 import { interpolatedUnits } from './unit-pos';
-import { terrainY } from './world';
+import { HEIGHT_STEP, terrainY } from './world';
 
 const CLICK_RADIUS_CELLS = 0.6;
 
@@ -75,6 +81,7 @@ function ownSubjectForHandle(
 export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
   const { client, db, mapWidth, mapHeight, heights } = env;
   const raycaster = new THREE.Raycaster();
+  let panPlaneY = 0;
 
   const roadNetwork = (): LogisticsNetwork | null => {
     const latest = client.snapshots().latest;
@@ -85,14 +92,14 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
     return roadNetwork()?.links ?? { a: [], pathOffsets: [], pathCells: [] };
   };
 
-  const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
+  const rayAt = (sx: number, sy: number): Ray => {
     const rect = env.rect();
     const ndc = new THREE.Vector2(
-      ((sx - rect.left) / rect.width) * 2 - 1,
-      -((sy - rect.top) / rect.height) * 2 + 1,
+      rect.width > 0 ? ((sx - rect.left) / rect.width) * 2 - 1 : 0,
+      rect.height > 0 ? -((sy - rect.top) / rect.height) * 2 + 1 : 0,
     );
     raycaster.setFromCamera(ndc, env.camera);
-    const ray: Ray = {
+    return {
       origin: {
         x: raycaster.ray.origin.x,
         y: raycaster.ray.origin.y,
@@ -104,17 +111,25 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         z: raycaster.ray.direction.z,
       },
     };
-    return pickGround(ray, heights, mapWidth, mapHeight);
   };
 
-  // Screen-pixel projection of a world point (box selection).
-  const project = (x: number, y: number): { x: number; y: number } => {
+  const groundAt = (sx: number, sy: number): { x: number; y: number } | null => {
+    return pickGround(rayAt(sx, sy), heights, mapWidth, mapHeight);
+  };
+
+  // Screen-pixel projection of a world point (box selection), checking frustum Z depth.
+  const project = (
+    x: number,
+    y: number,
+    elevOffset = 0,
+  ): { x: number; y: number; inFront: boolean } => {
     const rect = env.rect();
-    const v = new THREE.Vector3(x, terrainY(heights, mapWidth, mapHeight, x, y), y);
+    const v = new THREE.Vector3(x, terrainY(heights, mapWidth, mapHeight, x, y) + elevOffset, y);
     v.project(env.camera);
     return {
       x: ((v.x + 1) / 2) * rect.width + rect.left,
       y: ((1 - v.y) / 2) * rect.height + rect.top,
+      inFront: v.z >= -1 && v.z <= 1,
     };
   };
 
@@ -122,35 +137,86 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
     const now = performance.now();
     switch (intent.kind) {
       case 'camera.zoom': {
-        useCameraStore.getState().zoomToward(intent.delta, groundAt(intent.x, intent.y));
+        const cam = useCameraStore.getState();
+        const ground = groundAt(intent.x, intent.y);
+        const rect = env.rect();
+        const ndcX = rect.width > 0 ? ((intent.x - rect.left) / rect.width) * 2 - 1 : 0;
+        const ndcY = rect.height > 0 ? -((intent.y - rect.top) / rect.height) * 2 + 1 : 0;
+        const aspect = rect.height > 0 && rect.width > 0 ? rect.width / rect.height : 16 / 9;
+        const centerY = terrainY(heights, mapWidth, mapHeight, cam.center.x, cam.center.y);
+        const planeY =
+          ground !== null ? terrainY(heights, mapWidth, mapHeight, ground.x, ground.y) : centerY;
+        cam.zoomToward(intent.delta, ground, {
+          ndcX,
+          ndcY,
+          aspect,
+          centerY,
+          planeY,
+        });
+        const next = useCameraStore.getState();
+        next.setCenter(clampCenter(next.center, mapWidth, mapHeight));
+        return;
+      }
+      case 'camera.pan_start': {
+        const g = groundAt(intent.x, intent.y);
+        const cam = useCameraStore.getState();
+        panPlaneY =
+          g !== null
+            ? terrainY(heights, mapWidth, mapHeight, g.x, g.y)
+            : terrainY(heights, mapWidth, mapHeight, cam.center.x, cam.center.y);
         return;
       }
       case 'camera.pan_px': {
         const cam = useCameraStore.getState();
-        const cpp = visibleGroundHeight(cam.mode, cam.zoom) / env.size.height;
-        cam.panBy(intent.dx * cpp, intent.dy * cpp);
+        const hit0 = intersectHorizontalPlane(rayAt(intent.prevX, intent.prevY), panPlaneY);
+        const hit1 = intersectHorizontalPlane(rayAt(intent.x, intent.y), panPlaneY);
+        const extent = visibleGroundHeight(cam.mode, cam.zoom, cam.pitchOffsetDeg);
+        let dx: number;
+        let dy: number;
+        if (hit0 !== null && hit1 !== null) {
+          dx = hit0.x - hit1.x;
+          dy = hit0.y - hit1.y;
+          const step = Math.hypot(dx, dy);
+          const maxStep = Math.max(4, extent * 0.75);
+          if (step > maxStep) {
+            const s = maxStep / step;
+            dx *= s;
+            dy *= s;
+          }
+        } else {
+          const cpp = extent / Math.max(1, env.size.height);
+          const fallback = rotatePanVector(
+            { x: (intent.prevX - intent.x) * cpp, y: (intent.prevY - intent.y) * cpp },
+            cam.yaw,
+          );
+          dx = fallback.x;
+          dy = fallback.y;
+        }
+        cam.setCenter(
+          clampCenter({ x: cam.center.x + dx, y: cam.center.y + dy }, mapWidth, mapHeight),
+        );
         return;
       }
       case 'cursor.move': {
         cursorState.setScreen(intent.x, intent.y);
-        const ground = groundAt(intent.x, intent.y);
+        const ray = rayAt(intent.x, intent.y);
+        const ground = pickGround(ray, heights, mapWidth, mapHeight);
         cursorState.setGround(ground);
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
         const units = interpolatedUnits(client.snapshots(), now);
-        const picked =
-          ground !== null
-            ? pickSubjectAt(
-                db,
-                { width: mapWidth, height: mapHeight },
-                latest,
-                observer,
-                units,
-                ground.x,
-                ground.y,
-                CLICK_RADIUS_CELLS,
-              )
-            : { ownHandle: null, subject: null };
+        const picked = pickSubjectByRay(
+          db,
+          { width: mapWidth, height: mapHeight },
+          heights,
+          HEIGHT_STEP,
+          ray,
+          ground,
+          latest,
+          observer,
+          units,
+          CLICK_RADIUS_CELLS,
+        );
         useInspectorStore.getState().setHovered(picked.subject);
 
         const interaction = useInteractionStore.getState();
@@ -159,10 +225,17 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
             ground === null ? -1 : nearestLink(roadLinks(), mapWidth, ground.x, ground.y);
           interaction.setRoadHover(link);
         } else if (interaction.tool.kind === 'demolish') {
-          const hit =
-            ground === null
-              ? null
-              : pickDemolishableAt(db, latest, observer, ground.x, ground.y, CLICK_RADIUS_CELLS);
+          const hit = pickDemolishableByRay(
+            db,
+            { width: mapWidth, height: mapHeight },
+            heights,
+            HEIGHT_STEP,
+            ray,
+            ground,
+            latest,
+            observer,
+            CLICK_RADIUS_CELLS,
+          );
           interaction.setDemolishHover(
             hit === null ? null : { handle: hit.handle, refunds: hit.refunds },
           );
@@ -223,18 +296,19 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         return;
       }
       case 'demolish.click': {
-        const ground = groundAt(intent.x, intent.y);
-        if (ground === null) {
-          return;
-        }
+        const ray = rayAt(intent.x, intent.y);
+        const ground = pickGround(ray, heights, mapWidth, mapHeight);
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
-        const hit = pickDemolishableAt(
+        const hit = pickDemolishableByRay(
           db,
+          { width: mapWidth, height: mapHeight },
+          heights,
+          HEIGHT_STEP,
+          ray,
+          ground,
           latest,
           observer,
-          ground.x,
-          ground.y,
           CLICK_RADIUS_CELLS,
         );
         if (hit !== null) {
@@ -246,28 +320,23 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
         return;
       }
       case 'select.click': {
-        const ground = groundAt(intent.x, intent.y);
+        const ray = rayAt(intent.x, intent.y);
+        const ground = pickGround(ray, heights, mapWidth, mapHeight);
         const selection = useSelectionStore.getState();
         const inspector = useInspectorStore.getState();
-        if (ground === null) {
-          if (!intent.additive) {
-            selection.clear();
-            inspector.unpin();
-            useInteractionStore.getState().clearDemolishConfirm();
-          }
-          return;
-        }
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
         const units = interpolatedUnits(client.snapshots(), now);
-        const picked = pickSubjectAt(
+        const picked = pickSubjectByRay(
           db,
           { width: mapWidth, height: mapHeight },
+          heights,
+          HEIGHT_STEP,
+          ray,
+          ground,
           latest,
           observer,
           units,
-          ground.x,
-          ground.y,
           CLICK_RADIUS_CELLS,
         );
         if (picked.subject === null) {
@@ -322,8 +391,8 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
             if (u.faction !== observer) {
               continue;
             }
-            const p = project(u.x, u.y);
-            if (inside(p.x, p.y)) {
+            const p = project(u.x, u.y, 0.3);
+            if (p.inFront && inside(p.x, p.y)) {
               picked.add(handle);
             }
           }
@@ -341,8 +410,8 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
               }
               const cx = (structures.x[i] ?? 0) + kind.footprint.w / 2;
               const cy = (structures.y[i] ?? 0) + kind.footprint.h / 2;
-              const p = project(cx, cy);
-              if (inside(p.x, p.y)) {
+              const p = project(cx, cy, kind.visual.height * 0.45);
+              if (p.inFront && inside(p.x, p.y)) {
                 picked.add(structures.handles[i] ?? 0);
               }
             }

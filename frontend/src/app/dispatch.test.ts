@@ -86,6 +86,19 @@ describe('intent router', () => {
 
     router.dispatch({ kind: 'camera.toggle_mode' });
     expect(useCameraStore.getState().mode).toBe('tactical');
+
+    router.dispatch({ kind: 'camera.orbit_px', dx: 100, dy: -20 });
+    expect(useCameraStore.getState().yaw).toBeCloseTo(0.55, 6);
+    expect(useCameraStore.getState().pitchOffsetDeg).toBe(0);
+
+    router.dispatch({ kind: 'camera.toggle_mode' });
+    router.dispatch({ kind: 'camera.orbit_px', dx: 100, dy: -20 });
+    expect(useCameraStore.getState().yaw).toBeCloseTo(1.1, 6);
+    expect(useCameraStore.getState().pitchOffsetDeg).toBeCloseTo(-5, 6);
+
+    router.dispatch({ kind: 'camera.reset_orientation' });
+    expect(useCameraStore.getState().yaw).toBe(0);
+    expect(useCameraStore.getState().pitchOffsetDeg).toBe(0);
   });
 
   it('handles build.select, road.toggle, and tool.exit', () => {
@@ -353,7 +366,7 @@ describe('intent router', () => {
     router.setCanvasHandler((intent) => {
       seen.push(intent);
     });
-    router.dispatch({ kind: 'camera.pan_px', dx: 4, dy: -2 });
+    router.dispatch({ kind: 'camera.pan_px', prevX: 0, prevY: 0, x: 4, y: -2 });
     router.dispatch({ kind: 'select.click', x: 10, y: 20, additive: false });
     expect(seen.map((i) => i.kind)).toEqual(['camera.pan_px', 'select.click']);
     // Global intents never reach the canvas.
@@ -361,7 +374,7 @@ describe('intent router', () => {
     expect(seen).toHaveLength(2);
     // Unregistering drops canvas intents silently.
     router.setCanvasHandler(null);
-    router.dispatch({ kind: 'camera.pan_px', dx: 1, dy: 1 });
+    router.dispatch({ kind: 'camera.pan_px', prevX: 0, prevY: 0, x: 1, y: 1 });
     expect(seen).toHaveLength(2);
   });
 

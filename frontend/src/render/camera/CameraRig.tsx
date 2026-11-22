@@ -1,30 +1,41 @@
-// Camera rig (M2 C4): owns the perspective + orthographic cameras, applies
-// held-key panning and zoom every frame, and animates 400 ms ease-in-out
-// mode transitions (pitch to 90°, swap, pitch back down).
+// Orbital camera rig (ADR 0028, ADR 0051, ADR 0060): owns the perspective
+// + orthographic cameras, applies held-key yaw-aligned panning and rotation,
+// smoothly damps focus/yaw/distance/pitch, and animates 400 ms ease-in-out
+// mode transitions while keeping current yaw.
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
 import type { PanTracker } from '../../input/pan';
 import {
-  CAMERA_UP,
   SPECTATE_FOV_DEG,
-  SPECTATE_PITCH_DEG,
   TRANSITION_MS,
   clampCenter,
   clampSpectateDist,
   clampTacticalHeight,
   easeInOut,
+  effectiveSpectatePitchDeg,
+  frameDampingAlpha,
+  matchZoomForMode,
+  orbitalCameraPose,
   orthoClipPlanes,
   perspectiveClipPlanes,
   perspectiveDistAtPitch,
-  spectateCameraPosition,
+  rotatePanVector,
   visibleGroundHeight,
 } from '../../client/camera-math';
+import { terrainY } from '../world';
 
 const ORTHO_HEIGHT = 200;
-// Pan speed: one full visible height per second.
+// Pan speed: one full visible ground height per second.
 const PAN_SPEED = 1.0;
+// Keyboard yaw rotation speed (Q / E) in radians per second.
+const YAW_KEY_SPEED = 1.85;
+
+const TAU_CENTER = 0.025;
+const TAU_HEIGHT = 0.08;
+const TAU_ORBIT = 0.045;
+const TAU_ZOOM = 0.055;
 
 function syncPerspClip(
   persp: THREE.PerspectiveCamera,
@@ -42,10 +53,8 @@ function syncPerspClip(
 
 interface Transition {
   startedAt: number;
-  // Pitch degrees the animation runs between (55→90 or 90→55).
   fromPitch: number;
   toPitch: number;
-  // Constant ground extent kept during the transition.
   extent: number;
 }
 
@@ -54,13 +63,26 @@ interface Cameras {
   ortho: THREE.OrthographicCamera;
 }
 
+interface SmoothedState {
+  initialized: boolean;
+  x: number;
+  y: number;
+  centerY: number;
+  yaw: number;
+  dist: number;
+  pitchDeg: number;
+  orthoHeight: number;
+}
+
 export function CameraRig({
   mapWidth,
   mapHeight,
+  heights,
   panTracker,
 }: {
   mapWidth: number;
   mapHeight: number;
+  heights: ArrayLike<number>;
   panTracker: PanTracker;
 }) {
   const set = useThree((s) => s.set);
@@ -70,8 +92,18 @@ export function CameraRig({
   const transition = useRef<Transition | null>(null);
   const lastMode = useRef<'spectate' | 'tactical'>(useCameraStore.getState().mode);
   const activeCamera = useRef<THREE.Camera | null>(null);
+  const smoothed = useRef<SmoothedState>({
+    initialized: false,
+    x: 0,
+    y: 0,
+    centerY: 0,
+    yaw: 0,
+    dist: 30,
+    pitchDeg: 55,
+    orthoHeight: 30,
+  });
 
-  // Create both cameras once and register the perspective camera.
+  // Create both cameras once with singularity-free YXZ Euler ordering.
   useEffect(() => {
     if (cameras.current === null) {
       const initialClip = perspectiveClipPlanes(
@@ -85,12 +117,9 @@ export function CameraRig({
         initialClip.near,
         initialClip.far,
       );
-      // Map north (-Z) as the up reference: never parallel to the view for
-      // pitch in (0°, 90°], so lookAt stays defined all through the
-      // transition (the tactical→spectate leg starts exactly at 90°).
-      persp.up.set(CAMERA_UP.x, CAMERA_UP.y, CAMERA_UP.z);
+      persp.rotation.order = 'YXZ';
       const ortho = new THREE.OrthographicCamera();
-      ortho.up.set(CAMERA_UP.x, CAMERA_UP.y, CAMERA_UP.z);
+      ortho.rotation.order = 'YXZ';
       cameras.current = { persp, ortho };
     }
     activeCamera.current = cameras.current.persp;
@@ -114,9 +143,10 @@ export function CameraRig({
     }
     const { persp, ortho } = c;
     const cam = useCameraStore.getState();
-    const aspect = size.width / size.height;
+    const aspect = size.height > 0 ? size.width / size.height : 16 / 9;
+    const dt = Math.min(0.1, Math.max(0, delta));
+    const s = smoothed.current;
 
-    // Register the active camera only when it actually changes.
     const activate = (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera): void => {
       if (activeCamera.current !== camera) {
         activeCamera.current = camera;
@@ -124,33 +154,72 @@ export function CameraRig({
       }
     };
 
-    // Held-key pan: speed proportional to the visible extent.
+    // Continuous keyboard yaw orbit (Q / E).
+    const yawDir = panTracker.yawDelta();
+    if (yawDir !== 0) {
+      cam.orbitBy(yawDir * YAW_KEY_SPEED * dt, 0);
+    }
+
+    // Continuous held-key pan aligned with current visual yaw.
     const pan = panTracker.panVector();
-    let center = clampCenter(cam.center, mapWidth, mapHeight);
     if (pan.x !== 0 || pan.y !== 0) {
-      const extent = visibleGroundHeight(cam.mode, cam.zoom);
-      const speed = extent * PAN_SPEED * delta;
-      center = clampCenter(
-        { x: center.x + pan.x * speed, y: center.y + pan.y * speed },
+      const current = useCameraStore.getState();
+      const extent = visibleGroundHeight(current.mode, current.zoom, current.pitchOffsetDeg);
+      const speed = extent * PAN_SPEED * dt;
+      const worldPan = rotatePanVector(pan, s.initialized ? s.yaw : current.yaw);
+      const clamped = clampCenter(
+        { x: current.center.x + worldPan.x * speed, y: current.center.y + worldPan.y * speed },
         mapWidth,
         mapHeight,
       );
-      cam.setCenter(center);
+      current.setCenter(clamped);
     }
 
-    if (cam.mode !== lastMode.current) {
-      // Mode changed: run the pitch animation on the perspective camera.
-      // The store zoom was already converted to the new mode by
-      // matchZoomForMode; visibleGroundHeight gives the common extent the
-      // transition keeps constant.
-      const toTactical = cam.mode === 'tactical';
+    const latest = useCameraStore.getState();
+    const targetCenter = clampCenter(latest.center, mapWidth, mapHeight);
+    const targetCenterY = terrainY(heights, mapWidth, mapHeight, targetCenter.x, targetCenter.y);
+    const targetDist =
+      latest.mode === 'spectate'
+        ? clampSpectateDist(latest.zoom)
+        : clampSpectateDist(matchZoomForMode('spectate', latest.zoom, latest.pitchOffsetDeg));
+    const targetPitchDeg = effectiveSpectatePitchDeg(targetDist, latest.pitchOffsetDeg);
+    const targetOrthoH =
+      latest.mode === 'tactical'
+        ? clampTacticalHeight(latest.zoom)
+        : clampTacticalHeight(visibleGroundHeight('spectate', latest.zoom, latest.pitchOffsetDeg));
+
+    if (!s.initialized) {
+      s.initialized = true;
+      s.x = targetCenter.x;
+      s.y = targetCenter.y;
+      s.centerY = targetCenterY;
+      s.yaw = latest.yaw;
+      s.dist = targetDist;
+      s.pitchDeg = targetPitchDeg;
+      s.orthoHeight = targetOrthoH;
+    } else {
+      const aCenter = frameDampingAlpha(dt, TAU_CENTER);
+      const aHeight = frameDampingAlpha(dt, TAU_HEIGHT);
+      const aOrbit = frameDampingAlpha(dt, TAU_ORBIT);
+      const aZoom = frameDampingAlpha(dt, TAU_ZOOM);
+      s.x += (targetCenter.x - s.x) * aCenter;
+      s.y += (targetCenter.y - s.y) * aCenter;
+      s.centerY += (targetCenterY - s.centerY) * aHeight;
+      s.yaw += (latest.yaw - s.yaw) * aOrbit;
+      s.dist += (targetDist - s.dist) * aZoom;
+      s.pitchDeg += (targetPitchDeg - s.pitchDeg) * aZoom;
+      s.orthoHeight += (targetOrthoH - s.orthoHeight) * aZoom;
+    }
+
+    if (latest.mode !== lastMode.current) {
+      const toTactical = latest.mode === 'tactical';
       transition.current = {
         startedAt: performance.now(),
-        fromPitch: toTactical ? SPECTATE_PITCH_DEG : 90,
-        toPitch: toTactical ? 90 : SPECTATE_PITCH_DEG,
-        extent: visibleGroundHeight(cam.mode, cam.zoom),
+        fromPitch: toTactical ? s.pitchDeg : 90,
+        toPitch: toTactical ? 90 : targetPitchDeg,
+        extent: visibleGroundHeight(latest.mode, latest.zoom, latest.pitchOffsetDeg),
       };
-      lastMode.current = cam.mode;
+      lastMode.current = latest.mode;
       activate(persp);
     }
 
@@ -158,28 +227,31 @@ export function CameraRig({
     if (t !== null) {
       const k = easeInOut((performance.now() - t.startedAt) / TRANSITION_MS);
       const finished = k >= 1;
-      // Drive the perspective camera until the very last frame; on the
-      // final frame of a →tactical transition the ortho camera takes over.
-      if (!(finished && cam.mode === 'tactical')) {
+      t.extent = visibleGroundHeight(latest.mode, latest.zoom, latest.pitchOffsetDeg);
+      if (latest.mode === 'spectate') {
+        t.toPitch = targetPitchDeg;
+      }
+      if (!(finished && latest.mode === 'tactical')) {
         const pitch = t.fromPitch + (t.toPitch - t.fromPitch) * k;
         const dist = perspectiveDistAtPitch(t.extent, pitch);
         syncPerspClip(persp, dist, mapWidth, mapHeight);
-        const pos = spectateCameraPosition(center, dist, pitch);
-        persp.position.set(pos.x, pos.y, pos.z);
-        persp.lookAt(center.x, 0, center.y);
+        const pose = orbitalCameraPose({ x: s.x, y: s.y }, s.centerY, dist, s.yaw, pitch);
+        persp.position.set(pose.position.x, pose.position.y, pose.position.z);
+        persp.rotation.set(pose.eulerYXZ.x, pose.eulerYXZ.y, 0);
+        persp.updateMatrixWorld();
       }
       if (finished) {
         transition.current = null;
-        if (cam.mode === 'tactical') {
+        if (latest.mode === 'tactical') {
           activate(ortho);
         }
       }
       return;
     }
 
-    if (cam.mode === 'tactical') {
-      const h = clampTacticalHeight(cam.zoom);
-      const clip = orthoClipPlanes(ORTHO_HEIGHT);
+    if (latest.mode === 'tactical') {
+      const h = s.orthoHeight;
+      const clip = orthoClipPlanes(ORTHO_HEIGHT + s.centerY);
       ortho.left = (-h * aspect) / 2;
       ortho.right = (h * aspect) / 2;
       ortho.top = h / 2;
@@ -187,16 +259,16 @@ export function CameraRig({
       ortho.near = clip.near;
       ortho.far = clip.far;
       ortho.updateProjectionMatrix();
-      // Straight down; screen-up is scene -Z (up set once at creation).
-      ortho.position.set(center.x, ORTHO_HEIGHT, center.y);
-      ortho.lookAt(center.x, 0, center.y);
+      ortho.position.set(s.x, ORTHO_HEIGHT + s.centerY, s.y);
+      ortho.rotation.set(-Math.PI / 2, -s.yaw, 0);
+      ortho.updateMatrixWorld();
       activate(ortho);
     } else {
-      const dist = clampSpectateDist(cam.zoom);
-      syncPerspClip(persp, dist, mapWidth, mapHeight);
-      const pos = spectateCameraPosition(center, dist, SPECTATE_PITCH_DEG);
-      persp.position.set(pos.x, pos.y, pos.z);
-      persp.lookAt(center.x, 0, center.y);
+      syncPerspClip(persp, s.dist, mapWidth, mapHeight);
+      const pose = orbitalCameraPose({ x: s.x, y: s.y }, s.centerY, s.dist, s.yaw, s.pitchDeg);
+      persp.position.set(pose.position.x, pose.position.y, pose.position.z);
+      persp.rotation.set(pose.eulerYXZ.x, pose.eulerYXZ.y, 0);
+      persp.updateMatrixWorld();
       activate(persp);
     }
   });

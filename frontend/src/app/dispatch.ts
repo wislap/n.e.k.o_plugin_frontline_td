@@ -125,6 +125,12 @@ export function createIntentRouter(deps: { client: SimClient; db: ContentDb }): 
       case 'camera.toggle_lock':
         useCameraStore.getState().toggleLocked();
         return;
+      case 'camera.orbit_px':
+        useCameraStore.getState().orbitBy(intent.dx * 0.0055, intent.dy * 0.25);
+        return;
+      case 'camera.reset_orientation':
+        useCameraStore.getState().resetOrientation();
+        return;
       case 'ui.toggle_keymap_help':
         useUiStore.getState().toggleKeymapHelp();
         return;

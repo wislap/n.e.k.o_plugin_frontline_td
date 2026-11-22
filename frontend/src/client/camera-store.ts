@@ -1,17 +1,36 @@
-// Camera UI state (ADR 0028, ADR 0048): mode, map-space center, zoom,
-// perspective lock, and primary-mode-driven auto-tactical switching.
+// Camera UI state (ADR 0028, ADR 0048, ADR 0060): mode, map-space center,
+// zoom, horizontal yaw, manual pitch offset, perspective lock, and
+// primary-mode-driven auto-tactical switching.
 // Zoom means "spectate distance" in spectate and "visible ground height"
 // in tactical.
 import { create } from 'zustand';
-import { clampSpectateDist, clampTacticalHeight, matchZoomForMode } from './camera-math';
+import {
+  clampPitchOffsetForDist,
+  clampSpectateDist,
+  clampTacticalHeight,
+  effectiveSpectatePitchDeg,
+  matchZoomForMode,
+  nearestNorthYaw,
+  spectateCursorGroundOffset,
+} from './camera-math';
 import type { PrimaryMode } from './interaction-store';
 
 type CameraMode = 'spectate' | 'tactical';
+
+interface ZoomAnchor {
+  ndcX: number;
+  ndcY: number;
+  aspect: number;
+  centerY: number;
+  planeY: number;
+}
 
 export interface CameraState {
   mode: CameraMode;
   center: { x: number; y: number };
   zoom: number;
+  yaw: number;
+  pitchOffsetDeg: number;
   // True when the current tactical view was entered automatically by
   // entering build or logistics mode (returning to command restores
   // spectate only in that case).
@@ -19,9 +38,11 @@ export interface CameraState {
   locked: boolean;
   setCenter(center: { x: number; y: number }): void;
   panBy(dx: number, dy: number): void;
+  orbitBy(dYaw: number, dPitchDeg: number): void;
+  resetOrientation(): void;
   setZoom(zoom: number): void;
-  // Zoom while keeping a ground point fixed (cursor-anchored zoom).
-  zoomToward(delta: number, ground: { x: number; y: number } | null): void;
+  // Zoom while keeping a ground point (or spectate cursor ray) fixed.
+  zoomToward(delta: number, ground: { x: number; y: number } | null, anchor?: ZoomAnchor): void;
   toggleMode(): void;
   setMode(mode: CameraMode, auto: boolean): void;
   toggleLocked(): void;
@@ -34,6 +55,8 @@ export const useCameraStore = create<CameraState>((set, get) => ({
   mode: 'spectate',
   center: { x: 0, y: 0 },
   zoom: 30,
+  yaw: 0,
+  pitchOffsetDeg: 0,
   autoSwitch: false,
   locked: false,
   setCenter: (center) => {
@@ -42,24 +65,96 @@ export const useCameraStore = create<CameraState>((set, get) => ({
   panBy: (dx, dy) => {
     set((state) => ({ center: { x: state.center.x + dx, y: state.center.y + dy } }));
   },
-  setZoom: (zoom) => {
+  orbitBy: (dYaw, dPitchDeg) => {
     set((state) => ({
-      zoom: state.mode === 'tactical' ? clampTacticalHeight(zoom) : clampSpectateDist(zoom),
+      yaw: state.yaw + dYaw,
+      pitchOffsetDeg:
+        state.mode === 'spectate'
+          ? clampPitchOffsetForDist(state.zoom, state.pitchOffsetDeg + dPitchDeg)
+          : state.pitchOffsetDeg,
     }));
   },
-  zoomToward: (delta, ground) => {
+  resetOrientation: () => {
+    set((state) => ({
+      yaw: nearestNorthYaw(state.yaw),
+      pitchOffsetDeg: 0,
+    }));
+  },
+  setZoom: (zoom) => {
+    set((state) => {
+      if (state.mode === 'tactical') {
+        return { zoom: clampTacticalHeight(zoom) };
+      }
+      const next = clampSpectateDist(zoom);
+      return {
+        zoom: next,
+        pitchOffsetDeg: clampPitchOffsetForDist(next, state.pitchOffsetDeg),
+      };
+    });
+  },
+  zoomToward: (delta, ground, anchor) => {
     set((state) => {
       const oldZoom = state.zoom;
-      const next =
-        state.mode === 'tactical'
-          ? clampTacticalHeight(oldZoom * (1 + delta))
-          : clampSpectateDist(oldZoom * (1 + delta));
-      if (ground === null || next === oldZoom) {
-        return { zoom: next };
+      if (state.mode === 'tactical') {
+        const next = clampTacticalHeight(oldZoom * (1 + delta));
+        if (ground === null || next === oldZoom) {
+          return { zoom: next };
+        }
+        const k = 1 - next / oldZoom;
+        return {
+          zoom: next,
+          center: {
+            x: state.center.x + (ground.x - state.center.x) * k,
+            y: state.center.y + (ground.y - state.center.y) * k,
+          },
+        };
+      }
+      const next = clampSpectateDist(oldZoom * (1 + delta));
+      const nextPitchOffset = clampPitchOffsetForDist(next, state.pitchOffsetDeg);
+      if (next === oldZoom) {
+        return { zoom: next, pitchOffsetDeg: nextPitchOffset };
+      }
+      if (anchor !== undefined) {
+        const pOld = effectiveSpectatePitchDeg(oldZoom, state.pitchOffsetDeg);
+        const pNext = effectiveSpectatePitchDeg(next, nextPitchOffset);
+        const qOld = spectateCursorGroundOffset(
+          anchor.ndcX,
+          anchor.ndcY,
+          anchor.aspect,
+          oldZoom,
+          state.yaw,
+          pOld,
+          anchor.centerY,
+          anchor.planeY,
+        );
+        const qNext = spectateCursorGroundOffset(
+          anchor.ndcX,
+          anchor.ndcY,
+          anchor.aspect,
+          next,
+          state.yaw,
+          pNext,
+          anchor.centerY,
+          anchor.planeY,
+        );
+        if (qOld !== null && qNext !== null) {
+          return {
+            zoom: next,
+            pitchOffsetDeg: nextPitchOffset,
+            center: {
+              x: state.center.x + qOld.x - qNext.x,
+              y: state.center.y + qOld.y - qNext.y,
+            },
+          };
+        }
+      }
+      if (ground === null) {
+        return { zoom: next, pitchOffsetDeg: nextPitchOffset };
       }
       const k = 1 - next / oldZoom;
       return {
         zoom: next,
+        pitchOffsetDeg: nextPitchOffset,
         center: {
           x: state.center.x + (ground.x - state.center.x) * k,
           y: state.center.y + (ground.y - state.center.y) * k,
@@ -76,10 +171,10 @@ export const useCameraStore = create<CameraState>((set, get) => ({
         return { autoSwitch: auto };
       }
       // Keep the viewed ground extent across the swap (no visible jump);
-      // auto-switch and manual toggle share this conversion.
+      // auto-switch and manual toggle share this conversion while preserving yaw.
       return {
         mode,
-        zoom: matchZoomForMode(mode, state.zoom),
+        zoom: matchZoomForMode(mode, state.zoom, state.pitchOffsetDeg),
         autoSwitch: auto,
       };
     });
@@ -110,6 +205,8 @@ export const useCameraStore = create<CameraState>((set, get) => ({
       mode: 'spectate',
       center: { x: 0, y: 0 },
       zoom: 30,
+      yaw: 0,
+      pitchOffsetDeg: 0,
       autoSwitch: false,
       locked: false,
     });

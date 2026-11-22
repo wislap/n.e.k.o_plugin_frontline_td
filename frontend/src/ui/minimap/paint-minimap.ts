@@ -3,9 +3,10 @@
 // blit the cached bitmap and redraw dynamic overlays.
 import {
   buildBaseTerrainRgb,
+  clipPolygonToRect,
   collectMinimapEntities,
   compositeMinimapTerrainRgba,
-  computeMinimapViewport,
+  computeMinimapFrustumQuad,
   mapToCanvas,
 } from '../../client/minimap-model';
 import type { ContentDb, ResolvedMap } from '../../content/index';
@@ -37,7 +38,10 @@ export interface PaintMinimapParams {
   cameraMode: 'spectate' | 'tactical';
   cameraCenter: { x: number; y: number };
   cameraZoom: number;
+  cameraYaw?: number;
+  cameraPitchOffsetDeg?: number;
   viewportAspect: number;
+  pixelRatio?: number;
   moveMarker: { x: number; y: number; at: number } | null;
   nowMs: number;
 }
@@ -154,8 +158,10 @@ export function paintMinimapCanvas(
   cache: MinimapRenderCache,
   params: PaintMinimapParams,
 ): void {
-  const width = canvas.width;
-  const height = canvas.height;
+  const rawDpr = params.pixelRatio ?? 1;
+  const dpr = Number.isFinite(rawDpr) && rawDpr > 0 ? rawDpr : 1;
+  const width = canvas.width / dpr;
+  const height = canvas.height / dpr;
   if (width <= 0 || height <= 0) {
     return;
   }
@@ -171,10 +177,14 @@ export function paintMinimapCanvas(
 
   syncTerrainLayer(cache, params.snapshot);
 
-  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (cache.offCanvas !== null) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(cache.offCanvas, 0, 0, width, height);
+    ctx.imageSmoothingEnabled = true;
   }
 
   // 1. Subtle radar grid lines at 25% / 50% / 75%.
@@ -345,34 +355,47 @@ export function paintMinimapCanvas(
     }
   }
 
-  // 8. Camera viewport frustum.
-  const vp = computeMinimapViewport(
+  // 8. Camera viewport frustum (rotated trapezoid in 3D, rotated rect in 2D).
+  const quad = computeMinimapFrustumQuad(
     params.cameraMode,
     params.cameraCenter,
     params.cameraZoom,
+    params.cameraYaw ?? 0,
+    params.cameraPitchOffsetDeg ?? 0,
     params.viewportAspect,
   );
-  const tl = mapToCanvas(vp.x, vp.y, width, height, mapW, mapH);
-  const br = mapToCanvas(vp.x + vp.w, vp.y + vp.h, width, height, mapW, mapH);
-  const minX = 1;
-  const minY = 1;
-  const maxX = Math.max(minX, width - 2);
-  const maxY = Math.max(minY, height - 2);
-  const x0 = Math.max(minX, Math.min(maxX, tl.x));
-  const y0 = Math.max(minY, Math.min(maxY, tl.y));
-  const x1 = Math.max(minX, Math.min(maxX, br.x));
-  const y1 = Math.max(minY, Math.min(maxY, br.y));
-  const vw = Math.max(2, x1 - x0);
-  const vh = Math.max(2, y1 - y0);
-  const rx = Math.min(x0, Math.max(minX, maxX - vw));
-  const ry = Math.min(y0, Math.max(minY, maxY - vh));
-
-  ctx.save();
-  ctx.strokeStyle = 'rgba(5, 8, 15, 0.75)';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(rx, ry, vw, vh);
-  ctx.strokeStyle = '#e8f4ff';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(rx, ry, vw, vh);
+  const canvasQuad = quad.map((pt) => mapToCanvas(pt.x, pt.y, width, height, mapW, mapH));
+  const inset = 1.25;
+  const clipped = clipPolygonToRect(
+    canvasQuad,
+    inset,
+    inset,
+    Math.max(inset, width - inset),
+    Math.max(inset, height - inset),
+  );
+  const first = clipped[0];
+  if (first !== undefined && clipped.length >= 3) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(first.x, first.y);
+    for (let i = 1; i < clipped.length; i++) {
+      const pt = clipped[i];
+      if (pt !== undefined) {
+        ctx.lineTo(pt.x, pt.y);
+      }
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(232, 244, 255, 0.045)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(5, 8, 15, 0.82)';
+    ctx.lineWidth = 2.75;
+    ctx.stroke();
+    ctx.strokeStyle = '#e8f4ff';
+    ctx.lineWidth = 1.35;
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 }

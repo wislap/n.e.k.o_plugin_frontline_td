@@ -16,6 +16,7 @@ import {
 } from '../features/construction/protocol';
 import { VisionMemoryChannel, type VisionMemory } from '../features/vision/protocol';
 import { pickAt, pickDemolishableAt, pickSubjectAt } from './pick';
+import { pickDemolishableByRay, pickSubjectByRay } from './pick-ray';
 
 const db = loadContent();
 const DEPOT = db.structures.byId('frontline_td:supply_depot');
@@ -313,5 +314,79 @@ describe('pickDemolishableAt', () => {
         10.5,
       ),
     ).toBeNull();
+  });
+});
+
+describe('3D ray-volume picking', () => {
+  it('picks elevated units and tall structures from shallow-pitch rays even when groundBehind misses', () => {
+    const heights = new Uint8Array(MAP_DIMS.width * MAP_DIMS.height);
+    const snap = snapshot({ [StructuresChannel.id]: ownDepot });
+    // Depot sits at [10..12, 0..1.0, 10..12]; aim ray through y = 0.7 at x=11, z=11
+    // from pitch ~28°, hitting the flat floor behind the depot at (11, 9.68).
+    const ray = {
+      origin: { x: 11, y: 3.36, z: 16 },
+      dir: { x: 0, y: -2.66, z: -5 },
+    };
+    const pickedStruct = pickSubjectByRay(
+      db,
+      MAP_DIMS,
+      heights,
+      0.5,
+      ray,
+      { x: 11, y: 9.68 },
+      snap,
+      OBSERVER,
+      new Map(),
+    );
+    expect(pickedStruct).toEqual({
+      ownHandle: 100,
+      subject: { kind: 'own_structure', handle: 100 },
+    });
+
+    const demolishable = pickDemolishableByRay(
+      db,
+      MAP_DIMS,
+      heights,
+      0.5,
+      ray,
+      { x: 11, y: 9.68 },
+      snap,
+      OBSERVER,
+    );
+    expect(demolishable?.handle).toBe(100);
+
+    // Same ray clipped by a closer cliff groundHit in front (z = 13) ignores the depot behind it.
+    const occluded = pickSubjectByRay(
+      db,
+      MAP_DIMS,
+      heights,
+      0.5,
+      ray,
+      { x: 11, y: 13 },
+      snap,
+      OBSERVER,
+      new Map(),
+    );
+    expect(occluded).toEqual({ ownHandle: null, subject: { kind: 'cell', x: 11, y: 13 } });
+
+    // Unit cylinder pick works when cursor ray grazes the top of a unit.
+    const units = new Map([[77, { x: 20, y: 20, faction: OBSERVER }]]);
+    const unitRay = {
+      origin: { x: 20, y: 3, z: 25 },
+      dir: { x: 0, y: -2.5, z: -5 },
+    };
+    expect(
+      pickSubjectByRay(
+        db,
+        MAP_DIMS,
+        heights,
+        0.5,
+        unitRay,
+        { x: 20, y: 19 },
+        null,
+        OBSERVER,
+        units,
+      ),
+    ).toEqual({ ownHandle: 77, subject: { kind: 'own_unit', handle: 77 } });
   });
 });

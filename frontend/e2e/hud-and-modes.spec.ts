@@ -390,3 +390,63 @@ test('HUD panels stay in-bounds and non-overlapping across 800x600, 1280x720, an
 
   expect(failures).toEqual([]);
 });
+
+test('3D orbital rotation via Q/E and middle-drag updates compass and resets smoothly to North', async ({
+  page,
+}) => {
+  const failures = collectFailures(page);
+  await bootAndWaitForTick(page);
+
+  const compass = page.locator('[data-testid="camera-compass"]');
+  await expect(compass).toBeVisible();
+  await expect(compass).toHaveAttribute('data-compass-deg', '0');
+
+  // Hold KeyE briefly to orbit clockwise away from North.
+  await page.keyboard.down('KeyE');
+  await page.waitForTimeout(350);
+  await page.keyboard.up('KeyE');
+  await expect
+    .poll(async () => Number((await compass.getAttribute('data-compass-deg')) ?? '0'))
+    .toBeGreaterThan(5);
+
+  const rotatedDeg = Number((await compass.getAttribute('data-compass-deg')) ?? '0');
+
+  // Middle-mouse drag on the canvas orbits smoothly without triggering click/box errors.
+  const canvas = page.locator('canvas').first();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (box !== null) {
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(cx + 80, cy - 25, { steps: 4 });
+    await page.mouse.up({ button: 'middle' });
+  }
+  await expect
+    .poll(async () => Number((await compass.getAttribute('data-compass-deg')) ?? '0'))
+    .not.toBe(rotatedDeg);
+
+  // Switching to 2D tactical and back preserves the rotated heading.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: /战术视角/ })).toBeVisible();
+  await expect(compass).not.toHaveAttribute('data-compass-deg', '0');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: /观战视角/ })).toBeVisible();
+
+  // Clicking the HUD compass returns yaw to 0° (North); KeyN works the same.
+  await compass.click();
+  await expect(compass).toHaveAttribute('data-compass-deg', '0');
+
+  await page.keyboard.down('KeyQ');
+  await page.waitForTimeout(300);
+  await page.keyboard.up('KeyQ');
+  await expect
+    .poll(async () => Math.abs(Number((await compass.getAttribute('data-compass-deg')) ?? '0')))
+    .toBeGreaterThan(5);
+
+  await page.keyboard.press('KeyN');
+  await expect(compass).toHaveAttribute('data-compass-deg', '0');
+
+  expect(failures).toEqual([]);
+});

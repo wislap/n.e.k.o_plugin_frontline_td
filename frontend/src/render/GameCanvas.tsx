@@ -41,6 +41,7 @@ const BACKGROUND = '#0b1020';
 const MARKER_COLOR = '#ffe08a';
 const SKY_COLOR = '#bcd4ff';
 const GROUND_LIGHT_COLOR = '#3a2f22';
+const RIM_LIGHT_COLOR = '#9ec5ff';
 const UNIT_BAR_TOP = 0.8;
 
 export interface GameCanvasProps {
@@ -234,6 +235,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
       <Canvas frameloop="always" style={{ background: BACKGROUND }}>
         <hemisphereLight args={[SKY_COLOR, GROUND_LIGHT_COLOR, 0.9]} />
         <directionalLight position={[40, 60, 20]} intensity={1.2} />
+        <directionalLight position={[-32, 38, -28]} color={RIM_LIGHT_COLOR} intensity={0.35} />
         {ready && (
           <>
             <TerrainMesh
@@ -345,7 +347,12 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
             />
           </>
         )}
-        <CameraRig mapWidth={grid.width} mapHeight={grid.height} panTracker={panTracker} />
+        <CameraRig
+          mapWidth={grid.width}
+          mapHeight={grid.height}
+          heights={heights}
+          panTracker={panTracker}
+        />
       </Canvas>
     </div>
   );

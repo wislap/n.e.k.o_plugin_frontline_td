@@ -33,7 +33,10 @@
       "tactical": "Tactical",
       "toggle_hint": "Toggle camera view (Tab)",
       "locked": "Lock View: On",
-      "unlocked": "Lock View: Off"
+      "unlocked": "Lock View: Off",
+      "compass_n": "N",
+      "reset_north": "Reset North",
+      "reset_north_hint": "Reset camera to North (N / Home)"
     },
     "mode": {
       "command": "Command",
@@ -50,7 +53,7 @@
     "demolish_confirm_btn": "Confirm Demolish",
     "demolish_cancel_btn": "Cancel",
     "selected": "{{count}} selected",
-    "hints": "F1-F3 modes | Tab camera | WASD pan | Space pause | -/= speed | L logistics | ` debug | K keys",
+    "hints": "F1-F3 modes | Tab camera | WASD pan | Q/E rotate | N north | Space pause | K keys",
     "help_button_hint": "Keybindings (K)",
     "threat": "Enemy gathering · ~{{count}} · attacks in {{time}}",
     "fullscreen": "Fullscreen",
@@ -81,6 +84,10 @@
       "speed": "Step simulation speed",
       "camera": "Toggle Spectate / Tactical view",
       "pan": "Pan camera",
+      "rotate_camera": "Rotate camera",
+      "orbit_camera": "Free orbit / pitch camera",
+      "grab_pan": "Grab-pan ground",
+      "reset_north": "Reset camera North",
       "modes": "Switch primary mode",
       "logistics_overlay": "Toggle logistics overlay",
       "debug": "Toggle debug panel",

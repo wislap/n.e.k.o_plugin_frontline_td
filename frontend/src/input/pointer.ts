@@ -35,6 +35,7 @@ interface PointLike {
   shiftKey: boolean;
   ctrlKey?: boolean;
   metaKey?: boolean;
+  altKey?: boolean;
 }
 
 interface PointerEventLike extends PointLike {
@@ -84,6 +85,7 @@ export function installPointer(
   let lastY = 0;
   let boxing = false;
   let panning = false;
+  let orbiting = false;
 
   const currentContext = (): PointerContext =>
     options.getContext?.() ?? { mode: 'command', tool: 'none' };
@@ -99,14 +101,20 @@ export function installPointer(
     lastX = pos.x;
     lastY = pos.y;
     boxing = false;
-    panning = event.button === 1;
+    const isAltLeft = event.button === 0 && event.altKey === true;
+    const isCameraButton = event.button === 1 || isAltLeft;
+    panning = isCameraButton && event.shiftKey;
+    orbiting = isCameraButton && !event.shiftKey;
     if (event.pointerId !== undefined) {
       // Capture keeps move/up events flowing to this element even when
       // the pointer leaves the canvas mid-drag.
       target.setPointerCapture?.(event.pointerId);
     }
-    if (event.button === 1 || event.button === 2) {
+    if (event.button === 1 || event.button === 2 || isAltLeft) {
       event.preventDefault();
+    }
+    if (panning) {
+      dispatch({ kind: 'camera.pan_start', x: pos.x, y: pos.y });
     }
   };
 
@@ -116,8 +124,20 @@ export function installPointer(
       dispatch({ kind: 'cursor.move', x: pos.x, y: pos.y });
       return;
     }
+    if (orbiting) {
+      dispatch({ kind: 'camera.orbit_px', dx: pos.x - lastX, dy: pos.y - lastY });
+      lastX = pos.x;
+      lastY = pos.y;
+      return;
+    }
     if (panning) {
-      dispatch({ kind: 'camera.pan_px', dx: lastX - pos.x, dy: lastY - pos.y });
+      dispatch({
+        kind: 'camera.pan_px',
+        prevX: lastX,
+        prevY: lastY,
+        x: pos.x,
+        y: pos.y,
+      });
       lastX = pos.x;
       lastY = pos.y;
       return;
@@ -134,6 +154,14 @@ export function installPointer(
 
   const up = (event: PointerEventLike): void => {
     if (event.button !== downButton) {
+      return;
+    }
+    if (orbiting || panning) {
+      downButton = -1;
+      boxing = false;
+      panning = false;
+      orbiting = false;
+      onBox(null);
       return;
     }
     const pos = getPos(event);
@@ -174,6 +202,7 @@ export function installPointer(
     downButton = -1;
     boxing = false;
     panning = false;
+    orbiting = false;
     onBox(null);
   };
 
@@ -184,6 +213,7 @@ export function installPointer(
     downButton = -1;
     boxing = false;
     panning = false;
+    orbiting = false;
     onBox(null);
   };
 

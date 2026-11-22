@@ -36,6 +36,12 @@ describe('intentForKey', () => {
       expect(intentForKey(event({ code: 'Tab' }), mode)).toEqual({
         kind: 'camera.toggle_mode',
       });
+      expect(intentForKey(event({ code: 'KeyN' }), mode)).toEqual({
+        kind: 'camera.reset_orientation',
+      });
+      expect(intentForKey(event({ code: 'Home' }), mode)).toEqual({
+        kind: 'camera.reset_orientation',
+      });
       expect(intentForKey(event({ code: 'Backquote' }), mode)).toEqual({
         kind: 'dev.toggle_panel',
       });

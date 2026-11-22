@@ -4,6 +4,9 @@
 
 export const SPECTATE_FOV_DEG = 45;
 export const SPECTATE_PITCH_DEG = 55;
+export const SPECTATE_MIN_PITCH_DEG = 26;
+export const SPECTATE_MAX_PITCH_DEG = 86;
+export const SPECTATE_DEFAULT_DIST = 30;
 export const SPECTATE_MIN_DIST = 8;
 export const SPECTATE_MAX_DIST = 80;
 export const TACTICAL_MIN_HEIGHT = 10;
@@ -12,6 +15,10 @@ export const TRANSITION_MS = 400;
 
 export function clampSpectateDist(dist: number): number {
   return Math.min(SPECTATE_MAX_DIST, Math.max(SPECTATE_MIN_DIST, dist));
+}
+
+export function clampSpectatePitch(pitchDeg: number): number {
+  return Math.min(SPECTATE_MAX_PITCH_DEG, Math.max(SPECTATE_MIN_PITCH_DEG, pitchDeg));
 }
 
 export function clampTacticalHeight(height: number): number {
@@ -33,6 +40,60 @@ function halfFovTan(fovDeg: number): number {
   return Math.tan((fovDeg * Math.PI) / 360);
 }
 
+// Smart dolly-pitch curve: close inspection leans forward (34° at dist 8),
+// default distance sits at 55°, and overview zoom lifts toward 72°.
+export function baseSpectatePitchDeg(dist: number): number {
+  const d = clampSpectateDist(dist);
+  if (d <= SPECTATE_DEFAULT_DIST) {
+    const t = (d - SPECTATE_MIN_DIST) / (SPECTATE_DEFAULT_DIST - SPECTATE_MIN_DIST);
+    return 34 + (SPECTATE_PITCH_DEG - 34) * easeInOut(t);
+  }
+  const t = (d - SPECTATE_DEFAULT_DIST) / (SPECTATE_MAX_DIST - SPECTATE_DEFAULT_DIST);
+  return SPECTATE_PITCH_DEG + (72 - SPECTATE_PITCH_DEG) * easeInOut(t);
+}
+
+export function effectiveSpectatePitchDeg(dist: number, pitchOffsetDeg: number = 0): number {
+  return clampSpectatePitch(baseSpectatePitchDeg(dist) + pitchOffsetDeg);
+}
+
+export function clampPitchOffsetForDist(dist: number, pitchOffsetDeg: number): number {
+  return effectiveSpectatePitchDeg(dist, pitchOffsetDeg) - baseSpectatePitchDeg(dist);
+}
+
+// Normalize `yaw` to the nearest equivalent North (`2πk`) so resets rotate
+// smoothly through at most 180° without unwinding multiple turns.
+export function nearestNorthYaw(yaw: number): number {
+  const twoPi = Math.PI * 2;
+  const snapped = Math.round(yaw / twoPi) * twoPi;
+  return snapped === 0 ? 0 : snapped;
+}
+
+// Quantized integer compass heading in `(-180, 180]` degrees (`0` at any `2πk` North).
+export function compassHeadingDeg(yaw: number): number {
+  let deg = Math.round((yaw * 180) / Math.PI) % 360;
+  if (deg > 180) {
+    deg -= 360;
+  }
+  if (deg <= -180) {
+    deg += 360;
+  }
+  return deg === 0 ? 0 : deg;
+}
+
+// Rotate a screen-space pan direction (`+x` right, `+y` down/south) into
+// map space (`+x` east, `+y` south) for the current horizontal camera `yaw`.
+export function rotatePanVector(
+  pan: { x: number; y: number },
+  yaw: number,
+): { x: number; y: number } {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  return {
+    x: pan.x * c - pan.y * s,
+    y: pan.x * s + pan.y * c,
+  };
+}
+
 // A perspective camera looking straight down from distance `dist` sees a
 // ground span of `2 * dist * tan(fov/2)` vertically.
 export function orthoHeightForPerspectiveDist(
@@ -50,28 +111,51 @@ export function perspectiveDistForOrthoHeight(
 }
 
 // Ground span visible vertically in the current mode — used for pan speed
-// and middle-drag ground anchoring.
-export function visibleGroundHeight(mode: 'spectate' | 'tactical', zoom: number): number {
+// and mode-swap viewport extent parity.
+export function visibleGroundHeight(
+  mode: 'spectate' | 'tactical',
+  zoom: number,
+  pitchOffsetDeg: number = 0,
+): number {
   if (mode === 'tactical') {
     return clampTacticalHeight(zoom);
   }
   const dist = clampSpectateDist(zoom);
-  const pitch = (SPECTATE_PITCH_DEG * Math.PI) / 180;
+  const pitch = (effectiveSpectatePitchDeg(dist, pitchOffsetDeg) * Math.PI) / 180;
   return orthoHeightForPerspectiveDist(dist) / Math.sin(pitch);
 }
 
 // Zoom value to store for the OTHER mode so the swap preserves the visible
 // ground extent (no visible jump, tested as a pure function).
-export function matchZoomForMode(mode: 'spectate' | 'tactical', zoom: number): number {
+export function matchZoomForMode(
+  mode: 'spectate' | 'tactical',
+  zoom: number,
+  pitchOffsetDeg: number = 0,
+): number {
   if (mode === 'tactical') {
     // spectate → tactical
-    return clampTacticalHeight(visibleGroundHeight('spectate', zoom));
+    return clampTacticalHeight(visibleGroundHeight('spectate', zoom, pitchOffsetDeg));
   }
-  // tactical → spectate: the perspective camera ends the transition at
-  // pitch 55° showing the ortho's ground height.
-  const height = clampTacticalHeight(zoom);
-  const pitch = (SPECTATE_PITCH_DEG * Math.PI) / 180;
-  return clampSpectateDist(perspectiveDistForOrthoHeight(height) * Math.sin(pitch));
+  // tactical → spectate: solve visibleGroundHeight('spectate', d, pitchOffsetDeg)
+  // = target height via bisection (monotonically increasing over [min, max]).
+  const target = clampTacticalHeight(zoom);
+  let lo = SPECTATE_MIN_DIST;
+  let hi = SPECTATE_MAX_DIST;
+  if (target <= visibleGroundHeight('spectate', lo, pitchOffsetDeg)) {
+    return lo;
+  }
+  if (target >= visibleGroundHeight('spectate', hi, pitchOffsetDeg)) {
+    return hi;
+  }
+  for (let i = 0; i < 36; i++) {
+    const mid = (lo + hi) * 0.5;
+    if (visibleGroundHeight('spectate', mid, pitchOffsetDeg) < target) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return (lo + hi) * 0.5;
 }
 
 // During a mode transition the perspective camera keeps the same vertical
@@ -111,7 +195,7 @@ export function easeInOut(t: number): number {
 // perspective camera that vector is never parallel to the view direction
 // at pitch in (0°, 90°], so lookAt stays well defined through the whole
 // transition — unlike (0,1,0), which is degenerate exactly at 90°.
-export const CAMERA_UP = { x: 0, y: 0, z: -1 } as const;
+const CAMERA_UP = { x: 0, y: 0, z: -1 } as const;
 
 // The on-screen "up" direction: `up` projected perpendicular to the view
 // direction. Pure; tested at 55° / 89.9° / 90° pitch.
@@ -155,4 +239,110 @@ export function perspectiveClipPlanes(
 // Dynamic depth clip planes for the top-down orthographic camera (ADR 0051).
 export function orthoClipPlanes(cameraY: number): { near: number; far: number } {
   return { near: 1, far: Math.max(300, cameraY + 80) };
+}
+
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface OrbitalCameraPose {
+  position: Vec3;
+  forward: Vec3;
+  right: Vec3;
+  up: Vec3;
+  // Euler angles in Three.js 'YXZ' order (x = -pitchRad, y = -yawRad, z = 0).
+  eulerYXZ: Vec3;
+}
+
+// Singularity-free 3D orbital camera pose for any `yaw` (0 = facing map north
+// -Z, +yaw turns clockwise toward east +X) and `pitchDeg` in (0°, 90°].
+export function orbitalCameraPose(
+  center: { x: number; y: number },
+  centerY: number,
+  dist: number,
+  yaw: number,
+  pitchDeg: number,
+): OrbitalCameraPose {
+  const pitch = (pitchDeg * Math.PI) / 180;
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+
+  const forward: Vec3 = { x: cp * sy, y: -sp, z: -cp * cy };
+  const right: Vec3 = { x: cy, y: 0, z: sy };
+  const up: Vec3 = { x: sp * sy, y: cp, z: -sp * cy };
+  const position: Vec3 = {
+    x: center.x - dist * forward.x,
+    y: centerY + dist * sp,
+    z: center.y - dist * forward.z,
+  };
+  return {
+    position,
+    forward,
+    right,
+    up,
+    eulerYXZ: { x: -pitch, y: -yaw, z: 0 },
+  };
+}
+
+// Exact intersection of a 3D ray with a horizontal ground plane Y = planeY,
+// rejecting near-horizon rays whose normalized downward slope < minDownSlope.
+export function intersectHorizontalPlane(
+  ray: { origin: Vec3; dir: Vec3 },
+  planeY: number,
+  minDownSlope: number = 0.08,
+): { x: number; y: number } | null {
+  const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
+  if (len <= 0) {
+    return null;
+  }
+  const dy = ray.dir.y / len;
+  if (dy > -minDownSlope) {
+    return null;
+  }
+  const t = (planeY - ray.origin.y) / ray.dir.y;
+  if (t < 0 || !Number.isFinite(t)) {
+    return null;
+  }
+  return {
+    x: ray.origin.x + ray.dir.x * t,
+    y: ray.origin.z + ray.dir.z * t,
+  };
+}
+
+// Ground-plane offset `(hit.x - center.x, hit.z - center.y)` for a spectate
+// camera ray at NDC `(ndcX, ndcY)`. Used for exact cursor-anchored zoom and
+// rotated trapezoid minimap frustum corners.
+export function spectateCursorGroundOffset(
+  ndcX: number,
+  ndcY: number,
+  aspect: number,
+  dist: number,
+  yaw: number,
+  pitchDeg: number,
+  centerY: number,
+  planeY: number,
+  minDownSlope: number = 0.08,
+): { x: number; y: number } | null {
+  const pose = orbitalCameraPose({ x: 0, y: 0 }, centerY, dist, yaw, pitchDeg);
+  const th = halfFovTan(SPECTATE_FOV_DEG);
+  const tw = th * aspect;
+  const dir: Vec3 = {
+    x: pose.forward.x + ndcX * tw * pose.right.x + ndcY * th * pose.up.x,
+    y: pose.forward.y + ndcY * th * pose.up.y,
+    z: pose.forward.z + ndcX * tw * pose.right.z + ndcY * th * pose.up.z,
+  };
+  return intersectHorizontalPlane({ origin: pose.position, dir }, planeY, minDownSlope);
+}
+
+// Frame-rate-independent exponential damping factor for time constant `tauSec`.
+export function frameDampingAlpha(dtSec: number, tauSec: number): number {
+  const dt = Math.max(0, Math.min(0.1, dtSec));
+  if (tauSec <= 0) {
+    return 1;
+  }
+  return 1 - Math.exp(-dt / tauSec);
 }

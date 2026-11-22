@@ -19,23 +19,17 @@ import {
   type MinimapRenderCache,
 } from './paint-minimap';
 
-const MAX_BACKING = 256;
+const DEFAULT_CSS_WIDTH = 196;
 const SNAPSHOT_POLL_MS = 100;
 const WHEEL_ZOOM_STEP = 0.12;
 
 function computeBackingSize(mapW: number, mapH: number): { width: number; height: number } {
   if (mapW <= 0 || mapH <= 0) {
-    return { width: MAX_BACKING, height: MAX_BACKING };
-  }
-  if (mapW >= mapH) {
-    return {
-      width: MAX_BACKING,
-      height: Math.max(1, Math.round((MAX_BACKING * mapH) / mapW)),
-    };
+    return { width: DEFAULT_CSS_WIDTH, height: DEFAULT_CSS_WIDTH };
   }
   return {
-    width: Math.max(1, Math.round((MAX_BACKING * mapW) / mapH)),
-    height: MAX_BACKING,
+    width: DEFAULT_CSS_WIDTH,
+    height: Math.max(1, Math.round((DEFAULT_CSS_WIDTH * mapH) / mapW)),
   };
 }
 
@@ -50,9 +44,7 @@ function canvasPointFromEvent(
   if (rect.width <= 0 || rect.height <= 0) {
     return null;
   }
-  const px = ((clientX - rect.left) / rect.width) * canvas.width;
-  const py = ((clientY - rect.top) / rect.height) * canvas.height;
-  return canvasToMap(px, py, canvas.width, canvas.height, mapW, mapH);
+  return canvasToMap(clientX - rect.left, clientY - rect.top, rect.width, rect.height, mapW, mapH);
 }
 
 export function Minimap({
@@ -105,6 +97,20 @@ export function Minimap({
       if (canvas === null || cache === null) {
         return;
       }
+      const dpr = Math.min(4, Math.max(1, window.devicePixelRatio || 1));
+      const rect = canvas.getBoundingClientRect();
+      let pixelRatio = 1;
+      if (rect.width > 0 && rect.height > 0) {
+        const targetW = Math.max(1, Math.round(rect.width * dpr));
+        const targetH = Math.max(1, Math.round(rect.height * dpr));
+        if (canvas.width !== targetW) {
+          canvas.width = targetW;
+        }
+        if (canvas.height !== targetH) {
+          canvas.height = targetH;
+        }
+        pixelRatio = dpr;
+      }
       const cam = useCameraStore.getState();
       const sel = useSelectionStore.getState();
       const viewportAspect =
@@ -117,7 +123,10 @@ export function Minimap({
         cameraMode: cam.mode,
         cameraCenter: cam.center,
         cameraZoom: cam.zoom,
+        cameraYaw: cam.yaw,
+        cameraPitchOffsetDeg: cam.pitchOffsetDeg,
         viewportAspect,
+        pixelRatio,
         moveMarker: sel.moveMarker,
         nowMs: performance.now(),
       });
@@ -135,6 +144,11 @@ export function Minimap({
     const unsubCamera = useCameraStore.subscribe(scheduleDraw);
     const unsubSelection = useSelectionStore.subscribe(scheduleDraw);
     window.addEventListener('resize', scheduleDraw);
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleDraw) : null;
+    if (resizeObserver !== null && canvasRef.current !== null) {
+      resizeObserver.observe(canvasRef.current);
+    }
 
     return () => {
       disposed = true;
@@ -145,6 +159,7 @@ export function Minimap({
       unsubCamera();
       unsubSelection();
       window.removeEventListener('resize', scheduleDraw);
+      resizeObserver?.disconnect();
     };
   }, [open, client, db, map, isHostile, backing.width, backing.height]);
 

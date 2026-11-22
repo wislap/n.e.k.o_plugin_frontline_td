@@ -8,7 +8,7 @@ import { useCameraStore } from '../../../client/camera-store';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import type { Snapshot } from '../../../core/index';
-import { buildTerrainGeometry, parseHexColor } from './geometry';
+import { buildTerrainGeometry, buildTerrainSkirtGeometry, parseHexColor } from './geometry';
 
 export interface TerrainMeshProps {
   snapshot: Snapshot | null;
@@ -61,7 +61,7 @@ function updateTerrainGrid(mesh: THREE.Mesh, mat: THREE.ShaderMaterial): void {
   mesh.visible = true;
   const cam = useCameraStore.getState();
   const mode = useInteractionStore.getState().mode;
-  const extent = visibleGroundHeight(cam.mode, cam.zoom);
+  const extent = visibleGroundHeight(cam.mode, cam.zoom, cam.pitchOffsetDeg);
   const opacity =
     cam.mode === 'tactical' || mode !== 'command'
       ? extent > 85
@@ -111,11 +111,30 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     return geo;
   }, [data]);
 
+  const skirtGeometry = useMemo(() => {
+    if (heights === undefined) {
+      return null;
+    }
+    const skirt = buildTerrainSkirtGeometry(width, height, heights, ramps);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(skirt.positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(skirt.colors, 3));
+    geo.setIndex(new THREE.BufferAttribute(skirt.indices, 1));
+    geo.computeVertexNormals();
+    return geo;
+  }, [heights, width, height, ramps]);
+
   useEffect(() => {
     return () => {
       geometry?.dispose();
     };
   }, [geometry]);
+
+  useEffect(() => {
+    return () => {
+      skirtGeometry?.dispose();
+    };
+  }, [skirtGeometry]);
 
   useEffect(() => {
     return () => {
@@ -141,6 +160,11 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
       <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
         <meshLambertMaterial vertexColors />
       </mesh>
+      {skirtGeometry !== null && (
+        <mesh geometry={skirtGeometry} frustumCulled={false}>
+          <meshLambertMaterial vertexColors />
+        </mesh>
+      )}
       <mesh
         ref={gridMeshRef}
         geometry={geometry}

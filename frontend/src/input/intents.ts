@@ -9,7 +9,10 @@ export type Intent =
   | { kind: 'dev.toggle_panel' }
   | { kind: 'camera.toggle_mode' }
   | { kind: 'camera.toggle_lock' }
-  | { kind: 'camera.pan_px'; dx: number; dy: number }
+  | { kind: 'camera.orbit_px'; dx: number; dy: number }
+  | { kind: 'camera.pan_start'; x: number; y: number }
+  | { kind: 'camera.pan_px'; prevX: number; prevY: number; x: number; y: number }
+  | { kind: 'camera.reset_orientation' }
   | { kind: 'camera.zoom'; delta: number; x: number; y: number }
   | { kind: 'mode.select'; mode: PrimaryMode }
   | { kind: 'tool.exit' }

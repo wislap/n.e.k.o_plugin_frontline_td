@@ -33,7 +33,10 @@
       "tactical": "战术视角",
       "toggle_hint": "切换视角 (Tab)",
       "locked": "视角锁定：开",
-      "unlocked": "视角锁定：关"
+      "unlocked": "视角锁定：关",
+      "compass_n": "N",
+      "reset_north": "镜头归北",
+      "reset_north_hint": "归位正北视角 (N / Home)"
     },
     "mode": {
       "command": "指挥",
@@ -50,7 +53,7 @@
     "demolish_confirm_btn": "确认拆除",
     "demolish_cancel_btn": "取消",
     "selected": "已选中 {{count}} 个",
-    "hints": "F1-F3 模式 | Tab 视角 | WASD 平移 | Space 暂停 | -/= 速度 | L 物流 | ` 调试 | K 快捷键",
+    "hints": "F1-F3 模式 | Tab 视角 | WASD 平移 | Q/E 旋转 | N 归北 | Space 暂停 | K 快捷键",
     "help_button_hint": "快捷键说明 (K)",
     "threat": "敌军集结中 · 约 {{count}} · {{time}} 后进攻",
     "fullscreen": "全屏",
@@ -81,6 +84,10 @@
       "speed": "调整游戏速度",
       "camera": "切换观战 / 战术视角",
       "pan": "平移镜头",
+      "rotate_camera": "水平旋转镜头",
+      "orbit_camera": "自由旋转 / 俯仰镜头",
+      "grab_pan": "抓地平移镜头",
+      "reset_north": "镜头归北",
       "modes": "切换主交互模式",
       "logistics_overlay": "开关物流覆盖层",
       "debug": "开关调试面板",

@@ -22,7 +22,21 @@ describe('pan tracker', () => {
     t.handleKeyDown('Space');
     t.handleKeyDown('ArrowLeft');
     expect(t.panVector()).toEqual({ x: -1, y: 0 });
+    expect(t.yawDelta()).toBe(0);
     t.reset();
     expect(t.panVector()).toEqual({ x: 0, y: 0 });
+  });
+
+  it('tracks Q and E rotation keys independently of WASD pan', () => {
+    const t = createPanTracker();
+    t.handleKeyDown('KeyQ');
+    expect(t.yawDelta()).toBe(-1);
+    expect(t.panVector()).toEqual({ x: 0, y: 0 });
+    t.handleKeyDown('KeyE');
+    expect(t.yawDelta()).toBe(0);
+    t.handleKeyUp('KeyQ');
+    expect(t.yawDelta()).toBe(1);
+    t.handleKeyUp('KeyE');
+    expect(t.yawDelta()).toBe(0);
   });
 });
