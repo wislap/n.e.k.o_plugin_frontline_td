@@ -18,6 +18,8 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const error = useRuntimeStore((state) => state.error);
   const theme = useUiStore((state) => state.theme);
   const setTheme = useUiStore((state) => state.setTheme);
+  const outline = useUiStore((state) => state.outline);
+  const setOutline = useUiStore((state) => state.setOutline);
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
@@ -117,6 +119,17 @@ export function DebugPanel({ client }: { client: SimClient }) {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className={styles['row']}>
+        <span className={styles['label']}>{t('dev.outline')}</span>
+        <input
+          type="checkbox"
+          checked={outline}
+          onChange={(e) => {
+            setOutline(e.target.checked);
+          }}
+        />
       </div>
 
       <div className={styles['controls']}>

@@ -51,6 +51,9 @@ interface ThemePost {
   // Grade (stage 2): contrast multiplier around mid-grey, saturation scale.
   contrast: number;
   saturation: number;
+  // Downscale+nearest-upsample granularity in px at 1080p (0 = off;
+  // mindustry-pixel uses ~4 for a pixel-crisp look).
+  pixelation: number;
 }
 
 interface ThemeMaterials {
@@ -76,8 +79,9 @@ interface ThemeMarkers {
 }
 
 // Fog of war treatment (stage 2 item 4): 'plain' = soft dark film,
-// 'hatch' = faint diagonal lines on unexplored, 'grid' = faint cell grid.
-type FogStyle = 'plain' | 'hatch' | 'grid';
+// 'hatch' = faint diagonal lines on unexplored, 'grid' = faint cell grid,
+// 'survey' = pale cartography paper with height contours + dot grid.
+type FogStyle = 'plain' | 'hatch' | 'grid' | 'survey';
 
 interface ThemeScatter {
   // Which prop sets to spawn: 'clutter' (rocks/debris/tufts), 'studs'
@@ -103,12 +107,16 @@ interface ThemeBackground {
   platformGridAlpha: number;
   nebula: string;
   nebula2: string;
+  // Scene fog color for distance haze toward the horizon ('' = none).
+  haze: string;
 }
 
 export interface RenderTheme {
   id: ThemeId;
   accent: string;
   exposure: number;
+  // Ink color for the inverted-hull outline pass (debug toggle).
+  outline: string;
   fogColor: string;
   fogSoft: boolean;
   fogStyle: FogStyle;
@@ -141,6 +149,7 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
     id: 'legacy',
     accent: '#ffe08a',
     exposure: 1,
+    outline: '#1a1c22',
     fogColor: '#05070d',
     fogSoft: false,
     fogStyle: 'plain',
@@ -167,6 +176,7 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       noiseOpacity: 0,
       contrast: 1,
       saturation: 1,
+      pixelation: 0,
     },
     materials: {
       unitBody: '#ffffff',
@@ -197,12 +207,14 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       platformGridAlpha: 0,
       nebula: '#000000',
       nebula2: '#000000',
+      haze: '',
     },
   },
   endfield: {
     id: 'endfield',
     accent: '#FFE600',
     exposure: 1.0,
+    outline: '#14161a',
     fogColor: '#0a0e10',
     fogSoft: true,
     fogStyle: 'hatch',
@@ -242,6 +254,7 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       noiseOpacity: 0.045,
       contrast: 1.08,
       saturation: 0.92,
+      pixelation: 0,
     },
     materials: {
       unitBody: '#c8cbc6',
@@ -272,12 +285,14 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       platformGridAlpha: 0,
       nebula: '#000000',
       nebula2: '#000000',
+      haze: '',
     },
   },
   shapez: {
     id: 'shapez',
     accent: '#3FD8FF',
     exposure: 1.05,
+    outline: '#1c1440',
     fogColor: '#171240',
     fogSoft: true,
     fogStyle: 'grid',
@@ -317,6 +332,7 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       noiseOpacity: 0,
       contrast: 1.1,
       saturation: 1.05,
+      pixelation: 0,
     },
     materials: {
       unitBody: '#f4f5fa',
@@ -347,12 +363,14 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       platformGridAlpha: 0.08,
       nebula: '#7a55d8',
       nebula2: '#2f8f9f',
+      haze: '',
     },
   },
   mindustry: {
     id: 'mindustry',
     accent: '#FFD37F',
     exposure: 1.1,
+    outline: '#120d0a',
     fogColor: '#171110',
     fogSoft: true,
     fogStyle: 'plain',
@@ -392,6 +410,7 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       noiseOpacity: 0,
       contrast: 1.12,
       saturation: 1.06,
+      pixelation: 0,
     },
     materials: {
       unitBody: '#43464c',
@@ -422,6 +441,170 @@ export const RENDER_THEMES: Record<ThemeId, RenderTheme> = {
       platformGridAlpha: 0,
       nebula: '#000000',
       nebula2: '#000000',
+      haze: '',
+    },
+  },
+  // endfield-day: same theme re-lit to Endfield's actual look — high-key
+  // daylight, pale sky + distance haze, fresh grass greens, near-white
+  // structures with graphite trim and hazard accents, pale "survey paper"
+  // fog with contour lines.
+  'endfield-day': {
+    id: 'endfield-day',
+    accent: '#FFE600',
+    exposure: 1.15,
+    outline: '#1c1f1a',
+    fogColor: '#e4e3dc',
+    fogSoft: true,
+    fogStyle: 'survey',
+    lighting: {
+      hemiSky: '#bcd8ee',
+      hemiGround: '#6f8f5a',
+      hemiIntensity: 0.85,
+      sunColor: '#fff6e0',
+      sunIntensity: 2.0,
+      sunDir: [-0.45, 0.62, -0.45],
+      rimColor: '#cfe4f4',
+      rimIntensity: 0.35,
+      rimDir: [0.5, 0.35, 0.6],
+      shadow: true,
+    },
+    terrain: {
+      rampLow: '#6f9e5c',
+      rampHigh: '#a7c487',
+      rampStrength: 0.9,
+      cliffColor: '#bdb8ad',
+      cliffStart: 0.6,
+      cliffEnd: 0.85,
+      gridStrength: 0.05,
+      noiseAmp: 0.06,
+      noiseStyle: 'cell',
+      slopeDarken: 0.25,
+      edgeOcc: 0.15,
+      edgeFadeDist: 14,
+    },
+    post: {
+      enabled: true,
+      aoIntensity: 0.9,
+      aoRadius: 0.7,
+      bloomIntensity: 0.15,
+      bloomThreshold: 0.95,
+      vignette: 0,
+      noiseOpacity: 0,
+      contrast: 1.04,
+      saturation: 1.02,
+      pixelation: 0,
+    },
+    materials: {
+      unitBody: '#ecebe5',
+      structureBody: '#ecebe5',
+      structureTrim: '#33373a',
+      unitEmissive: 'faction',
+      structureEmissive: 'faction',
+      emissiveBoost: 0.6,
+      roughness: 0.6,
+      metalness: 0.05,
+    },
+    markers: {
+      accent: '#1f2123',
+      secondary: '#FFE600',
+      invalid: '#d43a2e',
+      link: '#1f2123',
+    },
+    scatter: { kind: 'clutter', density: 0.07 },
+    background: {
+      kind: 'sky',
+      top: '#bfd9ec',
+      horizon: '#eef2ee',
+      bottom: '#a8b49a',
+      platform: '#9ab27e',
+      platformFadeStart: 0.55,
+      platformFadeEnd: 1.1,
+      platformGrid: '#000000',
+      platformGridAlpha: 0,
+      nebula: '#000000',
+      nebula2: '#000000',
+      haze: '#e8efe6',
+    },
+  },
+  // mindustry-pixel: same Mindustry identity pushed toward the real game —
+  // saturated distinct floor colors, dark-outlined blocks, pixel-crisp
+  // post pass, near-black blurred darkness, orthographic tactical default.
+  'mindustry-pixel': {
+    id: 'mindustry-pixel',
+    accent: '#FFD37F',
+    exposure: 1.1,
+    outline: '#0f0b08',
+    fogColor: '#060504',
+    fogSoft: true,
+    fogStyle: 'plain',
+    lighting: {
+      hemiSky: '#e8d0a0',
+      hemiGround: '#3a2818',
+      hemiIntensity: 0.7,
+      sunColor: '#ffe4b8',
+      sunIntensity: 1.6,
+      sunDir: [-0.4, 0.72, -0.2],
+      rimColor: '#ffb070',
+      rimIntensity: 0.15,
+      rimDir: [0.5, 0.3, 0.55],
+      shadow: true,
+    },
+    terrain: {
+      rampLow: '#4a7a3a',
+      rampHigh: '#8fae4a',
+      rampStrength: 0.95,
+      cliffColor: '#5a4632',
+      cliffStart: 0.55,
+      cliffEnd: 0.8,
+      gridStrength: 0.35,
+      noiseAmp: 0.22,
+      noiseStyle: 'pixel',
+      slopeDarken: 0.3,
+      edgeOcc: 0.4,
+      edgeFadeDist: 10,
+    },
+    post: {
+      enabled: true,
+      aoIntensity: 0.8,
+      aoRadius: 0.6,
+      bloomIntensity: 0.5,
+      bloomThreshold: 0.85,
+      vignette: 0,
+      noiseOpacity: 0,
+      contrast: 1.15,
+      saturation: 1.15,
+      pixelation: 4,
+    },
+    materials: {
+      unitBody: '#8a8f96',
+      structureBody: '#8a929c',
+      structureTrim: '#3a3f45',
+      unitEmissive: '#ffb060',
+      structureEmissive: '#ffb060',
+      emissiveBoost: 1.2,
+      roughness: 0.9,
+      metalness: 0.05,
+    },
+    markers: {
+      accent: '#FFD37F',
+      secondary: '#FFD37F',
+      invalid: '#ff5a4f',
+      link: '#FFD37F',
+    },
+    scatter: { kind: 'boulders', density: 0.06 },
+    background: {
+      kind: 'rock',
+      top: '#14100c',
+      horizon: '#14100c',
+      bottom: '#0c0906',
+      platform: '#1c1710',
+      platformFadeStart: 0.55,
+      platformFadeEnd: 1.1,
+      platformGrid: '#000000',
+      platformGridAlpha: 0,
+      nebula: '#000000',
+      nebula2: '#000000',
+      haze: '',
     },
   },
 };

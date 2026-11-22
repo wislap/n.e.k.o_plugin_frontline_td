@@ -43,13 +43,23 @@ function applyRendererSettings(
   };
 }
 
-function applySceneBackground(scene: THREE.Scene, themed: boolean): () => void {
+function applySceneBackground(
+  scene: THREE.Scene,
+  themed: boolean,
+  haze: string,
+  extent: number,
+): () => void {
   const prev = scene.background;
+  const prevFog = scene.fog;
   if (!themed) {
     scene.background = null;
   }
+  if (themed && haze !== '') {
+    scene.fog = new THREE.Fog(new THREE.Color(haze), extent * 0.9, extent * 2.6);
+  }
   return () => {
     scene.background = prev;
+    scene.fog = prevFog;
   };
 }
 
@@ -65,11 +75,11 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
     return applyRendererSettings(gl, id !== 'legacy', exposure);
   }, [gl, id, exposure]);
 
-  useEffect(() => {
-    return applySceneBackground(scene, id !== 'legacy');
-  }, [scene, id]);
-
   const diag = Math.hypot(mapWidth, mapHeight);
+
+  useEffect(() => {
+    return applySceneBackground(scene, id !== 'legacy', theme.background.haze, diag * 0.5);
+  }, [scene, id, theme.background.haze, diag]);
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;
   const sunPos: [number, number, number] = [

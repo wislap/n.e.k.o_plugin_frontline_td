@@ -45,10 +45,15 @@ export interface FogLayerProps {
 // endfield, cell grid for shapez) driven by theme.fogStyle.
 function createSoftFogMaterial(theme: {
   fogColor: string;
-  fogStyle: 'plain' | 'hatch' | 'grid';
+  fogStyle: 'plain' | 'hatch' | 'grid' | 'survey';
 }): THREE.ShaderMaterial {
   const explored = new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
-  const pattern = new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
+  // Survey paper draws darker ink lines on a pale ground; dark themes draw
+  // lighter pattern lines on their fog color.
+  const pattern =
+    theme.fogStyle === 'survey'
+      ? new THREE.Color(theme.fogColor).multiplyScalar(0.62)
+      : new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -59,12 +64,23 @@ function createSoftFogMaterial(theme: {
       uMap: { value: null },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
-      uStyle: { value: theme.fogStyle === 'hatch' ? 1 : theme.fogStyle === 'grid' ? 2 : 0 },
+      uStyle: {
+        value:
+          theme.fogStyle === 'hatch'
+            ? 1
+            : theme.fogStyle === 'grid'
+              ? 2
+              : theme.fogStyle === 'survey'
+                ? 3
+                : 0,
+      },
     },
     vertexShader: `
       varying vec2 vUv;
+      varying vec3 vWorld;
       void main() {
         vUv = uv;
+        vWorld = position;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -77,6 +93,7 @@ function createSoftFogMaterial(theme: {
       uniform vec2 uMapSize;
       uniform float uStyle;
       varying vec2 vUv;
+      varying vec3 vWorld;
       float fogA(vec2 uv) { return texture2D(uMap, uv).g; }
       void main() {
         vec2 o = uTexel * 0.8;
@@ -89,7 +106,14 @@ function createSoftFogMaterial(theme: {
         float unexplored = smoothstep(0.55, 0.8, a);
         float pat = 0.0;
         vec2 cell = vUv * uMapSize;
-        if (uStyle > 1.5) {
+        if (uStyle > 2.5) {
+          // Survey paper: height-contour lines plus a faint dot grid.
+          float c = abs(fract(vWorld.y * 2.0) - 0.5);
+          float cont = 1.0 - min(c / 0.05, 1.0);
+          vec2 dg = fract(cell) - 0.5;
+          float dotG = 1.0 - min(length(dg) / 0.09, 1.0);
+          pat = cont * 0.8 + dotG * 0.45;
+        } else if (uStyle > 1.5) {
           vec2 g = abs(fract(cell - 0.5) - 0.5);
           pat = (1.0 - min(min(g.x, g.y) / 0.08, 1.0)) * 0.5;
         } else if (uStyle > 0.5) {
@@ -186,7 +210,11 @@ export function FogLayer({ client, map }: FogLayerProps) {
         const uExplored = mat.uniforms['uExplored'] as { value: THREE.Color } | undefined;
         uExplored?.value.set(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
         const uPattern = mat.uniforms['uPattern'] as { value: THREE.Color } | undefined;
-        uPattern?.value.set(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
+        if (theme.fogStyle === 'survey') {
+          uPattern?.value.set(theme.fogColor).multiplyScalar(0.62);
+        } else {
+          uPattern?.value.set(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
+        }
         const uTexel = mat.uniforms['uTexel'] as { value: THREE.Vector2 } | undefined;
         uTexel?.value.set(1 / grid.width, 1 / grid.height);
         const uMapSize = mat.uniforms['uMapSize'] as { value: THREE.Vector2 } | undefined;

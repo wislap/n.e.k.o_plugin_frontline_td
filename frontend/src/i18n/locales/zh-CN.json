@@ -21,7 +21,10 @@
     "theme_legacy": "Legacy",
     "theme_endfield": "Endfield",
     "theme_shapez": "Shapez",
-    "theme_mindustry": "Mindustry"
+    "theme_mindustry": "Mindustry",
+    "theme_endfield-day": "Endfield（白昼）",
+    "theme_mindustry-pixel": "Mindustry（像素）",
+    "outline": "描边"
   },
   "hud": {
     "paused": "已暂停",

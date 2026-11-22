@@ -21,7 +21,10 @@
     "theme_legacy": "Legacy",
     "theme_endfield": "Endfield",
     "theme_shapez": "Shapez",
-    "theme_mindustry": "Mindustry"
+    "theme_mindustry": "Mindustry",
+    "theme_endfield-day": "Endfield (Day)",
+    "theme_mindustry-pixel": "Mindustry (Pixel)",
+    "outline": "Outline"
   },
   "hud": {
     "paused": "Paused",

@@ -31,11 +31,12 @@ import { ThreatsLayer } from '../features/squads/render/index';
 import { FogLayer, MemoryLayer } from '../features/vision/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
+import { useCameraStore } from '../client/camera-store';
 import { CameraRig } from './camera/CameraRig';
 import { HpBars, type HpBarCollector, type HpBarSink } from './hp-bars';
 import { makeDispatch } from './input-dispatch';
 import { SelectionHighlightLayer } from './SelectionHighlightLayer';
-import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
+import { PostEffects, SceneLighting, ThemeBackground, useRenderTheme } from './theme/index';
 import { terrainY } from './world';
 
 const BACKGROUND = '#0b1020';
@@ -199,6 +200,19 @@ function MoveMarker({
   );
 }
 
+// mindustry-pixel reads as the top-down game: default into tactical view on
+// theme entry (Tab still switches back; leaving the theme does not force
+// the view, so a user-set mode survives theme hops).
+function ThemeCameraDefault() {
+  const theme = useRenderTheme();
+  useEffect(() => {
+    if (theme.id === 'mindustry-pixel' && useCameraStore.getState().mode === 'spectate') {
+      useCameraStore.getState().setMode('tactical', false);
+    }
+  }, [theme.id]);
+  return null;
+}
+
 export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanvasProps) {
   const router = useIntentRouter();
   // Wait for the first snapshot (terrain layers + observer) before
@@ -231,6 +245,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Canvas frameloop="always" style={{ background: BACKGROUND }}>
+        <ThemeCameraDefault />
         <SceneLighting mapWidth={grid.width} mapHeight={grid.height} />
         {ready && <ThemeBackground mapWidth={grid.width} mapHeight={grid.height} />}
         {ready && (

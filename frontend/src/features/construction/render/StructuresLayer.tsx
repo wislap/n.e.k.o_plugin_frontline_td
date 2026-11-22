@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { effectiveSpectatePitchDeg } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import type { SimClient } from '../../../client/sim-client';
+import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb } from '../../../content/index';
 import { useRenderTheme } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
@@ -28,6 +29,7 @@ import {
   type ConstructionStructures,
 } from '../protocol';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
+import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { createThemedStructureMaterial } from './themed-structure-material';
 import {
   ACTIVE_STRUCTURE_GLYPHS,
@@ -206,7 +208,20 @@ export function StructuresLayer({
 }: StructuresLayerProps) {
   const [capacity, setCapacity] = useState(64);
   const theme = useRenderTheme();
+  const outlineOn = useUiStore((s) => s.outline);
+  const outlineMat = useMemo(
+    () => (theme.id !== 'legacy' && outlineOn ? createOutlineMaterial(theme.outline) : null),
+    [theme, outlineOn],
+  );
+  useEffect(() => {
+    return () => {
+      outlineMat?.dispose();
+    };
+  }, [outlineMat]);
   const silRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>({});
+  const silOutlineRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>(
+    {},
+  );
   const glyphRefs = useRef<Partial<Record<ActiveGlyph, THREE.InstancedMesh | null>>>({});
   const blueprintRef = useRef<THREE.InstancedMesh>(null);
   const waitingRef = useRef<THREE.InstancedMesh>(null);
@@ -435,6 +450,7 @@ export function StructuresLayer({
       const silMesh = silRefs.current[s];
       if (silMesh !== undefined && silMesh !== null) {
         commitMeshBuffers(silMesh, silCounts[s]);
+        bindOutline(silOutlineRefs.current[s] ?? null, silMesh);
       }
       const dimAttr = dimAttrs[s];
       if (dimAttr !== undefined) {
@@ -494,6 +510,19 @@ export function StructuresLayer({
           )}
         </instancedMesh>
       ))}
+      {outlineMat !== null &&
+        STRUCTURE_SILHOUETTES.map((s) => (
+          <instancedMesh
+            key={`ol-${s}-${capacity}-${theme.id}`}
+            ref={(m) => {
+              silOutlineRefs.current[s] = m;
+            }}
+            args={[undefined, undefined, capacity]}
+            frustumCulled={false}
+          >
+            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
+          </instancedMesh>
+        ))}
       {ACTIVE_STRUCTURE_GLYPHS.map((g) => (
         <instancedMesh
           key={`gly-${g}-${capacity}`}

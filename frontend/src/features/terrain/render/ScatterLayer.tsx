@@ -9,7 +9,9 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
+import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { useRenderTheme } from '../../../render/theme/index';
+import { useUiStore } from '../../../client/ui-store';
 import { terrainY } from '../../../render/world';
 import {
   RoadWorksChannel,
@@ -42,6 +44,7 @@ function cellHash(x: number, y: number, salt: number): number {
 
 const U32 = 1 / 4294967296;
 
+const ATTACH_MATERIAL = 'material';
 const SCATTER_MESH_PREFIX = 'scatter-';
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 const TUFT_COLOR = '#5d6e38';
@@ -109,6 +112,10 @@ function applyScatter(
     if (mesh.instanceColor !== null) {
       mesh.instanceColor.needsUpdate = true;
     }
+    const ol = group.getObjectByName(`${SCATTER_MESH_PREFIX}ol-${kind}`);
+    if (ol instanceof THREE.InstancedMesh) {
+      bindOutline(ol, mesh);
+    }
   }
 }
 
@@ -121,6 +128,16 @@ export interface ScatterLayerProps {
 
 export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const theme = useRenderTheme();
+  const outlineOn = useUiStore((s) => s.outline);
+  const outlineMat = useMemo(
+    () => (theme.id !== 'legacy' && outlineOn ? createOutlineMaterial(theme.outline) : null),
+    [theme, outlineOn],
+  );
+  useEffect(() => {
+    return () => {
+      outlineMat?.dispose();
+    };
+  }, [outlineMat]);
   const groupRef = useRef<THREE.Group>(null);
   const dummyRef = useRef(new THREE.Object3D());
   const colorRef = useRef(new THREE.Color());
@@ -323,9 +340,22 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
     return null;
   }
   const cap = (k: PropKind) => Math.max(1, props[k].length);
+  const outlineKinds = (Object.keys(props) as PropKind[]).filter((k) => props[k].length > 0);
 
   return (
     <group key={`${theme.id}-${kind}`} ref={groupRef}>
+      {outlineMat !== null &&
+        outlineKinds.map((k) => (
+          <instancedMesh
+            key={`ol-${k}`}
+            name={`${SCATTER_MESH_PREFIX}ol-${k}`}
+            raycast={NO_RAYCAST}
+            args={[undefined, undefined, cap(k)]}
+            frustumCulled={false}
+          >
+            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
+          </instancedMesh>
+        ))}
       {kind === 'clutter' && (
         <>
           <instancedMesh

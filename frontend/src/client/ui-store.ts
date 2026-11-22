@@ -10,17 +10,23 @@ export interface UiState {
   logisticsOverlay: boolean;
   keymapHelpOpen: boolean;
   minimapOpen: boolean;
+  // Edge-outline render pass toggle (debug panel; default on for
+  // mindustry-pixel, otherwise off — can be enabled on any theme).
+  outline: boolean;
   toggleDebugPanel(): void;
   toggleLogisticsOverlay(): void;
   toggleKeymapHelp(): void;
   toggleMinimap(): void;
   setTheme: (theme: ThemeId) => void;
+  setOutline: (outline: boolean) => void;
   reset(): void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
   debugPanelOpen: false,
   theme: themeFromSearch(typeof location === 'undefined' ? '' : location.search),
+  outline:
+    themeFromSearch(typeof location === 'undefined' ? '' : location.search) === 'mindustry-pixel',
   logisticsOverlay: false,
   keymapHelpOpen: true,
   minimapOpen: true,
@@ -37,7 +43,12 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => ({ minimapOpen: !state.minimapOpen }));
   },
   setTheme: (theme) => {
-    set({ theme });
+    // Switching themes restores the theme's default outline state; the
+    // checkbox can still override afterwards.
+    set({ theme, outline: theme === 'mindustry-pixel' });
+  },
+  setOutline: (outline) => {
+    set({ outline });
   },
   reset: () => {
     set({

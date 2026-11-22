@@ -2,11 +2,12 @@
 // useFrame (never React state), interpolates previous→latest positions by
 // handle, and draws a flat ring under selected units. Instance capacity
 // doubles when needed and never shrinks per frame.
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { pruneSelected, useSelectionStore } from '../../../client/selection-store';
+import { useUiStore } from '../../../client/ui-store';
 import {
   SalvageChannel,
   StructuresChannel,
@@ -14,11 +15,13 @@ import {
   type ConstructionStructures,
 } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
+import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { useRenderTheme } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
 
+const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
 const RING_SCALE = 1.5;
@@ -68,7 +71,18 @@ export function UnitsLayer({
   const [capacity, setCapacity] = useState(256);
   const theme = useRenderTheme();
   const themed = theme.id !== 'legacy';
+  const outlineOn = useUiStore((s) => s.outline);
+  const outlineMat = useMemo(
+    () => (themed && outlineOn ? createOutlineMaterial(theme.outline) : null),
+    [themed, outlineOn, theme],
+  );
+  useEffect(() => {
+    return () => {
+      outlineMat?.dispose();
+    };
+  }, [outlineMat]);
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const outlineRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const energyPipRef = useRef<THREE.InstancedMesh>(null);
   const bandRef = useRef<THREE.InstancedMesh>(null);
@@ -265,6 +279,7 @@ export function UnitsLayer({
       if (mesh.instanceColor !== null) {
         mesh.instanceColor.needsUpdate = true;
       }
+      bindOutline(outlineRefs.current[s] ?? null, mesh);
     }
     if (ring !== null) {
       ring.count = rings;
@@ -395,6 +410,26 @@ export function UnitsLayer({
         <octahedronGeometry args={[0.13, 0]} />
         <meshBasicMaterial />
       </instancedMesh>
+      {themed && outlineMat !== null && (
+        <>
+          {[0, 1, 2, 3].map((i) => (
+            <instancedMesh
+              key={`ol-${i}-${capacity}-${theme.id}`}
+              ref={(m) => {
+                outlineRefs.current[i] = m;
+              }}
+              args={[undefined, undefined, capacity]}
+              frustumCulled={false}
+            >
+              {i === 0 && <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />}
+              {i === 1 && <boxGeometry args={[1, UNIT_HEIGHT, 1]} />}
+              {i === 2 && <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />}
+              {i === 3 && <sphereGeometry args={[0.5, 12, 10]} />}
+              <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
+            </instancedMesh>
+          ))}
+        </>
+      )}
       {themed && (
         <instancedMesh
           key={`band-${capacity}`}
