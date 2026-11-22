@@ -22,11 +22,12 @@ const TICKS = 6000; // 5 minutes
 const SAMPLE_EVERY = 20; // 1 s
 const RESUPPLY_LIMIT = 120 * TPS; // continuous resupplying budget
 
-// Golden hash (ADR 0058 cleanup & real-map hardening: SquadHeading schema simplification,
-// unified mixed-tier squadGoalTier pacing/reachability, idleFar blocked-goal snap, and
-// existing ADR 0057/real-map rules): rule changes may legitimately change it — update in the
-// same commit with reason.
-const GOLDEN_HASH = 'd037f43174ab4cd2';
+// Golden hash (ADR 0059 P5 locomotion fusion: Stage 2b wall-parallel gradient,
+// unified mixed-tier GoalField/corridor cohesion, 15-ray engage surround arcs,
+// realized velocity damping, contagious local arrival, and C1 spatial aperture
+// spine + [3.8, 8.0] stream cross-fade): rule changes may legitimately change
+// it — update in the same commit with reason.
+const GOLDEN_HASH = 'c63a8667114b72df';
 
 describe('match smoke (proto_01, balanced bot vs director)', () => {
   it('plays 5 minutes: hash golden, waves launch, sane unit state', () => {

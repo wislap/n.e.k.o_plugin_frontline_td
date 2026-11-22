@@ -14,30 +14,28 @@ import {
   boundedLocalRejoin,
   buildWideGate,
   createRouteChainStore,
-  gateLanePoint,
   MAX_GATE_HALF_W,
   releaseRouteFollow,
   type RouteChainStore,
   type RouteFollowView,
   type RouteGate,
 } from './route-store';
+import { steerApertureSpine } from './aperture-spine';
 
 export {
   boundedLocalRejoin,
   createRouteChainStore,
   releaseRouteFollow,
+  steerApertureSpine as steerRouteFollow,
   type RouteChainStore,
   type RouteFollowView,
 };
 
 const CLUSTER_LINK_DIST_SQ = 81; // 9 cells
-const GATE_STEP_DIST = 3.0;
-const TRACE_SUBSTEP = 0.75;
-const MAX_TRACE_STEPS = 360;
-const GOAL_CUTOFF_DIST = 6.5;
-
-const lanePt = { x: 0, y: 0 };
-const nextLanePt = { x: 0, y: 0 };
+const GATE_STEP_DIST = 1.5;
+const TRACE_SUBSTEP = 0.5;
+const MAX_TRACE_STEPS = 540;
+const GOAL_CUTOFF_DIST = 4.5;
 
 function clusterOpenGroundSkip(
   terrain: TerrainApi,
@@ -219,12 +217,19 @@ export function assignClusterRoutes(
     let px = ux[repIdx] as number;
     let py = uy[repIdx] as number;
     let arc = 0;
-    let nextEmit = 2.5;
+    let nextEmit = GATE_STEP_DIST;
     let steps = 0;
     let lastX = px;
     let lastY = py;
     let lastTx = 1;
     let lastTy = 0;
+    const d0 = pathing.smoothDirectionAt(goalId, px, py);
+    const d0Len = d0 === null ? 0 : Math.sqrt(d0.dx * d0.dx + d0.dy * d0.dy);
+    if (d0 !== null && d0Len > 1e-9) {
+      lastTx = d0.dx / d0Len;
+      lastTy = d0.dy / d0Len;
+      gates.push(buildWideGate(terrain, cls, tier, px, py, lastTx, lastTy, 0));
+    }
 
     for (let step = 0; step < MAX_TRACE_STEPS; step++) {
       const gdx = goalCx - px;
@@ -258,7 +263,7 @@ export function assignClusterRoutes(
         !lineWalkable(terrain, cls, prevGate.x, prevGate.y, nxPos, nyPos, tier) &&
         (px !== prevGate.x || py !== prevGate.y)
       ) {
-        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, prevGate));
+        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, arc, prevGate));
         nextEmit = arc + GATE_STEP_DIST;
       }
       px = nxPos;
@@ -270,19 +275,22 @@ export function assignClusterRoutes(
       lastTx = tx;
       lastTy = ty;
       if (arc >= nextEmit) {
-        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, gates[gates.length - 1]));
+        gates.push(buildWideGate(terrain, cls, tier, px, py, tx, ty, arc, gates[gates.length - 1]));
         nextEmit = arc + GATE_STEP_DIST;
       }
     }
+    const lastGate = gates[gates.length - 1];
     if (gates.length === 0 && steps >= 2) {
-      gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy));
+      gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy, arc));
+    } else if (lastGate !== undefined && arc > lastGate.arc + 0.5) {
+      gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy, arc, lastGate));
     }
     for (let k = gates.length - 2; k >= 0; k--) {
       const cur = gates[k];
       const nxt = gates[k + 1];
       if (cur !== undefined && nxt !== undefined) {
-        cur.leftW = Math.min(cur.leftW, nxt.leftW + 1.25);
-        cur.rightW = Math.min(cur.rightW, nxt.rightW + 1.25);
+        cur.leftW = Math.min(cur.leftW, nxt.leftW + 0.7);
+        cur.rightW = Math.min(cur.rightW, nxt.rightW + 0.7);
         cur.halfW = (cur.leftW + cur.rightW) * 0.5;
       }
     }
@@ -301,6 +309,47 @@ export function assignClusterRoutes(
       }
     }
     const clusterHalfW = Math.min(MAX_GATE_HALF_W, maxAbsLat);
+    // Bake lookahead aperture profile (0.22..1.0) and C1-smooth twice so column morphing never kinks.
+    const gLen = gates.length;
+    const denom = Math.max(0.8, clusterHalfW);
+    let rawAp = new Float64Array(gLen);
+    let smoothAp = new Float64Array(gLen);
+    for (let i = 0; i < gLen; i++) {
+      const gi = gates[i];
+      if (gi === undefined) {
+        continue;
+      }
+      const lookEnd = gi.arc + 4.5;
+      let minHalfW = clusterHalfW;
+      for (let j = i; j < gLen; j++) {
+        const gj = gates[j];
+        if (gj === undefined || gj.arc > lookEnd) {
+          break;
+        }
+        if (gj.halfW < minHalfW) {
+          minHalfW = gj.halfW;
+        }
+      }
+      rawAp[i] = Math.max(0.22, Math.min(1, (minHalfW - 0.35) / denom));
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < gLen; i++) {
+        const prev = rawAp[i > 0 ? i - 1 : i] as number;
+        const cur = rawAp[i] as number;
+        const next = rawAp[i + 1 < gLen ? i + 1 : i] as number;
+        smoothAp[i] = 0.25 * prev + 0.5 * cur + 0.25 * next;
+      }
+      const tmp = rawAp;
+      rawAp = smoothAp;
+      smoothAp = tmp;
+    }
+    for (let i = 0; i < gLen; i++) {
+      const gi = gates[i];
+      if (gi !== undefined) {
+        gi.aperture = rawAp[i] ?? 1;
+      }
+    }
+
     const chainId = store.acquireChain(cls, tier, clusterHalfW, gates, cluster.length);
     for (let k = 0; k < cluster.length; k++) {
       const id = clsIds[cluster[k] as number] as number;
@@ -310,96 +359,4 @@ export function assignClusterRoutes(
       routeOut.active[id] = 1;
     }
   }
-}
-
-export function steerRouteFollow(
-  store: RouteChainStore,
-  terrain: TerrainApi,
-  routeOut: RouteFollowView,
-  id: number,
-  px: number,
-  py: number,
-  cls: number,
-  tier: ClearanceTier,
-  outDir: { dx: number; dy: number },
-): boolean {
-  const chain = store.getChain(routeOut.chain[id] as number);
-  if (chain === undefined || chain.gates.length === 0) {
-    releaseRouteFollow(store, routeOut, id);
-    return false;
-  }
-
-  const gates = chain.gates;
-  const lane = routeOut.lane[id] as number;
-  let k = routeOut.gate[id] as number;
-
-  while (k < gates.length) {
-    const gk = gates[k];
-    if (gk === undefined) {
-      break;
-    }
-    if (!terrain.passable(gk.ax, gk.ay, cls, tier)) {
-      releaseRouteFollow(store, routeOut, id);
-      return false;
-    }
-    gateLanePoint(gk, lane, chain.clusterHalfW, lanePt);
-    const wdx = lanePt.x - px;
-    const wdy = lanePt.y - py;
-    const wDistSq = wdx * wdx + wdy * wdy;
-    const along = (px - gk.x) * gk.tx + (py - gk.y) * gk.ty;
-    const maxRad = gk.halfW + 2.5;
-    if (wDistSq <= 2.25 || (along >= -0.5 && wDistSq <= maxRad * maxRad)) {
-      k += 1;
-      continue;
-    }
-    const gNext = gates[k + 1];
-    if (gNext !== undefined && along >= -1.25 && wDistSq <= 9 && gNext.halfW >= gk.halfW - 0.5) {
-      gateLanePoint(gNext, lane, chain.clusterHalfW, nextLanePt);
-      if (lineWalkable(terrain, cls, px, py, nextLanePt.x, nextLanePt.y, tier)) {
-        k += 1;
-        continue;
-      }
-    }
-    break;
-  }
-
-  const gk = gates[k];
-  if (k >= gates.length || gk === undefined) {
-    releaseRouteFollow(store, routeOut, id);
-    return false;
-  }
-  routeOut.gate[id] = k;
-  gateLanePoint(gk, lane, chain.clusterHalfW, lanePt);
-
-  const wdx = lanePt.x - px;
-  const wdy = lanePt.y - py;
-  if (
-    wdx * wdx + wdy * wdy > 1e-6 &&
-    terrain.inBounds(Math.floor(lanePt.x), Math.floor(lanePt.y)) &&
-    terrain.passable(
-      clearanceAnchorCell(lanePt.x, tier),
-      clearanceAnchorCell(lanePt.y, tier),
-      cls,
-      tier,
-    ) &&
-    lineWalkable(terrain, cls, px, py, lanePt.x, lanePt.y, tier)
-  ) {
-    outDir.dx = wdx;
-    outDir.dy = wdy;
-    return true;
-  }
-
-  const gdx = gk.x - px;
-  const gdy = gk.y - py;
-  if (gdx * gdx + gdy * gdy > 1e-6 && lineWalkable(terrain, cls, px, py, gk.x, gk.y, tier)) {
-    outDir.dx = gdx;
-    outDir.dy = gdy;
-    return true;
-  }
-
-  if (boundedLocalRejoin(store, terrain, cls, tier, px, py, gk.x, gk.y, outDir)) {
-    return true;
-  }
-  releaseRouteFollow(store, routeOut, id);
-  return false;
 }

@@ -44,12 +44,11 @@
   施加 `safeQuad = Math.max(quad, Math.max(ux, uy) + 1)` 强制严格 Lyapunov 单调性。
 - 离散方向 `directionAt` 要求候选邻格严格满足 `uNext < here`，按 `DIR_ORDER`
   （N,E,S,W,NE,SE,SW,NW）取 `uNext + step * COST_SCALE` 最小者并缓存于 `dirPacked`。
-- `smoothDirectionAt(goalId, px, py)` 在全图范围无缝执行三段式零堆分配连续方向计算
-  （以 `quadFlags` 惰性缓存校验位）：
-  1. 全图 `2×2` 对偶双线性梯度（先对四角调用 `costAtCell` 结算，保证冷/热缓存结果一致，要求
-     四角可达且四边与双对角双向可通行）；
-  2. 全图安全四向中心差分（先结算四正交邻格，要求四向邻步合法且合力步进可通行）；
-  3. 归一化离散 `d0` 兜底；前两段均受正方向门控 `gx * d0x + gy * d0y > 0` 约束。
+- `smoothDirectionAt(goalId, px, py)` 在全图范围无缝执行四段式零堆分配连续方向计算（ADR 0059 增加 Stage 2b 贴墙单侧迎风合法梯度回退，以 `quadFlags` 惰性缓存校验位）：
+  1. 全图 `2×2` 对偶双线性梯度（先对四角调用 `costAtCell` 结算，保证冷/热缓存结果一致，要求四角可达且四边与双对角双向可通行）；
+  2. 全图安全四向对称中心差分（先结算四正交邻格，要求四向邻步合法且合力步进可通行）；
+  2b. 贴墙单侧迎风合法梯度回退（Stage 2 遇墙缺边时，仅沿合法可步进正交半边做单侧迎风斜率求和，再经合力可通行与正方向门控）；
+  3. 归一化离散 `d0` 兜底；前两/三段均受正方向门控 `gx * d0x + gy * d0y > 0` 约束。
 - `distanceAt(goalId, px, py)` 在 Stage 1 `2×2` 四边形有效时返回双线性插值后的连续格距
   （除以 `GROUND_COST_SCALED`），否则回退为 `costAtCell / GROUND_COST_SCALED`（不可达返回 `null`）。
 - `directionAt` 与 `smoothDirectionAt` 各自复用独立的内部 scratch 对象，互不干扰，
@@ -68,4 +67,5 @@
   （模型）、[ADR 0027](../../../../docs/adr/0027-map-terrain-flowfield-movement.md)
   （确定性约束）、[ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)
   （地形净空分档与连续流场梯度）、[ADR 0055](../../../../docs/adr/0055-resumable-upwind-eikonal-and-component-reachability.md)
-  （可恢复迎风 Eikonal 求解器与连通分量可达性）。
+  （可恢复迎风 Eikonal 求解器与连通分量可达性）、[ADR 0059](../../../../docs/adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)
+  （Stage 2b 贴墙单侧迎风梯度平滑）。

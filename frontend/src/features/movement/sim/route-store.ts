@@ -33,6 +33,8 @@ export interface RouteGate {
   ty: number;
   nx: number;
   ny: number;
+  arc: number;
+  aperture: number;
   halfW: number;
   leftW: number;
   rightW: number;
@@ -43,6 +45,7 @@ interface RouteChain {
   cls: number;
   tier: ClearanceTier;
   clusterHalfW: number;
+  totalArc: number;
   refcount: number;
   gates: RouteGate[];
 }
@@ -109,7 +112,8 @@ export function createRouteChainStore(): RouteChainStore {
 
     acquireChain(cls, tier, clusterHalfW, gates, refcount) {
       const id = freeIds.length > 0 ? (freeIds.shift() ?? nextId++) : nextId++;
-      chainSlots[id] = { id, cls, tier, clusterHalfW, refcount, gates };
+      const totalArc = gates.length > 0 ? (gates[gates.length - 1]?.arc ?? 0) : 0;
+      chainSlots[id] = { id, cls, tier, clusterHalfW, totalArc, refcount, gates };
       return id;
     },
 
@@ -166,6 +170,7 @@ export function createRouteChainStore(): RouteChainStore {
           cls: c.cls,
           tier: c.tier === HEAVY_TIER ? HEAVY_TIER : STD_TIER,
           clusterHalfW: c.clusterHalfW,
+          totalArc: c.totalArc,
           refcount: c.refcount,
           gates: c.gates.map((g) => ({ ...g })),
         };
@@ -229,6 +234,7 @@ export function buildWideGate(
   py: number,
   tx: number,
   ty: number,
+  arc: number,
   prevGate?: RouteGate,
 ): RouteGate {
   const nx = -ty;
@@ -265,22 +271,12 @@ export function buildWideGate(
     ty,
     nx,
     ny,
+    arc,
+    aperture: 1,
     halfW: (leftW + rightW) * 0.5,
     leftW,
     rightW,
   };
-}
-
-export function gateLanePoint(
-  g: RouteGate,
-  lane: number,
-  clusterHalfW: number,
-  out: { x: number; y: number },
-): void {
-  const sideW = lane >= 0 ? g.rightW : g.leftW;
-  const latOff = lane * (clusterHalfW < sideW ? clusterHalfW : sideW);
-  out.x = g.x + g.nx * latOff;
-  out.y = g.y + g.ny * latOff;
 }
 
 function writeRejoinDir(

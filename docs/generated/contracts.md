@@ -173,7 +173,7 @@
 | `frontline_td:logistics.node` | connect: i32、service: f64、vehicles: u16、warehouse: u8、w: u8、h: u8 | frontline_td:logistics | — |
 | `frontline_td:logistics.site` | kind: u16 | frontline_td:logistics | frontline_td:logistics |
 | `frontline_td:movement.formation_guide` | maxSpeed: f64、active: u8 | frontline_td:movement | frontline_td:movement |
-| `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8 | frontline_td:movement | frontline_td:movement |
+| `frontline_td:movement.move_target` | goal: u32、x: f64、y: f64、active: u8、stall: u8 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.mover` | speed: f64、radius: f64、cls: u8 | frontline_td:movement | — |
 | `frontline_td:movement.position` | x: f64、y: f64 | frontline_td:movement | frontline_td:movement |
 | `frontline_td:movement.route_follow` | chain: u32、gate: u16、lane: f64、active: u8 | frontline_td:movement | frontline_td:movement |

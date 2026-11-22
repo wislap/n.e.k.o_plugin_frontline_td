@@ -58,14 +58,14 @@
   （strength − 成员数）的小队，平局取最小 id。
 - advance 目标不可达时改打最近的可达敌对建筑（查询排除废墟，
   ADR 0038/0040），摧毁后重新评估。
-- 持久职能分排阵型与子集槽位保护（ADR 0054 / ADR 0058）：`sim/formation.ts` 按
+- 持久职能分排阵型、交战弧形包抄与子集槽位保护（ADR 0054 / ADR 0058 / ADR 0059）：`sim/formation.ts` 按
   `(rangeKey asc, radius desc, handle asc)` 将近程重型前排置于中心前排、
   轻量与远程置于两翼与后排，按 `rA + rB + 0.35` 计算无碰撞间距并在目标点
-  周围螺旋分配持久 `slots`（带 `gd <= sqrt(euclidSq) * 2.5 + 2.5` 测地距过滤防跨崖落槽）；同目标仅对缺失/早停成员做增量槽位补发（预留其余
+  周围螺旋分配持久 `slots`（带 `gd <= sqrt(euclidSq) * 2.5 + 2.5` 测地距过滤防跨崖落槽）；交战推进中未入射程的非开火成员改走 `projectSurroundArcSlots` 围绕敌方目标沿 15 射线射程弧扇避开前排占位落位并以同射程带 `<= 1.5` 的 2-opt 解交叉；同目标仅对缺失/早停成员做增量槽位补发（预留其余
   已定槽位足迹并统一复用不可通行目标 6 格来向面吸附），已全员在途且减员 < 30% 时不重发 `MoveIntent`，交战拆分与
   走失召回亦显式避让已停火前排并保留各自持久槽位。
-- 1D Eikonal 测地距截尾中位数巡航控速、O(1) 可达性与首拍瞬发（ADR 0054 / ADR 0057 / ADR 0058）：`moving` / `returning`
-  期间按 `squadGoalTier`（全员重型取 `CLEARANCE_HEAVY`，混编统一取 `CLEARANCE_STANDARD`）通过 `pathing.distanceAt` 计算成员站位 `s_i = d_i + slot.fwd`，剔除距中位数超过 `STRAY_DIST = 10` 的隔墙/掉队离群者并对 `n >= 5` 两端各截去 20% 极值得到 `sRef` 与 `vCruise`；经纯标量 `FormationGuideIntent { units, maxSpeeds, active }` 抑制过快及超前成员（落后或离群成员不限速全速归队）；进入 `resupplying` / `holding` / `engaging` / `idle` 或末段接近目标时立即释放控速。`advance` 阶段经 `resolveSquadGoalAtTier` / `isGoalReachableWithFallback`（对自身不可通行目标做 `SQUAD_GOAL_SNAP_RING = 6` 来向面吸附，可通行目标封死仍返回不可达以触发 `retargetStructure`）走 $O(1)$ `pathing.reachable`（质心落障自动退避至合法成员）；`SquadsOrder` 与 `SquadsGather` 置 `immediate = true` 次 tick 即刻起步。
+- 1D Eikonal 测地距截尾中位数巡航控速、O(1) 可达性与首拍瞬发（ADR 0054 / ADR 0057 / ADR 0058 / ADR 0059）：`moving` / `returning`
+  期间按 `squadGoalTier`（含重型成员时取 `CLEARANCE_HEAVY` 防分道，含标准跨墙离群探针回退；仅纯标准小队取 `CLEARANCE_STANDARD`）通过 `pathing.distanceAt` 计算成员站位 `s_i = d_i + slot.fwd`，剔除距中位数超过 `STRAY_DIST = 10` 的隔墙/掉队离群者并对 `n >= 5` 两端各截去 20% 极值得到 `sRef` 与 `vCruise`；经纯标量 `FormationGuideIntent { units, maxSpeeds, active }` 抑制过快及超前成员（落后或离群成员不限速全速归队）；进入 `resupplying` / `holding` / `engaging` / `idle` 或末段接近目标时立即释放控速。`advance` 阶段经 `resolveSquadGoalAtTier` / `isGoalReachableWithFallback`（对自身不可通行目标做 `SQUAD_GOAL_SNAP_RING = 6` 来向面吸附，可通行目标封死仍返回不可达以触发 `retargetStructure`）走 $O(1)$ `pathing.reachable`（质心落障自动退避至合法成员）；`SquadsOrder` 与 `SquadsGather` 置 `immediate = true` 次 tick 即刻起步。
 - 净空分档寻路联动（ADR 0052 / ADR 0054 / ADR 0058）：`SquadsGather` 与
   `routing.ts`（`traceRoute` / `retargetStructure`）按小队重型优先/标准回退生成预视路线或转火目标，`ensureSquadSlotsAndEmitMove` 与 `emitTransitGuide` 对混编小队统一走 `squadGoalTier` 以复用活跃 `GoalField`。
 - idle 订单的小队不触发走失成员召回（尚无目标可回）。
@@ -85,6 +85,7 @@
   [ADR 0054](../../../../docs/adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)
   （混编职能分排与巡航控速）、[ADR 0057](../../../../docs/adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)
   （1D 测地距截尾中位数控速、O(1) 可达性与首拍瞬发）、[ADR 0058](../../../../docs/adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md)
-  （占格目标吸附、混编净空统一与 `heading` 瘦身）。
+  （占格目标吸附、混编净空统一与 `heading` 瘦身）、[ADR 0059](../../../../docs/adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)
+  （重型优先混编流域与遇敌弧形扇区包抄）。
 - [game_design.md §4.7](../../../../docs/design/game_design.md)
   （小队玩法）。

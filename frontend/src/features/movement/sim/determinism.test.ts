@@ -15,12 +15,13 @@ const F1 = toFactionId(1);
 const F2 = toFactionId(2);
 const TICKS = 400;
 // This world installs terrain + pathing + movement + units only. The
-// golden was re-derived for Batch P3 real-map hardening (ADR 0057: scalar
-// FormationGuide + sub-cell continuous DDA lineWalkable + inter-gate
-// lineWalkable/funneling + forward-only steerRouteFollow).
+// golden was re-derived for Batch P5 fusion locomotion (ADR 0059: Stage 2b
+// wall-parallel smooth gradient, MoveTarget.stall contagious arrival,
+// realized velocity writeback & direction-preserving steering inertia,
+// C1 spatial aperture spine with [3.8, 8.0] terminal stream cross-fade).
 // Any further change to movement or those serialized inputs legitimately
 // changes the hash; update it in the same commit with the reason.
-const GOLDEN_HASH = 'd971229e9ae22cdd';
+const GOLDEN_HASH = 'aa7bb4778f10789e';
 
 function makeSim() {
   const db = loadContent();

@@ -19,7 +19,7 @@ import { meanEnergyBp } from './energy';
 import {
   computeFormationLayout,
   markFootprintCells,
-  projectFormationSlots,
+  projectSurroundArcSlots,
   type FormationMemberInfo,
 } from './formation';
 import { nearestCovered, retargetStructure } from './routing';
@@ -245,9 +245,6 @@ export function updateSquad(
         .map((id) => infoById.get(id))
         .filter((m): m is FormationMemberInfo => m !== undefined);
       const layout = computeFormationLayout(moveInfos);
-      const dHostile = distance(c.x, c.y, hx, hy);
-      const dirX = dHostile > 1e-6 ? (hx - c.x) / dHostile : 1;
-      const dirY = dHostile > 1e-6 ? (hy - c.y) / dHostile : 0;
       const moveCls = moveInfos[0]?.cls ?? 0;
       const moveSingleCls = moveInfos.every((m) => m.cls === moveCls);
       const moveTier = squadGoalTier(moveInfos);
@@ -257,14 +254,14 @@ export function updateSquad(
       try {
         const projX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : hx;
         const projY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : hy;
-        const slotsMap = projectFormationSlots(
+        const slotsMap = projectSurroundArcSlots(
           deps.terrain,
           deps.pathing,
           probe?.goalId ?? null,
-          projX,
-          projY,
-          dirX,
-          dirY,
+          hx,
+          hy,
+          c.x,
+          c.y,
           moveInfos,
           layout.offsets,
           reservedCells,

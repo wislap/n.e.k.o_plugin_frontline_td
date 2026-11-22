@@ -29,6 +29,7 @@ export const MoveTarget = defineComponent('frontline_td:movement.move_target', {
   x: 'f64',
   y: 'f64',
   active: 'u8',
+  stall: 'u8',
 });
 
 // Transient scalar squad cruise speed cap (ADR 0054 / ADR 0057).

@@ -10,11 +10,9 @@ import type { PathingApi } from '../../pathing/sim/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import {
   CLEARANCE_HEAVY,
-  CLEARANCE_STANDARD,
   clearanceAnchorCell,
   clearanceAnchorCenter,
   clearanceTierForRadius,
-  spiralOffsets,
   type ClearanceTier,
 } from '../../terrain/rules/index';
 import {
@@ -33,12 +31,18 @@ import {
   type RouteFollowView,
 } from './route-chain';
 import { assignSlots, collectSlots } from './slots';
+import {
+  COMMAND_SNAP_RING,
+  groupByClassAndTier,
+  type MoveGroup,
+  resolveTierTarget,
+  resolveUnifiedIntentGroups,
+} from './target-resolve';
 
-const STD_TIER = CLEARANCE_STANDARD;
 const HEAVY_TIER = CLEARANCE_HEAVY;
 
-type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
-type TgtWriter = ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8' }>;
+type TgtView = WriteView<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8'; stall: 'u8' }>;
+type TgtWriter = ComponentWriter<{ goal: 'u32'; x: 'f64'; y: 'f64'; active: 'u8'; stall: 'u8' }>;
 type GuideView = WriteView<{ maxSpeed: 'f64'; active: 'u8' }>;
 type GuideWriter = ComponentWriter<{ maxSpeed: 'f64'; active: 'u8' }>;
 type RouteFollowWriter = ComponentWriter<{
@@ -67,152 +71,6 @@ export function releaseHeldGoal(
   }
 }
 
-// Move intents snap up to INTENT_SNAP_RING (structure-centre targets);
-// MoveCommands snap up to COMMAND_SNAP_RING (near-face obstacle/structure edge).
-const INTENT_SNAP_RING = 32;
-const COMMAND_SNAP_RING = 3;
-
-const HEAVY_COVER_OFFSETS: readonly [number, number][] = [
-  [0, 0],
-  [1, 0],
-  [0, 1],
-  [1, 1],
-];
-
-// Nearest cell for `(cls, tier)` around (x, y) within `maxRing` that is both
-// passable and reachable from at least one moving unit (O(1) component check),
-// scoring candidates to prefer the side facing the approaching group's centroid.
-function snapReachable(
-  terrain: TerrainApi,
-  pathing: PathingApi,
-  pos: { x: ReadonlyNumberArray; y: ReadonlyNumberArray },
-  cls: number,
-  tier: ClearanceTier,
-  ids: readonly number[],
-  x: number,
-  y: number,
-  maxRing: number,
-): { x: number; y: number } | null {
-  const cx = Math.floor(x);
-  const cy = Math.floor(y);
-  let sx = 0;
-  let sy = 0;
-  for (let i = 0; i < ids.length; i++) {
-    const id = ids[i] as number;
-    sx += pos.x[id] ?? 0;
-    sy += pos.y[id] ?? 0;
-  }
-  const n = Math.max(1, ids.length);
-  const gcx = sx / n;
-  const gcy = sy / n;
-
-  let best: { x: number; y: number } | null = null;
-  let bestScore = Infinity;
-  let stopRing = maxRing;
-
-  for (const [dx, dy] of spiralOffsets(cx, cy, terrain.width, terrain.height)) {
-    const ring = Math.max(Math.abs(dx), Math.abs(dy));
-    if (ring > stopRing) {
-      break;
-    }
-    const tx = cx + dx;
-    const ty = cy + dy;
-    if (!terrain.passable(tx, ty, cls, tier)) {
-      continue;
-    }
-    const ok = ids.some((id) =>
-      pathing.reachable(
-        clearanceAnchorCell(pos.x[id] ?? 0, tier),
-        clearanceAnchorCell(pos.y[id] ?? 0, tier),
-        tx,
-        ty,
-        cls,
-        tier,
-      ),
-    );
-    if (!ok) {
-      continue;
-    }
-    if (best === null && maxRing > COMMAND_SNAP_RING) {
-      stopRing = Math.min(maxRing, ring + 1);
-    }
-    const candCx = clearanceAnchorCenter(tx, tier);
-    const candCy = clearanceAnchorCenter(ty, tier);
-    const fdx = candCx - gcx;
-    const fdy = candCy - gcy;
-    const score = (dx * dx + dy * dy) * 1024 + (fdx * fdx + fdy * fdy);
-    if (score < bestScore) {
-      bestScore = score;
-      best = { x: tx, y: ty };
-    }
-  }
-  return best;
-}
-
-function resolveTierTarget(
-  terrain: TerrainApi,
-  pathing: PathingApi,
-  pos: { x: ReadonlyNumberArray; y: ReadonlyNumberArray },
-  cls: number,
-  tier: ClearanceTier,
-  ids: readonly number[],
-  x: number,
-  y: number,
-  maxSnapRing: number,
-): { x: number; y: number } | null {
-  const cx = Math.floor(x);
-  const cy = Math.floor(y);
-  if (tier === STD_TIER) {
-    if (terrain.passable(cx, cy, cls, STD_TIER)) {
-      return { x: cx, y: cy };
-    }
-    return maxSnapRing > 0
-      ? snapReachable(terrain, pathing, pos, cls, tier, ids, cx, cy, maxSnapRing)
-      : null;
-  }
-  for (const [ox, oy] of HEAVY_COVER_OFFSETS) {
-    const ax = cx - ox;
-    const ay = cy - oy;
-    if (terrain.passable(ax, ay, cls, HEAVY_TIER)) {
-      return { x: ax, y: ay };
-    }
-  }
-  const heavyRing = Math.max(
-    maxSnapRing,
-    terrain.passable(cx, cy, cls, STD_TIER) ? INTENT_SNAP_RING : maxSnapRing,
-  );
-  return heavyRing > 0
-    ? snapReachable(terrain, pathing, pos, cls, HEAVY_TIER, ids, cx, cy, heavyRing)
-    : null;
-}
-
-interface MoveGroup {
-  cls: number;
-  tier: ClearanceTier;
-  ids: number[];
-}
-
-function groupByClassAndTier(
-  ids: readonly number[],
-  mover: { cls: ReadonlyNumberArray; radius: ReadonlyNumberArray },
-): MoveGroup[] {
-  const groups: MoveGroup[] = [];
-  const byKey = new Map<number, MoveGroup>();
-  for (const id of ids) {
-    const cls = mover.cls[id] ?? 0;
-    const tier = clearanceTierForRadius(mover.radius[id] ?? 0);
-    const key = tier * 1024 + cls;
-    let group = byKey.get(key);
-    if (group === undefined) {
-      group = { cls, tier, ids: [] };
-      byKey.set(key, group);
-      groups.push(group);
-    }
-    group.ids.push(id);
-  }
-  return groups;
-}
-
 // Shared goal/slot assignment used by MoveCommand and the move intent:
 // release each unit's old goal, acquire one shared goal for (cls, tier),
 // write slot targets, and assign watershed-proof cluster corridor chains.
@@ -236,6 +94,7 @@ function applyMoveGroup(
   const guideOut = ctx.write(guideW) as GuideView;
   const routeOut = ctx.write(routeW) as RouteFollowView;
   const pos = ctx.read(Position);
+  const mover = ctx.read(Mover);
   // Release old goals, clear stale formation guides, then one shared-goal
   // ref per unit (the goal id is the same for the whole (cls, tier) group).
   let goal = -1;
@@ -252,17 +111,24 @@ function applyMoveGroup(
   if (explicitSlots !== undefined && clsIds.every((id) => explicitSlots.has(id))) {
     const checked = new Map<number, { x: number; y: number }>();
     for (const id of clsIds) {
+      const uTier = clearanceTierForRadius(mover.radius[id] ?? 0);
       const s = explicitSlots.get(id);
       const dest =
         s !== undefined &&
         terrain.inBounds(Math.floor(s.x), Math.floor(s.y)) &&
-        terrain.passable(clearanceAnchorCell(s.x, tier), clearanceAnchorCell(s.y, tier), cls, tier)
+        terrain.passable(
+          clearanceAnchorCell(s.x, uTier),
+          clearanceAnchorCell(s.y, uTier),
+          cls,
+          uTier,
+        )
           ? s
           : fallback;
       out.goal[id] = goal;
       out.x[id] = dest.x;
       out.y[id] = dest.y;
       out.active[id] = 1;
+      out.stall[id] = 0;
       checked.set(id, dest);
     }
     resolvedMap = checked;
@@ -316,6 +182,7 @@ function applyMoveGroup(
       out.x[id] = slot.x;
       out.y[id] = slot.y;
       out.active[id] = 1;
+      out.stall[id] = 0;
     }
     resolvedMap = assignment;
   }
@@ -382,28 +249,11 @@ export function installMovementIntents(
         if (ids.length === 0 || !terrain.inBounds(p.x, p.y)) {
           continue;
         }
-        // Per-(class, tier): an impassable target cell snaps to the nearest
-        // passable cell the group can reach (intents aim at points — e.g.
-        // a structure's blocked centre); commands snap within COMMAND_SNAP_RING.
-        const groups = groupByClassAndTier(ids, mover);
+        // Unified mixed-tier routing for MoveIntent: keep heavy + heavy-reachable
+        // standard units on one shared heavy goal & corridor chain to prevent
+        // 1-cell shortcut splitting.
         const pos = ctx.read(Position);
-        const resolved: { group: MoveGroup; targetCell: { x: number; y: number } }[] = [];
-        for (const group of groups) {
-          const targetCell = resolveTierTarget(
-            terrain,
-            pathing,
-            pos,
-            group.cls,
-            group.tier,
-            group.ids,
-            p.x,
-            p.y,
-            INTENT_SNAP_RING,
-          );
-          if (targetCell !== null) {
-            resolved.push({ group, targetCell });
-          }
-        }
+        const resolved = resolveUnifiedIntentGroups(terrain, pathing, pos, mover, ids, p.x, p.y);
         for (const { group, targetCell } of resolved) {
           applyMoveGroup(
             ctx,
@@ -436,6 +286,7 @@ export function installMovementIntents(
           releaseRouteFollow(routes, routeOut, id);
           out.goal[id] = 0;
           out.active[id] = 0;
+          out.stall[id] = 0;
         }
       }
       for (const p of ctx.read(FormationGuideIntent)) {

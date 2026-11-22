@@ -35,6 +35,7 @@ import {
   createSlotCache,
   type SlotCache,
 } from './grid-cache';
+import { wallParallelDirection } from './smooth';
 
 const INF = UNREACHABLE;
 const SCALE = COST_SCALE;
@@ -480,6 +481,29 @@ export function createPathingModule(
             }
           }
         }
+      }
+
+      // Stage 2b: Wall-parallel one-sided upwind difference when adjacent to walls/cliffs.
+      if (
+        wallParallelDirection(
+          terrain,
+          sc,
+          field.u,
+          INF,
+          goal.cls,
+          goal.tier,
+          isHeavy,
+          px,
+          py,
+          cx,
+          cy,
+          d0x,
+          d0y,
+          (x, y) => costAtCell(field, sc, x, y),
+          smoothScratch,
+        )
+      ) {
+        return smoothScratch;
       }
 
       // Stage 3: Safe discrete unit fallback.

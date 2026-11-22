@@ -10,6 +10,20 @@ import {
 } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 
+export function canStep(
+  terrain: TerrainApi,
+  cls: number,
+  tier: ClearanceTier,
+  ccx: number,
+  ccy: number,
+  tx: number,
+  ty: number,
+): boolean {
+  const tcx = clearanceAnchorCell(tx, tier);
+  const tcy = clearanceAnchorCell(ty, tier);
+  return (tcx === ccx && tcy === ccy) || terrain.stepCost(ccx, ccy, tcx, tcy, cls, tier) >= 0;
+}
+
 export function lineWalkable(
   terrain: TerrainApi,
   cls: number,

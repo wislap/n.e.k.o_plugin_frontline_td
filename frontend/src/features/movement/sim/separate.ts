@@ -13,6 +13,8 @@ const BUCKET = 2;
 // Breathing buffer outside summed radii; soft repulsion resolves light
 // grazing before core penetration engages.
 const SEPARATION_GAP = 0.08;
+const CONTAGIOUS_GAP = 0.16;
+const CONTAGIOUS_TARGET_DIST_SQ = 4.8 * 4.8;
 // Two-slope overdamped stiffnesses (buffer vs core penetration).
 const SOFT_STIFFNESS = 0.25;
 const CORE_STIFFNESS = 0.65;
@@ -54,8 +56,9 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
   let oobBuckets: Map<number, number[]> | null = null;
   let pushX = new Float64Array(64);
   let pushY = new Float64Array(64);
+  let blockedByHolder = new Uint8Array(64);
 
-  return function separate(ctx: SystemContext): void {
+  function separate(ctx: SystemContext): void {
     const ids = ctx.query([Position, Mover]);
     const count = ids.length;
     const pos = ctx.read(Position);
@@ -71,12 +74,18 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
     const velRY = velR.y;
     const facId = fac.id;
     const tgtActive = target.active;
+    const tgtX = target.x;
+    const tgtY = target.y;
 
     if (pushX.length < count) {
       pushX = new Float64Array(count * 2);
       pushY = new Float64Array(count * 2);
       next = new Int32Array(count * 2);
     }
+    if (blockedByHolder.length < posX.length) {
+      blockedByHolder = new Uint8Array(posX.length * 2);
+    }
+    blockedByHolder.fill(0);
     pushX.fill(0, 0, count);
     pushY.fill(0, 0, count);
     head.fill(-1);
@@ -127,11 +136,34 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       const br = moverR[b] as number;
       const ddx = (posX[b] as number) - ax;
       const ddy = (posY[b] as number) - ay;
-      const maxDist = ar + br + SEPARATION_GAP;
-      if (Math.abs(ddx) >= maxDist || Math.abs(ddy) >= maxDist) {
+      const touchDist = ar + br + CONTAGIOUS_GAP;
+      if (Math.abs(ddx) >= touchDist || Math.abs(ddy) >= touchDist) {
         return;
       }
       const distSq = ddx * ddx + ddy * ddy;
+      const fb = facId[b] as number;
+      const sameFaction = fa !== 0 && fa === fb;
+      const actB = tgtActive[b] as number;
+      if (sameFaction && ((actA === 1 && actB === 2) || (actB === 1 && actA === 2))) {
+        if (distSq <= touchDist * touchDist) {
+          const moverId = actA === 1 ? a : b;
+          const holderId = actA === 1 ? b : a;
+          const tdx = (tgtX[moverId] ?? 0) - (tgtX[holderId] ?? 0);
+          const tdy = (tgtY[moverId] ?? 0) - (tgtY[holderId] ?? 0);
+          if (tdx * tdx + tdy * tdy <= CONTAGIOUS_TARGET_DIST_SQ) {
+            const mx = posX[moverId] ?? 0;
+            const my = posY[moverId] ?? 0;
+            const hx = posX[holderId] ?? 0;
+            const hy = posY[holderId] ?? 0;
+            const fwdDot =
+              (hx - mx) * ((tgtX[moverId] ?? 0) - mx) + (hy - my) * ((tgtY[moverId] ?? 0) - my);
+            if (fwdDot > 0) {
+              blockedByHolder[moverId] = 1;
+            }
+          }
+        }
+      }
+      const maxDist = ar + br + SEPARATION_GAP;
       const distLimit = maxDist + 1e-12;
       if (distSq >= distLimit * distLimit) {
         return;
@@ -156,9 +188,6 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       const impulse = soft * SOFT_STIFFNESS + core * CORE_STIFFNESS;
 
       const mb = Math.max(br * br, 0.01);
-      const fb = facId[b] as number;
-      const sameFaction = fa !== 0 && fa === fb;
-      const actB = tgtActive[b] as number;
       const vbx = actB === 1 || actA === 1 ? (velRX[b] as number) : 0;
       const vby = actB === 1 || actA === 1 ? (velRY[b] as number) : 0;
       let wMassA = sameFaction ? ma * stateWeight(actA) : ma;
@@ -303,5 +332,35 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       velWX[id] = (velWX[id] as number) + pxPush;
       velWY[id] = (velWY[id] as number) + pyPush;
     }
+  }
+
+  return {
+    run: separate,
+    blockedByHolder: () => blockedByHolder,
+    saveBlocked(): number[] {
+      const idsOut: number[] = [];
+      for (let id = 0; id < blockedByHolder.length; id++) {
+        if ((blockedByHolder[id] ?? 0) === 1) {
+          idsOut.push(id);
+        }
+      }
+      return idsOut;
+    },
+    loadBlocked(idsIn: readonly number[]): void {
+      let maxId = -1;
+      for (let i = 0; i < idsIn.length; i++) {
+        const id = idsIn[i] ?? 0;
+        if (id > maxId) {
+          maxId = id;
+        }
+      }
+      if (maxId >= blockedByHolder.length) {
+        blockedByHolder = new Uint8Array(maxId + 1);
+      }
+      blockedByHolder.fill(0);
+      for (let i = 0; i < idsIn.length; i++) {
+        blockedByHolder[idsIn[i] ?? 0] = 1;
+      }
+    },
   };
 }

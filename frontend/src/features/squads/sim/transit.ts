@@ -107,9 +107,7 @@ function pickPassableRef(
 }
 
 export function squadGoalTier(members: readonly FormationMemberInfo[]): ClearanceTier {
-  return members.length > 0 && members.every((m) => m.tier === CLEARANCE_HEAVY)
-    ? CLEARANCE_HEAVY
-    : CLEARANCE_STANDARD;
+  return members.some((m) => m.tier === CLEARANCE_HEAVY) ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
 }
 
 function resolveGoalCellWithFallback(
@@ -517,6 +515,7 @@ export function emitTransitGuide(
     return;
   }
 
+  let stdFallbackGoalId: number | null = null;
   try {
     const fwdByHandle = new Map<number, number>();
     for (const s of squad.slots) {
@@ -525,7 +524,11 @@ export function emitTransitGuide(
     const distByHandle = new Map<number, number | null>();
     const samples: GeodesicSample[] = [];
     for (const m of memberInfos) {
-      const d = deps.pathing.distanceAt(probe.goalId, m.x, m.y);
+      let d = deps.pathing.distanceAt(probe.goalId, m.x, m.y);
+      if (d === null && probe.tier === CLEARANCE_HEAVY && m.tier === CLEARANCE_STANDARD) {
+        stdFallbackGoalId ??= deps.pathing.acquireGoal(probe.gx, probe.gy, cls, CLEARANCE_STANDARD);
+        d = deps.pathing.distanceAt(stdFallbackGoalId, m.x, m.y);
+      }
       distByHandle.set(m.handle, d);
       if (d !== null) {
         samples.push({
@@ -561,6 +564,9 @@ export function emitTransitGuide(
     ctx.emit(FormationGuideIntent, { units, maxSpeeds, active: true });
     squad.guideActive = true;
   } finally {
+    if (stdFallbackGoalId !== null) {
+      deps.pathing.releaseGoal(stdFallbackGoalId);
+    }
     deps.pathing.releaseGoal(probe.goalId);
   }
 }

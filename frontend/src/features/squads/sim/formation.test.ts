@@ -18,6 +18,7 @@ import {
   isFootprintFree,
   markFootprintCells,
   projectFormationSlots,
+  projectSurroundArcSlots,
   type FormationMemberInfo,
 } from './formation';
 
@@ -231,5 +232,56 @@ describe('formation layout & slot projection', () => {
 
     // Stray (> strayDist from median): uncapped (0) so it sprints to rejoin.
     expect(computeGeodesicCruiseCap(0.2, 35.0, 0, pacing, strayDist)).toBe(0);
+  });
+
+  it('projects non-crossing surround arc slots around a hostile outside reserved vanguard cells', () => {
+    const rows = Array.from({ length: 24 }, () => '.'.repeat(24));
+    const terrain = createTerrainApi(makeGrid(rows), SURFACES);
+    const pathing = createPathingModule(terrain, 1);
+
+    const vanguard = member(1, { radius: 0.7, range: 2, x: 10.5, y: 12.5 });
+    const leftWing = member(2, { radius: 0.35, range: 4, x: 7.5, y: 8.5 });
+    const rightWing = member(3, { radius: 0.35, range: 4, x: 7.5, y: 16.5 });
+    const flankerA = member(4, { radius: 0.35, range: 4, x: 8.5, y: 10.5 });
+    const flankerB = member(5, { radius: 0.35, range: 4, x: 8.5, y: 14.5 });
+    const members = [vanguard, leftWing, rightWing, flankerA, flankerB];
+    const { offsets } = computeFormationLayout(members);
+
+    // Hostile sits at (14.5, 12.5); vanguard holds directly west at (11.5, 12.5).
+    const reserved = new Set<number>();
+    markFootprintCells(reserved, terrain.width, terrain.height, 11.5, 12.5, CLEARANCE_STANDARD);
+    const goalId = pathing.api.acquireGoal(14, 12, 0, CLEARANCE_STANDARD);
+
+    const arcSlots = projectSurroundArcSlots(
+      terrain,
+      pathing.api,
+      goalId,
+      14.5,
+      12.5,
+      8.0,
+      12.5,
+      [leftWing, rightWing, flankerA, flankerB],
+      offsets,
+      reserved,
+    );
+
+    expect(arcSlots.size).toBe(4);
+    const sLeft = arcSlots.get(leftWing.handle);
+    const sRight = arcSlots.get(rightWing.handle);
+    expect(sLeft).toBeDefined();
+    expect(sRight).toBeDefined();
+    // 2-opt uncrossing keeps north member (y=8.5) on north side of south member (y=16.5).
+    expect(sLeft?.y ?? 99).toBeLessThan(sRight?.y ?? -99);
+    // All projected slots sit outside the reserved cell and roughly within weapon range arc.
+    for (const s of arcSlots.values()) {
+      expect(
+        clearanceAnchorCell(s.x, CLEARANCE_STANDARD) === 11 &&
+          clearanceAnchorCell(s.y, CLEARANCE_STANDARD) === 12,
+      ).toBe(false);
+      const distToEnemy = Math.sqrt((s.x - 14.5) * (s.x - 14.5) + (s.y - 12.5) * (s.y - 12.5));
+      expect(distToEnemy).toBeGreaterThanOrEqual(2.5);
+      expect(distToEnemy).toBeLessThanOrEqual(6.0);
+    }
+    pathing.api.releaseGoal(goalId);
   });
 });

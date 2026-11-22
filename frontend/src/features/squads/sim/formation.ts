@@ -250,6 +250,163 @@ export function projectFormationSlots(
   return result;
 }
 
+const SURROUND_ARC_FAN: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [0.9612616959383189, 0.27563735581699916],
+  [0.9612616959383189, -0.27563735581699916],
+  [0.848048096156426, 0.5299192642332049],
+  [0.848048096156426, -0.5299192642332049],
+  [0.6691306063588582, 0.7431448254773942],
+  [0.6691306063588582, -0.7431448254773942],
+  [0.4383711467890774, 0.898794046299167],
+  [0.4383711467890774, -0.898794046299167],
+  [0.17364817766693033, 0.984807753012208],
+  [0.17364817766693033, -0.984807753012208],
+  [-0.10452846326765346, 0.9945218953682733],
+  [-0.10452846326765346, -0.9945218953682733],
+  [-0.374606593415912, 0.9271838545667874],
+  [-0.374606593415912, -0.9271838545667874],
+];
+
+// Project engaging non-shooting members onto a curved firing arc around a
+// hostile at (hx, hy) outside already-occupied front-rank cells, then uncross
+// same-tier pairs via 2-opt so flanks glide smoothly to the nearest wing.
+export function projectSurroundArcSlots(
+  terrain: TerrainApi,
+  pathing: PathingApi | null,
+  goalId: number | null,
+  hx: number,
+  hy: number,
+  centroidX: number,
+  centroidY: number,
+  members: readonly FormationMemberInfo[],
+  offsets: ReadonlyMap<number, { fwd: number; right: number }>,
+  reservedCells?: ReadonlySet<number>,
+): Map<number, { x: number; y: number }> {
+  if (members.length === 0) {
+    return new Map();
+  }
+  const dx = centroidX - hx;
+  const dy = centroidY - hy;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  const ux = d > 1e-6 ? dx / d : -1;
+  const uy = d > 1e-6 ? dy / d : 0;
+  const rx = -uy;
+  const ry = ux;
+
+  const ordered = sortFormationMembers(members);
+  const usedCells = new Set<number>(reservedCells);
+  const checkNear = goalId !== null && pathing !== null;
+  const fallbackMap = projectFormationSlots(
+    terrain,
+    pathing,
+    goalId,
+    hx,
+    hy,
+    -ux,
+    -uy,
+    ordered,
+    offsets,
+    reservedCells,
+  );
+  const slots: { x: number; y: number }[] = [];
+
+  for (const m of ordered) {
+    const rBase = m.range <= 1.2 ? 0.85 : Math.max(1.6, m.range - 0.35);
+    const radii =
+      m.range <= 1.2
+        ? [0.85, 1.45, 2.1, 2.8]
+        : [rBase, Math.max(1.4, rBase - 0.9), rBase + 0.9, Math.max(1.4, rBase - 1.8), rBase + 1.8];
+    let picked: { x: number; y: number } | null = null;
+    for (const rad of radii) {
+      if (picked !== null) {
+        break;
+      }
+      for (const [cAng, sAng] of SURROUND_ARC_FAN) {
+        const wx = hx + rad * (ux * cAng + rx * sAng);
+        const wy = hy + rad * (uy * cAng + ry * sAng);
+        const ax = clearanceAnchorCell(wx, m.tier);
+        const ay = clearanceAnchorCell(wy, m.tier);
+        if (!terrain.inBounds(ax, ay) || !terrain.passable(ax, ay, m.cls, m.tier)) {
+          continue;
+        }
+        if (checkNear && pathing.directionAt(goalId, ax, ay) === null) {
+          continue;
+        }
+        const cx = clearanceAnchorCenter(ax, m.tier);
+        const cy = clearanceAnchorCenter(ay, m.tier);
+        if (!isFootprintFree(usedCells, terrain.width, cx, cy, m.tier)) {
+          continue;
+        }
+        if (checkNear) {
+          const gd = pathing.distanceAt(goalId, cx, cy);
+          const euclidSq = (cx - hx) * (cx - hx) + (cy - hy) * (cy - hy);
+          if (gd !== null && gd <= Math.sqrt(euclidSq) * 2.5 + 3.0) {
+            picked = { x: cx, y: cy };
+            break;
+          }
+        } else {
+          picked = { x: cx, y: cy };
+          break;
+        }
+      }
+    }
+    const chosen = picked ?? fallbackMap.get(m.handle) ?? { x: hx, y: hy };
+    markFootprintCells(usedCells, terrain.width, terrain.height, chosen.x, chosen.y, m.tier);
+    slots.push(chosen);
+  }
+
+  let swapped = true;
+  while (swapped) {
+    swapped = false;
+    for (let i = 0; i < ordered.length; i++) {
+      const mi = ordered[i];
+      const si = slots[i];
+      if (mi === undefined || si === undefined) {
+        continue;
+      }
+      for (let j = i + 1; j < ordered.length; j++) {
+        const mj = ordered[j];
+        const sj = slots[j];
+        if (
+          mj === undefined ||
+          sj === undefined ||
+          mi.tier !== mj.tier ||
+          mi.cls !== mj.cls ||
+          Math.abs(mi.range - mj.range) > 1.5
+        ) {
+          continue;
+        }
+        const curCost =
+          (si.x - mi.x) * (si.x - mi.x) +
+          (si.y - mi.y) * (si.y - mi.y) +
+          (sj.x - mj.x) * (sj.x - mj.x) +
+          (sj.y - mj.y) * (sj.y - mj.y);
+        const altCost =
+          (sj.x - mi.x) * (sj.x - mi.x) +
+          (sj.y - mi.y) * (sj.y - mi.y) +
+          (si.x - mj.x) * (si.x - mj.x) +
+          (si.y - mj.y) * (si.y - mj.y);
+        if (altCost + 1e-6 < curCost) {
+          slots[i] = sj;
+          slots[j] = si;
+          swapped = true;
+        }
+      }
+    }
+  }
+
+  const result = new Map<number, { x: number; y: number }>();
+  for (let i = 0; i < ordered.length; i++) {
+    const m = ordered[i];
+    const s = slots[i];
+    if (m !== undefined && s !== undefined) {
+      result.set(m.handle, s);
+    }
+  }
+  return result;
+}
+
 export interface GeodesicSample {
   handle: number;
   dist: number;
