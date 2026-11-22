@@ -14,6 +14,7 @@ import {
   boundedLocalRejoin,
   buildWideGate,
   createRouteChainStore,
+  GATE_CLEAR_INSET,
   MAX_GATE_HALF_W,
   releaseRouteFollow,
   type RouteChainStore,
@@ -36,6 +37,22 @@ const GATE_STEP_DIST = 1.5;
 const TRACE_SUBSTEP = 0.5;
 const MAX_TRACE_STEPS = 540;
 const GOAL_CUTOFF_DIST = 4.5;
+// Representative swap falls back to "any member near the goal" inside this
+// squared distance.
+const GOAL_SWAP_DIST_SQ = 64; // 8 cells
+// Minimum arc distance between successive corridor gates.
+const GATE_MIN_ARC_GAP = 0.5;
+// Per-gate width propagation margin walking backward through the chain.
+const GATE_WIDTH_GROWTH = 0.7;
+// Floor for the lateral cluster half-width before member offsets apply.
+const LANE_LAT_FLOOR = 0.5;
+// Aperture lookahead: narrowest gate within this arc distance sets the
+// profile, smoothed twice with a binomial kernel so morphing never kinks.
+const APERTURE_LOOKAHEAD = 4.5;
+const APERTURE_DENOM_FLOOR = 0.8;
+const APERTURE_MIN = 0.22;
+const APERTURE_SMOOTH_SIDE = 0.25;
+const APERTURE_SMOOTH_CENTER = 0.5;
 
 function clusterOpenGroundSkip(
   terrain: TerrainApi,
@@ -194,7 +211,7 @@ export function assignClusterRoutes(
     }
     if (
       repIdx === -1 ||
-      (goalCx - cx) * (goalCx - cx) + (goalCy - cy) * (goalCy - cy) <= 64 ||
+      (goalCx - cx) * (goalCx - cx) + (goalCy - cy) * (goalCy - cy) <= GOAL_SWAP_DIST_SQ ||
       clusterOpenGroundSkip(
         terrain,
         cls,
@@ -282,15 +299,15 @@ export function assignClusterRoutes(
     const lastGate = gates[gates.length - 1];
     if (gates.length === 0 && steps >= 2) {
       gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy, arc));
-    } else if (lastGate !== undefined && arc > lastGate.arc + 0.5) {
+    } else if (lastGate !== undefined && arc > lastGate.arc + GATE_MIN_ARC_GAP) {
       gates.push(buildWideGate(terrain, cls, tier, lastX, lastY, lastTx, lastTy, arc, lastGate));
     }
     for (let k = gates.length - 2; k >= 0; k--) {
       const cur = gates[k];
       const nxt = gates[k + 1];
       if (cur !== undefined && nxt !== undefined) {
-        cur.leftW = Math.min(cur.leftW, nxt.leftW + 0.7);
-        cur.rightW = Math.min(cur.rightW, nxt.rightW + 0.7);
+        cur.leftW = Math.min(cur.leftW, nxt.leftW + GATE_WIDTH_GROWTH);
+        cur.rightW = Math.min(cur.rightW, nxt.rightW + GATE_WIDTH_GROWTH);
         cur.halfW = (cur.leftW + cur.rightW) * 0.5;
       }
     }
@@ -298,7 +315,7 @@ export function assignClusterRoutes(
     if (g0 === undefined) {
       continue;
     }
-    let maxAbsLat = 0.5;
+    let maxAbsLat = LANE_LAT_FLOOR;
     const lats = new Float64Array(cluster.length);
     for (let k = 0; k < cluster.length; k++) {
       const idx = cluster[k] as number;
@@ -311,7 +328,7 @@ export function assignClusterRoutes(
     const clusterHalfW = Math.min(MAX_GATE_HALF_W, maxAbsLat);
     // Bake lookahead aperture profile (0.22..1.0) and C1-smooth twice so column morphing never kinks.
     const gLen = gates.length;
-    const denom = Math.max(0.8, clusterHalfW);
+    const denom = Math.max(APERTURE_DENOM_FLOOR, clusterHalfW);
     let rawAp = new Float64Array(gLen);
     let smoothAp = new Float64Array(gLen);
     for (let i = 0; i < gLen; i++) {
@@ -319,7 +336,7 @@ export function assignClusterRoutes(
       if (gi === undefined) {
         continue;
       }
-      const lookEnd = gi.arc + 4.5;
+      const lookEnd = gi.arc + APERTURE_LOOKAHEAD;
       let minHalfW = clusterHalfW;
       for (let j = i; j < gLen; j++) {
         const gj = gates[j];
@@ -330,14 +347,15 @@ export function assignClusterRoutes(
           minHalfW = gj.halfW;
         }
       }
-      rawAp[i] = Math.max(0.22, Math.min(1, (minHalfW - 0.35) / denom));
+      rawAp[i] = Math.max(APERTURE_MIN, Math.min(1, (minHalfW - GATE_CLEAR_INSET) / denom));
     }
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < gLen; i++) {
         const prev = rawAp[i > 0 ? i - 1 : i] as number;
         const cur = rawAp[i] as number;
         const next = rawAp[i + 1 < gLen ? i + 1 : i] as number;
-        smoothAp[i] = 0.25 * prev + 0.5 * cur + 0.25 * next;
+        smoothAp[i] =
+          APERTURE_SMOOTH_SIDE * prev + APERTURE_SMOOTH_CENTER * cur + APERTURE_SMOOTH_SIDE * next;
       }
       const tmp = rawAp;
       rawAp = smoothAp;

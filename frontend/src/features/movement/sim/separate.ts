@@ -30,6 +30,12 @@ const OVERTAKE_WRAP_FACTOR = 0.35;
 // Per-tick push clamp relative to unit base speed.
 const MAX_PUSH_SPEED_FACTOR = 1.15;
 const MIN_MAX_PUSH = 0.06;
+// Mass floor so zero-radius movers still yield deterministically.
+const MASS_EPS = 0.01;
+// Front-mover cone: |cos| above this threshold counts as "same direction";
+// the multiplier scales across the remaining cosine range.
+const FRONT_MOVER_COS_MIN = 0.25;
+const FRONT_MOVER_COS_RANGE = 0.75;
 
 // Fixed neighbour-bucket order for pair iteration (deterministic).
 const NB_DX = new Int8Array([-1, 0, 1, -1, 0, 1, -1, 0, 1]);
@@ -187,7 +193,7 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       const core = overlap - soft;
       const impulse = soft * SOFT_STIFFNESS + core * CORE_STIFFNESS;
 
-      const mb = Math.max(br * br, 0.01);
+      const mb = Math.max(br * br, MASS_EPS);
       const vbx = actB === 1 || actA === 1 ? (velRX[b] as number) : 0;
       const vby = actB === 1 || actA === 1 ? (velRY[b] as number) : 0;
       let wMassA = sameFaction ? ma * stateWeight(actA) : ma;
@@ -203,9 +209,12 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
           if (mLenSq > 1e-8) {
             cosLong = (ux * mx + uy * my) / Math.sqrt(mLenSq);
             const absCos = Math.abs(cosLong);
-            if (absCos > 0.25) {
+            if (absCos > FRONT_MOVER_COS_MIN) {
               sameDirLong = true;
-              const mult = 1 + (FRONT_MOVER_MAX_MULT - 1) * ((absCos - 0.25) / 0.75);
+              const mult =
+                1 +
+                (FRONT_MOVER_MAX_MULT - 1) *
+                  ((absCos - FRONT_MOVER_COS_MIN) / FRONT_MOVER_COS_RANGE);
               if (cosLong > 0) {
                 wMassB *= mult;
               } else {
@@ -285,7 +294,7 @@ export function makeSeparate(terrain: TerrainApi, velW: () => VelWriter) {
       const ax = posX[a] as number;
       const ay = posY[a] as number;
       const ar = moverR[a] as number;
-      const ma = Math.max(ar * ar, 0.01);
+      const ma = Math.max(ar * ar, MASS_EPS);
       const fa = facId[a] as number;
       const actA = tgtActive[a] as number;
       const vax = velRX[a] as number;

@@ -2,11 +2,10 @@
 // reachability checks with Heavy->Standard fallback, persistent slot
 // assignment/subset preservation, and 1D Eikonal geodesic trimmed-median
 // cruise speed pacing (ADR 0054 / ADR 0057).
-import { distance } from '../../../core/index';
 import type { EntityId } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
-import { FormationGuideIntent, MoveIntent } from '../../movement/protocol';
-import { MoveSpeed, Mover, MoveTarget, Position } from '../../movement/sim/index';
+import { FormationGuideIntent } from '../../movement/protocol';
+import { MoveSpeed, Mover, Position } from '../../movement/sim/index';
 import {
   CLEARANCE_HEAVY,
   CLEARANCE_STANDARD,
@@ -18,15 +17,12 @@ import {
 } from '../../terrain/rules/index';
 import type { SquadsDeps } from './deps';
 import {
-  computeFormationLayout,
   computeGeodesicCruiseCap,
   computeGeodesicPacing,
-  markFootprintCells,
-  projectFormationSlots,
   type FormationMemberInfo,
   type GeodesicSample,
 } from './formation';
-import type { Squad, SquadSlot } from './state';
+import type { Squad } from './state';
 
 export const SQUAD_PERIOD = 10;
 export const ARRIVE_DIST = 2;
@@ -34,6 +30,12 @@ export const STRAY_DIST = 10;
 
 const GUIDE_RELEASE_DIST = 7;
 const SQUAD_GOAL_SNAP_RING = 6;
+// Slot score: squared snap-ring distance dominates, anchor-facing distance
+// breaks ties (scaled up so any ring step outweighs facing).
+const SLOT_SCORE_CELL_WEIGHT = 1024;
+// Formation guide is released when the cruise cap lands within this
+// tolerance of the geodesic reference speed.
+const GUIDE_RELEASE_CRUISE_TOLERANCE = 1.02;
 
 function resolveSquadGoalAtTier(
   terrain: SquadsDeps['terrain'],
@@ -74,7 +76,7 @@ function resolveSquadGoalAtTier(
     const ccx = clearanceAnchorCenter(cx, tier);
     const ccy = clearanceAnchorCenter(cy, tier);
     const faceDistSq = (ccx - refX) * (ccx - refX) + (ccy - refY) * (ccy - refY);
-    const score = (dx * dx + dy * dy) * 1024 + faceDistSq;
+    const score = (dx * dx + dy * dy) * SLOT_SCORE_CELL_WEIGHT + faceDistSq;
     if (score < bestScore) {
       bestScore = score;
       bestX = cx;
@@ -84,7 +86,7 @@ function resolveSquadGoalAtTier(
   return bestX >= 0 ? { gx: bestX, gy: bestY } : null;
 }
 
-function pickPassableRef(
+export function pickPassableRef(
   terrain: SquadsDeps['terrain'],
   memberInfos: readonly FormationMemberInfo[],
   cls: number,
@@ -110,7 +112,7 @@ export function squadGoalTier(members: readonly FormationMemberInfo[]): Clearanc
   return members.some((m) => m.tier === CLEARANCE_HEAVY) ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
 }
 
-function resolveGoalCellWithFallback(
+export function resolveGoalCellWithFallback(
   terrain: SquadsDeps['terrain'],
   pathing: SquadsDeps['pathing'],
   cls: number,
@@ -226,260 +228,6 @@ export function acquireProbeWithFallback(
   return null;
 }
 
-function projectSquadMembersWithProbe(
-  deps: SquadsDeps,
-  memberInfos: readonly FormationMemberInfo[],
-  targetsToProject: readonly FormationMemberInfo[],
-  c: { x: number; y: number },
-  goalX: number,
-  goalY: number,
-  cls: number,
-  goalTier: ClearanceTier,
-  preferredHeading?: { hx: number; hy: number },
-  reservedCells?: ReadonlySet<number>,
-): {
-  effX: number;
-  effY: number;
-  emitGx: number;
-  emitGy: number;
-  hx: number;
-  hy: number;
-  offsets: Map<number, { fwd: number; right: number }>;
-  projected: Map<number, { x: number; y: number }>;
-} {
-  const singleClass = memberInfos.every((m) => m.cls === cls);
-  const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
-  const probe = singleClass
-    ? acquireProbeWithFallback(
-        deps.terrain,
-        deps.pathing,
-        cls,
-        goalTier,
-        goalX,
-        goalY,
-        ref.x,
-        ref.y,
-      )
-    : null;
-  try {
-    const effX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : goalX;
-    const effY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : goalY;
-    const emitGx = probe !== null ? probe.gx : Math.floor(goalX);
-    const emitGy = probe !== null ? probe.gy : Math.floor(goalY);
-    const layout = computeFormationLayout(memberInfos);
-    const dGoal = distance(c.x, c.y, effX, effY);
-    const hx = preferredHeading?.hx ?? (dGoal > 1e-6 ? (effX - c.x) / dGoal : 1);
-    const hy = preferredHeading?.hy ?? (dGoal > 1e-6 ? (effY - c.y) / dGoal : 0);
-    const projected = projectFormationSlots(
-      deps.terrain,
-      deps.pathing,
-      probe?.goalId ?? null,
-      effX,
-      effY,
-      hx,
-      hy,
-      targetsToProject,
-      layout.offsets,
-      reservedCells,
-    );
-    return {
-      effX,
-      effY,
-      emitGx,
-      emitGy,
-      hx,
-      hy,
-      offsets: layout.offsets,
-      projected,
-    };
-  } finally {
-    if (probe !== null) {
-      deps.pathing.releaseGoal(probe.goalId);
-    }
-  }
-}
-
-// Persistent formation assignment + MoveIntent dedupe (ADR 0054).
-// Returns the set of handles that received a MoveIntent on this tick.
-export function ensureSquadSlotsAndEmitMove(
-  ctx: SystemContext,
-  deps: SquadsDeps,
-  squad: Squad,
-  memberInfos: readonly FormationMemberInfo[],
-  c: { x: number; y: number },
-  goalX: number,
-  goalY: number,
-  forceAll = false,
-): Set<number> {
-  const emitted = new Set<number>();
-  if (memberInfos.length === 0) {
-    return emitted;
-  }
-
-  const goalChanged = goalX !== squad.lastGoal.x || goalY !== squad.lastGoal.y;
-  const prevSlotCount = squad.slots?.length ?? 0;
-  const significantAttrition =
-    squad.slots !== undefined &&
-    prevSlotCount > 0 &&
-    (prevSlotCount - memberInfos.length) * 10 >= prevSlotCount * 3;
-  const fullRebuild = forceAll || goalChanged || squad.slots === undefined || significantAttrition;
-
-  const first = memberInfos[0];
-  const cls = first?.cls ?? 0;
-  const singleClass = memberInfos.every((m) => m.cls === cls);
-  const goalTier = squadGoalTier(memberInfos);
-
-  if (fullRebuild) {
-    const res = projectSquadMembersWithProbe(
-      deps,
-      memberInfos,
-      memberInfos,
-      c,
-      goalX,
-      goalY,
-      cls,
-      goalTier,
-    );
-    squad.heading = { hx: res.hx, hy: res.hy };
-    const nextSlots: SquadSlot[] = [];
-    const emitUnits: number[] = [];
-    const emitSlots: { x: number; y: number }[] = [];
-    for (const m of memberInfos) {
-      const off = res.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-      const dest = res.projected.get(m.handle) ?? { x: res.effX, y: res.effY };
-      nextSlots.push({
-        handle: m.handle,
-        fwd: off.fwd,
-        right: off.right,
-        destX: dest.x,
-        destY: dest.y,
-      });
-      emitUnits.push(m.handle);
-      emitSlots.push({ x: dest.x, y: dest.y });
-      emitted.add(m.handle);
-    }
-    squad.slots = nextSlots;
-    squad.lastGoal = { x: goalX, y: goalY };
-    ctx.emit(MoveIntent, {
-      units: emitUnits,
-      x: res.emitGx,
-      y: res.emitGy,
-      slots: emitSlots,
-    });
-    return emitted;
-  }
-
-  // Same destination: check for missing members (e.g. reinforcements) or
-  // idle-far members (stopped early while still outside ARRIVE_DIST).
-  const slotByHandle = new Map<number, SquadSlot>();
-  for (const s of squad.slots ?? []) {
-    slotByHandle.set(s.handle, s);
-  }
-  const tgt = ctx.read(MoveTarget);
-  const missing: FormationMemberInfo[] = [];
-  const idleFar: FormationMemberInfo[] = [];
-  const settled: FormationMemberInfo[] = [];
-  for (const m of memberInfos) {
-    const s = slotByHandle.get(m.handle);
-    if (s === undefined) {
-      missing.push(m);
-    } else if (
-      (tgt.active[m.id] ?? 0) === 0 &&
-      distance(m.x, m.y, s.destX, s.destY) > ARRIVE_DIST
-    ) {
-      idleFar.push(m);
-    } else {
-      settled.push(m);
-    }
-  }
-
-  if (missing.length === 0 && idleFar.length === 0) {
-    return emitted;
-  }
-
-  const reservedCells = new Set<number>();
-  for (const list of [settled, idleFar]) {
-    for (const m of list) {
-      const s = slotByHandle.get(m.handle);
-      if (s !== undefined) {
-        markFootprintCells(
-          reservedCells,
-          deps.terrain.width,
-          deps.terrain.height,
-          s.destX,
-          s.destY,
-          m.tier,
-        );
-      }
-    }
-  }
-
-  const subsetHandles: number[] = [];
-  const subsetSlots: { x: number; y: number }[] = [];
-
-  for (const m of idleFar) {
-    const s = slotByHandle.get(m.handle);
-    if (s !== undefined) {
-      subsetHandles.push(m.handle);
-      subsetSlots.push({ x: s.destX, y: s.destY });
-      emitted.add(m.handle);
-    }
-  }
-
-  let emitGx = Math.floor(goalX);
-  let emitGy = Math.floor(goalY);
-  if (missing.length > 0) {
-    const res = projectSquadMembersWithProbe(
-      deps,
-      memberInfos,
-      missing,
-      c,
-      goalX,
-      goalY,
-      cls,
-      goalTier,
-      squad.heading,
-      reservedCells,
-    );
-    emitGx = res.emitGx;
-    emitGy = res.emitGy;
-    for (const m of missing) {
-      const off = res.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-      const dest = res.projected.get(m.handle) ?? { x: res.effX, y: res.effY };
-      squad.slots?.push({
-        handle: m.handle,
-        fwd: off.fwd,
-        right: off.right,
-        destX: dest.x,
-        destY: dest.y,
-      });
-      subsetHandles.push(m.handle);
-      subsetSlots.push({ x: dest.x, y: dest.y });
-      emitted.add(m.handle);
-    }
-  } else if (singleClass) {
-    const snapped = resolveGoalCellWithFallback(
-      deps.terrain,
-      deps.pathing,
-      cls,
-      goalTier,
-      goalX,
-      goalY,
-      memberInfos,
-      c,
-    );
-    if (snapped !== null) {
-      emitGx = snapped.gx;
-      emitGy = snapped.gy;
-    }
-  }
-
-  if (subsetHandles.length > 0) {
-    ctx.emit(MoveIntent, { units: subsetHandles, x: emitGx, y: emitGy, slots: subsetSlots });
-  }
-  return emitted;
-}
-
 export function emitTransitGuide(
   ctx: SystemContext,
   deps: SquadsDeps,
@@ -542,7 +290,8 @@ export function emitTransitGuide(
     const pacing = computeGeodesicPacing(samples, STRAY_DIST);
     if (
       pacing === null ||
-      (pacing.sRef <= GUIDE_RELEASE_DIST && pacing.vMax <= pacing.vCruise * 1.02)
+      (pacing.sRef <= GUIDE_RELEASE_DIST &&
+        pacing.vMax <= pacing.vCruise * GUIDE_RELEASE_CRUISE_TOLERANCE)
     ) {
       releaseGuideIfActive(ctx, squad);
       return;

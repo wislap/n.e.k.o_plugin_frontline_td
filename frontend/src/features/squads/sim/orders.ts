@@ -31,11 +31,11 @@ import {
   acquireProbeWithFallback,
   collectMemberInfos,
   emitTransitGuide,
-  ensureSquadSlotsAndEmitMove,
   isGoalReachableWithFallback,
   releaseGuideIfActive,
   squadGoalTier,
 } from './transit';
+import { ensureSquadSlotsAndEmitMove } from './slot-emit';
 
 export { SQUAD_PERIOD };
 

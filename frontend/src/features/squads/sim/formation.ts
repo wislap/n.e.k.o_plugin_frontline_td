@@ -15,6 +15,13 @@ import type { TerrainApi } from '../../terrain/sim/index';
 export const FORMATION_PAD = 0.35;
 
 const PROJECT_SPIRAL_RING = 10;
+// Column count from member count: near-square grid, capped.
+const FORMATION_COLS_MAX = 8;
+const FORMATION_COLS_ASPECT = 1.4;
+// Slot projection acceptance: geodesic distance may exceed the euclidean
+// detour by this factor plus a flat bias.
+const MAX_GEODESIC_FACTOR = 2.5;
+const MAX_GEODESIC_BIAS = 2.5;
 
 export interface FormationMemberInfo {
   handle: number;
@@ -51,7 +58,10 @@ export function computeFormationLayout(members: readonly FormationMemberInfo[]):
     return { offsets, halfWidth: 0 };
   }
   const sorted = sortFormationMembers(members);
-  const cols = Math.max(1, Math.min(8, Math.ceil(Math.sqrt(sorted.length * 1.4))));
+  const cols = Math.max(
+    1,
+    Math.min(FORMATION_COLS_MAX, Math.ceil(Math.sqrt(sorted.length * FORMATION_COLS_ASPECT))),
+  );
   const rows: FormationMemberInfo[][] = [];
   for (let i = 0; i < sorted.length; i += cols) {
     rows.push(sorted.slice(i, i + cols));
@@ -223,7 +233,7 @@ export function projectFormationSlots(
       if (checkNear) {
         const gd = pathing.distanceAt(goalId, cx, cy);
         const euclidSq = (cx - centerX) * (cx - centerX) + (cy - centerY) * (cy - centerY);
-        const maxGeodesic = Math.sqrt(euclidSq) * 2.5 + 2.5;
+        const maxGeodesic = Math.sqrt(euclidSq) * MAX_GEODESIC_FACTOR + MAX_GEODESIC_BIAS;
         if (gd !== null && gd <= maxGeodesic) {
           chosen = { x: cx, y: cy };
           break;

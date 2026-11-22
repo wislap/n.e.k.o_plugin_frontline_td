@@ -18,6 +18,12 @@ const HEAVY_TIER = CLEARANCE_HEAVY;
 const DIRS = DIR_ORDER;
 
 export const MAX_GATE_HALF_W = 4.5;
+// Gate half-width inset from measured clearance so the lane stays clear
+// of walls. Shared with route-chain's aperture profile.
+export const GATE_CLEAR_INSET = 0.35;
+// Lane recentering bias: half the right/left clearance difference, clamped.
+const LANE_BIAS_MAX = 2.25;
+const LANE_BIAS_FACTOR = 0.5;
 const LOCAL_REJOIN_RADIUS = 12;
 const BFS_WIN = LOCAL_REJOIN_RADIUS * 2 + 1;
 const BFS_SLOTS = BFS_WIN * BFS_WIN;
@@ -241,7 +247,10 @@ export function buildWideGate(
   const ny = tx;
   const rightClear = probeSide(terrain, cls, tier, px, py, nx, ny);
   const leftClear = probeSide(terrain, cls, tier, px, py, -nx, -ny);
-  const bias = Math.max(-2.25, Math.min(2.25, (rightClear - leftClear) * 0.5));
+  const bias = Math.max(
+    -LANE_BIAS_MAX,
+    Math.min(LANE_BIAS_MAX, (rightClear - leftClear) * LANE_BIAS_FACTOR),
+  );
   const candX = px + nx * bias;
   const candY = py + ny * bias;
   const recenter =
@@ -260,8 +269,8 @@ export function buildWideGate(
   const gy = recenter ? candY : py;
   const rClear = recenter ? probeSide(terrain, cls, tier, gx, gy, nx, ny) : rightClear;
   const lClear = recenter ? probeSide(terrain, cls, tier, gx, gy, -nx, -ny) : leftClear;
-  const leftW = Math.max(0, Math.min(MAX_GATE_HALF_W, lClear - 0.35));
-  const rightW = Math.max(0, Math.min(MAX_GATE_HALF_W, rClear - 0.35));
+  const leftW = Math.max(0, Math.min(MAX_GATE_HALF_W, lClear - GATE_CLEAR_INSET));
+  const rightW = Math.max(0, Math.min(MAX_GATE_HALF_W, rClear - GATE_CLEAR_INSET));
   return {
     x: gx,
     y: gy,

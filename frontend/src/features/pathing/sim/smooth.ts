@@ -5,6 +5,11 @@ import type { ClearanceTier } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { DIR_E, DIR_N, DIR_S, DIR_W, type SlotCache } from './grid-cache';
 
+// Wall-edge deadband inside a cell: directions into a wall are zeroed only
+// while the sub-cell position sits inside these margins.
+const EDGE_LOCK_MIN = 0.35;
+const EDGE_LOCK_MAX = 0.65;
+
 export function wallParallelDirection(
   terrain: TerrainApi,
   sc: SlotCache,
@@ -58,19 +63,21 @@ export function wallParallelDirection(
         : nValid
           ? Math.min(0, cN - here)
           : 0;
+  // Sub-cell position within the anchor cell; directions pointing into a
+  // wall are locked out when the unit sits beyond these edges.
   const shift = isHeavy ? 0.5 : 0;
   const fx = px - (cx + shift);
   const fy = py - (cy + shift);
-  if (!wValid && fx < 0.35 && gx < 0) {
+  if (!wValid && fx < EDGE_LOCK_MIN && gx < 0) {
     gx = 0;
   }
-  if (!eValid && fx > 0.65 && gx > 0) {
+  if (!eValid && fx > EDGE_LOCK_MAX && gx > 0) {
     gx = 0;
   }
-  if (!nValid && fy < 0.35 && gy < 0) {
+  if (!nValid && fy < EDGE_LOCK_MIN && gy < 0) {
     gy = 0;
   }
-  if (!sValid && fy > 0.65 && gy > 0) {
+  if (!sValid && fy > EDGE_LOCK_MAX && gy > 0) {
     gy = 0;
   }
   let sx = gx > 0 ? 1 : gx < 0 ? -1 : 0;

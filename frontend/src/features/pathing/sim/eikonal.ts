@@ -20,6 +20,11 @@ import {
 const MAX_POOLED_QUEUES = 16;
 const MAX_POOLED_FIELDS = 16;
 const MIN_RING_SIZE = 2048;
+// Queue ring slack beyond twice the largest possible step budget.
+const RING_SLACK = 128;
+// Diagonal step fallback when an orthogonal leg is blocked: inverse of the
+// octile diagonal factor (flat cost 10, diagonal 14).
+const DIAG_FALLBACK_FRACTION = 10 / 14;
 const INF = UNREACHABLE;
 const SCALE = COST_SCALE;
 const STD_TIER = CLEARANCE_STANDARD;
@@ -221,7 +226,7 @@ export function acquireGoalField(
     return field;
   }
 
-  const minRing = Math.max(MIN_RING_SIZE, slotCache.maxStepScaled * 2 + 128);
+  const minRing = Math.max(MIN_RING_SIZE, slotCache.maxStepScaled * 2 + RING_SLACK);
   const queue = acquireQueue(pools, minRing, size);
   field.u[goalIdx] = 0;
   field.state[goalIdx] = 1;
@@ -329,7 +334,9 @@ export function expandUntil(
           const cOrtho1 = terrain.stepCost(nx, gy, gx, gy, cls, tier);
           const cOrtho2 = terrain.stepCost(gx, ny, gx, gy, cls, tier);
           const wDiagBase =
-            cOrtho1 >= 0 && cOrtho2 >= 0 ? Math.max(cOrtho1, cOrtho2) : stepInto * (10 / 14);
+            cOrtho1 >= 0 && cOrtho2 >= 0
+              ? Math.max(cOrtho1, cOrtho2)
+              : stepInto * DIAG_FALLBACK_FRACTION;
           const rawDiag = (wDiagBase * SCALE * Math.SQRT2 + 0.5) | 0;
           cand = rawDiag > 1 ? rawDiag : 1;
         }

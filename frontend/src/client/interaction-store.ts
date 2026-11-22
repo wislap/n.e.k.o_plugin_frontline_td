@@ -70,120 +70,122 @@ const INITIAL_STATE = {
   roadHover: -1,
 };
 
-let confirmTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearConfirmTimer(): void {
-  if (confirmTimer !== null) {
-    clearTimeout(confirmTimer);
-    confirmTimer = null;
-  }
+// Tool-transient fields cleared whenever the active tool changes; fresh
+// object each call so no mutable roadSel array is shared between states.
+function toolTransientClear(): {
+  ghost: GhostState | null;
+  demolishConfirm: DemolishConfirmState | null;
+  demolishHover: DemolishHoverState | null;
+  roadSel: RoadLinkKey[];
+  roadHover: number;
+} {
+  return {
+    ghost: null,
+    demolishConfirm: null,
+    demolishHover: null,
+    roadSel: [],
+    roadHover: -1,
+  };
 }
 
-export const useInteractionStore = create<InteractionState>((set) => ({
-  ...INITIAL_STATE,
-  setMode: (mode) => {
-    clearConfirmTimer();
-    set({
-      mode,
-      tool: { kind: 'none' },
-      ghost: null,
-      demolishConfirm: null,
-      demolishHover: null,
-      roadSel: [],
-      roadHover: -1,
-    });
-  },
-  enterPlace: (structureKindId) => {
-    clearConfirmTimer();
-    set((s) => ({
-      mode: 'build',
-      tool: { kind: 'place', structureKindId },
-      ghost: s.tool.kind === 'place' && s.tool.structureKindId === structureKindId ? s.ghost : null,
-      demolishConfirm: null,
-      demolishHover: null,
-      roadSel: [],
-      roadHover: -1,
-    }));
-  },
-  enterDemolish: () => {
-    clearConfirmTimer();
-    set({
-      mode: 'build',
-      tool: { kind: 'demolish' },
-      ghost: null,
-      demolishConfirm: null,
-      demolishHover: null,
-      roadSel: [],
-      roadHover: -1,
-    });
-  },
-  enterRoad: () => {
-    clearConfirmTimer();
-    set({
-      mode: 'logistics',
-      tool: { kind: 'road' },
-      ghost: null,
-      demolishConfirm: null,
-      demolishHover: null,
-      roadSel: [],
-      roadHover: -1,
-    });
-  },
-  exitTool: () => {
-    clearConfirmTimer();
-    set({
-      tool: { kind: 'none' },
-      ghost: null,
-      demolishConfirm: null,
-      demolishHover: null,
-      roadSel: [],
-      roadHover: -1,
-    });
-  },
-  armDemolishConfirm: (targets, now) => {
-    clearConfirmTimer();
-    const normalized = [...new Set(targets)].sort((a, b) => a - b);
-    const expiresAt = now + DEMOLISH_CONFIRM_MS;
-    set({
-      demolishConfirm: {
-        targetKey: normalized.join(','),
-        targets: normalized,
-        expiresAt,
-      },
-    });
-    confirmTimer = setTimeout(() => {
+export const useInteractionStore = create<InteractionState>((set) => {
+  let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearConfirmTimer(): void {
+    if (confirmTimer !== null) {
+      clearTimeout(confirmTimer);
       confirmTimer = null;
-      set((s) => (s.demolishConfirm?.expiresAt === expiresAt ? { demolishConfirm: null } : s));
-    }, DEMOLISH_CONFIRM_MS);
-  },
-  clearDemolishConfirm: () => {
-    clearConfirmTimer();
-    set({ demolishConfirm: null });
-  },
-  setGhost: (ghost) => {
-    set({ ghost });
-  },
-  setDemolishHover: (demolishHover) => {
-    set({ demolishHover });
-  },
-  setRoadSel: (roadSel) => {
-    set({ roadSel });
-  },
-  toggleRoadLink: (key) => {
-    set((s) => ({
-      roadSel: s.roadSel.some((k) => k.a === key.a && k.b === key.b)
-        ? s.roadSel.filter((k) => !(k.a === key.a && k.b === key.b))
-        : [...s.roadSel, key].sort((x, y) => x.a - y.a || x.b - y.b),
-    }));
-  },
-  setRoadHover: (index) => {
-    set((s) => (s.roadHover === index ? s : { roadHover: index }));
-  },
-  reset: () => {
-    clearConfirmTimer();
-    set({ ...INITIAL_STATE });
-  },
-}));
+    }
+  }
+
+  return {
+    ...INITIAL_STATE,
+    setMode: (mode) => {
+      clearConfirmTimer();
+      set({
+        mode,
+        tool: { kind: 'none' },
+        ...toolTransientClear(),
+      });
+    },
+    enterPlace: (structureKindId) => {
+      clearConfirmTimer();
+      set((s) => ({
+        mode: 'build',
+        tool: { kind: 'place', structureKindId },
+        ...toolTransientClear(),
+        ghost:
+          s.tool.kind === 'place' && s.tool.structureKindId === structureKindId ? s.ghost : null,
+      }));
+    },
+    enterDemolish: () => {
+      clearConfirmTimer();
+      set({
+        mode: 'build',
+        tool: { kind: 'demolish' },
+        ...toolTransientClear(),
+      });
+    },
+    enterRoad: () => {
+      clearConfirmTimer();
+      set({
+        mode: 'logistics',
+        tool: { kind: 'road' },
+        ...toolTransientClear(),
+      });
+    },
+    exitTool: () => {
+      clearConfirmTimer();
+      set({
+        tool: { kind: 'none' },
+        ...toolTransientClear(),
+      });
+    },
+    armDemolishConfirm: (targets, now) => {
+      clearConfirmTimer();
+      const normalized = [...new Set(targets)].sort((a, b) => a - b);
+      const expiresAt = now + DEMOLISH_CONFIRM_MS;
+      set({
+        demolishConfirm: {
+          targetKey: normalized.join(','),
+          targets: normalized,
+          expiresAt,
+        },
+      });
+      confirmTimer = setTimeout(() => {
+        confirmTimer = null;
+        set((s) => (s.demolishConfirm?.expiresAt === expiresAt ? { demolishConfirm: null } : s));
+      }, DEMOLISH_CONFIRM_MS);
+    },
+    clearDemolishConfirm: () => {
+      clearConfirmTimer();
+      set({ demolishConfirm: null });
+    },
+    setGhost: (ghost) => {
+      set({ ghost });
+    },
+    setDemolishHover: (demolishHover) => {
+      set({ demolishHover });
+    },
+    setRoadSel: (roadSel) => {
+      set({ roadSel });
+    },
+    toggleRoadLink: (key) => {
+      set((s) => ({
+        roadSel: s.roadSel.some((k) => k.a === key.a && k.b === key.b)
+          ? s.roadSel.filter((k) => !(k.a === key.a && k.b === key.b))
+          : [...s.roadSel, key].sort((x, y) => x.a - y.a || x.b - y.b),
+      }));
+    },
+    setRoadHover: (index) => {
+      set((s) => (s.roadHover === index ? s : { roadHover: index }));
+    },
+    reset: () => {
+      clearConfirmTimer();
+      set({ ...INITIAL_STATE });
+    },
+  };
+});
 
 useSelectionStore.subscribe((state, prev) => {
   if (state.selected !== prev.selected && useInteractionStore.getState().demolishConfirm !== null) {
