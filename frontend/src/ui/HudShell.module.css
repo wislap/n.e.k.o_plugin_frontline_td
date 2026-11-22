@@ -1,10 +1,14 @@
 .shell {
+  /* Both side tracks reserve the wider side's maximum width, so the center
+     column stays viewport-centered and does not shift when side panels
+     (e.g. the bottom-right inspector) appear, resize or collapse. */
+  --hud-side-w: min(360px, 34vw);
   position: fixed;
   inset: 0;
   z-index: var(--z-hud);
   pointer-events: none;
   display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+  grid-template-columns: var(--hud-side-w) minmax(0, 1fr) var(--hud-side-w);
   grid-template-rows: minmax(0, 1fr);
   gap: var(--space-2);
   padding: var(--space-3);
@@ -34,6 +38,7 @@
 }
 
 .colRight {
+  justify-self: end;
   justify-content: space-between;
   align-items: flex-end;
   max-width: min(340px, 32vw);
@@ -154,6 +159,7 @@
 
 @media (max-width: 1080px) {
   .shell {
+    --hud-side-w: min(280px, 33vw);
     gap: var(--space-1);
     padding: var(--space-2);
   }
@@ -168,6 +174,10 @@
 }
 
 @media (max-width: 920px) {
+  .shell {
+    --hud-side-w: min(244px, 32vw);
+  }
+
   .colLeft {
     max-width: min(244px, 32vw);
   }
