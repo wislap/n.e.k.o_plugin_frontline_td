@@ -341,26 +341,25 @@ test('minimap sector jump on canvas click and collapse/expand toggle', async ({ 
   expect(failures).toEqual([]);
 });
 
-test('HUD panels stay in-bounds and non-overlapping across 800x600, 1280x720, and 1920x1080', async ({
-  page,
-}) => {
-  const failures = collectFailures(page);
-  await bootAndWaitForTick(page);
+// One test per viewport: under CI's software WebGL the three viewports in a
+// single test exceeded the 30 s per-test budget.
+const HUD_VIEWPORTS = [
+  { width: 800, height: 600 },
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
+] as const;
 
-  const topRight = page.locator('[data-hud-slot="topRight"]');
-  const topCenter = page.locator('[data-hud-slot="topCenter"]');
-  const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
-  await expect(topRight).toContainText('仓库');
-
-  const viewports = [
-    { width: 800, height: 600 },
-    { width: 1280, height: 720 },
-    { width: 1920, height: 1080 },
-  ] as const;
-
-  for (const vp of viewports) {
-    const label = `${vp.width}x${vp.height}`;
+for (const vp of HUD_VIEWPORTS) {
+  const label = `${vp.width}x${vp.height}`;
+  test(`HUD panels stay in-bounds and non-overlapping at ${label}`, async ({ page }) => {
+    const failures = collectFailures(page);
     await page.setViewportSize(vp);
+    await bootAndWaitForTick(page);
+
+    const topRight = page.locator('[data-hud-slot="topRight"]');
+    const topCenter = page.locator('[data-hud-slot="topCenter"]');
+    const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
+    await expect(topRight).toContainText('仓库');
 
     // State 1: F1 default
     await page.keyboard.press('F1');
@@ -383,13 +382,9 @@ test('HUD panels stay in-bounds and non-overlapping across 800x600, 1280x720, an
     await expect(topRight).toContainText('运行遥测');
     await assertHudBoundsAndNonOverlap(page, `${label} F3+debug`);
 
-    // Close DebugPanel cleanly before next viewport
-    await page.keyboard.press('Backquote');
-    await expect(topRight).not.toContainText('运行遥测');
-  }
-
-  expect(failures).toEqual([]);
-});
+    expect(failures).toEqual([]);
+  });
+}
 
 test('3D orbital rotation via Q/E and middle-drag updates compass and resets smoothly to North', async ({
   page,
