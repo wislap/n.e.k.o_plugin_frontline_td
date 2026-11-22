@@ -2,15 +2,20 @@
 // mode is active: terrain-conforming service-coverage tint on the ground,
 // link polylines from pathCells (brightness ∝ the 30 s EMA of outBp + inBp,
 // red when either direction saturates), and service-radius rings on nodes.
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useInspectorStore } from '../../../client/inspector-store';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useSelectionStore } from '../../../client/selection-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import type { Snapshot } from '../../../core/index';
+import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-material';
+import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import { useRenderTheme } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import {
   StructuresChannel,
@@ -20,6 +25,8 @@ import {
 import { buildTerrainGeometry } from '../../terrain/render/index';
 import { LogisticsNetworkChannel, SERVICE_LAYER_ID, type LogisticsNetwork } from '../protocol';
 import { linkFlow } from './link-flow';
+
+const ATTACH_MATERIAL = 'material';
 
 const COVER_COLOR = '#3f7fbf';
 const COVER_ALPHA = Math.round(0.22 * 255);
@@ -41,6 +48,7 @@ function buildCover(
   map: ResolvedMap,
   mesh: THREE.Mesh,
   material: THREE.MeshBasicMaterial,
+  edgeMode: boolean,
 ): BuiltCover {
   const grid = map.grid;
   const data = buildTerrainGeometry(
@@ -65,8 +73,8 @@ function buildCover(
   geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
   const texData = new Uint8Array(grid.width * grid.height * 4);
   const texture = new THREE.DataTexture(texData, grid.width, grid.height, THREE.RGBAFormat);
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = edgeMode ? THREE.LinearFilter : THREE.NearestFilter;
+  texture.minFilter = edgeMode ? THREE.LinearFilter : THREE.NearestFilter;
   texture.needsUpdate = true;
   mesh.geometry = geometry;
   material.alphaMap = texture;
@@ -74,6 +82,9 @@ function buildCover(
   return { geometry, texture };
 }
 
+// Red channel = coverage mask for the themed contour shader; green = the
+// legacy flat alphaMap value. Both are written on every upload so either
+// material can bind the same texture.
 function uploadServiceCoverage(
   texture: THREE.DataTexture,
   layer: ArrayLike<number> | undefined,
@@ -81,10 +92,10 @@ function uploadServiceCoverage(
 ): void {
   const buf = texture.image.data as Uint8Array;
   for (let i = 0; i < cells; i++) {
-    const alpha = (layer?.[i] ?? 0) !== 0 ? COVER_ALPHA : 0;
-    buf[i * 4] = alpha;
-    buf[i * 4 + 1] = alpha;
-    buf[i * 4 + 2] = alpha;
+    const covered = (layer?.[i] ?? 0) !== 0;
+    buf[i * 4] = covered ? 255 : 0;
+    buf[i * 4 + 1] = covered ? COVER_ALPHA : 0;
+    buf[i * 4 + 2] = 0;
     buf[i * 4 + 3] = 255;
   }
   texture.needsUpdate = true;
@@ -99,6 +110,9 @@ function updateLinks(
   height: number,
   heights: ArrayLike<number>,
   scratchColor: THREE.Color,
+  dashTime: number,
+  themed: boolean,
+  linkColor: THREE.Color,
 ): void {
   linkLines.geometry = linkBuf.geometry;
   const linkPos = linkBuf.positions;
@@ -113,10 +127,20 @@ function updateLinks(
     for (let i = 0; i < links.a.length && verts < MAX_LINK_VERTS - 2; i++) {
       const flow = Math.min(1, (smoothed.bp[i] ?? 0) / 20000);
       const sat = (links.outSat[i] ?? 0) !== 0 || (links.inSat[i] ?? 0) !== 0;
-      scratchColor.copy(sat ? LINK_SAT_COLOR : LINK_COLOR).multiplyScalar(0.3 + flow * 0.7);
+      scratchColor
+        .copy(sat ? LINK_SAT_COLOR : linkColor)
+        .multiplyScalar(0.3 + flow * 0.7)
+        .multiplyScalar(themed ? 1.4 : 1);
       const from = links.pathOffsets[i] ?? 0;
       const to = links.pathOffsets[i + 1] ?? 0;
       for (let c = from; c + 1 < to && verts < MAX_LINK_VERTS - 2; c++) {
+        if (themed) {
+          // Flowing dashes: cells scroll toward the destination endpoint.
+          const phase = (((c - from - dashTime * 2) % 2.2) + 2.2) % 2.2;
+          if (phase > 1.1) {
+            continue;
+          }
+        }
         const ca = links.pathCells[c] ?? 0;
         const cb = links.pathCells[c + 1] ?? 0;
         const ax = (ca % width) + 0.5;
@@ -153,6 +177,7 @@ function updateRings(
   height: number,
   heights: ArrayLike<number>,
   scratchDummy: THREE.Object3D,
+  focus: ReadonlySet<number> | null,
 ): void {
   let ringCount = 0;
   if (structures !== undefined) {
@@ -161,6 +186,10 @@ function updateRings(
         (structures.faction[i] ?? 0) !== observer ||
         (structures.state[i] ?? 0) !== STATE_OPERATIONAL
       ) {
+        continue;
+      }
+      // Themed: range rings only on hovered/pinned/selected structures.
+      if (focus !== null && !focus.has(structures.handles[i] ?? 0)) {
         continue;
       }
       const kind = db.structures.byIndex(structures.kind[i] ?? 0);
@@ -189,6 +218,8 @@ export interface LogisticsOverlayProps {
 }
 
 export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
+  const theme = useRenderTheme();
+  const themed = theme.id !== 'legacy';
   const toggled = useUiStore((s) => s.logisticsOverlay);
   const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');
   const on = toggled || modeOn;
@@ -197,9 +228,11 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const coverBuiltRef = useRef<BuiltCover | null>(null);
   const coverBuiltForRef = useRef<{
     map: ResolvedMap;
+    themed: boolean;
     layer: ArrayLike<number> | undefined | null;
   }>({
     map,
+    themed,
     layer: null,
   });
   const linkRef = useRef<THREE.LineSegments>(null);
@@ -207,6 +240,18 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const linkBufRef = useRef<LineBuffer | null>(null);
   const dummyRef = useRef<THREE.Object3D | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
+  const ringDashMatRef = useRef<DashRingMaterial | null>(null);
+  const ringDashMat = useMemo(
+    () => (themed ? createDashRingMaterial(theme.markers.accent) : null),
+    [theme, themed],
+  );
+  const focusSetRef = useRef(new Set<number>());
+  const linkColorRef = useRef(new THREE.Color(LINK_COLOR));
+  const coverShaderRef = useRef<CoverMaterial | null>(null);
+  const coverShader = useMemo(
+    () => (themed ? createCoverMaterial(theme.markers.link) : null),
+    [theme, themed],
+  );
 
   useEffect(() => {
     return () => {
@@ -217,6 +262,18 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       linkBufRef.current = null;
     };
   }, []);
+  useEffect(() => {
+    ringDashMatRef.current = ringDashMat;
+    return () => {
+      ringDashMat?.dispose();
+    };
+  }, [ringDashMat]);
+  useEffect(() => {
+    coverShaderRef.current = coverShader;
+    return () => {
+      coverShader?.dispose();
+    };
+  }, [coverShader]);
 
   useFrame(() => {
     const coverMesh = coverMeshRef.current;
@@ -229,9 +286,31 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
     if (coverBuiltRef.current === null || coverBuiltForRef.current.map !== map) {
       coverBuiltRef.current?.geometry.dispose();
       coverBuiltRef.current?.texture.dispose();
-      coverBuiltRef.current = buildCover(map, coverMesh, coverMat);
+      coverBuiltRef.current = buildCover(map, coverMesh, coverMat, themed);
       coverBuiltForRef.current.map = map;
       coverBuiltForRef.current.layer = null;
+    }
+    if (coverBuiltForRef.current.themed !== themed) {
+      coverBuiltForRef.current.themed = themed;
+      coverBuiltForRef.current.layer = null;
+      coverBuiltRef.current.texture.magFilter = themed ? THREE.LinearFilter : THREE.NearestFilter;
+      coverBuiltRef.current.texture.minFilter = themed ? THREE.LinearFilter : THREE.NearestFilter;
+      coverBuiltRef.current.texture.needsUpdate = true;
+    }
+    const coverShaderMat = coverShaderRef.current;
+    if (coverShaderMat !== null) {
+      coverShaderMat.uniforms.uCover.value = coverBuiltRef.current.texture;
+      coverShaderMat.uniforms.uColor.value.set(theme.markers.link);
+      coverMesh.material = coverShaderMat;
+    } else {
+      coverMesh.material = coverMat;
+      coverMat.color.set(COVER_COLOR);
+    }
+    linkColorRef.current.set(themed ? theme.markers.link : LINK_COLOR);
+    const ringDash = ringDashMatRef.current;
+    if (ringDash !== null) {
+      ringDash.uniforms.uTime.value = performance.now() / 1000;
+      ringDash.uniforms.uColor.value.set(theme.markers.accent);
     }
     linkBufRef.current ??= createLineBuffer(MAX_LINK_VERTS, true);
     dummyRef.current ??= new THREE.Object3D();
@@ -266,8 +345,31 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       height,
       heights,
       colorRef.current,
+      performance.now() / 1000,
+      themed,
+      linkColorRef.current,
     );
-    updateRings(rings, structures, observer, db, width, height, heights, dummyRef.current);
+    let focus: ReadonlySet<number> | null = null;
+    if (themed) {
+      const focusSet = focusSetRef.current;
+      focusSet.clear();
+      for (const h of useSelectionStore.getState().selected) {
+        focusSet.add(h);
+      }
+      const inspector = useInspectorStore.getState();
+      const subjectHandle = (s: { kind: string } | null): number | null =>
+        s !== null && 'handle' in s ? (s.handle as number) : null;
+      const hHandle = subjectHandle(inspector.hovered);
+      const pHandle = subjectHandle(inspector.pinned);
+      if (hHandle !== null) {
+        focusSet.add(hHandle);
+      }
+      if (pHandle !== null) {
+        focusSet.add(pHandle);
+      }
+      focus = focusSet;
+    }
+    updateRings(rings, structures, observer, db, width, height, heights, dummyRef.current, focus);
   });
 
   return (
@@ -284,15 +386,24 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       <lineSegments ref={linkRef} visible={false} frustumCulled={false}>
         <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
       </lineSegments>
-      <instancedMesh ref={ringRef} args={[undefined, undefined, RING_CAP]} frustumCulled={false}>
+      <instancedMesh
+        key={`rings-${theme.id}`}
+        ref={ringRef}
+        args={[undefined, undefined, RING_CAP]}
+        frustumCulled={false}
+      >
         <ringGeometry args={[0.95, 1, RING_SEGMENTS]} />
-        <meshBasicMaterial
-          color={RING_COLOR}
-          transparent
-          opacity={0.5}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        {ringDashMat === null ? (
+          <meshBasicMaterial
+            color={RING_COLOR}
+            transparent
+            opacity={0.5}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        ) : (
+          <primitive object={ringDashMat} attach={ATTACH_MATERIAL} />
+        )}
       </instancedMesh>
     </group>
   );

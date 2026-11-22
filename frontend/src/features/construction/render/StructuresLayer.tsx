@@ -4,13 +4,14 @@
 // rising construction sites, darkened demolishing structures, low-rubble
 // ruins, and salvage crates. Reads snapshot channels in useFrame; no
 // per-tick state in React.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { effectiveSpectatePitchDeg } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
+import { useRenderTheme } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from '../../units/render/index';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
@@ -27,12 +28,16 @@ import {
   type ConstructionStructures,
 } from '../protocol';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
+import { createThemedStructureMaterial } from './themed-structure-material';
 import {
   ACTIVE_STRUCTURE_GLYPHS,
   createGlyphMaterials,
   disposeGlyphMaterials,
   type GlyphMaterialEntry,
 } from './structure-glyphs';
+
+const ATTACH_MATERIAL = 'material';
+const STATUS_COLOR = '#ffb84d';
 
 const SALVAGE_SIZE = 0.3;
 const SALVAGE_COLOR = '#8a6a3f';
@@ -200,11 +205,28 @@ export function StructuresLayer({
   isHostile,
 }: StructuresLayerProps) {
   const [capacity, setCapacity] = useState(64);
+  const theme = useRenderTheme();
   const silRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>({});
   const glyphRefs = useRef<Partial<Record<ActiveGlyph, THREE.InstancedMesh | null>>>({});
   const blueprintRef = useRef<THREE.InstancedMesh>(null);
   const waitingRef = useRef<THREE.InstancedMesh>(null);
   const crateRef = useRef<THREE.InstancedMesh>(null);
+  const statusRef = useRef<THREE.InstancedMesh>(null);
+  // Per-silhouette aDim instanced attributes (body/trim dim factor for the
+  // themed material; legacy ignores them).
+  const dimAttrsRef = useRef<Partial<Record<StructureSilhouette, THREE.InstancedBufferAttribute>>>(
+    {},
+  );
+
+  const themedMat = useMemo(
+    () => (theme.id === 'legacy' ? null : createThemedStructureMaterial(theme)),
+    [theme],
+  );
+  useEffect(() => {
+    return () => {
+      themedMat?.dispose();
+    };
+  }, [themedMat]);
 
   const gpuRef = useRef<StructureGpuAssets | null>(null);
   const silCountsRef = useRef<Record<StructureSilhouette, number> | null>(null);
@@ -228,6 +250,7 @@ export function StructuresLayer({
     const bpMesh = blueprintRef.current;
     const waitMesh = waitingRef.current;
     const crates = crateRef.current;
+    const statusMesh = statusRef.current;
     if (bpMesh === null || waitMesh === null || crates === null) {
       return;
     }
@@ -235,6 +258,19 @@ export function StructuresLayer({
     const gpu = ensureGpuAssets(gpuRef);
     if (!bindGpuToMeshes(silRefs.current, glyphRefs.current, gpu)) {
       return;
+    }
+    const dimAttrs = dimAttrsRef.current;
+    for (const s of STRUCTURE_SILHOUETTES) {
+      const mesh = silRefs.current[s];
+      if (mesh === undefined || mesh === null) {
+        continue;
+      }
+      let attr = dimAttrs[s];
+      if (attr === undefined || attr.count !== capacity) {
+        attr = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1);
+        mesh.geometry.setAttribute('aDim', attr);
+        dimAttrs[s] = attr;
+      }
     }
 
     silCountsRef.current ??= makeSilhouetteCounts();
@@ -264,6 +300,7 @@ export function StructuresLayer({
     resetGlyphCounts(glyphCounts);
     let bpCount = 0;
     let waitCount = 0;
+    let statusCount = 0;
 
     const cam = useCameraStore.getState();
     const glyphYawRot = camera.rotation.y;
@@ -331,21 +368,44 @@ export function StructuresLayer({
           dummy.scale.set(w * 0.92, full * heightScale, h * 0.92);
           dummy.updateMatrix();
           silMesh.setMatrixAt(slot, dummy.matrix);
+          let dim = 1;
           if (state === STATE_RUIN) {
             color.set(RUIN_COLOR);
+            dim = OUTPOST_TINT * DEMOLISH_DARKEN;
           } else {
             color.set(factionColorHex(faction, localFaction));
             if (kind.capture !== undefined) {
               color.multiplyScalar(OUTPOST_TINT);
             }
             if (state === STATE_SITE) {
-              color.multiplyScalar(SITE_DARKEN + progress * (1 - SITE_DARKEN));
+              dim = SITE_DARKEN + progress * (1 - SITE_DARKEN);
             } else if (state === STATE_DEMOLISHING) {
-              color.multiplyScalar(DEMOLISH_DARKEN);
+              dim = DEMOLISH_DARKEN;
+            }
+            if (dim !== 1) {
+              color.multiplyScalar(dim);
             }
           }
+          dimAttrs[silhouette]?.setX(slot, dim);
           silMesh.setColorAt(slot, color);
           silCounts[silhouette] = slot + 1;
+        }
+
+        // Damaged operational structures get a floating warning marker
+        // (themed modes only; uses hpBp already in the channel).
+        if (
+          statusMesh !== null &&
+          themedMat !== null &&
+          state === STATE_OPERATIONAL &&
+          (channel.hpBp[i] ?? 10000) < 9000 &&
+          statusCount < capacity
+        ) {
+          dummy.position.set(cx, groundY + full + 0.55, cy);
+          dummy.rotation.set(0, glyphYawRot, 0);
+          dummy.scale.set(0.22, 0.22, 0.22);
+          dummy.updateMatrix();
+          statusMesh.setMatrixAt(statusCount, dummy.matrix);
+          statusCount += 1;
         }
 
         const glyph = kind.visual.glyph;
@@ -360,6 +420,10 @@ export function StructuresLayer({
             dummy.updateMatrix();
             gMesh.setMatrixAt(gSlot, dummy.matrix);
             color.set(resolveGlyphTint(faction, localFaction, isHostile));
+            if (themedMat !== null) {
+              // HDR tint so roof glyphs feed bloom in themed modes.
+              color.multiplyScalar(theme.materials.emissiveBoost);
+            }
             gMesh.setColorAt(gSlot, color);
             glyphCounts[glyph] = gSlot + 1;
           }
@@ -372,6 +436,10 @@ export function StructuresLayer({
       if (silMesh !== undefined && silMesh !== null) {
         commitMeshBuffers(silMesh, silCounts[s]);
       }
+      const dimAttr = dimAttrs[s];
+      if (dimAttr !== undefined) {
+        dimAttr.needsUpdate = true;
+      }
     }
     for (const g of ACTIVE_STRUCTURE_GLYPHS) {
       const gMesh = glyphRefs.current[g];
@@ -380,6 +448,10 @@ export function StructuresLayer({
       }
     }
 
+    if (statusMesh !== null) {
+      statusMesh.count = statusCount;
+      statusMesh.instanceMatrix.needsUpdate = true;
+    }
     commitMeshBuffers(bpMesh, bpCount);
     commitMeshBuffers(waitMesh, waitCount);
     const pulse = 0.38 + 0.3 * (0.5 + 0.5 * Math.sin(performance.now() / 180));
@@ -407,14 +479,19 @@ export function StructuresLayer({
     <group>
       {STRUCTURE_SILHOUETTES.map((s) => (
         <instancedMesh
-          key={`sil-${s}-${capacity}`}
+          key={`sil-${s}-${capacity}-${theme.id}`}
           ref={(m) => {
             silRefs.current[s] = m;
           }}
           args={[undefined, undefined, capacity]}
           frustumCulled={false}
+          castShadow
         >
-          <meshLambertMaterial vertexColors />
+          {themedMat === null ? (
+            <meshLambertMaterial vertexColors />
+          ) : (
+            <primitive object={themedMat} attach={ATTACH_MATERIAL} />
+          )}
         </instancedMesh>
       ))}
       {ACTIVE_STRUCTURE_GLYPHS.map((g) => (
@@ -455,6 +532,17 @@ export function StructuresLayer({
         <boxGeometry args={[1, 1, 1]} />
         <meshLambertMaterial color={SALVAGE_COLOR} />
       </instancedMesh>
+      {themedMat !== null && (
+        <instancedMesh
+          key={`status-${capacity}`}
+          ref={statusRef}
+          args={[undefined, undefined, capacity]}
+          frustumCulled={false}
+        >
+          <octahedronGeometry args={[0.16, 0]} />
+          <meshBasicMaterial color={STATUS_COLOR} toneMapped={false} />
+        </instancedMesh>
+      )}
     </group>
   );
 }

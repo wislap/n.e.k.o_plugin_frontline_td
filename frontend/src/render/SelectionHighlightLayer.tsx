@@ -21,6 +21,7 @@ import {
   type LineBuffer,
 } from './line-buffer';
 import { writeRingVertices } from './rings';
+import { useRenderTheme } from './theme/index';
 import {
   collectSelectionHighlights,
   type HighlightBracket,
@@ -148,6 +149,7 @@ function writeHighlights(
   mapWidth: number,
   mapHeight: number,
   tempColor: THREE.Color,
+  accent: string | null,
 ): void {
   const neededVerts = brackets.length * VERTS_PER_BRACKET + circles.length * VERTS_PER_CIRCLE;
   if (neededVerts === 0) {
@@ -168,7 +170,12 @@ function writeHighlights(
 
   let cursor = 0;
   for (const b of brackets) {
-    tempColor.set(BRACKET_COLORS[b.tone]);
+    // Themed: selection corners glow in the theme accent.
+    tempColor.set(
+      accent !== null && (b.tone === 'selected' || b.tone === 'pinned_own')
+        ? accent
+        : BRACKET_COLORS[b.tone],
+    );
     const r = tempColor.r;
     const g = tempColor.g;
     const bl = tempColor.b;
@@ -189,7 +196,7 @@ function writeHighlights(
   }
 
   for (const c of circles) {
-    tempColor.set(CIRCLE_COLORS[c.kind]);
+    tempColor.set(accent !== null && c.kind === 'weapon_own' ? accent : CIRCLE_COLORS[c.kind]);
     const y = terrainY(heights, mapWidth, mapHeight, c.cx, c.cy) + LIFT;
     cursor = writeRingVertices(
       positions,
@@ -220,6 +227,7 @@ export function SelectionHighlightLayer({
   mapHeight,
   isHostile,
 }: SelectionHighlightLayerProps) {
+  const theme = useRenderTheme();
   const segsRef = useRef<THREE.LineSegments>(null);
   const bufRef = useRef<LineBuffer | null>(null);
   const tempColorRef = useRef(new THREE.Color());
@@ -276,6 +284,7 @@ export function SelectionHighlightLayer({
       demolishHoverHandle: interaction.demolishHover?.handle ?? null,
       demolishConfirmTargets: interaction.demolishConfirm?.targets ?? EMPTY_TARGETS,
       isHostile,
+      unitGroupBracket: theme.id !== 'legacy',
     });
 
     writeHighlights(
@@ -287,6 +296,7 @@ export function SelectionHighlightLayer({
       mapWidth,
       mapHeight,
       tempColorRef.current,
+      theme.id === 'legacy' ? null : theme.markers.accent,
     );
   });
 

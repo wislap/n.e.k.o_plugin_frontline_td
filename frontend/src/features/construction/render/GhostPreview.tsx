@@ -5,14 +5,17 @@
 // the connect-radius ring (with dashed predicted links to own completed
 // nodes) and the service-radius ring + translucent disc; armed kinds draw
 // the weapon-range ring.
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { cursorState } from '../../../client/cursor';
 import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
+import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
+import { createHoloMaterial, type HoloMaterial } from '../../../render/holo-material';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import { useRenderTheme } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import type { StructureSilhouette } from '../content';
 import { STATE_OPERATIONAL, StructuresChannel, type ConstructionStructures } from '../protocol';
@@ -25,6 +28,8 @@ import {
 } from '../rules/index';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
 import { structureKindHeight } from './StructuresLayer';
+
+const ATTACH_MATERIAL = 'material';
 
 const GHOST_OK = '#4dff7a';
 const GHOST_BAD = '#ff5a4f';
@@ -79,8 +84,35 @@ export interface GhostPreviewProps {
 }
 
 export function GhostPreview({ client, db, map, heights, isHostile }: GhostPreviewProps) {
+  const theme = useRenderTheme();
+  const themed = theme.id !== 'legacy';
   const boxRef = useRef<THREE.Mesh>(null);
   const boxMat = useRef<THREE.MeshBasicMaterial>(null);
+  const holoMat = useMemo(
+    () => (themed ? createHoloMaterial(theme.markers.accent, theme.markers.invalid) : null),
+    [theme, themed],
+  );
+  const dashMat = useMemo(
+    () => (themed ? createDashRingMaterial(theme.markers.accent) : null),
+    [theme, themed],
+  );
+  const dashServiceMat = useMemo(
+    () => (themed ? createDashRingMaterial(theme.markers.secondary) : null),
+    [theme, themed],
+  );
+  const holoMatRef = useRef<HoloMaterial | null>(null);
+  const dashMatRef = useRef<DashRingMaterial | null>(null);
+  const dashServiceMatRef = useRef<DashRingMaterial | null>(null);
+  useEffect(() => {
+    holoMatRef.current = holoMat;
+    dashMatRef.current = dashMat;
+    dashServiceMatRef.current = dashServiceMat;
+    return () => {
+      holoMat?.dispose();
+      dashMat?.dispose();
+      dashServiceMat?.dispose();
+    };
+  }, [holoMat, dashMat, dashServiceMat]);
   const connectRingRef = useRef<THREE.Mesh>(null);
   const serviceRingRef = useRef<THREE.Mesh>(null);
   const serviceDiscRef = useRef<THREE.Mesh>(null);
@@ -112,17 +144,30 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     const weaponRing = weaponRingRef.current;
     const weaponMat = weaponMatRef.current;
     const links = linksRef.current;
+    const holo = holoMatRef.current;
+    const dash = dashMatRef.current;
+    const dashService = dashServiceMatRef.current;
     if (
       box === null ||
-      material === null ||
+      (material === null && holo === null) ||
       connectRing === null ||
       serviceRing === null ||
       serviceDisc === null ||
       weaponRing === null ||
-      weaponMat === null ||
+      (weaponMat === null && dash === null) ||
       links === null
     ) {
       return;
+    }
+    const timeSec = performance.now() / 1000;
+    if (holo !== null) {
+      holo.uniforms.uTime.value = timeSec;
+    }
+    if (dash !== null) {
+      dash.uniforms.uTime.value = timeSec;
+    }
+    if (dashService !== null) {
+      dashService.uniforms.uTime.value = timeSec;
     }
 
     const linkBuf = ensureLinkBuffer(linkBufRef, links);
@@ -170,7 +215,11 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     bindSilhouetteGeometry(geosRef, placeholderDisposedRef, box, kind.visual.silhouette);
     box.position.set(cx, groundY, cy);
     box.scale.set(w * 0.92, height, h * 0.92);
-    material.color.set(ok ? GHOST_OK : GHOST_BAD);
+    if (holo !== null) {
+      holo.uniforms.uBad.value = ok ? 0 : 1;
+    } else {
+      material?.color.set(ok ? GHOST_OK : GHOST_BAD);
+    }
 
     // Mirror the ghost state for the HUD reason line (only on change).
     const key = `${tx},${ty},${code}`;
@@ -243,14 +292,22 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
       const wr = kind.weapon.range;
       weaponRing.position.set(cx, groundY + 0.061, cy);
       weaponRing.scale.set(wr, wr, 1);
-      setWeaponRingColor(weaponMat, ok);
+      if (dash !== null) {
+        dash.uniforms.uColor.value.set(ok ? theme.markers.accent : theme.markers.invalid);
+      } else if (weaponMat !== null) {
+        setWeaponRingColor(weaponMat, ok);
+      }
     }
   });
 
   return (
     <group>
       <mesh ref={boxRef} visible={false} frustumCulled={false}>
-        <meshBasicMaterial ref={boxMat} transparent opacity={0.4} depthWrite={false} />
+        {holoMat === null ? (
+          <meshBasicMaterial ref={boxMat} transparent opacity={0.4} depthWrite={false} />
+        ) : (
+          <primitive object={holoMat} attach={ATTACH_MATERIAL} />
+        )}
       </mesh>
       <mesh
         ref={connectRingRef}
@@ -259,13 +316,17 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
         frustumCulled={false}
       >
         <ringGeometry args={[0.96, 1, RING_SEGMENTS]} />
-        <meshBasicMaterial
-          color={CONNECT_COLOR}
-          transparent
-          opacity={0.8}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        {dashMat === null ? (
+          <meshBasicMaterial
+            color={CONNECT_COLOR}
+            transparent
+            opacity={0.8}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        ) : (
+          <primitive object={dashMat} attach={ATTACH_MATERIAL} />
+        )}
       </mesh>
       <mesh
         ref={serviceRingRef}
@@ -274,13 +335,17 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
         frustumCulled={false}
       >
         <ringGeometry args={[0.97, 1, CIRCLE_SEGMENTS]} />
-        <meshBasicMaterial
-          color={SERVICE_COLOR}
-          transparent
-          opacity={0.85}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        {dashServiceMat === null ? (
+          <meshBasicMaterial
+            color={SERVICE_COLOR}
+            transparent
+            opacity={0.85}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        ) : (
+          <primitive object={dashServiceMat} attach={ATTACH_MATERIAL} />
+        )}
       </mesh>
       <mesh
         ref={serviceDiscRef}
@@ -290,9 +355,9 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
       >
         <circleGeometry args={[1, CIRCLE_SEGMENTS]} />
         <meshBasicMaterial
-          color={SERVICE_COLOR}
+          color={themed ? theme.markers.accent : SERVICE_COLOR}
           transparent
-          opacity={0.09}
+          opacity={themed ? 0.05 : 0.09}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
@@ -304,17 +369,25 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
         frustumCulled={false}
       >
         <ringGeometry args={[0.975, 1, CIRCLE_SEGMENTS]} />
-        <meshBasicMaterial
-          ref={weaponMatRef}
-          color={WEAPON_OK_COLOR}
-          transparent
-          opacity={0.72}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-        />
+        {dashMat === null ? (
+          <meshBasicMaterial
+            ref={weaponMatRef}
+            color={WEAPON_OK_COLOR}
+            transparent
+            opacity={0.72}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        ) : (
+          <primitive object={dashMat} attach={ATTACH_MATERIAL} />
+        )}
       </mesh>
       <lineSegments ref={linksRef} visible={false} frustumCulled={false}>
-        <lineDashedMaterial color={CONNECT_COLOR} dashSize={0.5} gapSize={0.35} />
+        <lineDashedMaterial
+          color={themed ? theme.markers.link : CONNECT_COLOR}
+          dashSize={0.5}
+          gapSize={0.35}
+        />
       </lineSegments>
     </group>
   );

@@ -24,7 +24,7 @@ import {
 import { StructuresChannel, type ConstructionStructures } from '../features/construction/protocol';
 import { LogisticsOverlay, RoadLayer, RoadToolLayer } from '../features/logistics/render/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
-import { TerrainMesh } from '../features/terrain/render/index';
+import { TerrainMesh, ScatterLayer } from '../features/terrain/render/index';
 import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
 import { ThreatsLayer } from '../features/squads/render/index';
@@ -35,13 +35,11 @@ import { CameraRig } from './camera/CameraRig';
 import { HpBars, type HpBarCollector, type HpBarSink } from './hp-bars';
 import { makeDispatch } from './input-dispatch';
 import { SelectionHighlightLayer } from './SelectionHighlightLayer';
+import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
 import { terrainY } from './world';
 
 const BACKGROUND = '#0b1020';
 const MARKER_COLOR = '#ffe08a';
-const SKY_COLOR = '#bcd4ff';
-const GROUND_LIGHT_COLOR = '#3a2f22';
-const RIM_LIGHT_COLOR = '#9ec5ff';
 const UNIT_BAR_TOP = 0.8;
 
 export interface GameCanvasProps {
@@ -233,9 +231,8 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Canvas frameloop="always" style={{ background: BACKGROUND }}>
-        <hemisphereLight args={[SKY_COLOR, GROUND_LIGHT_COLOR, 0.9]} />
-        <directionalLight position={[40, 60, 20]} intensity={1.2} />
-        <directionalLight position={[-32, 38, -28]} color={RIM_LIGHT_COLOR} intensity={0.35} />
+        <SceneLighting mapWidth={grid.width} mapHeight={grid.height} />
+        {ready && <ThemeBackground mapWidth={grid.width} mapHeight={grid.height} />}
         {ready && (
           <>
             <TerrainMesh
@@ -283,6 +280,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               collect={structureHpItems}
             />
             <RoadLayer client={client} map={map} heights={heights} />
+            <ScatterLayer client={client} db={db} map={map} heights={heights} />
             <LogisticsOverlay client={client} db={db} map={map} heights={heights} />
             <RoadToolLayer client={client} map={map} heights={heights} />
             <RoadWorksLayer client={client} map={map} heights={heights} />
@@ -353,6 +351,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
           heights={heights}
           panTracker={panTracker}
         />
+        <PostEffects />
       </Canvas>
     </div>
   );

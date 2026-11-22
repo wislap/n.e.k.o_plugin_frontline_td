@@ -8,32 +8,47 @@ import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
 
 type Vec3 = readonly [number, number, number];
 
+// Vertex slots: 0 = body, 1 = trim, 2 = faction accent, 3 = emissive.
+// The themed structure material maps slots to palette colors; the legacy
+// material ignores the attribute entirely.
+type PartSlot = 0 | 1 | 2 | 3;
+
 class MeshBuilder {
   private readonly pos: number[] = [];
   private readonly norm: number[] = [];
   private readonly col: number[] = [];
+  private readonly slots: number[] = [];
   private readonly idx: number[] = [];
 
-  private pushVertex(p: Vec3, n: Vec3, shade: number): number {
+  private pushVertex(p: Vec3, n: Vec3, shade: number, slot: PartSlot): number {
     const v = this.pos.length / 3;
     this.pos.push(p[0], p[1], p[2]);
     this.norm.push(n[0], n[1], n[2]);
     this.col.push(shade, shade, shade);
+    this.slots.push(slot);
     return v;
   }
 
-  private pushTri(a: Vec3, b: Vec3, c: Vec3, n: Vec3, shade: number): void {
-    const ia = this.pushVertex(a, n, shade);
-    const ib = this.pushVertex(b, n, shade);
-    const ic = this.pushVertex(c, n, shade);
+  private pushTri(a: Vec3, b: Vec3, c: Vec3, n: Vec3, shade: number, slot: PartSlot): void {
+    const ia = this.pushVertex(a, n, shade, slot);
+    const ib = this.pushVertex(b, n, shade, slot);
+    const ic = this.pushVertex(c, n, shade, slot);
     this.idx.push(ia, ib, ic);
   }
 
-  private pushQuad(a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, shade: number): void {
-    const ia = this.pushVertex(a, n, shade);
-    const ib = this.pushVertex(b, n, shade);
-    const ic = this.pushVertex(c, n, shade);
-    const id = this.pushVertex(d, n, shade);
+  private pushQuad(
+    a: Vec3,
+    b: Vec3,
+    c: Vec3,
+    d: Vec3,
+    n: Vec3,
+    shade: number,
+    slot: PartSlot,
+  ): void {
+    const ia = this.pushVertex(a, n, shade, slot);
+    const ib = this.pushVertex(b, n, shade, slot);
+    const ic = this.pushVertex(c, n, shade, slot);
+    const id = this.pushVertex(d, n, shade, slot);
     this.idx.push(ia, ib, ic, ia, ic, id);
   }
 
@@ -45,6 +60,7 @@ class MeshBuilder {
     sy: number,
     sz: number,
     shade: number,
+    slot: PartSlot = 0,
   ): void {
     const x0 = cx - sx / 2;
     const x1 = cx + sx / 2;
@@ -52,17 +68,17 @@ class MeshBuilder {
     const z0 = cz - sz / 2;
     const z1 = cz + sz / 2;
     // +Y top
-    this.pushQuad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], shade);
+    this.pushQuad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], shade, slot);
     // -Y bottom
-    this.pushQuad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], shade);
+    this.pushQuad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], shade, slot);
     // +Z front
-    this.pushQuad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], shade);
+    this.pushQuad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], shade, slot);
     // -Z back
-    this.pushQuad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], shade);
+    this.pushQuad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], shade, slot);
     // +X right
-    this.pushQuad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], shade);
+    this.pushQuad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], shade, slot);
     // -X left
-    this.pushQuad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], shade);
+    this.pushQuad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], shade, slot);
   }
 
   pushCylinderPrism(
@@ -75,6 +91,7 @@ class MeshBuilder {
     sides: number,
     shade: number,
     rotY = 0,
+    slot: PartSlot = 0,
   ): void {
     const y1 = y0 + sy;
     const step = (Math.PI * 2) / sides;
@@ -96,18 +113,18 @@ class MeshBuilder {
 
       const n = faceNormal(b1, b0, rTop > 1e-6 ? t0 : cTop);
       if (rTop <= 1e-6) {
-        this.pushTri(b1, b0, cTop, n, shade);
+        this.pushTri(b1, b0, cTop, n, shade, slot);
       } else if (rBot <= 1e-6) {
-        this.pushTri(cBot, t0, t1, faceNormal(cBot, t0, t1), shade);
+        this.pushTri(cBot, t0, t1, faceNormal(cBot, t0, t1), shade, slot);
       } else {
-        this.pushQuad(b1, b0, t0, t1, n, shade);
+        this.pushQuad(b1, b0, t0, t1, n, shade, slot);
       }
 
       if (rTop > 1e-6) {
-        this.pushTri(cTop, t1, t0, [0, 1, 0], shade);
+        this.pushTri(cTop, t1, t0, [0, 1, 0], shade, slot);
       }
       if (rBot > 1e-6) {
-        this.pushTri(cBot, b0, b1, [0, -1, 0], shade);
+        this.pushTri(cBot, b0, b1, [0, -1, 0], shade, slot);
       }
     }
   }
@@ -116,12 +133,14 @@ class MeshBuilder {
     positions: Float32Array;
     normals: Float32Array;
     colors: Float32Array;
+    slots: Float32Array;
     indices: Uint16Array;
   } {
     return {
       positions: new Float32Array(this.pos),
       normals: new Float32Array(this.norm),
       colors: new Float32Array(this.col),
+      slots: new Float32Array(this.slots),
       indices: new Uint16Array(this.idx),
     };
   }
@@ -144,99 +163,100 @@ function faceNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 {
 function populateSilhouette(b: MeshBuilder, silhouette: StructureSilhouette): void {
   switch (silhouette) {
     case 'block':
-      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.78);
+      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.78, 1);
       b.pushBox(0, 0.14, 0, 0.92, 0.86, 0.92, 1.0);
       return;
 
     case 'hq_citadel':
-      b.pushBox(0, 0, 0, 0.98, 0.16, 0.98, 0.68);
+      b.pushBox(0, 0, 0, 0.98, 0.16, 0.98, 0.68, 1);
       for (const sx of [-0.34, 0.34]) {
         for (const sz of [-0.34, 0.34]) {
           b.pushBox(sx, 0.16, sz, 0.22, 0.44, 0.22, 0.86);
         }
       }
       b.pushBox(0, 0.16, 0, 0.64, 0.5, 0.64, 0.95);
-      b.pushCylinderPrism(0, 0.66, 0, 0.26, 0.2, 0.22, 8, 1.08, Math.PI / 8);
-      b.pushCylinderPrism(0, 0.88, 0, 0.08, 0.03, 0.12, 8, 1.15, 0);
+      b.pushCylinderPrism(0, 0.66, 0, 0.26, 0.2, 0.22, 8, 1.08, Math.PI / 8, 2);
+      b.pushCylinderPrism(0, 0.88, 0, 0.08, 0.03, 0.12, 8, 1.15, 0, 3);
       return;
 
     case 'rail_hub':
-      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.66);
+      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.66, 1);
       b.pushBox(0, 0.14, -0.28, 0.92, 0.34, 0.26, 0.92);
       b.pushBox(0, 0.14, 0.28, 0.92, 0.34, 0.26, 0.92);
-      b.pushBox(0, 0.48, 0, 0.44, 0.3, 0.78, 1.06);
-      b.pushCylinderPrism(-0.14, 0.78, 0, 0.035, 0.02, 0.22, 6, 1.14);
-      b.pushCylinderPrism(0.14, 0.78, 0, 0.035, 0.02, 0.22, 6, 1.14);
+      b.pushBox(0, 0.48, 0, 0.44, 0.3, 0.78, 1.06, 2);
+      b.pushCylinderPrism(-0.14, 0.78, 0, 0.035, 0.02, 0.22, 6, 1.14, 0, 3);
+      b.pushCylinderPrism(0.14, 0.78, 0, 0.035, 0.02, 0.22, 6, 1.14, 0, 3);
       return;
 
     case 'twin_depot':
-      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.66);
+      b.pushBox(0, 0, 0, 0.98, 0.14, 0.98, 0.66, 1);
       b.pushBox(-0.24, 0.14, 0, 0.38, 0.56, 0.88, 0.96);
       b.pushBox(0.24, 0.14, 0, 0.38, 0.56, 0.88, 0.96);
-      b.pushBox(0, 0.42, 0, 0.28, 0.3, 0.52, 1.08);
-      b.pushBox(-0.24, 0.7, 0.16, 0.2, 0.18, 0.28, 1.12);
-      b.pushBox(0.24, 0.7, -0.16, 0.2, 0.18, 0.28, 1.12);
+      b.pushBox(0, 0.42, 0, 0.28, 0.3, 0.52, 1.08, 2);
+      b.pushBox(-0.24, 0.7, 0.16, 0.2, 0.18, 0.28, 1.12, 3);
+      b.pushBox(0.24, 0.7, -0.16, 0.2, 0.18, 0.28, 1.12, 3);
       return;
 
     case 'octagon_fort':
-      b.pushCylinderPrism(0, 0, 0, 0.5, 0.47, 0.22, 8, 0.68, Math.PI / 8);
+      b.pushCylinderPrism(0, 0, 0, 0.5, 0.47, 0.22, 8, 0.68, Math.PI / 8, 1);
       b.pushCylinderPrism(0, 0.22, 0, 0.43, 0.38, 0.42, 8, 0.92, Math.PI / 8);
-      b.pushCylinderPrism(0, 0.64, 0, 0.26, 0.24, 0.2, 8, 1.06, Math.PI / 8);
-      b.pushCylinderPrism(0, 0.84, 0, 0.16, 0.08, 0.16, 8, 1.14, 0);
+      b.pushCylinderPrism(0, 0.64, 0, 0.26, 0.24, 0.2, 8, 1.06, Math.PI / 8, 2);
+      b.pushCylinderPrism(0, 0.84, 0, 0.16, 0.08, 0.16, 8, 1.14, 0, 3);
       return;
 
     case 'drill_rig':
-      b.pushBox(0, 0, 0, 0.96, 0.14, 0.96, 0.64);
+      b.pushBox(0, 0, 0, 0.96, 0.14, 0.96, 0.64, 1);
       for (const sx of [-0.32, 0.32]) {
         for (const sz of [-0.32, 0.32]) {
-          b.pushBox(sx, 0.14, sz, 0.12, 0.66, 0.12, 0.88);
+          b.pushBox(sx, 0.14, sz, 0.12, 0.66, 0.12, 0.88, 1);
         }
       }
       b.pushBox(0, 0.8, 0, 0.78, 0.14, 0.78, 1.04);
-      b.pushCylinderPrism(0, 0.14, 0, 0.08, 0.24, 0.66, 8, 1.12);
-      b.pushBox(0, 0.94, 0, 0.32, 0.06, 0.32, 1.15);
+      b.pushCylinderPrism(0, 0.14, 0, 0.08, 0.24, 0.66, 8, 1.12, 0, 2);
+      b.pushBox(0, 0.94, 0, 0.32, 0.06, 0.32, 1.15, 3);
       return;
 
     case 'reactor_pair':
-      b.pushBox(0, 0, 0, 0.98, 0.14, 0.94, 0.65);
+      b.pushBox(0, 0, 0, 0.98, 0.14, 0.94, 0.65, 1);
       b.pushBox(0, 0.14, 0.26, 0.82, 0.36, 0.34, 0.88);
       b.pushCylinderPrism(-0.24, 0.14, -0.14, 0.22, 0.17, 0.82, 12, 1.04);
       b.pushCylinderPrism(0.24, 0.14, -0.14, 0.22, 0.17, 0.82, 12, 1.04);
-      b.pushBox(0, 0.5, 0.26, 0.42, 0.18, 0.22, 1.12);
+      b.pushBox(0, 0.5, 0.26, 0.42, 0.18, 0.22, 1.12, 2);
+      b.pushBox(0, 0.68, 0.26, 0.3, 0.06, 0.14, 1.15, 3);
       return;
 
     case 'foundry_press':
-      b.pushBox(0, 0, 0, 0.98, 0.16, 0.96, 0.64);
+      b.pushBox(0, 0, 0, 0.98, 0.16, 0.96, 0.64, 1);
       b.pushBox(0, 0.16, 0.06, 0.86, 0.46, 0.72, 0.9);
-      b.pushBox(0, 0.62, 0.06, 0.62, 0.24, 0.44, 1.06);
-      b.pushCylinderPrism(-0.28, 0.16, -0.32, 0.1, 0.08, 0.84, 8, 1.12);
-      b.pushCylinderPrism(0.28, 0.16, -0.32, 0.1, 0.08, 0.84, 8, 1.12);
+      b.pushBox(0, 0.62, 0.06, 0.62, 0.24, 0.44, 1.06, 2);
+      b.pushCylinderPrism(-0.28, 0.16, -0.32, 0.1, 0.08, 0.84, 8, 1.12, 0, 1);
+      b.pushCylinderPrism(0.28, 0.16, -0.32, 0.1, 0.08, 0.84, 8, 1.12, 0, 1);
       return;
 
     case 'turret_mount':
-      b.pushCylinderPrism(0, 0, 0, 0.48, 0.42, 0.22, 8, 0.66, Math.PI / 8);
+      b.pushCylinderPrism(0, 0, 0, 0.48, 0.42, 0.22, 8, 0.66, Math.PI / 8, 1);
       b.pushCylinderPrism(0, 0.22, 0, 0.34, 0.3, 0.36, 10, 0.94);
-      b.pushBox(0, 0.58, -0.02, 0.42, 0.26, 0.46, 1.08);
-      b.pushBox(0, 0.64, 0.32, 0.14, 0.12, 0.32, 1.14);
-      b.pushCylinderPrism(0, 0.84, -0.06, 0.1, 0.07, 0.14, 8, 1.12);
+      b.pushBox(0, 0.58, -0.02, 0.42, 0.26, 0.46, 1.08, 2);
+      b.pushBox(0, 0.64, 0.32, 0.14, 0.12, 0.32, 1.14, 1);
+      b.pushCylinderPrism(0, 0.84, -0.06, 0.1, 0.07, 0.14, 8, 1.12, 0, 3);
       return;
 
     case 'gantry_bay':
-      b.pushBox(0, 0, 0, 0.98, 0.12, 0.98, 0.64);
+      b.pushBox(0, 0, 0, 0.98, 0.12, 0.98, 0.64, 1);
       b.pushBox(-0.34, 0.12, 0, 0.24, 0.58, 0.88, 0.88);
       b.pushBox(0.34, 0.12, 0, 0.24, 0.58, 0.88, 0.88);
-      b.pushBox(0, 0.7, 0, 0.92, 0.18, 0.42, 1.08);
-      b.pushBox(0, 0.88, 0, 0.36, 0.12, 0.34, 1.14);
-      b.pushBox(0, 0.12, 0, 0.3, 0.36, 0.46, 0.96);
+      b.pushBox(0, 0.7, 0, 0.92, 0.18, 0.42, 1.08, 1);
+      b.pushBox(0, 0.88, 0, 0.36, 0.12, 0.34, 1.14, 2);
+      b.pushBox(0, 0.12, 0, 0.3, 0.36, 0.46, 0.96, 3);
       return;
 
     case 'bio_spire':
-      b.pushCylinderPrism(0, 0, 0, 0.49, 0.38, 0.22, 6, 0.62, 0);
+      b.pushCylinderPrism(0, 0, 0, 0.49, 0.38, 0.22, 6, 0.62, 0, 1);
       b.pushCylinderPrism(-0.24, 0.14, 0.18, 0.14, 0.04, 0.44, 6, 0.84, 0.4);
       b.pushCylinderPrism(0.24, 0.14, 0.16, 0.14, 0.04, 0.48, 6, 0.84, 0.1);
       b.pushCylinderPrism(0, 0.14, -0.26, 0.15, 0.04, 0.52, 6, 0.86, 0.2);
-      b.pushCylinderPrism(0, 0.22, 0, 0.26, 0.1, 0.64, 6, 1.0, Math.PI / 6);
-      b.pushCylinderPrism(0, 0.86, 0, 0.11, 0.03, 0.14, 6, 1.15, 0);
+      b.pushCylinderPrism(0, 0.22, 0, 0.26, 0.1, 0.64, 6, 1.0, Math.PI / 6, 2);
+      b.pushCylinderPrism(0, 0.86, 0, 0.11, 0.03, 0.14, 6, 1.15, 0, 3);
       return;
   }
 }
@@ -245,6 +265,7 @@ export function buildSilhouetteGeometryData(silhouette: StructureSilhouette): {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  slots: Float32Array;
   indices: Uint16Array;
 } {
   const builder = new MeshBuilder();
@@ -260,6 +281,7 @@ export function createSilhouetteGeometries(): Record<StructureSilhouette, THREE.
     geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+    geo.setAttribute('aSlot', new THREE.BufferAttribute(data.slots, 1));
     geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
     record[silhouette] = geo;
   }

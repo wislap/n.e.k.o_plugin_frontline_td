@@ -3,10 +3,10 @@
 // All pure and unit-tested.
 
 export const SPECTATE_FOV_DEG = 45;
-export const SPECTATE_PITCH_DEG = 55;
+export const SPECTATE_PITCH_DEG = 50;
 export const SPECTATE_MIN_PITCH_DEG = 26;
 export const SPECTATE_MAX_PITCH_DEG = 86;
-export const SPECTATE_DEFAULT_DIST = 30;
+export const SPECTATE_DEFAULT_DIST = 26;
 export const SPECTATE_MIN_DIST = 8;
 export const SPECTATE_MAX_DIST = 80;
 export const TACTICAL_MIN_HEIGHT = 10;

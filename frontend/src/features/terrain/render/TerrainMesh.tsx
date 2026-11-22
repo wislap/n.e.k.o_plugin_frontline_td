@@ -6,9 +6,11 @@ import * as THREE from 'three';
 import { visibleGroundHeight } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useRenderTheme } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import type { Snapshot } from '../../../core/index';
 import { buildTerrainGeometry, buildTerrainSkirtGeometry, parseHexColor } from './geometry';
+import { createThemedTerrainMaterial } from './themed-material';
 
 export interface TerrainMeshProps {
   snapshot: Snapshot | null;
@@ -79,6 +81,7 @@ function updateTerrainGrid(mesh: THREE.Mesh, mat: THREE.ShaderMaterial): void {
 }
 
 export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: TerrainMeshProps) {
+  const theme = useRenderTheme();
   const meshRef = useRef<THREE.Mesh>(null);
   const gridMeshRef = useRef<THREE.Mesh>(null);
   const gridMatRef = useRef<THREE.ShaderMaterial | null>(null);
@@ -143,6 +146,37 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     };
   }, []);
 
+  // Themed terrain swaps the Lambert material for a light-aware standard
+  // material with the theme's shader parameters; legacy keeps the original.
+  const themedMaterial = useMemo(() => {
+    if (theme.id === 'legacy' || heights === undefined) {
+      return null;
+    }
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < heights.length; i++) {
+      const h = heights[i] ?? 0;
+      if (h < lo) {
+        lo = h;
+      }
+      if (h > hi) {
+        hi = h;
+      }
+    }
+    return createThemedTerrainMaterial(theme, {
+      heightMin: lo,
+      heightMax: hi,
+      mapWidth: width,
+      mapHeight: height,
+    });
+  }, [theme, heights, width, height]);
+
+  useEffect(() => {
+    return () => {
+      themedMaterial?.dispose();
+    };
+  }, [themedMaterial]);
+
   useFrame(() => {
     const gridMesh = gridMeshRef.current;
     if (gridMesh === null) {
@@ -157,12 +191,22 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   }
   return (
     <>
-      <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
-        <meshLambertMaterial vertexColors />
+      <mesh
+        ref={meshRef}
+        geometry={geometry}
+        frustumCulled={false}
+        receiveShadow={theme.id !== 'legacy'}
+        {...(themedMaterial !== null ? { material: themedMaterial } : {})}
+      >
+        {themedMaterial === null && <meshLambertMaterial vertexColors />}
       </mesh>
       {skirtGeometry !== null && (
-        <mesh geometry={skirtGeometry} frustumCulled={false}>
-          <meshLambertMaterial vertexColors />
+        <mesh
+          geometry={skirtGeometry}
+          frustumCulled={false}
+          {...(themedMaterial !== null ? { material: themedMaterial } : {})}
+        >
+          {themedMaterial === null && <meshLambertMaterial vertexColors />}
         </mesh>
       )}
       <mesh

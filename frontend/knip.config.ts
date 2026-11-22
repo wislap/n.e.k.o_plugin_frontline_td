@@ -14,6 +14,9 @@ const config: KnipConfig = {
   ],
   project: ['src/**/*.{ts,tsx}', 'tooling/**/*.ts', 'eval/**/*.ts'],
   ignore: ['tooling/fixtures/**'],
+  // Runtime peer of @react-three/postprocessing's <N8AO> — imported inside
+  // that package, so knip cannot see the usage directly.
+  ignoreDependencies: ['n8ao'],
   includeEntryExports: true,
 };
 

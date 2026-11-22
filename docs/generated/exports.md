@@ -412,6 +412,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `buildTerrainGeometry` | function |  |
+| `ScatterLayer` | function |  |
 | `TerrainMesh` | function |  |
 
 ## src/features/terrain/rules/index.ts

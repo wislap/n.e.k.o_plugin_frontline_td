@@ -11,6 +11,7 @@ import {
   effectiveSpectatePitchDeg,
   matchZoomForMode,
   nearestNorthYaw,
+  SPECTATE_DEFAULT_DIST,
   spectateCursorGroundOffset,
 } from './camera-math';
 import type { PrimaryMode } from './interaction-store';
@@ -54,7 +55,7 @@ export interface CameraState {
 export const useCameraStore = create<CameraState>((set, get) => ({
   mode: 'spectate',
   center: { x: 0, y: 0 },
-  zoom: 30,
+  zoom: SPECTATE_DEFAULT_DIST,
   yaw: 0,
   pitchOffsetDeg: 0,
   autoSwitch: false,
@@ -204,7 +205,7 @@ export const useCameraStore = create<CameraState>((set, get) => ({
     set({
       mode: 'spectate',
       center: { x: 0, y: 0 },
-      zoom: 30,
+      zoom: SPECTATE_DEFAULT_DIST,
       yaw: 0,
       pitchOffsetDeg: 0,
       autoSwitch: false,

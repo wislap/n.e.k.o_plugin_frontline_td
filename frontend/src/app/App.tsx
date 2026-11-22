@@ -27,10 +27,17 @@ export function App({
 }) {
   const { t } = useTranslation();
   const panelOpen = useUiStore((state) => state.debugPanelOpen);
+  const theme = useUiStore((state) => state.theme);
 
   useEffect(() => {
     document.title = t('app.title');
   }, [t]);
+
+  // Visual theme on the root node so later stages can skin the HUD via
+  // [data-theme] CSS variables.
+  useEffect(() => {
+    document.documentElement.dataset['theme'] = theme;
+  }, [theme]);
 
   return (
     <main>

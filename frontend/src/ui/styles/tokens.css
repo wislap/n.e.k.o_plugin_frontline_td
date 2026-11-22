@@ -85,3 +85,21 @@
   --mode-accent-dim: rgba(61, 220, 151, 0.16);
   --mode-accent-glow: rgba(61, 220, 151, 0.36);
 }
+
+/* Visual-slice themes: later HUD stages consume these; `legacy` keeps the
+   default :root tokens untouched. */
+:root[data-theme='endfield'] {
+  --theme-accent: #ffe600;
+  --theme-panel: #121412;
+  --theme-text: #f2f2ec;
+}
+:root[data-theme='shapez'] {
+  --theme-accent: #3fd8ff;
+  --theme-panel: rgba(22, 25, 40, 0.82);
+  --theme-text: #e8ecff;
+}
+:root[data-theme='mindustry'] {
+  --theme-accent: #ffd37f;
+  --theme-panel: #1d1d1d;
+  --theme-text: #e8e0d0;
+}

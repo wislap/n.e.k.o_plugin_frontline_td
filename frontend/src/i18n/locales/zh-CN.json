@@ -10,12 +10,18 @@
     "paused": "已暂停",
     "speed_value": "×{{n}}",
     "tick_rate": "Tick 速率",
+    "fps": "帧率",
     "entities": "实体数",
     "systems": "系统耗时",
     "systems_empty": "（无系统）",
     "error": "错误：",
     "pause": "暂停",
-    "resume": "继续"
+    "resume": "继续",
+    "theme": "主题",
+    "theme_legacy": "Legacy",
+    "theme_endfield": "Endfield",
+    "theme_shapez": "Shapez",
+    "theme_mindustry": "Mindustry"
   },
   "hud": {
     "paused": "已暂停",

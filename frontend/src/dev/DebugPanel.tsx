@@ -1,9 +1,12 @@
 // Flow debug telemetry panel (dev only, topRight below StockPanel):
 // tick, speed, tick rate, entity count, top systems by avg time,
 // last worker error, and pause / speed step controls.
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRuntimeStore } from '../client/runtime-store';
 import type { SimClient } from '../client/sim-client';
+import { THEME_IDS, type ThemeId } from '../client/theme';
+import { useUiStore } from '../client/ui-store';
 import { localName } from '../content/index';
 import { SPEED_STEPS } from '../protocol/index';
 import { ActionButton, TacticalPanel } from '../ui/kit/index';
@@ -13,6 +16,29 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const { t } = useTranslation();
   const stats = useRuntimeStore((state) => state.stats);
   const error = useRuntimeStore((state) => state.error);
+  const theme = useUiStore((state) => state.theme);
+  const setTheme = useUiStore((state) => state.setTheme);
+  const [fps, setFps] = useState(0);
+
+  useEffect(() => {
+    let frames = 0;
+    let last = performance.now();
+    let raf = 0;
+    const loop = (now: number) => {
+      frames += 1;
+      const dt = now - last;
+      if (dt >= 500) {
+        setFps(Math.round((frames * 1000) / dt));
+        frames = 0;
+        last = now;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   const systems = (stats?.systems ?? [])
     .slice()
@@ -50,6 +76,10 @@ export function DebugPanel({ client }: { client: SimClient }) {
           <span className={styles['label']}>{t('dev.entities')}</span>
           <span className={styles['value']}>{stats?.entityCount ?? 0}</span>
         </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.fps')}</span>
+          <span className={styles['value']}>{fps}</span>
+        </div>
       </div>
 
       <div className={styles['section']}>
@@ -72,6 +102,22 @@ export function DebugPanel({ client }: { client: SimClient }) {
           {error}
         </div>
       )}
+
+      <div className={styles['row']}>
+        <span className={styles['label']}>{t('dev.theme')}</span>
+        <select
+          value={theme}
+          onChange={(e) => {
+            setTheme(e.target.value as ThemeId);
+          }}
+        >
+          {THEME_IDS.map((id) => (
+            <option key={id} value={id}>
+              {t(`dev.theme_${id}`)}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className={styles['controls']}>
         <ActionButton

@@ -55,6 +55,9 @@ export interface SelectionHighlightInput {
   demolishHoverHandle: number | null;
   demolishConfirmTargets: readonly number[];
   isHostile: (observer: number, faction: number) => boolean;
+  // Themed selection: for >=2 selected own units, one bracket rectangle
+  // around the union bounds instead of per-unit overlays.
+  unitGroupBracket?: boolean;
 }
 
 interface Box2D {
@@ -253,6 +256,36 @@ export function collectSelectionHighlights(input: SelectionHighlightInput): {
           ROAD_BOX_SIZE,
         );
         brackets.push({ ...box, tone: 'selected' });
+      }
+    }
+    if (input.unitGroupBracket === true && denseUnits !== undefined) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      let count = 0;
+      for (let i = 0; i < denseUnits.handles.length; i++) {
+        const handle = denseUnits.handles[i] ?? 0;
+        if (!selected.has(handle) || (denseUnits.faction[i] ?? 0) !== observer) {
+          continue;
+        }
+        const ux = denseUnits.x[i] ?? 0;
+        const uy = denseUnits.y[i] ?? 0;
+        if (ux < minX) minX = ux;
+        if (uy < minY) minY = uy;
+        if (ux > maxX) maxX = ux;
+        if (uy > maxY) maxY = uy;
+        count += 1;
+      }
+      if (count >= 2) {
+        const pad = UNIT_BOX_SIZE * 0.7;
+        brackets.push({
+          x: minX - pad,
+          y: minY - pad,
+          w: maxX - minX + pad * 2,
+          h: maxY - minY + pad * 2,
+          tone: 'selected',
+        });
       }
     }
   }
