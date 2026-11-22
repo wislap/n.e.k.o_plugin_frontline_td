@@ -369,6 +369,7 @@ export function steerRouteFollow(
     return false;
   }
   routeOut.gate[id] = k;
+  gateLanePoint(gk, lane, chain.clusterHalfW, lanePt);
 
   const wdx = lanePt.x - px;
   const wdy = lanePt.y - py;

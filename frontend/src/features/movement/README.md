@@ -40,16 +40,15 @@
   `CLEARANCE_HEAVY = 1`、`2×2` 足迹）；若 `MoveIntent` 携带 `slots` 且与
   当前子组存在 1:1 映射，跳过螺旋搜槽直接逐一校验 `inBounds` 与
   `terrain.passable(..., cls, tier)`（非法槽位回退至组目标锚点中心）；
-  否则优先收集距目标锚点直线可达（`lineWalkable`）且与目标连通的同侧槽位（方环螺旋、半径 ≤
+  否则优先收集距目标锚点直线可达（`lineWalkable`，按真实亚格锚点连续 Amanatides–Woo DDA 射线步进）且与目标连通的同侧槽位（方环螺旋、半径 ≤
   `⌈√n⌉ · step + 8`），仅在直达槽位不足人数时由 `directionAt` 连通槽位补齐（仍不足则循环复用），再按保形贪心与 2-opt 分配到
   `clearanceAnchorCenter(c, tier)`。写完槽位后由 `assignClusterRoutes` 对多成员子组按
   `distSq <= 81`（9 格）且可行走直线划定空间簇，开阔直通或近距离（`<= 8` 格）跳过，其余簇沿
-  唯一共享 `tgtGoal` 提取宽门走廊链（门距 `3.0`、最大半宽 `4.5`、`<= 6.5` 格终止）并归一化写入 `lane ∈ [-1, 1]`。
-- 转向、走廊链、标量巡航控速与到达迟滞（ADR 0052 / ADR 0053 / ADR 0054 / ADR 0056 / ADR 0057）：槽位
-  `DIRECT_DIST = 8` 格内且同档位格子直线可走（`lineWalkable(..., tier)`，
-  DDA 逐步 `stepCost >= 0`）时优先直线驶向槽位并释放 `RouteFollow`；否则若 `RouteFollow.active === 1`
-  经 `steerRouteFollow` 推进共享宽门与车道偏移（支持 1 门平滑前瞻、前置门回望与 `256` 槽直接映射备忘表加速的 `729` 槽有界
-  `12` 格局部 BFS 重入；门失效时自动释放链）；否则在 `dist <= DIRECT_DIST` 时尝试有界局部重入，再消费连续流向梯度
+  唯一共享 `tgtGoal` 提取宽门走廊链（门距 `3.0`、最大半宽 `4.5`、`<= 6.5` 格终止、`buildWideGate` 要求新门中心与 `prevGate` 直线直通、拐弯处自动补门并用桥前反向漏斗 `min(cur, nxt + 1.25)` 收窄宽度）并归一化写入 `lane ∈ [-1, 1]`。
+- 转向、走廊链、标量巡航控速与到达迟滞（ADR 0052 / ADR 0053 / ADR 0054 / ADR 0056 / ADR 0057 / ADR 0058）：槽位
+  `DIRECT_DIST = 8` 格内且同档位格子直线可走（`lineWalkable(..., tier)`）时优先直线驶向槽位并释放 `RouteFollow`；否则若 `RouteFollow.active === 1`
+  经 `steerRouteFollow` 前向推进共享宽门与车道偏移（支持 1 门平滑前瞻与由 `RouteChainStore` 实例私有 `256` 槽直接映射备忘表加速的 `729` 槽有界
+  `12` 格局部 BFS 重入；不回看旧门以避免窄桥/坡道折返循环；门失效时自动释放链）；否则在 `dist <= DIRECT_DIST` 时尝试有界局部重入，再消费连续流向梯度
   `pathing.smoothDirectionAt(goal, px, py)`（不覆盖 2D 转向方向）。巡航速度上限 `gCap` 仅在
   `FormationGuide.active === 1` 且 `0 < gCap < statSpeed` 时夹紧标量 `maxSpeed`，
   不经 `MoveSpeed` 修正值通道以避免与 `EnergyLowModifier` 叠加（ADR 0054 / ADR 0057）；
@@ -89,4 +88,5 @@
   （混编职能分排与巡航控速）、[ADR 0055](../../../../docs/adr/0055-resumable-upwind-eikonal-and-component-reachability.md)
   （可恢复迎风 Eikonal 与可达性）、[ADR 0056](../../../../docs/adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)
   （空间聚类宽门走廊链、`MoveCommand` 近端吸附与纵向后车让行）、[ADR 0057](../../../../docs/adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)
-  （连续测地距巡航控速与纯标量 `FormationGuide`）。
+  （连续测地距巡航控速与纯标量 `FormationGuide`）、[ADR 0058](../../../../docs/adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md)
+  （实图寻路硬化、亚格连续 DDA 与走廊/实例隔离收口）。

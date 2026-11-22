@@ -9,7 +9,7 @@ import { Faction, InWorld } from '../../../kernel/index';
 import type { SimModule } from '../../../kernel/index';
 import { Health } from '../../combat/sim/index';
 import { CargoStore } from '../../logistics/sim/index';
-import { MoveCommand } from '../../movement/protocol';
+import { MoveCommand, StopIntent } from '../../movement/protocol';
 import { CLEARANCE_HEAVY, clearanceAnchorCell } from '../../terrain/rules/index';
 import { SpawnIntent } from '../../units/protocol';
 import {
@@ -687,5 +687,97 @@ describe('squads AI', () => {
     run(w, 60); // 3 s: full raider speed ~3.5 cells/s (+10.5) vs spitter speed 2.2 (+6.6)
     const minRaiderX = Math.min(w.pos(0).x, w.pos(1).x, w.pos(2).x, w.pos(3).x, w.pos(4).x);
     expect(minRaiderX).toBeGreaterThan(22.5);
+  });
+
+  it('mixed heavy+standard squad uses Standard geodesic pacing through 1-cell alleys and arrives', () => {
+    const db = loadContent();
+    const raider = db.units.byId('frontline_td:raider');
+    const spitter = db.units.byId('frontline_td:spitter');
+    if (raider === undefined || spitter === undefined) {
+      throw new Error('raider/spitter missing');
+    }
+    const heavySlow = { ...spitter, radius: 0.7 };
+    // Wall at x=12..14 offers only a 1-cell alley at y=4 (Standard-only) and a wide gap at y=10..15.
+    const rows = Array.from({ length: 16 }, (_, y) => {
+      if (y === 4 || y >= 10) {
+        return '.'.repeat(30);
+      }
+      return '.'.repeat(12) + '###' + '.'.repeat(15);
+    });
+    const w = world({
+      rows,
+      entities: [
+        { parts: robotInit(raider, 6, 4) },
+        { parts: robotInit(raider, 7, 4) },
+        { parts: robotInit(heavySlow, 6, 11) },
+      ],
+    });
+    createAll(w);
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 24, y: 7 });
+    run(w, 30);
+
+    const midSaved = w.sim.serialize() as {
+      moduleStates: { 'frontline_td:squads': { squads: Array<{ guideActive?: boolean }> } };
+    };
+    expect(midSaved.moduleStates['frontline_td:squads'].squads[0]?.guideActive).toBe(true);
+
+    run(w, 350);
+    expect(squad(w)?.order.kind).toBe('guard');
+    for (let i = 0; i < 3; i++) {
+      expect(w.pos(i).x).toBeGreaterThan(18);
+    }
+  });
+
+  it('idleFar member on blocked target re-emits the near-face snapped goal cell', () => {
+    // 26x14 open map with a 3x3 rock obstacle at x=19..21, y=5..7:
+    // center (20, 6) is blocked and snaps within SQUAD_GOAL_SNAP_RING to (18, 6).
+    const rows = Array.from({ length: 14 }, (_, y) => {
+      if (y >= 5 && y <= 7) {
+        return '.'.repeat(19) + '###' + '.'.repeat(4);
+      }
+      return '.'.repeat(26);
+    });
+    let stopFired = false;
+    let wRef: World | null = null;
+    const stopUnitZeroOnce: SimModule = {
+      id: 'test:stop_zero',
+      install(b) {
+        b.system({
+          id: 'test:stop_zero.emit',
+          phase: 'orders',
+          emits: [StopIntent],
+          run(ctx) {
+            if (!stopFired && ctx.tick === 3 && wRef !== null) {
+              stopFired = true;
+              ctx.emit(StopIntent, { units: [Number(wRef.handles[0])] });
+            }
+          },
+        });
+      },
+    };
+    const w = world({
+      rows,
+      entities: [
+        { parts: robotInit(ROBOT, 3, 6) },
+        { parts: robotInit(ROBOT, 3, 7) },
+        { parts: robotInit(ROBOT, 3, 8) },
+      ],
+      extraModules: [stopUnitZeroOnce],
+    });
+    wRef = w;
+    createAll(w);
+    w.issue('frontline_td:squads.order', { squad: 1, kind: 'advance', x: 20, y: 6 });
+    run(w, 12); // immediate move on tick 1 -> stopped on tick 3 -> idleFar resumed on tick 11
+
+    expect(w.tgtSlot(0)).not.toBe(0);
+    const saved = w.sim.serialize() as {
+      entities: { data: Record<string, Record<string, Record<string, number>>> };
+    };
+    const e0 = saved.entities.data[String(w.handles[0])];
+    const tgtActive = e0?.['frontline_td:movement.move_target']?.['active'];
+    expect(tgtActive).toBe(1);
+    run(w, 250);
+    expect(squad(w)?.order.kind).toBe('guard');
+    expect(distance(w.pos(0).x, w.pos(0).y, 18.5, 6.5)).toBeLessThan(3);
   });
 });

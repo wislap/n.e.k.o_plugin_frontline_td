@@ -123,8 +123,6 @@ describe('formation layout & slot projection', () => {
       0,
       members,
       offsets,
-      1,
-      1,
       reserved,
     );
     pathing.api.releaseGoal(goalId);

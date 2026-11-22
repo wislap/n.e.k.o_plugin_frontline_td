@@ -1,7 +1,7 @@
 // Per-squad orders update (called on the squad's stagger slot):
 // resupply, gather launch, engage split, advance arrival and
 // blocked-route retargeting, guard return, persistent role formations,
-// virtual leader anchor transit guidance, and stray recovery.
+// 1D geodesic cruise pacing, and stray recovery.
 import { distance } from '../../../core/index';
 import type { EntityHandle, EntityId, FactionId } from '../../../core/index';
 import type { SystemContext } from '../../../kernel/index';
@@ -12,7 +12,6 @@ import {
   CLEARANCE_HEAVY,
   CLEARANCE_STANDARD,
   clearanceAnchorCenter,
-  type ClearanceTier,
 } from '../../terrain/rules/index';
 import { SquadsLaunched } from '../protocol';
 import type { SquadsDeps } from './deps';
@@ -35,6 +34,7 @@ import {
   ensureSquadSlotsAndEmitMove,
   isGoalReachableWithFallback,
   releaseGuideIfActive,
+  squadGoalTier,
 } from './transit';
 
 export { SQUAD_PERIOD };
@@ -116,7 +116,7 @@ export function updateSquad(
       radius: 0,
     };
     squad.phase = 'moving';
-    delete squad.anchor;
+    delete squad.heading;
     delete squad.slots;
     releaseGuideIfActive(ctx, squad);
     ctx.emit(SquadsLaunched, {
@@ -198,7 +198,7 @@ export function updateSquad(
 
   if (hostile !== null) {
     releaseGuideIfActive(ctx, squad);
-    delete squad.anchor;
+    delete squad.heading;
     const hx = pos.x[hostile] ?? 0;
     const hy = pos.y[hostile] ?? 0;
     squad.phase = 'engaging';
@@ -250,8 +250,7 @@ export function updateSquad(
       const dirY = dHostile > 1e-6 ? (hy - c.y) / dHostile : 0;
       const moveCls = moveInfos[0]?.cls ?? 0;
       const moveSingleCls = moveInfos.every((m) => m.cls === moveCls);
-      const moveAllHeavy = moveInfos.every((m) => m.tier === CLEARANCE_HEAVY);
-      const moveTier: ClearanceTier = moveAllHeavy ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
+      const moveTier = squadGoalTier(moveInfos);
       const probe = moveSingleCls
         ? acquireProbeWithFallback(deps.terrain, deps.pathing, moveCls, moveTier, hx, hy, c.x, c.y)
         : null;
@@ -268,8 +267,6 @@ export function updateSquad(
           dirY,
           moveInfos,
           layout.offsets,
-          1,
-          1,
           reservedCells,
         );
         const moveHandles: number[] = [];
@@ -308,9 +305,7 @@ export function updateSquad(
     // connectivity — a route walled off mid-advance must still be caught
     // without allocating or solving a probe GoalField.
     const cls = mover.cls[ids[0] ?? 0] ?? 0;
-    const probeTier: ClearanceTier = memberInfos.some((m) => m.tier === CLEARANCE_HEAVY)
-      ? CLEARANCE_HEAVY
-      : CLEARANCE_STANDARD;
+    const probeTier = squadGoalTier(memberInfos);
     const reachable = isGoalReachableWithFallback(
       deps.terrain,
       deps.pathing,

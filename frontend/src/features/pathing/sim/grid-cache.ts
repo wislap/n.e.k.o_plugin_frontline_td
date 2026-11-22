@@ -21,6 +21,17 @@ export const DIR_ORDER = [
   [-1, -1],
 ] as const;
 
+// dirMask bit layout matching DIR_ORDER indices 0..7.
+export const DIR_N = 1;
+export const DIR_E = 2;
+export const DIR_S = 4;
+export const DIR_W = 8;
+export const DIR_NE = 16;
+export const DIR_SE = 32;
+export const DIR_SW = 64;
+export const DIR_NW = 128;
+export const DIR_CARDINAL = DIR_N | DIR_E | DIR_S | DIR_W;
+
 // Orthogonal check offsets matching DIR_ORDER diagonals (NE, SE, SW, NW).
 const DIAG_LEGS: readonly [number, number][] = [
   [0, 1], // NE = N & E
@@ -74,6 +85,9 @@ export function createSlotCache(terrain: TerrainApi, cls: number, tier: Clearanc
   const metaHeight = new Int16Array(isStd ? size : 0);
   const metaRamp = new Uint8Array(isStd ? size : 0);
 
+  // Note: tier-0 surface caching assumes TerrainApi.stepCost depends only on
+  // destination cell surface cost plus symmetric heightStepPassable (verified
+  // in terrain-api.ts); directional edge costs would invalidate this cache.
   function ensureCellMeta(cx: number, cy: number, ci: number): number {
     const mc = metaCost[ci] as number;
     if (mc !== -2) {
@@ -165,7 +179,7 @@ export function createSlotCache(terrain: TerrainApi, cls: number, tier: Clearanc
             }
           }
         }
-        const repEnter = (mask & 15) !== 0 ? c0 * COST_SCALE : 0;
+        const repEnter = (mask & DIR_CARDINAL) !== 0 ? c0 * COST_SCALE : 0;
         if (repEnter > cache.maxStepScaled) {
           cache.maxStepScaled = repEnter;
         }
@@ -268,7 +282,7 @@ export function createSlotCache(terrain: TerrainApi, cls: number, tier: Clearanc
         }
         const sx = start % width;
         const sy = (start - sx) / width;
-        if (!terrain.passable(sx, sy, cls, tier)) {
+        if (!cache.ensureCellBaked(sx, sy, start)) {
           continue;
         }
         nextComp += 1;
@@ -280,7 +294,11 @@ export function createSlotCache(terrain: TerrainApi, cls: number, tier: Clearanc
           const curr = bfsQueue[qHead++] as number;
           const cx = curr % width;
           const cy = (curr - cx) / width;
+          const cMask = dirMask[curr] as number;
           for (let d = 0; d < 4; d++) {
+            if ((cMask & (1 << d)) === 0) {
+              continue;
+            }
             const dir = DIR_ORDER[d];
             if (dir === undefined) {
               continue;
@@ -291,13 +309,10 @@ export function createSlotCache(terrain: TerrainApi, cls: number, tier: Clearanc
               continue;
             }
             const ni = ny * width + nx;
-            if ((compId[ni] as number) !== 0) {
+            if ((compId[ni] as number) !== 0 || !cache.ensureCellBaked(nx, ny, ni)) {
               continue;
             }
-            if (
-              terrain.stepCost(cx, cy, nx, ny, cls, tier) < 0 ||
-              terrain.stepCost(nx, ny, cx, cy, cls, tier) < 0
-            ) {
+            if (((dirMask[ni] as number) & (1 << ((d + 2) & 3))) === 0) {
               continue;
             }
             compId[ni] = nextComp;

@@ -180,8 +180,6 @@ export function projectFormationSlots(
   hy: number,
   members: readonly FormationMemberInfo[],
   offsets: ReadonlyMap<number, { fwd: number; right: number }>,
-  widthScale: number,
-  depthScale: number,
   reservedCells?: ReadonlySet<number>,
 ): Map<number, { x: number; y: number }> {
   const result = new Map<number, { x: number; y: number }>();
@@ -192,8 +190,8 @@ export function projectFormationSlots(
 
   for (const m of ordered) {
     const off = offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-    const px = centerX + hx * off.fwd * depthScale + rx * off.right * widthScale;
-    const py = centerY + hy * off.fwd * depthScale + ry * off.right * widthScale;
+    const px = centerX + hx * off.fwd + rx * off.right;
+    const py = centerY + hy * off.fwd + ry * off.right;
     const baseAx = Math.min(Math.max(0, clearanceAnchorCell(px, m.tier)), terrain.width - 1);
     const baseAy = Math.min(Math.max(0, clearanceAnchorCell(py, m.tier)), terrain.height - 1);
 

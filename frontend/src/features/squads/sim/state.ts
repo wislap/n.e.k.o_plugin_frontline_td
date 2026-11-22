@@ -27,12 +27,9 @@ export interface SquadSlot {
   destY: number;
 }
 
-interface SquadAnchor {
-  x: number;
-  y: number;
+interface SquadHeading {
   hx: number;
   hy: number;
-  halfWidth: number;
 }
 
 export interface Squad {
@@ -54,8 +51,8 @@ export interface Squad {
   route?: number[];
   // Persistent role-ordered formation slots (ADR 0054).
   slots?: SquadSlot[];
-  // Formation heading & spread reference for incremental reinforcement projection (ADR 0054 / ADR 0057).
-  anchor?: SquadAnchor;
+  // Cached advance heading for incremental reinforcement projection (ADR 0058).
+  heading?: SquadHeading;
   // True while scalar FormationGuideIntent cruise caps are active on members.
   guideActive?: boolean;
   // Set on new SquadsOrder / SquadsGather so updateSquad runs on the next tick (ADR 0057).
@@ -85,7 +82,7 @@ interface SavedSquad {
   retarget?: number;
   route?: number[];
   slots?: Serializable;
-  anchor?: Serializable;
+  heading?: Serializable;
   guideActive?: boolean;
   immediate?: boolean;
 }
@@ -118,8 +115,8 @@ export function saveSquads(env: SquadsEnv): Serializable {
       if (sq.slots !== undefined) {
         out.slots = sq.slots.map((s) => ({ ...s }));
       }
-      if (sq.anchor !== undefined) {
-        out.anchor = { ...sq.anchor };
+      if (sq.heading !== undefined) {
+        out.heading = { ...sq.heading };
       }
       if (sq.guideActive !== undefined) {
         out.guideActive = sq.guideActive;
@@ -155,8 +152,8 @@ export function loadSquads(env: SquadsEnv, data: Serializable): void {
           ...(sq.slots !== undefined
             ? { slots: (sq.slots as unknown as SquadSlot[]).map((s) => ({ ...s })) }
             : {}),
-          ...(sq.anchor !== undefined
-            ? { anchor: { ...(sq.anchor as unknown as SquadAnchor) } }
+          ...(sq.heading !== undefined
+            ? { heading: { ...(sq.heading as unknown as SquadHeading) } }
             : {}),
           ...(sq.guideActive !== undefined ? { guideActive: sq.guideActive } : {}),
           ...(sq.immediate !== undefined ? { immediate: sq.immediate } : {}),

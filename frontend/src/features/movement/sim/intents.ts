@@ -361,12 +361,14 @@ export function installMovementIntents(
       const target = ctx.read(MoveTarget);
       for (const p of ctx.read(MoveIntent)) {
         const ids: number[] = [];
+        const seen = new Set<number>();
         let explicitSlots: Map<number, { x: number; y: number }> | undefined;
         const pSlots = p.slots;
         for (let i = 0; i < p.units.length; i++) {
           const h = p.units[i];
           const id = ctx.resolve(h as EntityHandle);
-          if (id !== null && ctx.has(Mover, id) && !ids.includes(id)) {
+          if (id !== null && ctx.has(Mover, id) && !seen.has(id)) {
+            seen.add(id);
             ids.push(id);
             if (pSlots !== undefined && i < pSlots.length) {
               const slot = pSlots[i];
@@ -466,16 +468,13 @@ export function installMovementIntents(
       // units with acquired goals or a half-applied order.
       const mover = ctx.read(Mover);
       const ids: number[] = [];
+      const seen = new Set<number>();
       for (const handle of payload.units) {
         const id = ctx.resolve(handle);
-        if (
-          id === null ||
-          !ctx.ownedBy(handle, issuer) ||
-          !ctx.has(Mover, id) ||
-          ids.includes(id)
-        ) {
+        if (id === null || !ctx.ownedBy(handle, issuer) || !ctx.has(Mover, id) || seen.has(id)) {
           continue;
         }
+        seen.add(id);
         ids.push(id);
       }
       if (ids.length === 0) {
@@ -518,10 +517,6 @@ export function installMovementIntents(
           targetCell.x,
           targetCell.y,
         );
-      }
-      const guideOut = ctx.write(guideW) as GuideView;
-      for (const id of ids) {
-        clearFormationGuide(guideOut, id);
       }
       // Player override signal (squads drop these members): only the
       // command emits this; intent-driven moves do not.

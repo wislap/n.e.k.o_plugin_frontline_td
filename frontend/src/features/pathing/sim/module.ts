@@ -21,9 +21,18 @@ import {
 } from './eikonal';
 import {
   COST_SCALE,
-  createSlotCache,
+  DIR_CARDINAL,
+  DIR_E,
+  DIR_N,
+  DIR_NE,
+  DIR_NW,
   DIR_ORDER,
+  DIR_S,
+  DIR_SE,
+  DIR_SW,
+  DIR_W,
   GROUND_COST_SCALED,
+  createSlotCache,
   type SlotCache,
 } from './grid-cache';
 
@@ -86,18 +95,18 @@ function quadPassableBothWays(sc: SlotCache, x00: number, y00: number): boolean 
   const m11 = sc.dirMask[i11] as number;
   // DIR_ORDER bits: N=1, E=2, S=4, W=8, NE=16, SE=32, SW=64, NW=128.
   return (
-    (m00 & 2) !== 0 &&
-    (m10 & 8) !== 0 &&
-    (m01 & 2) !== 0 &&
-    (m11 & 8) !== 0 &&
-    (m00 & 4) !== 0 &&
-    (m01 & 1) !== 0 &&
-    (m10 & 4) !== 0 &&
-    (m11 & 1) !== 0 &&
-    (m00 & 32) !== 0 &&
-    (m11 & 128) !== 0 &&
-    (m10 & 64) !== 0 &&
-    (m01 & 16) !== 0
+    (m00 & DIR_E) !== 0 &&
+    (m10 & DIR_W) !== 0 &&
+    (m01 & DIR_E) !== 0 &&
+    (m11 & DIR_W) !== 0 &&
+    (m00 & DIR_S) !== 0 &&
+    (m01 & DIR_N) !== 0 &&
+    (m10 & DIR_S) !== 0 &&
+    (m11 & DIR_N) !== 0 &&
+    (m00 & DIR_SE) !== 0 &&
+    (m11 & DIR_NW) !== 0 &&
+    (m10 & DIR_SW) !== 0 &&
+    (m01 & DIR_NE) !== 0
   );
 }
 
@@ -445,7 +454,7 @@ export function createPathingModule(
             cE < INF &&
             cN < INF &&
             cS < INF &&
-            ((sc.dirMask[cIdx] as number) & 15) === 15;
+            ((sc.dirMask[cIdx] as number) & DIR_CARDINAL) === DIR_CARDINAL;
           cFlags |= STAGE2_CARD_DONE | (ok ? STAGE2_CARD_OK : 0);
           field.quadFlags[cIdx] = cFlags;
         }

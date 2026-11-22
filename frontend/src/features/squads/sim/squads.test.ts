@@ -77,7 +77,7 @@ describe('squads commands', () => {
     expect(snapshot(w).squads.length).toBe(0);
   });
 
-  it('state round-trips mid-march with persistent anchor, slots, and active guide', () => {
+  it('state round-trips mid-march with persistent heading, slots, and active guide', () => {
     const db = loadContent();
     const raider = db.units.byId('frontline_td:raider');
     const spitter = db.units.byId('frontline_td:spitter');
@@ -105,7 +105,7 @@ describe('squads commands', () => {
       moduleStates: {
         'frontline_td:squads': {
           squads: Array<{
-            anchor?: { x: number; y: number };
+            heading?: { hx: number; hy: number };
             slots?: unknown[];
             guideActive?: boolean;
           }>;
@@ -113,7 +113,7 @@ describe('squads commands', () => {
       };
     };
     const savedSquad = state.moduleStates['frontline_td:squads'].squads[0];
-    expect(savedSquad?.anchor).toBeDefined();
+    expect(savedSquad?.heading).toBeDefined();
     expect(savedSquad?.slots?.length).toBe(ents.length);
     expect(savedSquad?.guideActive).toBe(true);
     const activeGuides = Object.values(state.entities.data).filter(

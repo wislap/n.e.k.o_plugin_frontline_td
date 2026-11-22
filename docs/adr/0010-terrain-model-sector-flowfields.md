@@ -1,7 +1,7 @@
 # 0010. 地形模型与分区流场
 
 - 状态：已采纳
-- 实现：部分（缺：分区失效仍是全局：invalidateCells 清全图 fields/portalDists，rebuildNodesAndEdges 全局重编号）
+- 实现：部分（缺：高度影响视线/射程与海域/空中类别未做；原分区流场已由 ADR 0055 迎风 Eikonal 取代）
 - 日期：2026-11-14
 - 决策者：wislap
 - 批次：M0 架构基线

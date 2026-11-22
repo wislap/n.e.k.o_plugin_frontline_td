@@ -204,7 +204,7 @@ export function installSquadCommands(
     squad.phase = 'moving';
     squad.immediate = true;
     delete squad.route;
-    delete squad.anchor;
+    delete squad.heading;
     delete squad.slots;
   });
 
@@ -225,7 +225,7 @@ export function installSquadCommands(
     };
     squad.phase = 'moving';
     squad.immediate = true;
-    delete squad.anchor;
+    delete squad.heading;
     delete squad.slots;
     // Store the predicted gather→target route (pathing descent
     // polyline, capped at 512 cells); the snapshot shows it and the

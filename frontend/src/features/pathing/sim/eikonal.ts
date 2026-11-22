@@ -3,7 +3,19 @@
 import { CLEARANCE_STANDARD, type ClearanceTier } from '../../terrain/rules/index';
 import type { TerrainApi } from '../../terrain/sim/index';
 import { UNREACHABLE } from './dijkstra';
-import { COST_SCALE, DIR_ORDER, type SlotCache } from './grid-cache';
+import {
+  COST_SCALE,
+  DIR_E,
+  DIR_N,
+  DIR_NE,
+  DIR_NW,
+  DIR_ORDER,
+  DIR_S,
+  DIR_SE,
+  DIR_SW,
+  DIR_W,
+  type SlotCache,
+} from './grid-cache';
 
 const MAX_POOLED_QUEUES = 16;
 const MAX_POOLED_FIELDS = 16;
@@ -346,25 +358,25 @@ export function expandUntil(
             continue;
           }
           ni = cell - width;
-          reqBit = 4;
+          reqBit = DIR_S;
         } else if (d === 1) {
           if (cx + 1 >= width) {
             continue;
           }
           ni = cell + 1;
-          reqBit = 8;
+          reqBit = DIR_W;
         } else if (d === 2) {
           if (cell + width >= size) {
             continue;
           }
           ni = cell + width;
-          reqBit = 1;
+          reqBit = DIR_N;
         } else {
           if (cx <= 0) {
             continue;
           }
           ni = cell - 1;
-          reqBit = 2;
+          reqBit = DIR_E;
         }
         const stNi = state[ni] as number;
         if (stNi === 2) {
@@ -390,7 +402,7 @@ export function expandUntil(
         let wx = 0;
         let xDir = 0;
         let bestXTotal = INF;
-        if ((nMask & 8) !== 0 && (state[ni - 1] as number) === 2) {
+        if ((nMask & DIR_W) !== 0 && (state[ni - 1] as number) === 2) {
           const a = ni - 1;
           const st = isStd
             ? (enterCost[a] as number)
@@ -404,7 +416,7 @@ export function expandUntil(
             xDir = -1;
           }
         }
-        if ((nMask & 2) !== 0 && (state[ni + 1] as number) === 2) {
+        if ((nMask & DIR_E) !== 0 && (state[ni + 1] as number) === 2) {
           const a = ni + 1;
           const st = isStd
             ? (enterCost[a] as number)
@@ -423,7 +435,7 @@ export function expandUntil(
         let wy = 0;
         let yDir = 0;
         let bestYTotal = INF;
-        if ((nMask & 1) !== 0 && (state[ni - width] as number) === 2) {
+        if ((nMask & DIR_N) !== 0 && (state[ni - width] as number) === 2) {
           const a = ni - width;
           const st = isStd
             ? (enterCost[a] as number)
@@ -437,7 +449,7 @@ export function expandUntil(
             yDir = -1;
           }
         }
-        if ((nMask & 4) !== 0 && (state[ni + width] as number) === 2) {
+        if ((nMask & DIR_S) !== 0 && (state[ni + width] as number) === 2) {
           const a = ni + width;
           const st = isStd
             ? (enterCost[a] as number)
@@ -454,7 +466,8 @@ export function expandUntil(
 
         let best = bestXTotal < bestYTotal ? bestXTotal : bestYTotal;
         if (ux < INF && uy < INF) {
-          const diagBit = xDir === 1 ? (yDir === -1 ? 16 : 32) : yDir === -1 ? 128 : 64;
+          const diagBit =
+            xDir === 1 ? (yDir === -1 ? DIR_NE : DIR_SE) : yDir === -1 ? DIR_NW : DIR_SW;
           if ((nMask & diagBit) !== 0) {
             const wMax = wx > wy ? wx : wy;
             const diff = ux > uy ? ux - uy : uy - ux;

@@ -106,18 +106,32 @@ function pickPassableRef(
   return c;
 }
 
-function isReachableAtTier(
+export function squadGoalTier(members: readonly FormationMemberInfo[]): ClearanceTier {
+  return members.length > 0 && members.every((m) => m.tier === CLEARANCE_HEAVY)
+    ? CLEARANCE_HEAVY
+    : CLEARANCE_STANDARD;
+}
+
+function resolveGoalCellWithFallback(
   terrain: SquadsDeps['terrain'],
   pathing: SquadsDeps['pathing'],
   cls: number,
-  tier: ClearanceTier,
+  preferredTier: ClearanceTier,
   goalX: number,
   goalY: number,
   memberInfos: readonly FormationMemberInfo[],
   c: { x: number; y: number },
-): boolean {
-  const ref = pickPassableRef(terrain, memberInfos, cls, tier, c);
-  return resolveSquadGoalAtTier(terrain, pathing, cls, tier, goalX, goalY, ref.x, ref.y) !== null;
+): { gx: number; gy: number; tier: ClearanceTier } | null {
+  const attempts = preferredTier === CLEARANCE_HEAVY ? 2 : 1;
+  for (let i = 0; i < attempts; i++) {
+    const tier = i === 0 ? preferredTier : CLEARANCE_STANDARD;
+    const ref = pickPassableRef(terrain, memberInfos, cls, tier, c);
+    const hit = resolveSquadGoalAtTier(terrain, pathing, cls, tier, goalX, goalY, ref.x, ref.y);
+    if (hit !== null) {
+      return { gx: hit.gx, gy: hit.gy, tier };
+    }
+  }
+  return null;
 }
 
 export function isGoalReachableWithFallback(
@@ -130,22 +144,18 @@ export function isGoalReachableWithFallback(
   memberInfos: readonly FormationMemberInfo[],
   c: { x: number; y: number },
 ): boolean {
-  if (isReachableAtTier(terrain, pathing, cls, preferredTier, goalX, goalY, memberInfos, c)) {
-    return true;
-  }
-  if (preferredTier === CLEARANCE_HEAVY) {
-    return isReachableAtTier(
+  return (
+    resolveGoalCellWithFallback(
       terrain,
       pathing,
       cls,
-      CLEARANCE_STANDARD,
+      preferredTier,
       goalX,
       goalY,
       memberInfos,
       c,
-    );
-  }
-  return false;
+    ) !== null
+  );
 }
 
 export function collectMemberInfos(
@@ -190,30 +200,6 @@ export function releaseGuideIfActive(ctx: SystemContext, squad: Squad): void {
   }
 }
 
-function acquireReachableProbe(
-  terrain: SquadsDeps['terrain'],
-  pathing: SquadsDeps['pathing'],
-  cls: number,
-  tier: ClearanceTier,
-  goalX: number,
-  goalY: number,
-  refX: number,
-  refY: number,
-): { goalId: number; gx: number; gy: number } | null {
-  const resolved = resolveSquadGoalAtTier(terrain, pathing, cls, tier, goalX, goalY, refX, refY);
-  if (resolved === null) {
-    return null;
-  }
-  const rx = clearanceAnchorCell(refX, tier);
-  const ry = clearanceAnchorCell(refY, tier);
-  const probe = pathing.acquireGoal(resolved.gx, resolved.gy, cls, tier);
-  if (pathing.directionAt(probe, rx, ry) !== null) {
-    return { goalId: probe, gx: resolved.gx, gy: resolved.gy };
-  }
-  pathing.releaseGoal(probe);
-  return null;
-}
-
 export function acquireProbeWithFallback(
   terrain: SquadsDeps['terrain'],
   pathing: SquadsDeps['pathing'],
@@ -224,40 +210,95 @@ export function acquireProbeWithFallback(
   refX: number,
   refY: number,
 ): { goalId: number; tier: ClearanceTier; gx: number; gy: number } | null {
-  const primary = acquireReachableProbe(
-    terrain,
-    pathing,
-    cls,
-    preferredTier,
-    goalX,
-    goalY,
-    refX,
-    refY,
-  );
-  if (primary !== null) {
-    return { goalId: primary.goalId, tier: preferredTier, gx: primary.gx, gy: primary.gy };
-  }
-  if (preferredTier === CLEARANCE_HEAVY) {
-    const fallback = acquireReachableProbe(
-      terrain,
-      pathing,
-      cls,
-      CLEARANCE_STANDARD,
-      goalX,
-      goalY,
-      refX,
-      refY,
-    );
-    if (fallback !== null) {
-      return {
-        goalId: fallback.goalId,
-        tier: CLEARANCE_STANDARD,
-        gx: fallback.gx,
-        gy: fallback.gy,
-      };
+  const attempts = preferredTier === CLEARANCE_HEAVY ? 2 : 1;
+  for (let i = 0; i < attempts; i++) {
+    const tier = i === 0 ? preferredTier : CLEARANCE_STANDARD;
+    const resolved = resolveSquadGoalAtTier(terrain, pathing, cls, tier, goalX, goalY, refX, refY);
+    if (resolved === null) {
+      continue;
     }
+    const probe = pathing.acquireGoal(resolved.gx, resolved.gy, cls, tier);
+    const rx = clearanceAnchorCell(refX, tier);
+    const ry = clearanceAnchorCell(refY, tier);
+    if (pathing.directionAt(probe, rx, ry) !== null) {
+      return { goalId: probe, tier, gx: resolved.gx, gy: resolved.gy };
+    }
+    pathing.releaseGoal(probe);
   }
   return null;
+}
+
+function projectSquadMembersWithProbe(
+  deps: SquadsDeps,
+  memberInfos: readonly FormationMemberInfo[],
+  targetsToProject: readonly FormationMemberInfo[],
+  c: { x: number; y: number },
+  goalX: number,
+  goalY: number,
+  cls: number,
+  goalTier: ClearanceTier,
+  preferredHeading?: { hx: number; hy: number },
+  reservedCells?: ReadonlySet<number>,
+): {
+  effX: number;
+  effY: number;
+  emitGx: number;
+  emitGy: number;
+  hx: number;
+  hy: number;
+  offsets: Map<number, { fwd: number; right: number }>;
+  projected: Map<number, { x: number; y: number }>;
+} {
+  const singleClass = memberInfos.every((m) => m.cls === cls);
+  const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
+  const probe = singleClass
+    ? acquireProbeWithFallback(
+        deps.terrain,
+        deps.pathing,
+        cls,
+        goalTier,
+        goalX,
+        goalY,
+        ref.x,
+        ref.y,
+      )
+    : null;
+  try {
+    const effX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : goalX;
+    const effY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : goalY;
+    const emitGx = probe !== null ? probe.gx : Math.floor(goalX);
+    const emitGy = probe !== null ? probe.gy : Math.floor(goalY);
+    const layout = computeFormationLayout(memberInfos);
+    const dGoal = distance(c.x, c.y, effX, effY);
+    const hx = preferredHeading?.hx ?? (dGoal > 1e-6 ? (effX - c.x) / dGoal : 1);
+    const hy = preferredHeading?.hy ?? (dGoal > 1e-6 ? (effY - c.y) / dGoal : 0);
+    const projected = projectFormationSlots(
+      deps.terrain,
+      deps.pathing,
+      probe?.goalId ?? null,
+      effX,
+      effY,
+      hx,
+      hy,
+      targetsToProject,
+      layout.offsets,
+      reservedCells,
+    );
+    return {
+      effX,
+      effY,
+      emitGx,
+      emitGy,
+      hx,
+      hy,
+      offsets: layout.offsets,
+      projected,
+    };
+  } finally {
+    if (probe !== null) {
+      deps.pathing.releaseGoal(probe.goalId);
+    }
+  }
 }
 
 // Persistent formation assignment + MoveIntent dedupe (ADR 0054).
@@ -288,80 +329,45 @@ export function ensureSquadSlotsAndEmitMove(
   const first = memberInfos[0];
   const cls = first?.cls ?? 0;
   const singleClass = memberInfos.every((m) => m.cls === cls);
-  const allHeavy = memberInfos.every((m) => m.tier === CLEARANCE_HEAVY);
-  const goalTier: ClearanceTier = allHeavy ? CLEARANCE_HEAVY : CLEARANCE_STANDARD;
+  const goalTier = squadGoalTier(memberInfos);
 
   if (fullRebuild) {
-    const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
-    const probe = singleClass
-      ? acquireProbeWithFallback(
-          deps.terrain,
-          deps.pathing,
-          cls,
-          goalTier,
-          goalX,
-          goalY,
-          ref.x,
-          ref.y,
-        )
-      : null;
-    try {
-      const effX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : goalX;
-      const effY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : goalY;
-      const layout = computeFormationLayout(memberInfos);
-      const dGoal = distance(c.x, c.y, effX, effY);
-      const hx = dGoal > 1e-6 ? (effX - c.x) / dGoal : 1;
-      const hy = dGoal > 1e-6 ? (effY - c.y) / dGoal : 0;
-      squad.anchor = {
-        x: effX,
-        y: effY,
-        hx,
-        hy,
-        halfWidth: layout.halfWidth,
-      };
-      const slotsMap = projectFormationSlots(
-        deps.terrain,
-        deps.pathing,
-        probe?.goalId ?? null,
-        effX,
-        effY,
-        hx,
-        hy,
-        memberInfos,
-        layout.offsets,
-        1,
-        1,
-      );
-      const nextSlots: SquadSlot[] = [];
-      const emitUnits: number[] = [];
-      const emitSlots: { x: number; y: number }[] = [];
-      for (const m of memberInfos) {
-        const off = layout.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-        const dest = slotsMap.get(m.handle) ?? { x: effX, y: effY };
-        nextSlots.push({
-          handle: m.handle,
-          fwd: off.fwd,
-          right: off.right,
-          destX: dest.x,
-          destY: dest.y,
-        });
-        emitUnits.push(m.handle);
-        emitSlots.push({ x: dest.x, y: dest.y });
-        emitted.add(m.handle);
-      }
-      squad.slots = nextSlots;
-      squad.lastGoal = { x: goalX, y: goalY };
-      ctx.emit(MoveIntent, {
-        units: emitUnits,
-        x: probe !== null ? probe.gx : Math.floor(goalX),
-        y: probe !== null ? probe.gy : Math.floor(goalY),
-        slots: emitSlots,
+    const res = projectSquadMembersWithProbe(
+      deps,
+      memberInfos,
+      memberInfos,
+      c,
+      goalX,
+      goalY,
+      cls,
+      goalTier,
+    );
+    squad.heading = { hx: res.hx, hy: res.hy };
+    const nextSlots: SquadSlot[] = [];
+    const emitUnits: number[] = [];
+    const emitSlots: { x: number; y: number }[] = [];
+    for (const m of memberInfos) {
+      const off = res.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
+      const dest = res.projected.get(m.handle) ?? { x: res.effX, y: res.effY };
+      nextSlots.push({
+        handle: m.handle,
+        fwd: off.fwd,
+        right: off.right,
+        destX: dest.x,
+        destY: dest.y,
       });
-    } finally {
-      if (probe !== null) {
-        deps.pathing.releaseGoal(probe.goalId);
-      }
+      emitUnits.push(m.handle);
+      emitSlots.push({ x: dest.x, y: dest.y });
+      emitted.add(m.handle);
     }
+    squad.slots = nextSlots;
+    squad.lastGoal = { x: goalX, y: goalY };
+    ctx.emit(MoveIntent, {
+      units: emitUnits,
+      x: res.emitGx,
+      y: res.emitGy,
+      slots: emitSlots,
+    });
     return emitted;
   }
 
@@ -425,65 +431,48 @@ export function ensureSquadSlotsAndEmitMove(
   let emitGx = Math.floor(goalX);
   let emitGy = Math.floor(goalY);
   if (missing.length > 0) {
-    const ref = singleClass ? pickPassableRef(deps.terrain, memberInfos, cls, goalTier, c) : c;
-    const probe = singleClass
-      ? acquireProbeWithFallback(
-          deps.terrain,
-          deps.pathing,
-          cls,
-          goalTier,
-          goalX,
-          goalY,
-          ref.x,
-          ref.y,
-        )
-      : null;
-    try {
-      const effX = probe !== null ? clearanceAnchorCenter(probe.gx, probe.tier) : goalX;
-      const effY = probe !== null ? clearanceAnchorCenter(probe.gy, probe.tier) : goalY;
-      if (probe !== null) {
-        emitGx = probe.gx;
-        emitGy = probe.gy;
-      }
-      const layout = computeFormationLayout(memberInfos);
-      const dGoal = distance(c.x, c.y, effX, effY);
-      const hx = squad.anchor?.hx ?? (dGoal > 1e-6 ? (effX - c.x) / dGoal : 1);
-      const hy = squad.anchor?.hy ?? (dGoal > 1e-6 ? (effY - c.y) / dGoal : 0);
-      const assigned = projectFormationSlots(
-        deps.terrain,
-        deps.pathing,
-        probe?.goalId ?? null,
-        effX,
-        effY,
-        hx,
-        hy,
-        missing,
-        layout.offsets,
-        1,
-        1,
-        reservedCells,
-      );
-      for (const m of missing) {
-        const off = layout.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
-        const dest = assigned.get(m.handle) ?? { x: effX, y: effY };
-        squad.slots?.push({
-          handle: m.handle,
-          fwd: off.fwd,
-          right: off.right,
-          destX: dest.x,
-          destY: dest.y,
-        });
-        subsetHandles.push(m.handle);
-        subsetSlots.push({ x: dest.x, y: dest.y });
-        emitted.add(m.handle);
-      }
-      if (squad.anchor !== undefined) {
-        squad.anchor.halfWidth = layout.halfWidth;
-      }
-    } finally {
-      if (probe !== null) {
-        deps.pathing.releaseGoal(probe.goalId);
-      }
+    const res = projectSquadMembersWithProbe(
+      deps,
+      memberInfos,
+      missing,
+      c,
+      goalX,
+      goalY,
+      cls,
+      goalTier,
+      squad.heading,
+      reservedCells,
+    );
+    emitGx = res.emitGx;
+    emitGy = res.emitGy;
+    for (const m of missing) {
+      const off = res.offsets.get(m.handle) ?? { fwd: 0, right: 0 };
+      const dest = res.projected.get(m.handle) ?? { x: res.effX, y: res.effY };
+      squad.slots?.push({
+        handle: m.handle,
+        fwd: off.fwd,
+        right: off.right,
+        destX: dest.x,
+        destY: dest.y,
+      });
+      subsetHandles.push(m.handle);
+      subsetSlots.push({ x: dest.x, y: dest.y });
+      emitted.add(m.handle);
+    }
+  } else if (singleClass) {
+    const snapped = resolveGoalCellWithFallback(
+      deps.terrain,
+      deps.pathing,
+      cls,
+      goalTier,
+      goalX,
+      goalY,
+      memberInfos,
+      c,
+    );
+    if (snapped !== null) {
+      emitGx = snapped.gx;
+      emitGy = snapped.gy;
     }
   }
 
@@ -511,9 +500,7 @@ export function emitTransitGuide(
   }
 
   const cls = memberInfos[0]?.cls ?? 0;
-  const preferredTier: ClearanceTier = memberInfos.some((m) => m.tier === CLEARANCE_HEAVY)
-    ? CLEARANCE_HEAVY
-    : CLEARANCE_STANDARD;
+  const preferredTier = squadGoalTier(memberInfos);
   const ref = pickPassableRef(deps.terrain, memberInfos, cls, preferredTier, c);
   const probe = acquireProbeWithFallback(
     deps.terrain,

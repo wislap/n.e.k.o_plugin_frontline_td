@@ -20,11 +20,7 @@ const DIRS = DIR_ORDER;
 export const MAX_GATE_HALF_W = 4.5;
 const LOCAL_REJOIN_RADIUS = 12;
 const BFS_WIN = LOCAL_REJOIN_RADIUS * 2 + 1;
-
-const bfsQueue = new Int32Array(729);
-const bfsFirstDir = new Int8Array(729);
-const bfsSeen = new Int32Array(729);
-let bfsStamp = 1;
+const BFS_SLOTS = BFS_WIN * BFS_WIN;
 
 export type RouteFollowView = WriteView<{ chain: 'u32'; gate: 'u16'; lane: 'f64'; active: 'u8' }>;
 
@@ -58,6 +54,13 @@ interface RejoinMemo {
   readonly val: Int8Array;
 }
 
+interface RejoinBfsScratch {
+  readonly queue: Int32Array;
+  readonly firstDir: Int8Array;
+  readonly seen: Int32Array;
+  stamp: number;
+}
+
 export interface RouteChainStore {
   acquireChain(
     cls: number,
@@ -69,6 +72,7 @@ export interface RouteChainStore {
   releaseChain(chainId: number): void;
   getChain(chainId: number): RouteChain | undefined;
   readonly rejoinMemo: RejoinMemo;
+  readonly bfs: RejoinBfsScratch;
   save(): Serializable;
   load(data: Serializable): void;
 }
@@ -92,8 +96,16 @@ export function createRouteChainStore(): RouteChainStore {
     },
   };
 
+  const bfs: RejoinBfsScratch = {
+    queue: new Int32Array(BFS_SLOTS),
+    firstDir: new Int8Array(BFS_SLOTS),
+    seen: new Int32Array(BFS_SLOTS),
+    stamp: 1,
+  };
+
   return {
     rejoinMemo,
+    bfs,
 
     acquireChain(cls, tier, clusterHalfW, gates, refcount) {
       const id = freeIds.length > 0 ? (freeIds.shift() ?? nextId++) : nextId++;
@@ -325,12 +337,16 @@ export function boundedLocalRejoin(
     return first < 0 ? false : writeRejoinDir(first, startAx, startAy, tier, px, py, outDir);
   }
 
-  bfsStamp += 1;
-  if (bfsStamp >= 0x7fffffff) {
+  const bfs = store.bfs;
+  const bfsQueue = bfs.queue;
+  const bfsFirstDir = bfs.firstDir;
+  const bfsSeen = bfs.seen;
+  bfs.stamp += 1;
+  if (bfs.stamp >= 0x7fffffff) {
     bfsSeen.fill(0);
-    bfsStamp = 1;
+    bfs.stamp = 1;
   }
-  const stamp = bfsStamp;
+  const stamp = bfs.stamp;
   const startLi = LOCAL_REJOIN_RADIUS * BFS_WIN + LOCAL_REJOIN_RADIUS;
   bfsSeen[startLi] = stamp;
   bfsQueue[0] = startLi;

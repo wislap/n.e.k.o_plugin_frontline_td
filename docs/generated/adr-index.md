@@ -52,16 +52,17 @@
 | [0039](../adr/0039-vision-fog-of-war.md) | 视野与战争迷雾 | 已采纳 | 已实现 | wislap | M5 | 2026-11-18 |
 | [0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md) | 阻尼非对称避让、到达迟滞与墙体边距 | 已采纳；部分被 0056 取代（在同阵营双行进单位分离中增加纵向后车让行与单侧超车切向滑步，消除后车顶推前车抽动） | 已实现 | wislap | S2 阻尼避让与到达迟滞 | 2026-11-21 |
 | [0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md) | 小队虚拟领航锚点、混编职能分排与巡航控速 | 已采纳；部分被 0056 取代（在流场之上引入共享宽门走廊链 `RouteChain` 与内部组件 `RouteFollow`，从根源消除障碍物中线处的分水岭分裂与稀疏孤立绕路）、部分被 0057 取代（移除 2D 虚拟领航锚点与路径点转向覆盖，简化 `FormationGuide` 为标量巡航限速并改用 1D 连续测地距截尾中位数控速） | 已实现 | wislap | S3 小队编队领航与混编协同 | 2026-11-21 |
-| [0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md) | 分水岭防分裂空间聚类与宽门走廊链、MoveCommand 近端吸附及纵向后车让行 | 已采纳 | 已实现 | wislap | P2 寻路与运动 V2 重构 | 2026-11-21 |
-| [0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md) | 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发 | 已采纳 | 已实现 | wislap | P3 寻路与运动 V2 重构 | 2026-11-21 |
+| [0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md) | 分水岭防分裂空间聚类与宽门走廊链、MoveCommand 近端吸附及纵向后车让行 | 已采纳；部分被 0058 取代（lineWalkable 升级为精确亚格 Amanatides–Woo DDA；buildWideGate 强制门间直线直通并加入拐角补门与桥前反向宽度漏斗；steerRouteFollow 移除旧门回望并收口为实例局部重入缓冲） | 已实现 | wislap | P2 寻路与运动 V2 重构 | 2026-11-21 |
+| [0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md) | 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发 | 已采纳；部分被 0058 取代（新增 resolveSquadGoalAtTier 对不可通行目标做 6 格来向面吸附、projectFormationSlots 测地距防跨崖过滤、统一混编小队净空口径并将 SquadAnchor 精简为 heading） | 已实现 | wislap | P3 寻路与运动 V2 重构 | 2026-11-21 |
+| [0058](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md) | 实图寻路硬化、混编净空统一与走廊及状态收口 | 已采纳 | 已实现 | wislap | P4 寻路与运动实图硬化与收口 | 2026-11-21 |
 
 ### 地形
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|---|
-| [0010](../adr/0010-terrain-model-sector-flowfields.md) | 地形模型与分区流场 | 已采纳；部分被 0052 取代（补齐按移动类别 × 净空分档 1×1 标准档 / 2×2 重型档的门户流场，并在离散 8 向流场之上新增扇区内对偶双线性连续流向梯度查询 smoothDirectionAt）、部分被 0055 取代（以按需暂停/恢复的迎风 Eikonal 连续距离场、Dial 环形桶队列与懒惰连通分量缓存取代 16×16 扇区门户图与局部 Dijkstra） | 部分（分区失效仍是全局：invalidateCells 清全图 fields/portalDists，rebuildNodesAndEdges 全局重编号） | wislap | M0 架构基线 | 2026-11-14 |
+| [0010](../adr/0010-terrain-model-sector-flowfields.md) | 地形模型与分区流场 | 已采纳；部分被 0052 取代（补齐按移动类别 × 净空分档 1×1 标准档 / 2×2 重型档的门户流场，并在离散 8 向流场之上新增扇区内对偶双线性连续流向梯度查询 smoothDirectionAt）、部分被 0055 取代（以按需暂停/恢复的迎风 Eikonal 连续距离场、Dial 环形桶队列与懒惰连通分量缓存取代 16×16 扇区门户图与局部 Dijkstra） | 部分（高度影响视线/射程与海域/空中类别未做；原分区流场已由 ADR 0055 迎风 Eikonal 取代） | wislap | M0 架构基线 | 2026-11-14 |
 | [0027](../adr/0027-map-terrain-flowfield-movement.md) | 地图格式、地形规则、分区流场与移动的实现约定 | 已采纳；部分被 0053 取代（转向接入连续流向梯度 smoothDirectionAt 并引入到达减速带与守位迟滞死区；分离改为双斜率过阻尼排斥、r²×状态非对称让路、友军/对向切向绕行与单 tick 推挤限幅；积分增加按净空分档的平面墙距与凸角圆弧夹紧；移动编组与出兵按 (cls, tier) 分档）、部分被 0055 取代（分区流场与门户近似实现改为全图无缝迎风 Eikonal 求解与 O(1) 连通分量可达性判定）、部分被 0056 取代（为 `MoveCommand` 引入 `<= 3` 格近端向己侧吸附，替代死区零容错直接拒绝） | 已实现 | wislap | M2 第一个参考实现 | 2026-11-16 |
 | [0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md) | 地形净空分档与连续流场方向梯度 | 已采纳；部分被 0055 取代（保留两档净空与三段式连续流向梯度契约，并将双线性插值与中心差分从扇区内限制升级为全图无缝跨区查询） | 已实现 | wislap | S1 地形净空与连续流场 | 2026-11-21 |
-| [0055](../adr/0055-resumable-upwind-eikonal-and-component-reachability.md) | 可恢复迎风 Eikonal 求解器与连通分量可达性 | 已采纳 | 已实现 | wislap | P1 寻路与运动 V2 重构 | 2026-11-21 |
+| [0055](../adr/0055-resumable-upwind-eikonal-and-component-reachability.md) | 可恢复迎风 Eikonal 求解器与连通分量可达性 | 已采纳；部分被 0058 取代（澄清 Dial 环形桶采用 O(1) FIFO 尾插出队，由固定起点与 DIR_ORDER 保证确定性） | 已实现 | wislap | P1 寻路与运动 V2 重构 | 2026-11-21 |
 
 ### 战斗
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -195,3 +196,6 @@
 
 ### P3 寻路与运动 V2 重构（2026-11-21）
 - [0057 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)
+
+### P4 寻路与运动实图硬化与收口（2026-11-21）
+- [0058 实图寻路硬化、混编净空统一与走廊及状态收口](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md)
