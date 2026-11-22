@@ -6,79 +6,50 @@
 
 ## 公开接口
 - `sim/index.ts`：`createLogisticsModule(db, terrain, opts)`（`starts`、
-  可选 `healthBp`）；`unitParts`/`structureParts`/`roadSegmentParts`
-  生成部件；`LogisticsModule`（`blockersChanged`、`pave`、
-  `linkPath`、`covered`、`connectsToNetwork`、`energyBp`、`stockOf`）。
-- `protocol.ts`：`SetPrioritiesCommand`、`ConsumeIntent`/`DepositIntent`
-  （`frontline_td:logistics.consume` / `.deposit`，负载
-  `{ handle, cargo, amount }`，cargo 为货物注册表索引）、
-  货类名/码、unmet 原因码、`LogisticsNetworkChannel`、
-  `ROAD_LAYER_ID` 网格层、`LOGISTICS_INSPECTOR_ID` 与检查器契约类型
-  （`LogisticsInspection`/`LogisticsSlotInspection`）。
-- `content.ts`：货物、store、node 与全局物流配置的内容 schema
-  （含 `roadLevels`、`segmentCells`、`corridorWidth`）、
-  `lowestBuildableRoadLevel`（客户端预览与下单共用）。
-- `render/`：`LogisticsOverlay`（以单张全图 `DataTexture` 渲染服务覆盖层并配合
-  `.dispose()` 生命周期释放，消除格数上限）/`RoadLayer`/`RoadToolLayer`；
-  `ui/`：`StockPanel`（集成 `stock-rate.ts` 展示 `/s` 净收支速率与缺货建议）/
-  `RoadPanel` 与 `extendRoadSelection`/`nearestLink`/`linkKey`/`sameKey`；
-  检查器（节点/链路/存储）。
-  导出全表见 [exports.md](../../../../docs/generated/exports.md) 与
+  可选 `healthBp`）；`unitParts`/`structureParts`/`roadSegmentParts`；
+  `LogisticsModule`（`blockersChanged`、`pave`、`linkPath`、
+  `covered`、`connectsToNetwork`、`energyBp`、`stockOf`）。
+- `protocol.ts`：`SetPrioritiesCommand`、`ConsumeIntent`/
+  `DepositIntent`、unmet 原因码、`LogisticsNetworkChannel`、
+  `ROAD_LAYER_ID` 与检查器契约类型。
+- `content.ts`：货物、store、node 与全局配置 schema（`roadLevels`
+  等）、`lowestBuildableRoadLevel`（预览与下单共用）。
+- `render/`：LogisticsOverlay（全图 DataTexture 服务覆盖层）/
+  RoadLayer/RoadToolLayer；`ui/`：StockPanel/RoadPanel 与道路选择
+  辅助；检查器（节点/链路/存储）。导出全表见
+  [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
 ## 拥有的组件
-- `LogisticsNode`（footprint、connect、service、vehicles、warehouse，
-  归属本模块）、`CargoStore`（4 槽：cargo/cap/amt/cls/flags/since/
-  rate/unmet）、`SiteStore { kind: u16 }`（工地槽，本模块写）。
-- `EnergyLow`/`EnergyEmpty` 修改器组件；`FixedAttach`（固定挂载
-  node+gen+lastMile，道路工地用）、`Interceptor`（拦截强度 bp，
-  由单位内容注入）——spawn 挂载、归属本模块、无字段写者
-  （ADR 0047）。
-- 网格层：全局 u8 道路层 `frontline_td:logistics.road`（0 土路，
-  ≥1 等级）、按阵营 `frontline_td:logistics.service`（覆盖位图）。
-- 序列化状态：`frontline_td:logistics.state`、`frontline_td:logistics.roads`。
+- `LogisticsNode`、`CargoStore`、`SiteStore { kind: u16 }`（工地槽，
+  本模块写）；`EnergyLow`/`EnergyEmpty` 修改器。
+- `FixedAttach`（道路工地）、`Interceptor`（拦截强度）——spawn
+  挂载、归属本模块、无字段写者（ADR 0047）。
+- 网格层：`frontline_td:logistics.road`（全局 u8 道路等级）、
+  `frontline_td:logistics.service`（按阵营覆盖位图）。
+- 序列化状态：`frontline_td:logistics.state`、
+  `frontline_td:logistics.roads`。
 
 ## 不变量
-- 分配每 1 秒（cycleTicks）运行一次：先 rate，再 outbound、reserve、
-  inbound、供应状态与利用率记账。
-- 路径付费方为上游节点（outbound 近端、inbound 远端）；带宽
-  `qMax(R,L,load,m)=floor(R·load·m/(2L·10000))`——R 为剩余预算，
-  L 为链路长度，load 为车辆载货量（milli），m 为有效道路倍率
-  （10000 bp = 1×），10000 同样为 bp 定点分母。
-- 预算树每周期每方向各一棵，仅当付费节点预算归零时重建，与逐次
-  重建结果一致（测试覆盖）。
-- `since` 存 `tick + 1`，0 表示"无"；生成时未满的非 export 槽从
-  出生即为开放需求。
-- export 槽也写 unmet 原因码，网络通道把 unmet（需求）与
-  unmetExport（回收）分开统计。
-- 链路利用率按实际付费方全额预算折算 bp；付费方剩余预算 ≤1% 且
-  该方向有流量时对应 `outSat`/`inSat` 置 1。
-- 派生拓扑不序列化；节点集合变化、地形阻挡变化与读档触发懒重建；
-  链路折线只含合法前驱步（不跨越悬崖或阻挡边）。
-- 道路只改链路有效倍率，不改拓扑：搜索与 connect 判定始终用地形
-  步进代价。有效倍率 `m = floor(cost·10000 / Σ step_k·10000/m(cell))`
-  （步进代价记在目标格上），只在道路版本或拓扑变化时重算。
-- 走廊拦截：每周期按敌对 `Interceptor` 单位到链路折线任一格中心
-  距离 ≤ `corridorWidth`（含包围盒预筛）求和 strengthBp，配额系数
-  `max(0, 10000 − Σ)`；unmet 仍为 `no_capacity`，链路在快照中记
-  `intercept` bp。
-- `pave` 只升不降并推路层版本；`linkPath` 返回 `LinkPath`（上游
-  仓库侧 → 下游的折线格、逐格累计代价、逐格当前道路等级、上游
-  节点与两端节点 id）；工地段用的 `FixedAttach` 初始值由内部
-  `fixedAttachInit` 另行计算。
-- 数量用整数 milli 单位；运力与原因码用核心整数辅助函数。
-- 道路工具的选择存规范化端点句柄对 `RoadLinkKey`，不存链路下标；
-  每帧和下单时再解析为当前下标（ADR 0045）。
+- 分配每 cycleTicks 运行一次：rate → outbound → reserve → inbound
+  → 供应状态与利用率记账。
+- 每方向付费方为上游节点（outbound 近端、inbound 远端）；带宽与
+  利用率以 bp 定点记账，付费方预算耗尽触发预算树重建。
+- `since` 存 `tick + 1`，0 表示"无"；export 槽也写 unmet 原因码，
+  需求与回收分开统计。
+- 派生拓扑不序列化；节点集合、地形阻挡与读档触发懒重建；链路
+  折线不含跨越悬崖/阻挡的步。
+- 道路只改链路有效倍率不改拓扑；`pave` 只升不降并推路层版本；
+  `linkPath` 返回上游→下游折线与逐格数据。
+- 道路工具的选择存规范化端点句柄对 `RoadLinkKey`，渲染/下单时
+  再解析为当前链路下标（ADR 0045）。
+- 数量用整数 milli；工地槽结算在结构完工时把 `SiteStore` 重写为
+  运营 `CargoStore`（排除 `UnderConstruction` 查询）。
 
 ## 对应设计
-- [ADR 0025](../../../../docs/adr/0025-logistics-model.md)（模型）、
-  [ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)
-  （实现约定）；[architecture.md §6.11](../../../../docs/design/architecture.md)
+- [ADR 0025](../../../../docs/adr/0025-logistics-model.md)、
+  [ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)、
+  [ADR 0013](../../../../docs/adr/0013-modifier-pipeline.md)、
+  [ADR 0043](../../../../docs/adr/0043-review-remediation.md)。
+- [architecture.md §6.11](../../../../docs/design/architecture.md)
   （modifiers）。
-- [ADR 0013](../../../../docs/adr/0013-modifier-pipeline.md)（修正
-  值）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
-  （工地槽结算归物流）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
-  （`F3` 物流模式、`R` 道路工具与强类型 `LogisticsInspection`）、
-  [ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
-  （`StockPanel` 净收支速率与 HUD 槽位布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
-  （`LogisticsOverlay` `DataTexture` 服务覆盖层与 `.dispose()` GPU 治理）。

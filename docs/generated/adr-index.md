@@ -22,6 +22,7 @@
 | [0043](../adr/0043-review-remediation.md) | 评审整改约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-18 |
 | [0044](../adr/0044-adr-implementation-field.md) | ADR 实现状态字段 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-18 |
 | [0046](../adr/0046-doc-consistency-conventions.md) | 文档一致性约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
+| [0061](../adr/0061-doc-abstraction-and-tuning-records.md) | 文档抽象层级与调参记录约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-22 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -54,7 +55,7 @@
 | [0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md) | 小队虚拟领航锚点、混编职能分排与巡航控速 | 已采纳；部分被 0056 取代（在流场之上引入共享宽门走廊链 `RouteChain` 与内部组件 `RouteFollow`，从根源消除障碍物中线处的分水岭分裂与稀疏孤立绕路）、部分被 0057 取代（移除 2D 虚拟领航锚点与路径点转向覆盖，简化 `FormationGuide` 为标量巡航限速并改用 1D 连续测地距截尾中位数控速）、部分被 0059 取代（交战包抄改用 `projectSurroundArcSlots` 15 射线射程扇弧落位与同射程带 2-opt 解交叉，替代向敌心投影成块） | 已实现 | wislap | S3 小队编队领航与混编协同 | 2026-11-21 |
 | [0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md) | 分水岭防分裂空间聚类与宽门走廊链、MoveCommand 近端吸附及纵向后车让行 | 已采纳；部分被 0058 取代（lineWalkable 升级为精确亚格 Amanatides–Woo DDA；buildWideGate 强制门间直线直通并加入拐角补门与桥前反向宽度漏斗；steerRouteFollow 移除旧门回望并收口为实例局部重入缓冲）、部分被 0059 取代（`MoveIntent` 轻重混编优先共享重型可达 `GoalField` 消除 1 格窄缝分道拆队；引入 1.5 格弧长 C¹ 平滑空间孔径脊柱与 `[3.8, 8.0]` 终端平滑渐隐替代离散路门硬切换） | 已实现 | wislap | P2 寻路与运动 V2 重构 | 2026-11-21 |
 | [0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md) | 基于连续测地距截尾中位数的巡航控速与小队指令首拍瞬发 | 已采纳；部分被 0058 取代（新增 resolveSquadGoalAtTier 对不可通行目标做 6 格来向面吸附、projectFormationSlots 测地距防跨崖过滤、统一混编小队净空口径并将 SquadAnchor 精简为 heading） | 已实现 | wislap | P3 寻路与运动 V2 重构 | 2026-11-21 |
-| [0058](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md) | 实图寻路硬化、混编净空统一与走廊及状态收口 | 已采纳；部分被 0059 取代（将 `squadGoalTier` 混编小队默认净空统一提升至 `CLEARANCE_HEAVY`，仅对跨墙离群标准成员懒惰探测 `CLEARANCE_STANDARD`） | 已实现 | wislap | P4 寻路与运动实图硬化与收口 | 2026-11-21 |
+| [0058](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md) | 实图寻路硬化、混编净空统一与走廊及状态收口 | 已采纳；部分被 0059 取代（将 `squadGoalTier` 混编小队默认净空统一提升至 `CLEARANCE_HEAVY`，仅对跨墙离群标准成员懒惰探测 `CLEARANCE_STANDARD`；桥前反向宽度漏斗斜率由 `1.25` 改为 `0.7`） | 已实现 | wislap | P4 寻路与运动实图硬化与收口 | 2026-11-21 |
 | [0059](../adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md) | 阻尼速度惯性、混编统一流域、空间孔径缩列与弧形包抄 | 已采纳 | 已实现 | wislap | P5 寻路与集群运动融合重构 | 2026-11-21 |
 
 ### 地形
@@ -168,6 +169,7 @@
 - [0045 第二轮评审整改约定](../adr/0045-second-review-conventions.md)
 - [0046 文档一致性约定](../adr/0046-doc-consistency-conventions.md)
 - [0047 组件归属声明与契约清单](../adr/0047-component-ownership-manifest.md)
+- [0061 文档抽象层级与调参记录约定](../adr/0061-doc-abstraction-and-tuning-records.md)
 
 ### F1 客户端交互底座（2026-11-20）
 - [0048 客户端交互模式、检视焦点与强类型检查器契约](../adr/0048-interaction-modes-and-inspector-contract.md)

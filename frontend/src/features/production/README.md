@@ -6,20 +6,13 @@
 
 ## 公开接口
 - `sim/index.ts`：`createProductionModule(db)`、`structureParts`
-  （为带 `producer` 配方的结构注入 `Producer` 组件）。
-- `protocol.ts`：`PRODUCTION_INSPECTOR_ID`（`frontline_td:production`）、
-  `PRODUCTION_STATES`/`ProductionStateName` 与 `ProductionInspection`
-  检查器契约类型。
-- `content.ts`：`producerSchema`（`inputs`/`outputs` 货物表 +
-  `time` 秒；loader 换成货物索引、milli 与 tick），以及两个可选
-  字段：`producer.unitOutput`（替代 cargo 输出的单位产出表，按
-  `cycle` 依次产出，产出时在内容指定的出口位置发
-  `units.spawn` 意图）与 `producer.ramp`（`[{ atSeconds, seconds }]`
-  阶梯表，取当前比赛 tick 之前最后一档作为生产周期；无 ramp
-  时用 `time`）。无输入配方不消耗货物，也不要求挂靠/能量
-  （虫巢等怪物建筑用）。
-- 配方通过 `Producer.kind`（结构内容索引）从 db 查找，不按 ID
-  字符串分支。导出全表见
+  （为带 `producer` 配方的结构注入 `Producer`）。
+- `protocol.ts`：检查器 ID 与 `PRODUCTION_STATES`/
+  `ProductionInspection` 契约类型。
+- `content.ts`：`producerSchema`（`inputs`/`outputs` + `time` 秒；
+  可选 `unitOutput` 单位产出表（按 `cycle` 轮换，完工在内容出口
+  发 `units.spawn`）与 `ramp` 阶梯周期表）。无输入配方不消耗货物
+  （虫巢等怪物建筑用）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -30,20 +23,18 @@
 ## 不变量
 - 系统每 tick 运行于 `construction` 阶段，排除 `UnderConstruction`；
   查询要求结构同时带 `CargoStore`。
-- 空闲（progress = 0）：全部输入在自身 CargoStore 中足额，且每个
-  输出货都有能装下的 export 槽时才开工——先按输入发出
-  ConsumeIntent，然后 progress = 1。带 `unitOutput` 的配方完工时
-  发 `SpawnIntent` 并推进 `cycle`。
-- 运行中：progress + 1；到达 `timeTicks` 时按输出发出 DepositIntent
-  并归零。intent 在下一物流结算时被扣/入账。
-- 检查器汇报 producing / waiting_inputs（缺哪些货物索引）/
-  output_full（"运不回去"）/ ready 四种状态。
+- 开工条件：全部输入足额且每个输出货都有能装下的 export 槽；
+  先按输入发出 ConsumeIntent 再推进。
+- 完工按输出发出 DepositIntent（或 `SpawnIntent` + cycle 推进）；
+  intent 在下一物流结算时入账。
+- 配方经 `Producer.kind` 内容索引查 db，不按 ID 字符串分支。
+- 检查器汇报 producing / waiting_inputs / output_full / ready 四种
+  状态。
 
 ## 对应设计
-- [ADR 0025](../../../../docs/adr/0025-logistics-model.md)（物流
-  模型）、[ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)
-  （实现约定）、[ADR 0035](../../../../docs/adr/0035-assault-mode-director-victory.md)
-  （胜负判定的生产链路）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
-  （强类型 `ProductionInspection` 检查器契约）。
+- [ADR 0025](../../../../docs/adr/0025-logistics-model.md)、
+  [ADR 0030](../../../../docs/adr/0030-logistics-implementation.md)、
+  [ADR 0035](../../../../docs/adr/0035-assault-mode-director-victory.md)、
+  [ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)。
 - [game_design.md §4.6](../../../../docs/design/game_design.md)
-  （生产与补给节奏）。
+  （生产节奏）。

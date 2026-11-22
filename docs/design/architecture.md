@@ -41,12 +41,17 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 ### 1.4 下一步候选
 没有固定顺序，由负责人排优先级。开工前先确认，不要自行挑一项开始做。
 
-- **人工验证**：在预览里确认"再来一局"能完整重置（结算画面消失、新局正常）、迷雾视觉观感与多局重开 WebGL 显存；Playwright `e2e/` 现已覆盖冒烟及 HUD/模式/小地图/多分辨率防重叠交互，仍覆盖不到上述视觉与内存项。
+- **人工验证**（e2e 覆盖不到；负责人确认后在条目后注明结论与日期）：
+  - "再来一局"能完整重置（结算画面消失、新局正常），多局重开后 WebGL 显存不持续上涨；
+  - 迷雾的视觉观感；
+  - 镜头拉远看全图、聚焦角落、自由旋转与低俯角时，建筑、屋顶图标、单位、选中圈、血条不消失、不闪烁、不被道路遮盖（ADR 0051、0060）；
+  - 寻路与集群运动手感：开阔地斜线直行、大群过障碍整团同侧绕行、点建筑或岩壁时目标吸附到己方一侧、混编小队同步出发（ADR 0055–0059）。负责人试玩确认寻路明显改善（2026-11-22），混编小队待有第二种单位后再验；
+  - NEKO 宿主内 `F1`–`F3`、`Tab` 能否被游戏拦截（ADR 0048）。
 - **试玩验证核心循环**（§1.3 第 4 条），据此决定 Rogue 奖励（`game_design.md` 中为【建议｜未实现】）与局外成长。
 - **玩法设计讨论**：怪物生态（`game_design.md` §8、§9.1）；`game_design.md` 中负责人不认可的【已定】条目待重新梳理；`game_design.md` §8 第 10–15 条待负责人决定。
 - **内容扩充**：更多据点类型（目标一局 6–10 次攻占）、更多防御建筑与兵种、中立据点、对拍机器人学会占点（见 §13）。
 - **ADR 缺口**：[ADR 索引](../generated/adr-index.md)「实现」列中标为"部分"或"未实现"的条目。
-- **前端正式化重构（F1–F5，已完成落地）**：[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md) 已完成交互模式状态机、Hover/Pin 检视与强类型契约、九宫格战术 HUD、战略小地图、电子沙盘程序化渲染与 GPU 生命周期治理及 E2E 验证；后续可选扩充（如 `F2` 建造模式下 `1–9` 建造分类快捷抽屉绑定）留待后续需求定夺。
+- **建造模式 `1–9` 绑定建造分类**（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 已预留）。
 - **低优先级工程项**：命令日志随对局只增不减且参与存档与哈希；性能评估缺"大量建造与阻挡变化"场景，其他性能推断等有数据再决定；NEKO 宿主隐藏面板时是否触发 `visibilitychange`（§3.1）。
 
 ---
@@ -200,9 +205,9 @@ frontend/src/
 ├── content/     内容数据（建筑、怪物、地图）+ 拼装 schema + 校验
 ├── protocol/    拼装各功能通道 + 编解码
 ├── runtime/     Worker 入口、时钟与变速、快照缓冲
-├── client/      快照读取与插值、共享节流时钟、三态分离 store（interaction / selection / inspector）、视角与小队/小地图模型、集中会话重置
-├── render/      渲染公共设施：画布、镜头、高亮圈层（SelectionHighlightLayer）、线缓冲、单位插值与输入分发
-├── ui/          九宫格战术 HUD 外壳（HudShell）、快捷键引导栏、战略小地图、战情检视器与离线原语组件库（kit/styles）
+├── client/      快照读取与插值、共享节流时钟、客户端交互/选择/检视状态、视角与小队/小地图模型、集中会话重置
+├── render/      渲染公共设施：画布、镜头、高亮圈层、线缓冲、单位插值与输入分发
+├── ui/          战术 HUD 外壳、快捷键引导栏、战略小地图、战情检视器与离线原语组件库
 ├── input/       键鼠 → 意图 → 命令
 ├── i18n/        zh-CN / en 文案与类型化取词
 ├── host/        NEKO 桥接（显示模式；以后接解说）
@@ -247,8 +252,8 @@ frontend/src/
 - **移动类别与净空分档**：地面、两栖、海上（以后）、空中……每类一张代价表。寻路按「移动类别 × 净空分档」（`1×1` 标准档 / `2×2` 重型档）生成代价场与连续流向梯度（[ADR 0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)）。特殊怪物（如翻墙）通过代价表或"攻击障碍"逻辑表达。
 - 视线、射程修正、空地目标可攻击性读取同一张高度网格。
 - 只有地形模块知道原始地形编码；其他模块通过其公开的格子 / 边属性与代价场读取。新增地表类型（如海域）≈ 新增类型 + 代价表数据，不改寻路算法。
-- 流场采用按 `(cls, tier)` 槽位懒惰烘焙网格缓存、无向连通分量可达性门控与可恢复迎风 Eikonal 连续距离/流向场（Dial 环形桶队列 + 池化 `GoalField`），全图无缝提供离散 8 向、连续双线性梯度、贴墙单侧迎风回退与连续距离；建造或摧毁阻挡物时按净空分档（标准外扩 `{-1..1}`、重型外扩 `{-2..1}`）局部失效，按需恢复重算（[ADR 0010](../adr/0010-terrain-model-sector-flowfields.md)、[ADR 0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)、[ADR 0055](../adr/0055-resumable-upwind-eikonal-and-component-reachability.md)、[ADR 0059](../adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)）。
-- 流场之上运行真实位移速度回写与方向保持惯性、3-tick 接触传染到达、轻重统一流域与 1.5 格 C¹ 空间孔径平滑脊柱走廊链（含 `[3.8, 8.0]` 终端渐隐）、遇敌 15 射线射程弧包抄、阻尼非对称与纵向后车让行避让、墙体边距夹紧以及基于连续测地距截尾中位数的小队巡航控速，邻居遍历顺序确定且热路径零分配（[ADR 0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、[ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)、[ADR 0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)、[ADR 0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)、[ADR 0058](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md)、[ADR 0059](../adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)）。
+- 流场按「移动类别 × 净空分档」懒惰烘焙缓存，提供 O(1) 连通分量可达性与按需展开的连续距离/方向查询；阻挡变化触发失效后按需恢复重算（[ADR 0010](../adr/0010-terrain-model-sector-flowfields.md)、[ADR 0052](../adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)、[ADR 0055](../adr/0055-resumable-upwind-eikonal-and-component-reachability.md)）。
+- 流场之上运行位移结算、分离避让、走廊链与惯性平滑、小队巡航控速；遍历顺序确定、热路径零分配，细节见 [ADR 0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、[ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)、[ADR 0056](../adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)、[ADR 0057](../adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)、[ADR 0058](../adr/0058-real-map-locomotion-hardening-and-squad-cleanup.md)、[ADR 0059](../adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)。
 
 ### 6.9 弹道与效果：组合模型
 武器 = 正交维度的数据组合，不是"弹道类型"枚举：
@@ -277,12 +282,12 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 
 ### 6.13 客户端
 - 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh 与缓冲区，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。`render/` 与 `features/*/render/` 的命令式 Three.js 资源（`BufferGeometry`、`Material`、`CanvasTexture`、`DataTexture`、`LineBuffer`）遵守统一的 `.dispose()` 生命周期，在卸载或容量重建前显式释放（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）；全图动态 `<instancedMesh>` / `<lineSegments>` 批次统一显式声明 `frustumCulled={false}` 并由 ESLint `renderCullingBlock` 守门（[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）。
-- 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：`useInteractionStore` 管理平级一级模式（`F1 command` / `F2 build` / `F3 logistics`）与互斥二级工具（`place` / `demolish` / `road`）；`useSelectionStore` 仅持己方可控实体句柄；`useInspectorStore` 持有 `hovered` 与 `pinned`（地形格仅可悬停不可固定，严守迷雾零泄密），并以 `client/inspect-subject.ts` 提供 0ms 观察者快照即时解析与 80ms 防抖强类型 `*Inspection` 深度查询。所有 UI 面板通过共享 `subscribeSnapshotClock` / `useSnapshotValue` 节流订阅快照（禁止自建 `setInterval`），跨局重置收口于 `client/session.ts`。
-- 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：`HudShell` 采用九宫格流式槽位（无 `position: fixed` 硬编码互盖），集成左上时间/视角/指北针/全屏与 `ToastStack`、左中可折叠 `KeyGuideRail`（`K`/`?` 开关、`Esc` 不关闭）、左下模式栏与战略小地图 `Minimap`（北朝上并绘出当前镜头的旋转梯形/矩形视锥与近端高亮边）、底中小队/建造/道路工作台、右上 `StockPanel`（含净速率 `/s`）与默认收起的调试面板（`` ` ``），以及右下 `InspectorPanel`。全部 UI 原语与模式联动主题色收口于 `src/ui/kit/` 与 `src/ui/styles/`，100% 离线零外部字体/图标依赖。
+- 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：交互状态管理一级模式（`F1`/`F2`/`F3`）与互斥二级工具；选择状态仅持己方可控实体句柄；检视状态管理悬停与固定目标（地形格仅可悬停，严守迷雾零泄密），深查走强类型 `*Inspection` 契约。UI 面板统一经共享节流订阅快照，跨局重置收口于 `client/session.ts`。
+- 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：HUD 外壳按九宫格槽位布局时间/视角/指北针、快捷键引导、模式栏与战略小地图、工作台、资源面板与检视面板；原语与主题收口于 `src/ui/kit/` 与 `src/ui/styles/`，零外部字体/图标依赖。
 - 输入分三段：按键 / 鼠标 → 意图 → 命令，由数据驱动的 `input/keymap.ts` 按通用层与当前模式分层解析，组件中不直接监听具体按键。
-- 建造预览（`GhostPreview`）由客户端依据快照网格层与 `rules/` 先行判断，显示程序化建筑轮廓、连接与服务双圈、武器射程圈及阻塞原因，最终由模拟层裁决；不合法时模拟层发出 `COMMAND_REJECTED` 并由 `ToastStack` 提示。
-- 镜头与三维拾取：M2 起同一个摄像机在 3D 观战与 2D 正交战术视角之间平滑切换（设计清单 A6 ⑤，[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0033](../adr/0033-design-checklist-referenced-items.md)），F1 阶段（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）改为 `Tab` 切换、进入 `F2`/`F3` 自动切 2D 且可锁定视角；R2 阶段（[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）进一步升级为无奇点全向 3D 轨道阻尼镜头（`'YXZ'` 姿态、焦点贴合地形高程、视距联动智能俯角 `[26°, 86°]`、`Q/E` 与中键/`Alt+左键` 360° 自由旋转、`Shift+中键` 精确水平面射线抓地平移、光标射线锚定缩放、三维包围柱/包围盒优先拾取与 `N/Home`/指北针一键归北），切 2D 时保持当前 `yaw` 无跳变拍平；`CameraRig` 通过 `perspectiveClipPlanes` / `orthoClipPlanes` 动态收紧深度窗口（[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）。
-- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：`TerrainMesh` 生成合并高程地形、四边暗色沙盘底座裙边（`buildTerrainSkirtGeometry`）与 `fwidth` 自适应网格着色器，配合北西侧冷色轮廓补光形成完整 360° 沙盘台面；建筑采用程序化多部件轮廓（`visual.silhouette`）与随镜头旋转正立的 `128×128` `CanvasTexture`（`anisotropy = 4` + `polygonOffset`）屋顶战术图标（`visual.glyph`），蓝图与等待阻塞视觉分离；`UnitsLayer` 显示低电/断电标牌；`SelectionHighlightLayer` 与地表贴花严格遵循 `0.000..0.070` 单调 Y-lift 栈；`LogisticsOverlay` 服务覆盖层以单张 `DataTexture` 绘制；所有信息层同时以颜色与形状/图案区分。
+- 建造预览由客户端依据快照网格层与 `rules/` 先行判断合法性并显示轮廓、连接/服务圈与阻塞原因，最终由模拟层裁决（拒绝时经事件提示）。
+- 镜头与三维拾取：同一摄像机在 3D 观战与 2D 正交战术视角间平滑切换，`Tab` 手动切换、`F2`/`F3` 自动 2D；R2 起为全向 3D 轨道阻尼镜头（旋转、抓地平移、射线锚定缩放、三维包围体拾取、一键归北），切 2D 保持当前朝向（[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）。
+- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：地形网格含底座裙边与自适应着色器；建筑用程序化轮廓与正立屋顶图标区分状态；单位显示电量指示；高亮与贴花遵循统一 Y-lift 栈；物流覆盖层单纹理绘制；信息层同时以颜色与形状/图案区分。
 
 ### 6.14 Python 薄壳
 只声明 static 面板与插件元数据（含 i18n）。将来如接入 NEKO 解说 / 语音，参照 `neko_survivors` 的 `game_event → /chat → speak` 模式，经事件流驱动。
@@ -332,7 +337,7 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 ### 7.3 代码
 1. **系统按组件查询，禁止判断内容 ID 或"种类"字符串**（lint 强制）。需要特殊行为时新增组件或具名行为，由数据引用。
 2. **数据只放参数和组合，行为写在代码里**。配置需要条件逻辑时，在代码中写具名行为并由数据以 ID 引用，不在数据中发明脚本语言。
-3. **热路径直接在 TypedArray 上写循环**；kernel 提供类型化视图而不是对象包装（移动转向与小队巡航控速通过 `FormationGuide` 标量上界直写，不经 `MoveSpeed` 修正值管线，见 [ADR 0053](../adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、[ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)）。
+3. **热路径直接在 TypedArray 上写循环**；kernel 提供类型化视图而不是对象包装（小队巡航控速走移动组件的标量速度上限而非修正值管线，见 [ADR 0054](../adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)）。
 4. **至少两处真实用法才抽象成共享实现**；不做通用插件注册、依赖注入容器、动态加载。模块注册是显式数组。
 5. **底座只做纵向切片真正用到的部分**，每项抽象都要有当前的实际使用者。
 6. kernel 改动视同架构级改动，需 ADR（团队成形后加 CODEOWNERS）。

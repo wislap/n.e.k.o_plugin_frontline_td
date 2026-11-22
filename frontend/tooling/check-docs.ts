@@ -7,7 +7,10 @@
  * c) AGENTS.md must stay under 150 lines.
  * d) Every `frontend/src/features/<name>/` directory must contain a
  *    README.md whose `##` headings are exactly FEATURE_README_HEADINGS
- *    in order.
+ *    in order, that is at most FEATURE_README_MAX_LINES lines long and
+ *    has no line longer than FEATURE_README_MAX_COLS characters, and
+ *    whose 对应设计 section only references docs via Markdown links
+ *    (ADR 0061).
  *
  * Usage: node tooling/check-docs.ts
  */
@@ -37,6 +40,9 @@ const H2_RE = /^## .+$/gm;
 const DESIGN_SECTION_RE = /## 对应设计\r?\n([\s\S]*)$/;
 const BARE_DESIGN_REF_RE = /\bADR\s*\d{4}\b|\bdocs\/[^\s)]+|architecture\.md|game_design\.md/;
 
+const FEATURE_README_MAX_LINES = 80;
+const FEATURE_README_MAX_COLS = 200;
+
 export const FEATURE_README_HEADINGS = [
   '## 职责',
   '## 公开接口',
@@ -55,6 +61,26 @@ export function checkDesignSection(readmeText: string): string | null {
   const bare = section.replace(LINK_RE, '');
   const hit = BARE_DESIGN_REF_RE.exec(bare);
   return hit === null ? null : `'${hit[0]}' in 对应设计 must be a Markdown link, not bare text`;
+}
+
+// Returns an error string when the README exceeds the size limits of ADR
+// 0061 (line count or single-line width; counts characters, not bytes).
+const segmenter = new Intl.Segmenter('zh', { granularity: 'grapheme' });
+
+function charCount(text: string): number {
+  return [...segmenter.segment(text)].length;
+}
+
+export function checkFeatureReadmeSize(readmeText: string): string | null {
+  const lines = readmeText.split('\n');
+  if (lines.length > FEATURE_README_MAX_LINES) {
+    return `${lines.length} lines exceeds the ${FEATURE_README_MAX_LINES}-line limit`;
+  }
+  const long = lines.find((line) => charCount(line) > FEATURE_README_MAX_COLS);
+  if (long !== undefined) {
+    return `line ${lines.indexOf(long) + 1} is ${charCount(long)} chars exceeds the ${FEATURE_README_MAX_COLS}-char limit`;
+  }
+  return null;
 }
 
 // Returns an error string when the README's `##` headings differ from
@@ -150,6 +176,10 @@ export function checkDocs(root: string = PLUGIN_ROOT): string[] {
       const problem = checkFeatureReadme(readmeText);
       if (problem !== null) {
         errors.push(`frontend/src/features/${entry.name}/README.md: ${problem}`);
+      }
+      const sizeProblem = checkFeatureReadmeSize(readmeText);
+      if (sizeProblem !== null) {
+        errors.push(`frontend/src/features/${entry.name}/README.md: ${sizeProblem}`);
       }
       const designProblem = checkDesignSection(readmeText);
       if (designProblem !== null) {

@@ -1,96 +1,54 @@
 # construction
 
 ## 职责
-负责建筑的放置与生命周期：蓝图预订、放置校验、工地（site）材料需求、
-建造/拆除进度、取消退款与废料（salvage）实体，以及开局建筑的布置。
+负责建筑的放置与生命周期：蓝图预订、放置校验、工地材料需求、
+建造/拆除进度、取消退款、废料与废墟实体，以及开局建筑布置。
 
 ## 公开接口
 - `sim/index.ts`：`createConstructionModule(db, terrain, logistics, opts)`；
-  `opts` 含注入的 `structureParts`（`StructurePartsFn`）、`starts`、
-  可选 `segmentParts`/`healthBp`/`ruinParts`/`visible`；
-  `structureStateOf` 读工地/废墟状态。
-- `protocol.ts`：`PlaceCommand`/`ActivateCommand`/`CancelCommand`
-  （activate/cancel 数组上限 256）、`UpgradeLinksCommand`
-  （`links: [{a,b}]` 上限 64、`level`）、`ConstructionCompleted` 事件
-  （issuer 可见）、`StructuresChannel`/`SalvageChannel`/
-  `RoadWorksChannel`、`CONSTRUCTION_INSPECTOR_ID` 与检查器契约类型
-  （`ConstructionInspection`/`ConstructionSiteSlot`/
-  `ConstructionStateName`）。
-- `rules/`：`checkFootprint`/`checkRange` 与 `PlacementView` 纯放置
-  规则（不依赖 sim）；`makePlacementView` 快照侧适配器，建造幽灵
-  预览与 eval 机器人共用；`centeredFootprint`/`demolishRefund`/
-  `classifyCancelSelection` 纯拆除退款与取消选区分类规则。
-  放置/等待原因码在这里定义。
-- `content.ts`：`structureBaseFields`、`BUILD_CATEGORIES` 与
-  `BuildCategory`（`logistics` / `production` / `military`，`build.category`
-  省略时由内容加载器回退为 `production`）、`STRUCTURE_SILHOUETTES` /
-  `StructureSilhouette` 与 `STRUCTURE_GLYPHS` / `StructureGlyph`
-  （通过 `visual.silhouette` 与 `visual.glyph` 声明程序化轮廓与屋顶图标）。
-- `render/`/`ui/`/`inspector`：`StructuresLayer`（分离 `STATE_BLUEPRINT`
-  稳定半透明与 `STATE_WAITING` 预警脉冲，绘制程序化轮廓与 `CanvasTexture`
-  屋顶徽章）、`GhostPreview`（使用目标建筑轮廓并同时绘制物流连接/服务双圈、
-  预测连线与武器射程圈）、`ExclusionLayer`、`RoadWorksLayer`、`BuildMenu`、
-  工地检查器。导出全表见
+  `opts` 注入 `structureParts`/`starts` 与可选 `segmentParts`/
+  `healthBp`/`ruinParts`/`visible`；`structureStateOf` 读工地/废墟状态。
+- `protocol.ts`：`PlaceCommand`/`ActivateCommand`/`CancelCommand`、
+  `UpgradeLinksCommand`、`ConstructionCompleted` 事件（issuer 可见）、
+  `StructuresChannel`/`SalvageChannel`/`RoadWorksChannel`、检查器
+  契约与放置/等待原因码。
+- `rules/`：`checkFootprint`/`checkRange`、`PlacementView` 与
+  `makePlacementView`（幽灵预览与 eval 机器人共用）、拆除退款与
+  取消选区分类等纯规则。
+- `content.ts`：结构基础字段、`BUILD_CATEGORIES`、轮廓/图标声明。
+- `render/`/`ui/`/`inspector`：StructuresLayer、GhostPreview、
+  ExclusionLayer、RoadWorksLayer、BuildMenu、工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
 ## 拥有的组件
-- `Structure`（kind、左上角 x/y）；`Construction`（progress/total/
-  mode：0 建造、1 拆除）；`Blueprint`（kind、x、y、activated、
-  orderTick）；`Core`（只标在 operational 建筑上，供胜负判定）。
-- `Salvage`、`Ruin`、`RoadSegment`（project 索引）：spawn 时挂载，
-  归属本模块、无字段写者（ADR 0047）。
-- 声明 kernel 契约 `UnderConstruction` 的写者；工地与建成建筑立即
-  `setBlocked` 其占地。
+- `Structure`、`Construction`、`Blueprint`、`Core`（只标在运营建筑上）。
+- `Salvage`/`Ruin`/`RoadSegment`：spawn 挂载、归属本模块、无字段
+  写者（ADR 0047）。
+- kernel 契约 `UnderConstruction` 的写者；工地与建成建筑立即
+  `setBlocked` 占地。
 - 序列化状态：预订表（按阵营隔离）、`road_projects`。
 
 ## 不变量
-- 所有命令先完整校验再改动；非法/他阵营 handle 跳过，全无效时
-  拒绝 `no_targets`；已在拆除中的建筑再次取消是空操作。
-- 占地检查顺序：边界 → 静态地形/坡道 → 等高 → 动态占用 → 自身
-  预订 → 需求矿床。
-- 节点类建筑要求与己方完工网络的连通（沿用物流拓扑的环距离
-  规则），非节点建筑要求中心点被覆盖；占地内任何阵营的 mover
-  阻挡直接放置（`units_in_way`）并使蓝图激活保持等待。
-- 蓝图激活顺序为 (orderTick, entity id)；等待原因：
-  `not_covered`/`hostile_zone`/`not_connected`/`occupied`/
-  `reserved`/`units_in_way`/`terrain`。
-- 建造进度受已交付材料封顶：`allowed = floor(total·delivered/
-  required)`，每 tick 至多推进 1；完工时移除 `UnderConstruction`，
-  由 logistics 的工地槽结算（查询 `[SiteStore]` 且排除
-  `[UnderConstruction]`）重写 `CargoStore` 并移除 `SiteStore`。
-- 取消工地按已交付量退款；拆除完成后生成废料（export 槽，
-  `amt = 退款`、`cap = amt`、`since = tick + 1`，全零不生成），
-  废料无 Health、不阻塞地形，export 槽全空后每周期清理。
-- 预订表按阵营隔离并可序列化（`builder.state`）。`structures`
-  通道经注入的 `VisibilityQuery` 过滤（`app/` 接 vision.api，ADR
-  0039）；`salvage`/`road_works` 通道仅观察者己方可见，不接
-  VisibilityQuery。
-- 废墟与禁建区（ADR 0038）：带 `capture` 档案的结构死亡时生成
-  `Ruin` 实体（`Structure + Ruin + InWorld + Position`，无
-  `Faction`，占地保持封锁，通道 `STATE_RUIN`）；
-  `capture.completed` 事件触发下一 tick 的重建工地（工期 =
-  `rebuildTicks`，纯时间）。`checkRange` 的 `hostile_zone`：运营中
-  的敌对 `exclusion` 结构以占地中心为圆心禁建。
-- 道路项目（`upgrade_links`）按上游（仓库侧）→ 下游顺序逐段施工，
-  每段 `segmentCells` 格：段实体带 `Construction`/`RoadSegment` 与
-  注入的物流工地槽 + `FixedAttach`、战斗部件；无 `Structure`、不
-  阻塞地形。完工铺路后 despawn 并接棒下一段；取消退已交付材料为
-  废料，被毁材料损失，已铺格不回滚。项目状态可序列化。
-- `hpBp` 由注入的战斗读数提供（默认满血）。
+- 命令先完整校验再改动；非法/他阵营 handle 跳过，全无效拒绝
+  `no_targets`；已在拆除中的建筑再取消是空操作。
+- 占地校验顺序：边界 → 地形/坡道 → 等高 → 动态占用 → 自身预订
+  → 需求矿床；节点建筑另要求连通己方完工网络。
+- 蓝图按 (orderTick, entity id) 激活；占格单位使放置拒绝
+  `units_in_way` 并使激活保持等待。
+- 建造进度受已交付材料封顶；完工移除 `UnderConstruction`，工地槽
+  由物流结算重写为运营 `CargoStore`。
+- 取消工地按已交付量退款；拆除生成废料 export 槽；`salvage`/
+  `road_works` 通道仅观察者己方可见，`structures` 经注入的
+  `VisibilityQuery` 过滤（ADR 0039）。
+- 带 `capture` 档案的结构死亡生成 `Ruin`（无 `Faction`、占地保持
+  封锁）；敌对运营 `exclusion` 结构周围禁建（`hostile_zone`）。
+- 道路项目按上游→下游逐段施工；完工铺路，取消退已交付材料，
+  已铺格不回滚。
 
 ## 对应设计
-- [ADR 0012](../../../../docs/adr/0012-construction-as-entity.md)
-  （命令模型）、[ADR 0023](../../../../docs/adr/0023-grid-layers-groups-commands-rng-runtime-limits.md)
-  （拆除约定）、[ADR 0029](../../../../docs/adr/0029-construction-implementation.md)
-  （建造实现约定）、[ADR 0035](../../../../docs/adr/0035-assault-mode-director-victory.md)
-  （Core 与胜负判定）、[ADR 0038](../../../../docs/adr/0038-outposts-ruins-capture-exclusion.md)
-  （废墟与禁建区）。
-- [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（通道
-  可见性）、[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
-  （句柄校验）、[ADR 0043](../../../../docs/adr/0043-review-remediation.md)
-  （注入部件工厂）、[ADR 0048](../../../../docs/adr/0048-interaction-modes-and-inspector-contract.md)
-  （建造模式、`C`/`Delete` 双形态拆除与强类型 `ConstructionInspection`）、
-  [ADR 0049](../../../../docs/adr/0049-hud-design-system-and-layout.md)
-  （建造分类与 HUD 布局）、[ADR 0050](../../../../docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)
-  （程序化轮廓/屋顶图标、`STATE_BLUEPRINT`/`STATE_WAITING` 分离、幽灵双圈与 GPU 资源释放）。
+- [ADR 0012](../../../../docs/adr/0012-construction-as-entity.md)、
+  [ADR 0029](../../../../docs/adr/0029-construction-implementation.md)、
+  [ADR 0038](../../../../docs/adr/0038-outposts-ruins-capture-exclusion.md)、
+  [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)、
+  [ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)。

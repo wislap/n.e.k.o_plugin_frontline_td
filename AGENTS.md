@@ -78,6 +78,7 @@
 - 不要手改 `docs/generated/` 和 `static/`，它们由脚本生成。
 - 不要为了让检查通过去放宽棘轮基线（`frontend/ratchet.json`）。确实需要放宽时，在 PR 里写明理由。超长文件：>800 行计入棘轮、(600, 800] 仅警告；`*.test.ts(x)`、`test-world.ts`、`src/kernel/testing/` 豁免。
 - 不要在白名单以外的位置新建 `.md` 文件。施工计划、调研记录写在 `.plans/`（已被 gitignore），做完即删。删除前把有长期价值的结论提炼到 ADR 或设计文档。
+- 文档抽象层级（ADR 0061）：ADR 记决策不记调参，调整已有参数不新写 ADR（原因写进提交信息）；功能 README 只写职责与可核对的不变量（≤80 行、单行 ≤200 字符），`architecture.md` 只写总览；调参常数在代码里集中命名，不写裸数字。人工验收项写进 architecture.md §1.4。
 - 不要修改已有 ADR 的正文。决策被推翻时，新写一篇 ADR 来取代它。头部元数据（状态、部分取代、实现）可以更新；落地了某篇 ADR 的未实现部分时，更新它的「实现」行（ADR 0044）。
 - 不要修改 `.github/workflows/verify.yml` 和 `release.yml`。它们是插件市场托管的模板。
 - 不要在运行时下载或执行代码（`eval`、`new Function`、远程 URL 的动态 `import()`）。只有 `host/` 可以访问网络（ADR 0023，lint 强制）。

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   checkDesignSection,
+  checkFeatureReadmeSize,
   checkDocs,
   checkFeatureReadme,
   FEATURE_README_HEADINGS,
@@ -116,5 +117,27 @@ describe('checkDesignSection', () => {
 - ADR 0038 在正文里提及不检查。
 `;
     expect(checkDesignSection(text)).toBeNull();
+  });
+});
+
+describe('checkFeatureReadmeSize', () => {
+  it('accepts a short README', () => {
+    const text = ['# x', '', 'short lines', ''].join('\n');
+    expect(checkFeatureReadmeSize(text)).toBeNull();
+  });
+
+  it('flags a README over 80 lines', () => {
+    const text = ['# x', ...Array.from({ length: 80 }, () => 'y'), ''].join('\n');
+    expect(checkFeatureReadmeSize(text)).toMatch('lines');
+  });
+
+  it('flags a single line over 200 characters', () => {
+    const text = ['# x', 'z'.repeat(201), ''].join('\n');
+    expect(checkFeatureReadmeSize(text)).toMatch('line 2');
+  });
+
+  it('counts characters, not bytes, for CJK text', () => {
+    const text = '汉'.repeat(199) + '\n';
+    expect(checkFeatureReadmeSize(text)).toBeNull();
   });
 });
