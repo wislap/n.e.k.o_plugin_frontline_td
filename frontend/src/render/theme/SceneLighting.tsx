@@ -98,9 +98,12 @@ function applyPmremEnvironment(
   const pmrem = new THREE.PMREMGenerator(gl);
   const rt = pmrem.fromScene(sky.scene, 0.06);
   const prev = scene.environment;
+  const prevIntensity = scene.environmentIntensity;
   scene.environment = rt.texture;
+  scene.environmentIntensity = theme.envIntensity ?? 1;
   return () => {
     scene.environment = prev;
+    scene.environmentIntensity = prevIntensity;
     rt.dispose();
     pmrem.dispose();
     sky.dispose();

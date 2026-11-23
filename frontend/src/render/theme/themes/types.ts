@@ -166,11 +166,17 @@ export interface RenderTheme {
   exposure: number;
   toneMapping: ToneMappingId;
   environment: EnvironmentKind;
+  // Scales scene.environmentIntensity for pmrem-sky themes; defaults to 1.
+  // Pale skies otherwise flood materials with near-white ambient light.
+  envIntensity?: number | undefined;
   // Ink color for the inverted-hull outline pass (debug toggle).
   outline: string;
   fogColor: string;
   fogSoft: boolean;
   fogStyle: FogStyle;
+  // Cel-only: unexplored keeps a pale translucent wash so dimmed terrain
+  // reads as a cool desaturated tint instead of dark mud.
+  fogWash?: boolean | undefined;
   // Tactical 2D info treatment availability (弱化显示); the debug toggle
   // gates it further, legacy keeps it off.
   info2d: boolean;

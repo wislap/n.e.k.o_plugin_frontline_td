@@ -5,9 +5,12 @@ import * as THREE from 'three';
 
 const BAND_QUANTIZE = `#include <opaque_fragment>
       {
+        // Partial luminance quantize: hard anime bands over ~70% of the
+        // luminance delta, keeping a smooth floor so dim regions stay a
+        // cool desaturated tint instead of collapsing to black.
         float lum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
         float band = floor(lum * 3.0 + 0.5) / 3.0;
-        gl_FragColor.rgb *= band / max(lum, 1e-3);
+        gl_FragColor.rgb *= mix(1.0, band / max(lum, 1e-3), 0.7);
       }`;
 
 export function applyToonBands(material: THREE.Material): void {

@@ -381,6 +381,7 @@ export function buildOutskirtsGeometry(
   width: number,
   height: number,
   heights: ArrayLike<number>,
+  ramps: ArrayLike<number>,
   skirtCells: number,
 ): TerrainGeometryData {
   if (width <= 0 || height <= 0 || skirtCells <= 0) {
@@ -399,10 +400,21 @@ export function buildOutskirtsGeometry(
   const colors: number[] = [];
   const indices: number[] = [];
 
+  // Height on the map boundary itself: bilinear over the edge cell's real
+  // corner heights (cellCornerHeights) so ramp border cells — whose outer
+  // corners sit a full step above the cell level — meet the skirt with no
+  // vertical step. Without this the mismatch painted a lit cliff band.
   const edgeH = (x: number, y: number): number => {
-    const cx = Math.min(Math.max(x, 0), width - 1);
-    const cy = Math.min(Math.max(y, 0), height - 1);
-    return (heights[cy * width + cx] ?? 0) * HEIGHT_STEP;
+    const bx = Math.min(Math.max(x, 0), width);
+    const by = Math.min(Math.max(y, 0), height);
+    const cx = Math.min(Math.floor(bx), width - 1);
+    const cy = Math.min(Math.floor(by), height - 1);
+    const fx = bx - cx;
+    const fy = by - cy;
+    const c = cellCornerHeights(cx, cy, width, height, heights, ramps);
+    const north = c.nw + (c.ne - c.nw) * fx;
+    const south = c.sw + (c.se - c.sw) * fx;
+    return north + (south - north) * fy;
   };
   const distOutside = (x: number, y: number): number => Math.max(-x, x - width, -y, y - height, 0);
 
@@ -410,17 +422,35 @@ export function buildOutskirtsGeometry(
     const x = ix - s;
     const y = iy - s;
     const d = distOutside(x, y);
-    const base = edgeH(x, y);
+    // Continue the terrain's edge slope outward for a few cells instead of
+    // clamping to the border height: a flat clamp against a sloped border
+    // cell creases the shading at the seam (a lit lip along the edge).
+    const bx = Math.min(Math.max(x, 0), width);
+    const by = Math.min(Math.max(y, 0), height);
+    let base = edgeH(bx, by);
+    if (d > 0) {
+      const ux = (x - bx) / d;
+      const uy = (y - by) / d;
+      const slope = edgeH(bx, by) - edgeH(bx - ux, by - uy);
+      base += slope * d * Math.max(0, 1 - d / 4);
+    }
     const rim = 1 - Math.min(Math.max((d / s - 0.75) / 0.25, 0), 1);
     const amp = Math.min(d * 0.45, 1.7);
+    // First ~3 cells hold the border height so the skirt meets the map
+    // edge with no ledge, then rolling noise fades in.
     const hills =
       (outskirtsNoise(x * 0.09, y * 0.09) * 0.62 +
         outskirtsNoise(x * 0.31, y * 0.31) * 0.38 -
         0.5) *
       amp *
-      rim;
+      rim *
+      Math.min(Math.max((d - 1) / 2, 0), 1);
     const sink = Math.min(Math.max((d / s - 0.82) / 0.18, 0), 1) * (base - SKIRT_SINK_Y + 0.5);
-    return base + hills - sink;
+    // The outermost in-map ring is drawn by this skirt too (see the quad
+    // test below) and must tuck just under the terrain surface so the two
+    // meshes overlap without z-fighting: no sub-pixel crack can show sky.
+    const strictlyInside = x > 0 && y > 0 && x < width && y < height;
+    return base + hills - sink - (strictlyInside ? 0.035 : 0);
   };
 
   const nodeShade = (ix: number, iy: number, y: number): number => {
@@ -446,12 +476,13 @@ export function buildOutskirtsGeometry(
 
   for (let iy = 0; iy < ny; iy++) {
     for (let ix = 0; ix < nx; ix++) {
-      // Quad cells fully inside the map rect are covered by TerrainMesh,
-      // which spans [0, width] x [0, height]; skipping anything less leaves
-      // a double-drawn edge column/row that reads as a darker slab rim.
+      // Quad cells fully inside the map rect are covered by TerrainMesh —
+      // except the outermost ring, which this skirt also draws (tucked
+      // 0.035 under the terrain) so the mesh boundary overlaps instead of
+      // cracking open to the sky at grazing angles.
       const x0 = ix - s;
       const y0 = iy - s;
-      const inside = x0 >= 0 && y0 >= 0 && x0 < width && y0 < height;
+      const inside = x0 >= 1 && y0 >= 1 && x0 < width - 1 && y0 < height - 1;
       if (inside) {
         continue;
       }
@@ -505,7 +536,7 @@ export function buildIslandGeometry(
   const wall = (x0: number, z0: number, x1: number, z1: number, dx: number, dz: number): void => {
     const cx = width / 2;
     const cz = height / 2;
-    const k = (inset / Math.min(width, height)) * 2.6;
+    const k = (inset / Math.min(width, height)) * 2.0;
     const lerp = (a: number, c: number, f: number): number => a + (c - a) * f * k;
     for (let b = 0; b < bandCount; b++) {
       const f0 = b / bandCount;
@@ -530,7 +561,7 @@ export function buildIslandGeometry(
   wall(width, height, 0, height, 0, 1);
   wall(0, height, 0, 0, -1, 0);
   // Bottom face — same shrink factor as the deepest wall band (f = 1).
-  const k = (inset / Math.min(width, height)) * 2.6;
+  const k = (inset / Math.min(width, height)) * 2.0;
   const bx0 = (width / 2) * k;
   const bx1 = width * (1 - k / 2);
   const bz0 = (height / 2) * k;

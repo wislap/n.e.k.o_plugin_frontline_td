@@ -164,7 +164,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     if (heights === undefined || theme.terrain.skirtCells <= 0) {
       return null;
     }
-    const out = buildOutskirtsGeometry(width, height, heights, theme.terrain.skirtCells);
+    const out = buildOutskirtsGeometry(width, height, heights, ramps, theme.terrain.skirtCells);
     if (out.indices.length === 0) {
       return null;
     }
@@ -174,7 +174,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     geo.setIndex(new THREE.BufferAttribute(out.indices, 1));
     geo.computeVertexNormals();
     return geo;
-  }, [heights, width, height, theme]);
+  }, [heights, width, height, ramps, theme]);
 
   useEffect(() => {
     return () => {
@@ -218,7 +218,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     const shadowMat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      uniforms: { uAlpha: { value: 0.32 } },
+      uniforms: { uAlpha: { value: 0.42 } },
       vertexShader: `
         varying vec2 vUv;
         void main() {
@@ -238,7 +238,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     });
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
     const shadowY = topY - cfg.depth - cfg.shadowGap;
-    return { geo, mat, shadowMat, shadowY, shadowW: width * 1.7, shadowH: height * 1.7 };
+    return { geo, mat, shadowMat, shadowY, shadowW: width * 1.05, shadowH: height * 1.05 };
   }, [heights, width, height, theme]);
 
   useEffect(() => {

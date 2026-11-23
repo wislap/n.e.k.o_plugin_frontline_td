@@ -162,7 +162,7 @@ export function createThemedTerrainMaterial(
           float gline = 1.0 - min(min(g.x, g.y), 1.0);
           diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
           float dOut = terEdgeDist(terP, uMapSize);
-          float inBounds = 1.0 - smoothstep(0.0, 1.5, dOut);
+          float inBounds = 1.0 - smoothstep(0.0, 4.0, dOut);
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
           // Cliff edges: where the up-normal changes fast across pixels the
           // fragment sits in a top/bottom transition band; brighten the top
@@ -171,11 +171,18 @@ export function createThemedTerrainMaterial(
           float slopeChange = fwidth(ny);
           float topRim = smoothstep(0.12, 0.45, slopeChange) * smoothstep(0.55, 0.92, ny);
           float baseBand = smoothstep(0.12, 0.45, slopeChange) * (1.0 - smoothstep(0.05, 0.55, ny));
-          diffuseColor.rgb *= 1.0 + (topRim * 0.12 - baseBand * 0.2) * inBounds;
-          float cliffM = mix(1.0, smoothstep(uCliffStart, uCliffEnd, ny), inBounds);
+          float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
+          // The border seam between the terrain and the skirt reads as a
+          // normal jump; fade rim/cliff accents out over the outermost cells
+          // so nothing marks the map rectangle at overview zoom.
+          float rimGate = smoothstep(2.0, 5.5, dEdge) * inBounds;
+          diffuseColor.rgb *= 1.0 + (topRim * 0.07 - baseBand * 0.07) * rimGate;
+          // Cliff faces keep most of their surface color so long straight
+          // walls read as shaded terrain relief rather than a flat colored
+          // band that fakes a map edge at overview zoom.
+          float cliffM = mix(1.0, 0.78 + 0.22 * smoothstep(uCliffStart, uCliffEnd, ny), max(rimGate, 0.0));
           diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, cliffM);
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
-          float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
           // Tactical info view (弱化显示): sink the ground into a dark
           // slate grey-green so markers read as the bright layer on top.

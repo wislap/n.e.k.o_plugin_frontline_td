@@ -16,9 +16,10 @@ export const CEL_THEME: RenderTheme = {
   toon: true,
   // Unexplored cells read as a soft blue-violet wash — coloured shadow,
   // not black; explored keeps the bright flat palette.
-  fogColor: '#5a5f8e',
+  fogColor: '#8d97bd',
   fogSoft: true,
   fogStyle: 'dim',
+  fogWash: true,
   info2d: true,
   lighting: {
     // Strong warm key + cool violet sky fill = anime shadow colour.
@@ -35,7 +36,7 @@ export const CEL_THEME: RenderTheme = {
   },
   terrain: {
     // Saturated fresh meadow: deep grass → bright yellow-green.
-    rampLow: '#3f7d38',
+    rampLow: '#569048',
     rampHigh: '#9ccc5a',
     rampStrength: 1,
     cliffColor: '#8d97b8',
@@ -61,8 +62,8 @@ export const CEL_THEME: RenderTheme = {
     bloomThreshold: 0.9,
     vignette: 0,
     noiseOpacity: 0,
-    contrast: 1.12,
-    saturation: 1.22,
+    contrast: 1.04,
+    saturation: 1.18,
   },
   materials: {
     unitBody: '#eef1fb',

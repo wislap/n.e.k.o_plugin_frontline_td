@@ -13,6 +13,7 @@ import {
   TiltShift,
   Vignette,
 } from '@react-three/postprocessing';
+import { KernelSize } from 'postprocessing';
 import { useRenderTheme } from './useTheme';
 
 export function PostEffects() {
@@ -35,6 +36,7 @@ export function PostEffects() {
           offset={post.dof.offset}
           focusArea={post.dof.focusArea}
           feather={post.dof.feather}
+          kernelSize={KernelSize.SMALL}
         />
       ) : (
         <></>

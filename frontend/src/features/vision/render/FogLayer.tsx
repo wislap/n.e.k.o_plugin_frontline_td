@@ -17,6 +17,10 @@ import { VISION_STATE_LAYER_ID } from '../protocol';
 
 const FOG_COLOR = '#05070d';
 const LIFT = 0.045;
+// Minimum film margin (cells) so the dark film always dissolves into a
+// smooth falloff several cells beyond the border instead of ending in a
+// straight edge at the map rect or skirt rim.
+const FOG_RIM_MARGIN = 10;
 const STATE_ALPHA = [Math.round(0.85 * 255), Math.round(0.45 * 255), 0] as const;
 
 // Texture uploads live in a module-scope helper: the react-compiler lint
@@ -47,6 +51,7 @@ export interface FogLayerProps {
 function createSoftFogMaterial(theme: {
   fogColor: string;
   fogStyle: 'plain' | 'survey' | 'dim';
+  fogWash?: boolean | undefined;
   background: { haze: string };
 }): THREE.ShaderMaterial {
   // Survey paper: explored cells get a dark ink film so dimmed terrain and
@@ -77,6 +82,8 @@ function createSoftFogMaterial(theme: {
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
       uStyle: { value: theme.fogStyle === 'survey' ? 3 : dim ? 4 : 0 },
+      uWash: { value: theme.fogWash === true ? 1 : 0 },
+      uMargin: { value: FOG_RIM_MARGIN },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -100,21 +107,33 @@ function createSoftFogMaterial(theme: {
       uniform vec2 uTexel;
       uniform vec2 uMapSize;
       uniform float uStyle;
+      uniform float uWash;
+      uniform float uMargin;
       varying vec2 vUv;
       varying vec3 vWorld;
       varying float vDist;
       float fogA(vec2 uv) { return texture2D(uMap, uv).g; }
       void main() {
-        vec2 o = uTexel * 0.8;
+        // Cells beyond the map rect (UV clamps to border texels, so the
+        // film holds the border state just past the edge, then dissolves
+        // over the outer margin — never a straight-edged step.
+        float oob = max(
+          max(-vUv.x, vUv.x - 1.0) * uMapSize.x,
+          max(-vUv.y, vUv.y - 1.0) * uMapSize.y);
+        // Widen the blur kernel near the border so the vision-state
+        // transition softens over ~2.5 cells instead of reading as a line.
+        vec2 o = uTexel * mix(0.8, 2.5, smoothstep(-8.0, 2.0, oob));
         float a = fogA(vUv) * 0.44
           + (fogA(vUv + vec2(o.x, 0.0)) + fogA(vUv - vec2(o.x, 0.0))
            + fogA(vUv + vec2(0.0, o.y)) + fogA(vUv - vec2(0.0, o.y))) * 0.14;
         a = smoothstep(0.05, 0.95, a);
-        // Beyond the map rect the UV clamps to border texels; ramp the
-        // film gradually toward fully unexplored across the skirt so the
-        // map boundary never reads as a hard slab edge.
-        float oob = max(max(-vUv.x, vUv.x - 1.0), max(-vUv.y, vUv.y - 1.0));
-        a = max(a, smoothstep(0.0, 0.22, oob) * 0.9);
+        // Outside the rect the film keeps the border state for ~1.5 cells,
+        // then blends smoothly to full unexplored — the darkening reads as
+        // a radial falloff starting beyond the edge, never a hard line.
+        a = mix(a, 0.85, smoothstep(1.5, 7.0, oob));
+        // And dissolves entirely before the film's outer rim so it never
+        // ends in a visible hard edge against the void or horizon.
+        a *= 1.0 - smoothstep(uMargin * 0.55, uMargin * 0.95, oob);
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
@@ -125,7 +144,7 @@ function createSoftFogMaterial(theme: {
           // distance so far fog merges into the horizon.
           float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
           vec3 col = mix(uColor, uHaze, hz * 0.65);
-          float alpha = a * mix(0.35, 0.6, unexplored);
+          float alpha = a * mix(0.35, mix(0.6, 0.42, uWash), unexplored);
           gl_FragColor = vec4(col, alpha);
           return;
         }
@@ -145,7 +164,7 @@ function createSoftFogMaterial(theme: {
         col = mix(col, uPattern, pat * unexplored * 0.6);
         // Survey keeps the explored film thinner so the info2d treatment
         // (desaturated/darkened world + bright markers) stays readable.
-        float exploredA = uStyle > 2.5 ? 0.45 : 0.72;
+        float exploredA = uStyle > 2.5 ? 0.26 : 0.72;
         float alpha = a * mix(exploredA, 1.0, unexplored);
         gl_FragColor = vec4(col, alpha);
       }
@@ -198,12 +217,16 @@ export function FogLayer({ client, map }: FogLayerProps) {
         grid.ramps,
         [{ r: 1, g: 1, b: 1 }],
       );
-      // Extend the film over the out-of-bounds skirt (dim-fog themes):
-      // out-of-range UV clamps to the border texels, so the dark film
-      // continues past the map edge with no visible seam.
+      // Extend the film past the map rect so it can dissolve over a few
+      // cells instead of ending at a straight edge: out-of-range UV clamps
+      // to the border texels, and the shader fades alpha over the outer
+      // half of the margin.
+      const margin = theme.fogSoft
+        ? Math.max(theme.terrain.skirtCells, FOG_RIM_MARGIN)
+        : theme.terrain.skirtCells;
       const skirt =
-        theme.terrain.skirtCells > 0
-          ? buildOutskirtsGeometry(grid.width, grid.height, grid.heights, theme.terrain.skirtCells)
+        margin > 0
+          ? buildOutskirtsGeometry(grid.width, grid.height, grid.heights, grid.ramps, margin)
           : null;
       const vertCount = data.positions.length / 3 + (skirt?.positions.length ?? 0) / 3;
       const positions = new Float32Array(vertCount * 3);
@@ -262,6 +285,10 @@ export function FogLayer({ client, map }: FogLayerProps) {
         uTexel?.value.set(1 / grid.width, 1 / grid.height);
         const uMapSize = mat.uniforms['uMapSize'] as { value: THREE.Vector2 } | undefined;
         uMapSize?.value.set(grid.width, grid.height);
+        const uMargin = mat.uniforms['uMargin'] as { value: number } | undefined;
+        if (uMargin !== undefined) {
+          uMargin.value = margin;
+        }
         const uMap = mat.uniforms['uMap'] as { value: THREE.DataTexture } | undefined;
         if (uMap !== undefined) {
           uMap.value = texture;

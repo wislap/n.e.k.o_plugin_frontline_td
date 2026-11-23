@@ -2,8 +2,9 @@
 // nebula + stars) plus a far ground platform fading out radially toward
 // the map edge. All GPU objects are memoized per theme and disposed on
 // change/unmount (ADR 0050).
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { useRenderTheme } from './useTheme';
 import type { RenderTheme } from './themes';
 
@@ -51,9 +52,12 @@ function buildDomeMaterial(theme: RenderTheme): THREE.ShaderMaterial {
 
       void main() {
         float h = vDir.y;
-        vec3 col = h > 0.0
-          ? mix(uHorizon, uTop, pow(min(h * 1.6, 1.0), 0.7))
-          : mix(uHorizon, uBottom, min(-h * 2.5, 1.0));
+        // Smooth three-stop gradient: a continuous bottom→top ramp plus a
+        // wide gaussian horizon glow. The old two-sided exp blend pinned
+        // uHorizon to a thin stripe at h=0 that read as a stray ribbon at
+        // eye level wherever no platform/skirt hides it.
+        vec3 col = mix(uBottom, uTop, smoothstep(-0.55, 0.8, h));
+        col = mix(col, uHorizon, exp(-h * h * 18.0) * 0.55);
         if (uClouds > 0.5 && h > 0.02) {
           // Stylized anime cloud band: flat-bottomed blobs drifting with
           // azimuth, denser near the horizon, white against the gradient.
@@ -107,6 +111,14 @@ function buildPlatformMaterial(theme: RenderTheme): THREE.ShaderMaterial {
 
 export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; mapHeight: number }) {
   const theme = useRenderTheme();
+  const domeRef = useRef<THREE.Mesh>(null);
+  // Skybox-style: the dome follows the camera so its far limb can never
+  // expose the clear color — before, at max zoom-out the camera sat
+  // outside the map-centered sphere and the void showed through as a
+  // black wedge once the platform plane was removed for island themes.
+  useFrame(({ camera }) => {
+    domeRef.current?.position.copy(camera.position);
+  });
 
   const dome = useMemo(() => {
     if (theme.background.kind === 'none') {
@@ -118,7 +130,10 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
   }, [theme]);
 
   const platform = useMemo(() => {
-    if (theme.background.kind === 'none') {
+    // Floating-island themes replace the far platform entirely — the island
+    // block + contact shadow carry the ground read; a platform disc would
+    // slice the void as a visible edge-on streak at the horizon.
+    if (theme.background.kind === 'none' || theme.terrain.island !== undefined) {
       return null;
     }
     const radius = DOME_RADIUS * 0.98;
@@ -147,26 +162,29 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
     };
   }, [platform]);
 
-  if (theme.background.kind === 'none' || dome === null || platform === null) {
+  if (theme.background.kind === 'none' || dome === null) {
     return null;
   }
   return (
     <group key={theme.id}>
       <mesh
+        ref={domeRef}
         geometry={dome.geo}
         material={dome.mat}
         position={[mapWidth / 2, 0, mapHeight / 2]}
         renderOrder={-10}
         frustumCulled={false}
       />
-      <mesh
-        geometry={platform.geo}
-        material={platform.mat}
-        position={[mapWidth / 2, -0.4, mapHeight / 2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        renderOrder={-9}
-        frustumCulled={false}
-      />
+      {platform !== null && (
+        <mesh
+          geometry={platform.geo}
+          material={platform.mat}
+          position={[mapWidth / 2, -0.4, mapHeight / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={-9}
+          frustumCulled={false}
+        />
+      )}
     </group>
   );
 }

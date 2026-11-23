@@ -8,9 +8,12 @@ import type { RenderTheme } from './types';
 export const DIORAMA_THEME: RenderTheme = {
   id: 'diorama',
   accent: '#e2764a',
-  exposure: 0.82,
+  exposure: 0.52,
   toneMapping: 'agx',
   environment: 'pmrem-sky',
+  // The near-white studio sky would otherwise drown materials in ambient
+  // light — keep the pale void but cut its IBL contribution hard.
+  envIntensity: 0.35,
   outline: '#4a4038',
   // Survey paper fog: pale cartography sheet with height contours + dot
   // grid — reads as the "unexplored" page of the model's map.
@@ -23,10 +26,10 @@ export const DIORAMA_THEME: RenderTheme = {
     hemiGround: '#a89a80',
     hemiIntensity: 0.6,
     sunColor: '#fff2dc',
-    sunIntensity: 1.2,
+    sunIntensity: 1.0,
     sunDir: [-0.45, 0.65, -0.4],
     rimColor: '#ffffff',
-    rimIntensity: 0.35,
+    rimIntensity: 0.22,
     rimDir: [0.55, 0.35, 0.6],
     shadow: true,
   },
@@ -49,8 +52,8 @@ export const DIORAMA_THEME: RenderTheme = {
     skirtCells: 0,
     pedestal: false,
     island: {
-      depth: 10,
-      strata: ['#8a715a', '#7a6350', '#64513f', '#52433a', '#43362c'],
+      depth: 22,
+      strata: ['#a5825f', '#7d6247', '#5c4a37', '#463a2c', '#332a20'],
       shadowGap: 5,
     },
     // Pale paper slate for the info view — ink lines carry the read.
@@ -60,19 +63,19 @@ export const DIORAMA_THEME: RenderTheme = {
     enabled: true,
     aoIntensity: 1.3,
     aoRadius: 0.5,
-    bloomIntensity: 0.15,
-    bloomThreshold: 0.92,
+    bloomIntensity: 0.1,
+    bloomThreshold: 0.97,
     vignette: 0.15,
     noiseOpacity: 0.02,
-    contrast: 1.03,
-    saturation: 0.92,
-    dof: { offset: 0.38, focusArea: 0.45, feather: 0.35 },
+    contrast: 1.06,
+    saturation: 0.98,
+    dof: { offset: 0.4, focusArea: 0.3, feather: 0.55 },
   },
   materials: {
     // Toy paint: pastel shells, warm grey chassis, coral accent strips.
-    unitBody: '#d9d2c0',
+    unitBody: '#b5ac94',
     unitTrim: '#4d463c',
-    structureBody: '#dbd4c2',
+    structureBody: '#b8af97',
     structureTrim: '#514a40',
     unitEmissive: 'faction',
     structureEmissive: '#f0a860',
@@ -89,11 +92,12 @@ export const DIORAMA_THEME: RenderTheme = {
   },
   scatter: { kind: 'meadow', density: 0.5 },
   background: {
-    // Soft neutral studio void — no platform, the island floats.
+    // Soft neutral studio void — no platform, the island floats. All
+    // three stops stay within ~4% so no band/ring can form at any pitch.
     kind: 'sky',
-    top: '#f4f1ea',
-    horizon: '#eae5da',
-    bottom: '#d5cec0',
+    top: '#ece7db',
+    horizon: '#e7e2d4',
+    bottom: '#e2dcc9',
     platform: '#dcd6c8',
     platformFadeStart: 0,
     platformFadeEnd: 0.5,
