@@ -150,7 +150,7 @@ const VISUAL: RenderVisual = {
   accent: '#FFE600',
   exposure: 0.9,
   toneMapping: 'agx',
-  fogColor: '#3d453a',
+  fogColor: '#181d18',
   fogSoft: true,
   // Fog sits past the map: at overview distance it only catches the
   // skirt rim and the horizon, never the playfield itself.
@@ -162,7 +162,7 @@ const VISUAL: RenderVisual = {
     // Hemisphere is dimmed — most ambient comes from the PMREM sky.
     hemiSky: '#bcd8ee',
     hemiGround: '#5f7f4d',
-    hemiIntensity: 0.4,
+    hemiIntensity: 0.32,
     sunColor: '#fff0d0',
     sunIntensity: 2.1,
     sunDir: [-0.55, 0.6, -0.42],
@@ -196,7 +196,7 @@ const VISUAL: RenderVisual = {
     aoRadius: 0.55,
     bloomIntensity: 0.25,
     bloomThreshold: 0.9,
-    vignette: 0,
+    vignette: 0.2,
     noiseOpacity: 0,
     contrast: 1.06,
     saturation: 1.08,
@@ -205,9 +205,9 @@ const VISUAL: RenderVisual = {
     // Painted plates read as ~0.8 albedo off-white under AgX — below the
     // clip point so sun highlights keep tonal variation.
     unitBody: '#d8d9d1',
-    unitTrim: '#25282a',
+    unitTrim: '#0f1113',
     structureBody: '#d9dad2',
-    structureTrim: '#26292c',
+    structureTrim: '#101214',
     unitEmissive: 'faction',
     structureEmissive: '#ff9a2a',
     emissiveBoost: 1.2,
@@ -233,7 +233,7 @@ const VISUAL: RenderVisual = {
   },
   geometry: { bevel: 0.04 },
   pad: {
-    color: '#26292c',
+    color: '#000000',
     edge: '#ff9a2a',
     margin: 0.35,
     height: 0.12,
@@ -250,7 +250,7 @@ export type PaletteId = (typeof PALETTE_IDS)[number];
 // paint, warm earth, warm void — while keeping field's value range.
 const WARM: RenderVisual = {
   ...VISUAL,
-  fogColor: '#4a4438',
+  fogColor: '#1c1814',
   lighting: {
     ...VISUAL.lighting,
     hemiSky: '#c8d8e8',
@@ -279,7 +279,7 @@ const WARM: RenderVisual = {
     platform: '#a8ab72',
     haze: '#ece0c8',
   },
-  pad: { ...VISUAL.pad, color: '#33302a', edge: '#f0a860' },
+  pad: { ...VISUAL.pad, color: '#060504', edge: '#f0a860' },
 };
 
 function hexLerp(a: string, b: string, t: number): string {

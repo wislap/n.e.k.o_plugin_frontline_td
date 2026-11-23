@@ -17,8 +17,9 @@ export function createPadMaterial(theme: RenderVisual): {
   const uniforms: PadUniforms = { info2d: { value: 0 } };
   const mat = new THREE.MeshStandardMaterial({
     color: pad.color,
-    roughness: 0.55,
-    metalness: 0.25,
+    roughness: 0.9,
+    metalness: 0.0,
+    envMapIntensity: 0.0,
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms['uEdge'] = { value: new THREE.Color(pad.edge) };

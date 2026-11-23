@@ -73,7 +73,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
           const cargoKey = localName(id);
           const rateMilli = rates[cargo] ?? 0;
           return (
-            <div key={id} className={styles['row']}>
+            <div key={id} className={styles['row']} data-cargo={cargoKey}>
               <IconCargo id={cargoKey} size={13} className={styles['cargoIcon']} />
               <span className={styles['cargoName']}>
                 {t(`cargo.${cargoKey}`, { defaultValue: cargoKey })}

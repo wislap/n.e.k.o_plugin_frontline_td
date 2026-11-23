@@ -26,6 +26,20 @@
   color: var(--text-muted);
 }
 
+/* Per-resource glyph colours (visual hierarchy by colour, not opacity). */
+.row[data-cargo='ore'] .cargoIcon {
+  color: #d9a45b;
+}
+.row[data-cargo='material'] .cargoIcon {
+  color: #9fb8cc;
+}
+.row[data-cargo='energy'] .cargoIcon {
+  color: var(--semantic-warn);
+}
+.row[data-cargo='ammo'] .cargoIcon {
+  color: #ff8a5c;
+}
+
 .cargoName {
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -145,7 +159,7 @@
 }
 
 .cargoIcon {
-  color: rgba(246, 248, 242, 0.9);
+  filter: drop-shadow(0 1px 3px rgba(10, 14, 10, 0.65));
 }
 
 .cargoName {

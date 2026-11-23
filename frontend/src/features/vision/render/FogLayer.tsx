@@ -15,12 +15,15 @@ import { useRenderTheme } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 
-const LIFT = 0.045;
-// Minimum film margin (cells) so the dark film always dissolves into a
-// smooth falloff several cells beyond the border instead of ending in a
-// straight edge at the map rect or skirt rim.
-const FOG_RIM_MARGIN = 10;
-const STATE_ALPHA = [Math.round(0.85 * 255), Math.round(0.45 * 255), 0] as const;
+// Lift + polygonOffset keep the film a hair above the ground: at grazing
+// overview angles a tiny constant lift loses depth precision and the film
+// z-fights the terrain, reading as dirty horizontal contour stripes.
+const LIFT = 0.1;
+// Film margin (cells): the film only hands the border vision state off to
+// the terrain shader's out-of-bounds dim — extending it over the skirt
+// hills made hill crests occlude the film, which read as contour stripes.
+const FOG_RIM_MARGIN = 5;
+const STATE_ALPHA = [Math.round(0.95 * 255), Math.round(0.55 * 255), 0] as const;
 
 // Texture uploads live in a module-scope helper: the react-compiler lint
 // treats hook-derived objects (refs) as immutable, so mutations of the
@@ -54,6 +57,9 @@ function createSoftFogMaterial(theme: {
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
     uniforms: {
       uColor: { value: new THREE.Color(theme.fogColor) },
       uHaze: { value: new THREE.Color(theme.background.haze || theme.fogColor) },
@@ -103,10 +109,13 @@ function createSoftFogMaterial(theme: {
           + (fogA(vUv + vec2(o.x, 0.0)) + fogA(vUv - vec2(o.x, 0.0))
            + fogA(vUv + vec2(0.0, o.y)) + fogA(vUv - vec2(0.0, o.y))) * 0.14;
         a = smoothstep(0.05, 0.95, a);
-        // Outside the rect the film keeps the border state for ~1.5 cells,
-        // then blends smoothly to full unexplored — the darkening reads as
-        // a radial falloff starting beyond the edge, never a hard line.
-        a = mix(a, 0.85, smoothstep(2.0, 16.0, oob));
+        // Outside the rect the border state would otherwise smear outward:
+        // clamped border texels keep their per-cell alpha (explored vs
+        // unexplored) as dirty radial streaks for the whole blend range.
+        // Converge to full unexplored within ~5 cells so the smear dies
+        // inside the falloff — the darkening still reads as a smooth
+        // radial falloff starting just beyond the edge, never a hard line.
+        a = mix(a, 0.85, smoothstep(1.5, 5.0, oob));
         // And dissolves entirely before the film's outer rim so it never
         // ends in a visible hard edge against the void or horizon.
         a *= 1.0 - smoothstep(uMargin * 0.55, uMargin * 0.95, oob);
@@ -118,7 +127,12 @@ function createSoftFogMaterial(theme: {
         // rim, so its edge never reads as a dark ring over the hazed skirt.
         float rim = smoothstep(uMargin * 0.35, uMargin * 0.9, oob);
         vec3 col = mix(uColor, uHaze, max(hz * 0.65, rim));
-        float alpha = a * mix(0.35, 0.6, unexplored);
+        float alpha = a * mix(0.35, 0.85, unexplored);
+        // Past the border nothing beneath the film needs to read: a
+        // translucent film over lit skirt hills shows their shading as
+        // dirty smears, so the film converges to near-opaque over the
+        // same falloff band and the darkening stays smooth.
+        alpha = mix(alpha, 0.92, smoothstep(1.0, 4.0, oob));
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -167,23 +181,23 @@ export function FogLayer({ client, map }: FogLayerProps) {
       // cells instead of ending at a straight edge: out-of-range UV clamps
       // to the border texels, and the shader fades alpha over the outer
       // half of the margin.
-      const margin = Math.max(theme.terrain.skirtCells, FOG_RIM_MARGIN);
-      const skirt =
-        margin > 0
-          ? buildOutskirtsGeometry(grid.width, grid.height, grid.heights, grid.ramps, margin)
-          : null;
-      const vertCount = data.positions.length / 3 + (skirt?.positions.length ?? 0) / 3;
+      const skirt = buildOutskirtsGeometry(
+        grid.width,
+        grid.height,
+        grid.heights,
+        grid.ramps,
+        FOG_RIM_MARGIN,
+      );
+      const vertCount = data.positions.length / 3 + skirt.positions.length / 3;
       const positions = new Float32Array(vertCount * 3);
       const uvs = new Float32Array(vertCount * 2);
-      const indices = new Uint32Array(data.indices.length + (skirt?.indices.length ?? 0));
+      const indices = new Uint32Array(data.indices.length + skirt.indices.length);
       positions.set(data.positions);
       indices.set(data.indices);
       const skirtVertBase = data.positions.length / 3;
-      if (skirt !== null) {
-        positions.set(skirt.positions, data.positions.length);
-        for (let i = 0; i < skirt.indices.length; i++) {
-          indices[data.indices.length + i] = (skirt.indices[i] ?? 0) + skirtVertBase;
-        }
+      positions.set(skirt.positions, data.positions.length);
+      for (let i = 0; i < skirt.indices.length; i++) {
+        indices[data.indices.length + i] = (skirt.indices[i] ?? 0) + skirtVertBase;
       }
       for (let i = 1; i < positions.length; i += 3) {
         positions[i] = (positions[i] ?? 0) + LIFT;
@@ -216,7 +230,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
       uMapSize?.value.set(grid.width, grid.height);
       const uMargin = mat.uniforms['uMargin'] as { value: number } | undefined;
       if (uMargin !== undefined) {
-        uMargin.value = margin;
+        uMargin.value = FOG_RIM_MARGIN;
       }
       const uMap = mat.uniforms['uMap'] as { value: THREE.DataTexture } | undefined;
       if (uMap !== undefined) {
@@ -227,12 +241,16 @@ export function FogLayer({ client, map }: FogLayerProps) {
     }
     const soft = softMatRef.current;
     if (soft !== null) {
-      // Tactical info view keeps the dark slate; only the 3D spectate
-      // camera fades far fog into the sky haze.
+      // Tactical info view keeps a neutral dark slate; only the 3D
+      // spectate camera uses the (possibly warm) film color and fades
+      // far fog into the sky haze.
+      const tactical = useCameraStore.getState().mode === 'tactical';
       const uHazeAmt = soft.uniforms['uHazeAmt'] as { value: number } | undefined;
       if (uHazeAmt !== undefined) {
-        uHazeAmt.value = useCameraStore.getState().mode === 'tactical' ? 0 : 1;
+        uHazeAmt.value = tactical ? 0 : 1;
       }
+      const uColor = soft.uniforms['uColor'] as { value: THREE.Color } | undefined;
+      uColor?.value.set(tactical ? '#333c3a' : theme.fogColor);
     }
     const latest = client.snapshots().latest;
     if (latest === null) {

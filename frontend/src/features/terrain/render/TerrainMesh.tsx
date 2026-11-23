@@ -201,9 +201,13 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         theme.terrain.skirtCells > 0 && theme.background.haze !== ''
           ? {
               color: theme.background.haze,
-              start: theme.terrain.skirtCells * 0.3,
-              end: theme.terrain.skirtCells * 0.95,
+              start: theme.terrain.skirtCells * 0.15,
+              end: theme.terrain.skirtCells * 0.8,
             }
+          : undefined,
+      oobDim:
+        theme.terrain.skirtCells > 0
+          ? { color: theme.fogColor, start: 0.5, end: theme.terrain.skirtCells * 0.4 }
           : undefined,
     });
   }, [theme, heights, width, height]);

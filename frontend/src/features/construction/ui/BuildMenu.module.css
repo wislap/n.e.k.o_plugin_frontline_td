@@ -165,14 +165,45 @@
   background: rgba(18, 22, 20, 0.78);
 }
 
+/* One horizontal row: tiles scroll sideways instead of wrapping into a
+   second row that clips at the bottom edge. */
 .grid {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 6px;
 }
 
 .card {
+  flex: 0 0 148px;
   border: none;
   border-radius: 12px;
   background: rgba(18, 22, 20, 0.78);
+}
+
+/* Hairline corner ticks overshooting each tile corner (glass frames). */
+.card::before {
+  top: -5px;
+  bottom: -5px;
+  left: -1px;
+  right: -1px;
+  width: auto;
+  height: auto;
+  border-left: 1px solid rgba(255, 255, 255, 0.5);
+  border-right: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: -5px;
+  right: -5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none;
 }
 
 .card:hover {
@@ -182,6 +213,17 @@
 .cardActive {
   border: 1px solid var(--mode-accent);
   box-shadow: 0 0 14px var(--mode-accent-glow);
+}
+
+.cardActive::before {
+  background: none;
+  border-left-color: var(--mode-accent);
+  border-right-color: var(--mode-accent);
+}
+
+.cardActive::after {
+  border-top-color: var(--mode-accent);
+  border-bottom-color: var(--mode-accent);
 }
 
 .thumb {

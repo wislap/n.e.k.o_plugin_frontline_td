@@ -16,6 +16,10 @@ export interface ThemedTerrainParams {
   // Skirt mode: fade the surface toward the horizon haze color outside
   // the map rect (distance in cells past the border).
   hazeFade?: { color: string; start: number; end: number } | undefined;
+  // Out-of-map dim: darken the ground toward the fog-film color just past
+  // the border so the unexplored halo comes from surface shading — a
+  // conforming overlay film reads as stripes where skirt hills occlude it.
+  oobDim?: { color: string; start: number; end: number } | undefined;
 }
 
 // Shared mutable uniforms (module-scope, mutated per frame by callers):
@@ -32,12 +36,14 @@ export function createThemedTerrainMaterial(
   const t = theme.terrain;
   const uniforms: ThemedTerrainUniforms = { info2d: { value: 0 } };
   const haze = params.hazeFade;
+  const dim = params.oobDim;
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.95,
     metalness: 0,
   });
   mat.onBeforeCompile = (shader) => {
+    (mat as unknown as { _dbg?: unknown })._dbg = shader;
     shader.uniforms['uRampLow'] = { value: new THREE.Color(t.rampLow) };
     shader.uniforms['uRampHigh'] = { value: new THREE.Color(t.rampHigh) };
     shader.uniforms['uRampStrength'] = { value: t.rampStrength };
@@ -60,6 +66,11 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uHazeColor'] = { value: new THREE.Color(haze?.color ?? '#000000') };
     shader.uniforms['uHazeRange'] = {
       value: new THREE.Vector2(haze?.start ?? 0, Math.max(haze?.end ?? 1, 0.001)),
+    };
+    shader.uniforms['uDimOn'] = { value: dim === undefined ? 0 : 1 };
+    shader.uniforms['uDimColor'] = { value: new THREE.Color(dim?.color ?? '#000000') };
+    shader.uniforms['uDimRange'] = {
+      value: new THREE.Vector2(dim?.start ?? 0, Math.max(dim?.end ?? 1, 0.001)),
     };
     shader.uniforms['uHRange'] = {
       value: new THREE.Vector2(
@@ -106,6 +117,9 @@ export function createThemedTerrainMaterial(
         uniform float uHazeOn;
         uniform vec3 uHazeColor;
         uniform vec2 uHazeRange;
+        uniform float uDimOn;
+        uniform vec3 uDimColor;
+        uniform vec2 uDimRange;
         uniform vec2 uHRange;
         uniform vec2 uMapSize;
         varying vec3 vTerWorld;
@@ -183,16 +197,34 @@ export function createThemedTerrainMaterial(
           diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, cliffM);
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
+        }`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        `#include <opaque_fragment>
+        {
+          // Out-of-bounds dim + horizon haze run post-lighting: applied to
+          // albedo they only tint the skirt, so sun/AO still modulate it
+          // and hill shading bands through the fog film as dirty contour
+          // stripes. Post-lighting the outskirts converge to flat falloff
+          // colours — smooth radial darkening, no shading bands.
+          float dOut2 = terEdgeDist(vTerWorld.xz, uMapSize);
+          if (uDimOn > 0.5) {
+            gl_FragColor.rgb = mix(
+              gl_FragColor.rgb,
+              uDimColor,
+              smoothstep(uDimRange.x, uDimRange.y, dOut2)
+            );
+          }
+          if (uHazeOn > 0.5) {
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut2));
+          }
           // Tactical info view (弱化显示): sink the ground into a dark
           // slate grey-green so markers read as the bright layer on top.
-          float grey = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-          vec3 slate = vec3(grey) * uInfo2DTint;
-          diffuseColor.rgb = mix(diffuseColor.rgb, slate, uInfo2D);
-          // Out-of-bounds skirt: blend into the horizon haze by distance
-          // outside the map rect.
-          if (uHazeOn > 0.5) {
-            diffuseColor.rgb = mix(diffuseColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
-          }
+          // Applied post-lighting so sun warmth, fill light and grading
+          // cannot lift the map back toward pale olive.
+          float grey = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(grey) * uInfo2DTint, uInfo2D);
         }`,
       );
   };

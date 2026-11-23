@@ -164,8 +164,8 @@
   top: -1px;
   bottom: -1px;
   height: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.42);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55);
   background: none;
   box-shadow: none;
   pointer-events: none;
@@ -180,8 +180,8 @@
   bottom: -5px;
   left: -1px;
   right: -1px;
-  border-left: 1px solid rgba(255, 255, 255, 0.42);
-  border-right: 1px solid rgba(255, 255, 255, 0.42);
+  border-left: 1px solid rgba(255, 255, 255, 0.55);
+  border-right: 1px solid rgba(255, 255, 255, 0.55);
   background: none;
   pointer-events: none;
   z-index: 2;

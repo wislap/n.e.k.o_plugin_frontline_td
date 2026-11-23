@@ -191,7 +191,6 @@ export function InspectorPanel({
   return (
     <TacticalPanel
       tone={tone}
-      compact
       title={subjectTitle(view, t)}
       badge={badge}
       headerActions={

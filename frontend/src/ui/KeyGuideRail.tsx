@@ -27,7 +27,6 @@ export function KeyGuideRail() {
   return (
     <TacticalPanel
       tone="mode"
-      compact
       title={t('hud.guide_title')}
       headerActions={
         <ActionButton size="sm" variant="ghost" kbd="K" onClick={toggle}>

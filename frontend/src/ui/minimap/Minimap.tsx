@@ -269,7 +269,6 @@ export function Minimap({
     <div className={styles['wrapper']} data-testid="minimap-panel">
       <TacticalPanel
         tone="mode"
-        compact
         className={styles['panel']}
         bodyClassName={styles['body']}
         title={t('minimap.title')}
