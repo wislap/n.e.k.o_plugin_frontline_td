@@ -53,3 +53,21 @@
   border: 1px solid rgba(244, 246, 238, 0.85);
   border-radius: 50%;
 }
+
+/* cel skin: rounded-square minimap card with ink frame. */
+:global([data-ui-skin='cel']) .frame {
+  border: 2px solid rgba(58, 53, 96, 0.4);
+  border-radius: 14px;
+}
+
+/* glass skin: square frosted frame with extended corner ticks. */
+:global([data-ui-skin='glass']) .frame {
+  border: 1px solid rgba(235, 245, 240, 0.35);
+  border-radius: 3px;
+}
+
+/* paper skin: softly rounded paper frame. */
+:global([data-ui-skin='paper']) .frame {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+}

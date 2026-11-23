@@ -409,11 +409,8 @@ export function buildOutskirtsGeometry(
   const nodeY = (ix: number, iy: number): number => {
     const x = ix - s;
     const y = iy - s;
-    const d = distOutside(x - 0.5, y - 0.5);
-    const base = edgeH(
-      Math.min(Math.max(x - 1, 0), width - 1),
-      Math.min(Math.max(y - 1, 0), height - 1),
-    );
+    const d = distOutside(x, y);
+    const base = edgeH(x, y);
     const rim = 1 - Math.min(Math.max((d / s - 0.75) / 0.25, 0), 1);
     const amp = Math.min(d * 0.45, 1.7);
     const hills =
@@ -441,7 +438,7 @@ export function buildOutskirtsGeometry(
     const y = nodeY(ix, iy);
     const shade = nodeShade(ix, iy, y);
     idx = positions.length / 3;
-    positions.push(ix - s + 0.5, y, iy - s + 0.5);
+    positions.push(ix - s, y, iy - s);
     colors.push(shade, shade, shade);
     nodeIndex[key] = idx;
     return idx;
@@ -449,10 +446,12 @@ export function buildOutskirtsGeometry(
 
   for (let iy = 0; iy < ny; iy++) {
     for (let ix = 0; ix < nx; ix++) {
-      // Quad cells fully inside the map rect are covered by TerrainMesh.
+      // Quad cells fully inside the map rect are covered by TerrainMesh,
+      // which spans [0, width] x [0, height]; skipping anything less leaves
+      // a double-drawn edge column/row that reads as a darker slab rim.
       const x0 = ix - s;
       const y0 = iy - s;
-      const inside = x0 >= -1 && y0 >= -1 && x0 < width && y0 < height;
+      const inside = x0 >= 0 && y0 >= 0 && x0 < width && y0 < height;
       if (inside) {
         continue;
       }
@@ -464,6 +463,83 @@ export function buildOutskirtsGeometry(
     }
   }
 
+  return {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    indices: new Uint32Array(indices),
+  };
+}
+
+// Diorama floating island: a tapered block under the map with soil/rock
+// strata vertex colors banded on its sides (no top face — the terrain
+// covers it). topY is the terrain edge height in world units so the rim
+// tucks just under the map edge.
+export function buildIslandGeometry(
+  width: number,
+  height: number,
+  topY: number,
+  depth: number,
+  strata: readonly string[],
+): { positions: Float32Array; colors: Float32Array; indices: Uint32Array } {
+  const inset = Math.min(width, height) * 0.28;
+  const bottomY = topY - depth;
+  const strataRgb = strata.map(parseHexColor);
+  const bandCount = Math.max(strataRgb.length, 1);
+
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const emitVert = (x: number, y: number, z: number): number => {
+    const band = Math.min(
+      bandCount - 1,
+      Math.max(0, Math.floor(((topY - y) / Math.max(depth, 1e-3)) * bandCount)),
+    );
+    const rgb = strataRgb[band] ?? { r: 0.5, g: 0.4, b: 0.3 };
+    positions.push(x, y, z);
+    colors.push(rgb.r, rgb.g, rgb.b);
+    return positions.length / 3 - 1;
+  };
+  // Each wall is a column of bandCount strips so the strata read as
+  // discrete soil/rock layers, each strip slightly more inset downward.
+  const LIP = 0.5;
+  const wall = (x0: number, z0: number, x1: number, z1: number, dx: number, dz: number): void => {
+    const cx = width / 2;
+    const cz = height / 2;
+    const k = (inset / Math.min(width, height)) * 2.6;
+    const lerp = (a: number, c: number, f: number): number => a + (c - a) * f * k;
+    for (let b = 0; b < bandCount; b++) {
+      const f0 = b / bandCount;
+      const f1 = (b + 1) / bandCount;
+      const y0 = topY - depth * f0;
+      const y1 = topY - depth * f1;
+      // The top band edge flares outward past the map rect so the wall
+      // tucks under the terrain edge at every height.
+      const mx0 = dx * LIP * (1 - f0);
+      const mz0 = dz * LIP * (1 - f0);
+      const mx1 = dx * LIP * (1 - f1);
+      const mz1 = dz * LIP * (1 - f1);
+      const a = emitVert(lerp(x0, cx, f0) + mx0, y0, lerp(z0, cz, f0) + mz0);
+      const bb = emitVert(lerp(x1, cx, f0) + mx0, y0, lerp(z1, cz, f0) + mz0);
+      const c = emitVert(lerp(x1, cx, f1) + mx1, y1, lerp(z1, cz, f1) + mz1);
+      const d = emitVert(lerp(x0, cx, f1) + mx1, y1, lerp(z0, cz, f1) + mz1);
+      indices.push(a, d, c, a, c, bb);
+    }
+  };
+  wall(0, 0, width, 0, 0, -1);
+  wall(width, 0, width, height, 1, 0);
+  wall(width, height, 0, height, 0, 1);
+  wall(0, height, 0, 0, -1, 0);
+  // Bottom face — same shrink factor as the deepest wall band (f = 1).
+  const k = (inset / Math.min(width, height)) * 2.6;
+  const bx0 = (width / 2) * k;
+  const bx1 = width * (1 - k / 2);
+  const bz0 = (height / 2) * k;
+  const bz1 = height * (1 - k / 2);
+  const p0 = emitVert(bx0, bottomY, bz0);
+  const p1 = emitVert(bx1, bottomY, bz0);
+  const p2 = emitVert(bx1, bottomY, bz1);
+  const p3 = emitVert(bx0, bottomY, bz1);
+  indices.push(p0, p3, p2, p0, p2, p1);
   return {
     positions: new Float32Array(positions),
     colors: new Float32Array(colors),

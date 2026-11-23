@@ -4,13 +4,24 @@
 // parsing only — skin CSS lives under src/ui/styles/.
 import type { ThemeId } from './theme';
 
-export const UI_SKIN_IDS = ['legacy', 'field'] as const;
+export const UI_SKIN_IDS = ['legacy', 'field', 'cel', 'glass', 'paper'] as const;
 export type UiSkinId = (typeof UI_SKIN_IDS)[number];
 
 // Each theme picks a default skin; the ?ui= param or the debug dropdown
 // can still override afterwards.
 export function defaultSkinFor(theme: ThemeId): UiSkinId {
-  return theme === 'legacy' ? 'legacy' : 'field';
+  switch (theme) {
+    case 'cel':
+      return 'cel';
+    case 'mist':
+      return 'glass';
+    case 'diorama':
+      return 'paper';
+    case 'legacy':
+      return 'legacy';
+    default:
+      return 'field';
+  }
 }
 
 export function uiSkinFromSearch(search: string): UiSkinId | null {

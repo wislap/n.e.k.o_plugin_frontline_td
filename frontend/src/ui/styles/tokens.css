@@ -106,3 +106,75 @@
   --radius-panel: 10px;
   --radius-btn: 8px;
 }
+
+/* `cel` skin: bright white cards with ink-blue text, chunky rounded
+   corners and a warm accent; headers become solid colour blocks. */
+[data-ui-skin='cel'] {
+  --surface-panel: rgba(253, 253, 255, 0.95);
+  --surface-elevated: #ffffff;
+  --surface-ghost: rgba(253, 253, 255, 0.85);
+  --surface-hover: rgba(58, 53, 96, 0.1);
+  --surface-inset: rgba(58, 53, 96, 0.08);
+  --backdrop-blur: blur(6px);
+  --border-subtle: rgba(58, 53, 96, 0.3);
+  --border-strong: rgba(58, 53, 96, 0.6);
+  --border-grid: rgba(58, 53, 96, 0.12);
+  --text-primary: #2d2752;
+  --text-secondary: #4a4480;
+  --text-muted: #7d77ab;
+  --mode-accent: #f0a500;
+  --mode-accent-dim: rgba(240, 165, 0, 0.16);
+  --mode-accent-glow: rgba(240, 165, 0, 0.3);
+  --radius-panel: 14px;
+  --radius-btn: 10px;
+  --shadow-panel: 0 3px 0 rgba(45, 39, 82, 0.16), 0 12px 28px rgba(45, 39, 82, 0.2);
+  --shadow-elevated: 0 3px 0 rgba(45, 39, 82, 0.14), 0 16px 36px rgba(45, 39, 82, 0.26);
+}
+
+/* `glass` skin: dark frosted glass — translucent panels with strong
+   backdrop blur, thin white hairline frames, microtext, lime accent. */
+[data-ui-skin='glass'] {
+  --surface-panel: rgba(13, 17, 18, 0.55);
+  --surface-elevated: rgba(17, 22, 23, 0.65);
+  --surface-ghost: rgba(13, 17, 18, 0.42);
+  --surface-hover: rgba(184, 245, 60, 0.1);
+  --surface-inset: rgba(6, 9, 10, 0.55);
+  --backdrop-blur: blur(18px) saturate(0.75);
+  --border-subtle: rgba(235, 245, 240, 0.26);
+  --border-strong: rgba(235, 245, 240, 0.5);
+  --border-grid: rgba(235, 245, 240, 0.09);
+  --text-primary: #eef4ee;
+  --text-secondary: #c2ccc2;
+  --text-muted: #7f8b83;
+  --mode-accent: #c8f542;
+  --mode-accent-dim: rgba(200, 245, 66, 0.14);
+  --mode-accent-glow: rgba(200, 245, 66, 0.32);
+  --radius-panel: 3px;
+  --radius-btn: 3px;
+  --shadow-panel: 0 6px 26px rgba(0, 0, 0, 0.42);
+  --shadow-elevated: 0 10px 34px rgba(0, 0, 0, 0.55);
+}
+
+/* `paper` skin: light paper cards — layered soft shadows, generous
+   rounding, ink text, single coral accent. */
+[data-ui-skin='paper'] {
+  --surface-panel: #f7f3e9;
+  --surface-elevated: #fbf8f0;
+  --surface-ghost: rgba(247, 243, 233, 0.88);
+  --surface-hover: rgba(110, 95, 65, 0.1);
+  --surface-inset: rgba(196, 184, 158, 0.4);
+  --backdrop-blur: none;
+  --border-subtle: rgba(94, 82, 60, 0.28);
+  --border-strong: rgba(94, 82, 60, 0.5);
+  --border-grid: rgba(94, 82, 60, 0.12);
+  --text-primary: #3a3428;
+  --text-secondary: #5c5340;
+  --text-muted: #8f8470;
+  --mode-accent: #e2764a;
+  --mode-accent-dim: rgba(226, 118, 74, 0.14);
+  --mode-accent-glow: rgba(226, 118, 74, 0.3);
+  --radius-panel: 12px;
+  --radius-btn: 9px;
+  --shadow-panel: 0 1px 3px rgba(90, 80, 60, 0.14), 0 14px 30px rgba(90, 80, 60, 0.16);
+  --shadow-elevated: 0 2px 4px rgba(90, 80, 60, 0.12), 0 20px 40px rgba(90, 80, 60, 0.2);
+}

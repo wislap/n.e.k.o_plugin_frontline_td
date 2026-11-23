@@ -1,0 +1,105 @@
+// Language 2 「赛璐」— anime cel shading: hard luminance bands on every
+// material, blue-violet shadow tones, chunky rounded shapes, ink-dark
+// outlines always on, a painted sky with stylized cloud bands, and
+// stylized grass clumps. The info2d map stays flat and bright so bold
+// outlines carry the tactical read.
+import type { RenderTheme } from './types';
+
+export const CEL_THEME: RenderTheme = {
+  id: 'cel',
+  accent: '#ffca2e',
+  exposure: 1.05,
+  toneMapping: 'agx',
+  environment: 'pmrem-sky',
+  outline: '#2d2752',
+  outlineAlways: true,
+  toon: true,
+  // Unexplored cells read as a soft blue-violet wash — coloured shadow,
+  // not black; explored keeps the bright flat palette.
+  fogColor: '#5a5f8e',
+  fogSoft: true,
+  fogStyle: 'dim',
+  info2d: true,
+  lighting: {
+    // Strong warm key + cool violet sky fill = anime shadow colour.
+    hemiSky: '#aebdf0',
+    hemiGround: '#7a86c0',
+    hemiIntensity: 0.75,
+    sunColor: '#fff3da',
+    sunIntensity: 2.4,
+    sunDir: [-0.5, 0.65, -0.45],
+    rimColor: '#e8ecff',
+    rimIntensity: 0.55,
+    rimDir: [0.55, 0.35, 0.6],
+    shadow: true,
+  },
+  terrain: {
+    // Saturated fresh meadow: deep grass → bright yellow-green.
+    rampLow: '#3f7d38',
+    rampHigh: '#9ccc5a',
+    rampStrength: 1,
+    cliffColor: '#8d97b8',
+    cliffStart: 0.55,
+    cliffEnd: 0.82,
+    gridStrength: 0.09,
+    grid3d: 0,
+    noiseAmp: 0,
+    dirt: '#a89268',
+    slopeDarken: 0.15,
+    edgeOcc: 0.08,
+    edgeFadeDist: 14,
+    skirtCells: 30,
+    pedestal: false,
+    // Info view stays a bright flat map — bold outlines carry structure.
+    info2dTint: [0.5, 0.56, 0.68],
+  },
+  post: {
+    enabled: true,
+    aoIntensity: 0.9,
+    aoRadius: 0.5,
+    bloomIntensity: 0.2,
+    bloomThreshold: 0.9,
+    vignette: 0,
+    noiseOpacity: 0,
+    contrast: 1.12,
+    saturation: 1.22,
+  },
+  materials: {
+    unitBody: '#eef1fb',
+    unitTrim: '#3a3560',
+    structureBody: '#f0f2fa',
+    structureTrim: '#454073',
+    unitEmissive: 'faction',
+    structureEmissive: '#7fd8ff',
+    emissiveBoost: 1.3,
+    roughness: 0.85,
+    metalness: 0,
+    detail: 0.5,
+  },
+  markers: {
+    accent: '#ffca2e',
+    secondary: '#2d2752',
+    invalid: '#e04848',
+    link: '#4ec8ff',
+  },
+  scatter: { kind: 'meadow', density: 0.6 },
+  background: {
+    kind: 'sky',
+    top: '#6fa8f0',
+    horizon: '#eaf3ff',
+    bottom: '#a8b8d8',
+    platform: '#8fb060',
+    platformFadeStart: 0.5,
+    platformFadeEnd: 1.05,
+    haze: '#dfe9fa',
+    clouds: true,
+  },
+  geometry: { bevel: 0.09 },
+  pad: {
+    color: '#3c3763',
+    edge: '#ffd23e',
+    margin: 0.35,
+    height: 0.12,
+    emissiveBoost: 1.4,
+  },
+};

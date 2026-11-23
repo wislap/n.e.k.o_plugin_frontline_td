@@ -104,3 +104,121 @@
   white-space: nowrap;
   text-shadow: 0 1px 6px rgba(10, 14, 10, 0.65);
 }
+
+/* cel skin: chunky squircle buttons, white with ink icons; labels left. */
+:global([data-ui-skin='cel']) .btn {
+  width: 38px;
+  min-height: 38px;
+  padding: 6px;
+  border: 2px solid rgba(58, 53, 96, 0.3);
+  border-radius: 12px;
+  background: rgba(253, 253, 255, 0.96);
+  color: #2d2752;
+}
+
+:global([data-ui-skin='cel']) .btn:hover:not(:disabled) {
+  border-color: rgba(58, 53, 96, 0.6);
+  background: #ffffff;
+}
+
+:global([data-ui-skin='cel']) .btnActive {
+  border-color: transparent;
+  background: var(--mode-accent);
+  color: #ffffff;
+}
+
+:global([data-ui-skin='cel']) .cap {
+  display: none;
+}
+
+:global([data-ui-skin='cel']) .lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  order: -1;
+  color: #fdfdff;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(20, 16, 50, 0.7);
+}
+
+/* glass skin: square hairline buttons, translucent, lime when active. */
+:global([data-ui-skin='glass']) .btn {
+  width: 34px;
+  min-height: 34px;
+  padding: 5px;
+  border: 1px solid rgba(235, 245, 240, 0.32);
+  border-radius: 3px;
+  background: rgba(13, 17, 18, 0.5);
+  backdrop-filter: blur(10px);
+  color: var(--text-secondary);
+}
+
+:global([data-ui-skin='glass']) .btn:hover:not(:disabled) {
+  border-color: rgba(235, 245, 240, 0.6);
+  color: var(--text-primary);
+}
+
+:global([data-ui-skin='glass']) .btnActive {
+  border-color: var(--mode-accent);
+  background: var(--mode-accent-dim);
+  color: var(--mode-accent);
+}
+
+:global([data-ui-skin='glass']) .cap {
+  display: none;
+}
+
+:global([data-ui-skin='glass']) .lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  order: -1;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* paper skin: paper circles with ink icons; ink labels left. */
+:global([data-ui-skin='paper']) .btn {
+  width: 38px;
+  min-height: 38px;
+  padding: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: #3a3428;
+  box-shadow: 0 2px 6px rgba(90, 80, 60, 0.2);
+}
+
+:global([data-ui-skin='paper']) .btn:hover:not(:disabled) {
+  background: #fffdf6;
+}
+
+:global([data-ui-skin='paper']) .btnActive {
+  border-color: transparent;
+  background: var(--mode-accent);
+  color: #fffdf6;
+}
+
+:global([data-ui-skin='paper']) .cap {
+  display: none;
+}
+
+:global([data-ui-skin='paper']) .lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  order: -1;
+  color: #fdfbf4;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(60, 50, 35, 0.7);
+}

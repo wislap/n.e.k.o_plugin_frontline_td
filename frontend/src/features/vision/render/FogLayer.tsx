@@ -110,6 +110,11 @@ function createSoftFogMaterial(theme: {
           + (fogA(vUv + vec2(o.x, 0.0)) + fogA(vUv - vec2(o.x, 0.0))
            + fogA(vUv + vec2(0.0, o.y)) + fogA(vUv - vec2(0.0, o.y))) * 0.14;
         a = smoothstep(0.05, 0.95, a);
+        // Beyond the map rect the UV clamps to border texels; ramp the
+        // film gradually toward fully unexplored across the skirt so the
+        // map boundary never reads as a hard slab edge.
+        float oob = max(max(-vUv.x, vUv.x - 1.0), max(-vUv.y, vUv.y - 1.0));
+        a = max(a, smoothstep(0.0, 0.22, oob) * 0.9);
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);

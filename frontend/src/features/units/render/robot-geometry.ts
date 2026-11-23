@@ -30,27 +30,36 @@ function part(
   return geo;
 }
 
-// Small hard-surface robot ~0.5 tall in unit space (scaled by the layer
-// to 2*radius wide × scale tall per unit kind).
+// Small hard-surface robot ~0.65 tall in unit space (scaled by the layer
+// to 2*radius wide × scale tall per unit kind). The silhouette reads as
+// a robot: wide graphite treads, a narrower white torso, shoulder pods
+// and a weapon barrel, plus a separate sensor head with visor + antenna.
 export function buildRobotGeometry(bevel: number): THREE.BufferGeometry {
   const r = (a: number, b: number, c: number) => Math.min(bevel, Math.min(a, b, c) * 0.1);
   const parts: THREE.BufferGeometry[] = [
-    // Treads: two dark graphite rails, tall enough to clear grass.
-    part(new RoundedBoxGeometry(0.28, 0.2, 0.5, 2, r(0.28, 0.2, 0.5)), -0.16, 0.1, 0, 1),
-    part(new RoundedBoxGeometry(0.28, 0.2, 0.5, 2, r(0.28, 0.2, 0.5)), 0.16, 0.1, 0, 1),
-    // Dark chassis plate bridging the treads — the visible graphite
-    // chassis line that separates shell from running gear.
-    part(new THREE.BoxGeometry(0.34, 0.07, 0.42), 0, 0.235, 0, 1),
-    // Body shell (white armor plates).
-    part(new RoundedBoxGeometry(0.42, 0.2, 0.36, 2, r(0.42, 0.2, 0.36)), 0, 0.36, 0, 0),
-    // Faction accent stripe along the shell top edge.
-    part(new THREE.BoxGeometry(0.43, 0.04, 0.37), 0, 0.43, 0, 2),
+    // Treads: two slim graphite rails set wide, taller than the torso is
+    // wide so the running gear reads under the shell.
+    part(new RoundedBoxGeometry(0.15, 0.22, 0.5, 2, r(0.15, 0.22, 0.5)), -0.2, 0.11, 0, 1),
+    part(new RoundedBoxGeometry(0.15, 0.22, 0.5, 2, r(0.15, 0.22, 0.5)), 0.2, 0.11, 0, 1),
+    // Dark chassis plate bridging the treads.
+    part(new THREE.BoxGeometry(0.3, 0.06, 0.38), 0, 0.25, 0, 1),
+    // Torso — noticeably narrower than the tread span.
+    part(new RoundedBoxGeometry(0.3, 0.24, 0.3, 2, r(0.3, 0.24, 0.3)), 0, 0.4, 0, 0),
+    // Faction accent stripe around the torso top edge.
+    part(new THREE.BoxGeometry(0.31, 0.045, 0.31), 0, 0.47, 0, 2),
+    // Shoulder pods — visible arms at torso height.
+    part(new RoundedBoxGeometry(0.1, 0.13, 0.16, 2, r(0.1, 0.13, 0.16)), -0.21, 0.45, 0.02, 0),
+    part(new RoundedBoxGeometry(0.1, 0.13, 0.16, 2, r(0.1, 0.13, 0.16)), 0.21, 0.45, 0.02, 0),
+    // Weapon barrel on the right shoulder, pointing forward.
+    part(new THREE.BoxGeometry(0.055, 0.055, 0.26), 0.21, 0.45, 0.2, 1),
     // Graphite neck joint so the head reads as a separate part.
-    part(new THREE.BoxGeometry(0.18, 0.07, 0.18), 0, 0.49, 0.02, 1),
-    // Head / sensor block, pushed forward.
-    part(new RoundedBoxGeometry(0.24, 0.13, 0.24, 2, r(0.24, 0.13, 0.24)), 0, 0.59, 0.05, 0),
+    part(new THREE.BoxGeometry(0.14, 0.06, 0.14), 0, 0.55, 0.02, 1),
+    // Sensor head, pushed forward — white shell over graphite.
+    part(new RoundedBoxGeometry(0.2, 0.12, 0.2, 2, r(0.2, 0.12, 0.2)), 0, 0.63, 0.05, 0),
     // Emissive visor slit on the head front.
-    part(new THREE.BoxGeometry(0.17, 0.05, 0.03), 0, 0.59, 0.18, 3),
+    part(new THREE.BoxGeometry(0.14, 0.04, 0.03), 0, 0.63, 0.16, 3),
+    // Antenna nub on the head rear-left — breaks the box silhouette.
+    part(new THREE.BoxGeometry(0.025, 0.12, 0.025), -0.07, 0.73, -0.02, 1),
   ];
   const merged = mergeGeometries(parts, false);
   for (const p of parts) {

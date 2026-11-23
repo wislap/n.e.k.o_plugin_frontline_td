@@ -26,7 +26,13 @@
     "ui_legacy": "Legacy",
     "ui_field": "晴野",
     "grass_density": "草密度",
-    "info2d": "2D 信息视图"
+    "info2d": "2D 信息视图",
+    "theme_cel": "赛璐",
+    "theme_mist": "雾境",
+    "theme_diorama": "沙盘",
+    "ui_cel": "赛璐",
+    "ui_glass": "玻璃",
+    "ui_paper": "纸面"
   },
   "hud": {
     "paused": "已暂停",

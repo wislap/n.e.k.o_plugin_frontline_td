@@ -7,6 +7,7 @@
 // horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
 import type { RenderTheme } from '../../../render/theme/index';
+import { applyToonBands } from '../../../render/theme/toonify';
 
 export interface ThemedTerrainParams {
   heightMin: number;
@@ -53,6 +54,9 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uEdgeOcc'] = { value: t.edgeOcc };
     shader.uniforms['uEdgeFade'] = { value: t.edgeFadeDist };
     shader.uniforms['uInfo2D'] = uniforms.info2d;
+    shader.uniforms['uInfo2DTint'] = {
+      value: new THREE.Vector3(...(t.info2dTint ?? [0.2, 0.26, 0.22])),
+    };
     shader.uniforms['uHazeOn'] = { value: haze === undefined ? 0 : 1 };
     shader.uniforms['uHazeColor'] = { value: new THREE.Color(haze?.color ?? '#000000') };
     shader.uniforms['uHazeRange'] = {
@@ -99,6 +103,7 @@ export function createThemedTerrainMaterial(
         uniform float uEdgeOcc;
         uniform float uEdgeFade;
         uniform float uInfo2D;
+        uniform vec3 uInfo2DTint;
         uniform float uHazeOn;
         uniform vec3 uHazeColor;
         uniform vec2 uHazeRange;
@@ -156,32 +161,38 @@ export function createThemedTerrainMaterial(
           vec2 g = abs(fract(terP - 0.5) - 0.5) / gw;
           float gline = 1.0 - min(min(g.x, g.y), 1.0);
           diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
+          float dOut = terEdgeDist(terP, uMapSize);
+          float inBounds = 1.0 - smoothstep(0.0, 1.5, dOut);
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
           // Cliff edges: where the up-normal changes fast across pixels the
           // fragment sits in a top/bottom transition band; brighten the top
-          // rim slightly and darken the cliff base.
+          // rim slightly and darken the cliff base. Skirt cells are exempt —
+          // their roll-off would otherwise paint a cliff stripe at the rim.
           float slopeChange = fwidth(ny);
           float topRim = smoothstep(0.12, 0.45, slopeChange) * smoothstep(0.55, 0.92, ny);
           float baseBand = smoothstep(0.12, 0.45, slopeChange) * (1.0 - smoothstep(0.05, 0.55, ny));
-          diffuseColor.rgb *= 1.0 + topRim * 0.12 - baseBand * 0.2;
-          diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, smoothstep(uCliffStart, uCliffEnd, ny));
+          diffuseColor.rgb *= 1.0 + (topRim * 0.12 - baseBand * 0.2) * inBounds;
+          float cliffM = mix(1.0, smoothstep(uCliffStart, uCliffEnd, ny), inBounds);
+          diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, cliffM);
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
           float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
           // Tactical info view (弱化显示): sink the ground into a dark
           // slate grey-green so markers read as the bright layer on top.
           float grey = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-          vec3 slate = vec3(grey) * vec3(0.2, 0.26, 0.22);
+          vec3 slate = vec3(grey) * uInfo2DTint;
           diffuseColor.rgb = mix(diffuseColor.rgb, slate, uInfo2D);
           // Out-of-bounds skirt: blend into the horizon haze by distance
           // outside the map rect.
           if (uHazeOn > 0.5) {
-            float dOut = terEdgeDist(terP, uMapSize);
             diffuseColor.rgb = mix(diffuseColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
           }
         }`,
       );
   };
+  if (theme.toon === true) {
+    applyToonBands(mat);
+  }
   mat.customProgramCacheKey = () => `themed-terrain-${theme.id}`;
   return { material: mat, uniforms };
 }

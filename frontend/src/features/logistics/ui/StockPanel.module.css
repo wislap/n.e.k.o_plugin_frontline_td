@@ -125,9 +125,15 @@
 
 :global([data-ui-skin='field']) .rows {
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: var(--space-3);
+  gap: var(--space-2);
+}
+
+/* Zero-rate badges add noise without information; hiding them keeps the
+   resource row on a single line at every supported width. */
+:global([data-ui-skin='field']) .rateZero {
+  display: none;
 }
 
 :global([data-ui-skin='field']) .row {

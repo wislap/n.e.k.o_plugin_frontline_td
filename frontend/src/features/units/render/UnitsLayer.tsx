@@ -77,7 +77,10 @@ export function UnitsLayer({
   const themed = theme.id !== 'legacy';
   const outlineOn = useUiStore((s) => s.outline);
   const outlineMat = useMemo(
-    () => (themed && outlineOn ? createOutlineMaterial(theme.outline) : null),
+    () =>
+      themed && (outlineOn || theme.outlineAlways === true)
+        ? createOutlineMaterial(theme.outline)
+        : null,
     [themed, outlineOn, theme],
   );
   useEffect(() => {

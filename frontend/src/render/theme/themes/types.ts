@@ -61,6 +61,18 @@ interface ThemeTerrain {
   // false when the out-of-bounds skirt should meet the map edge directly
   // with no slab side visible.
   pedestal?: boolean | undefined;
+  // Diorama: the map sits on a floating island block with visible
+  // soil/rock strata sides over a void, instead of a terrain skirt.
+  island?:
+    | {
+        depth: number;
+        strata: readonly string[];
+        shadowGap: number;
+      }
+    | undefined;
+  // Tactical-info slate tint multiplier (grey luminance × tint);
+  // undefined = the field slate (0.2, 0.26, 0.22).
+  info2dTint?: readonly [number, number, number] | undefined;
 }
 
 interface ThemePost {
@@ -74,6 +86,8 @@ interface ThemePost {
   // Grade: contrast multiplier around mid-grey, saturation scale.
   contrast: number;
   saturation: number;
+  // Tilt-shift DOF (diorama tabletop look); undefined = off.
+  dof?: { offset: number; focusArea: number; feather: number } | undefined;
 }
 
 interface ThemeMaterials {
@@ -120,6 +134,12 @@ interface ThemeBackground {
   platformFadeEnd: number;
   // Scene fog color for distance haze toward the horizon ('' = none).
   haze: string;
+  // Scene-fog near/far in map-diagonal units (default 0.45 / 1.3); tighter
+  // ranges give dense cinematic mist.
+  fogNear?: number | undefined;
+  fogFar?: number | undefined;
+  // Cel: paint stylized cloud bands into the sky dome gradient.
+  clouds?: boolean | undefined;
 }
 
 // Geometry language: uniform chamfer/bevel radius applied to structure
@@ -154,6 +174,11 @@ export interface RenderTheme {
   // Tactical 2D info treatment availability (弱化显示); the debug toggle
   // gates it further, legacy keeps it off.
   info2d: boolean;
+  // Cel shading: lit color is quantized into hard luminance bands on the
+  // terrain / structure / unit / scatter materials.
+  toon?: boolean | undefined;
+  // Geometry outlines always on regardless of the debug toggle (cel).
+  outlineAlways?: boolean | undefined;
   lighting: ThemeLighting;
   terrain: ThemeTerrain;
   post: ThemePost;

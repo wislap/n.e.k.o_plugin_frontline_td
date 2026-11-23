@@ -58,3 +58,26 @@
   border: none;
   background: transparent;
 }
+
+/* cel skin: white instrument card with bold numerals. */
+:global([data-ui-skin='cel']) .clockPill {
+  border: 2px solid rgba(58, 53, 96, 0.3);
+  border-radius: 12px;
+  background: rgba(253, 253, 255, 0.95);
+  color: #2d2752;
+}
+
+/* glass skin: frosted microtext instrument bar. */
+:global([data-ui-skin='glass']) .clockPill {
+  border: 1px solid rgba(235, 245, 240, 0.3);
+  border-radius: 3px;
+  background: rgba(13, 17, 18, 0.5);
+}
+
+/* paper skin: paper clock card. */
+:global([data-ui-skin='paper']) .clockPill {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  color: #3a3428;
+}

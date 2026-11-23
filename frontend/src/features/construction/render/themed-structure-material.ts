@@ -11,6 +11,7 @@
 // uInfo2D dims structures into dark footprints for the tactical info view.
 import * as THREE from 'three';
 import type { RenderTheme } from '../../../render/theme/index';
+import { applyToonBands } from '../../../render/theme/toonify';
 import { createCodesTexture } from './decal-texture';
 
 interface ThemedStructureUniforms {
@@ -136,6 +137,9 @@ export function createThemedStructureMaterial(theme: RenderTheme): ThemedStructu
         }`,
       );
   };
+  if (theme.toon === true) {
+    applyToonBands(mat);
+  }
   mat.customProgramCacheKey = () => `themed-structure-${theme.id}`;
   return { material: mat, uniforms, codes };
 }

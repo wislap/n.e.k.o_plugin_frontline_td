@@ -80,7 +80,11 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
               </span>
               <div className={styles['metrics']}>
                 <span className={styles['amount']}>{Math.floor(milli / 1000)}</span>
-                <RateBadge milliPerSec={rateMilli} suffix={t('stock.per_sec')} />
+                <RateBadge
+                  milliPerSec={rateMilli}
+                  suffix={t('stock.per_sec')}
+                  className={rateMilli === 0 ? styles['rateZero'] : undefined}
+                />
               </div>
             </div>
           );

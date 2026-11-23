@@ -112,13 +112,19 @@ function applyPmremEnvironment(
 // to paper, so near/far are pushed out of range in the 2D info view.
 // Module-scope so the react-compiler immutability rule does not track
 // the hook-derived scene.
-function updateSceneFog(scene: THREE.Scene, mode: string, diag: number): void {
+function updateSceneFog(
+  scene: THREE.Scene,
+  mode: string,
+  diag: number,
+  nearF: number,
+  farF: number,
+): void {
   const fog = scene.fog;
   if (fog === null || !(fog instanceof THREE.Fog)) {
     return;
   }
-  const near = mode === 'tactical' ? diag * 20 : diag * 0.45;
-  const far = mode === 'tactical' ? diag * 21 : diag * 1.3;
+  const near = mode === 'tactical' ? diag * 20 : diag * nearF;
+  const far = mode === 'tactical' ? diag * 21 : diag * farF;
   if (fog.near !== near) {
     fog.near = near;
     fog.far = far;
@@ -176,7 +182,13 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   // map sits inside the fog range and washes out to paper, so the fog is
   // pushed out of range while the camera is in the 2D info view.
   useFrame(() => {
-    updateSceneFog(scene, useCameraStore.getState().mode, diag);
+    updateSceneFog(
+      scene,
+      useCameraStore.getState().mode,
+      diag,
+      theme.background.fogNear ?? 0.45,
+      theme.background.fogFar ?? 1.3,
+    );
   });
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;

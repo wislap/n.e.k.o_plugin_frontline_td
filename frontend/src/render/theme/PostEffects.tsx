@@ -10,6 +10,7 @@ import {
   N8AO,
   Noise,
   SMAA,
+  TiltShift,
   Vignette,
 } from '@react-three/postprocessing';
 import { useRenderTheme } from './useTheme';
@@ -29,6 +30,15 @@ export function PostEffects() {
         luminanceSmoothing={0.15}
         mipmapBlur
       />
+      {post.dof !== undefined ? (
+        <TiltShift
+          offset={post.dof.offset}
+          focusArea={post.dof.focusArea}
+          feather={post.dof.feather}
+        />
+      ) : (
+        <></>
+      )}
       <BrightnessContrast contrast={post.contrast - 1} />
       <HueSaturation saturation={post.saturation - 1} />
       <Vignette offset={0.25} darkness={post.vignette} />

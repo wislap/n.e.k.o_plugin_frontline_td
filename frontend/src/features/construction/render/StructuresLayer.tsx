@@ -82,7 +82,10 @@ export function StructuresLayer({
   const theme = useRenderTheme();
   const outlineOn = useUiStore((s) => s.outline);
   const outlineMat = useMemo(
-    () => (theme.id !== 'legacy' && outlineOn ? createOutlineMaterial(theme.outline) : null),
+    () =>
+      theme.id !== 'legacy' && (outlineOn || theme.outlineAlways === true)
+        ? createOutlineMaterial(theme.outline)
+        : null,
     [theme, outlineOn],
   );
   useEffect(() => {
@@ -337,7 +340,7 @@ export function StructuresLayer({
           const gMesh = glyphRefs.current[glyph];
           if (gMesh !== undefined && gMesh !== null) {
             const gSlot = glyphCounts[glyph];
-            const badgeSize = Math.max(0.7, Math.min(w, h) * 0.66);
+            const badgeSize = Math.max(0.42, Math.min(w, h) * 0.34);
             dummy.position.set(cx, groundY + full + 0.06, cy);
             dummy.rotation.set(0, glyphYawRot, 0);
             dummy.scale.set(badgeSize, 1, badgeSize);

@@ -189,3 +189,92 @@
   color: #23261f;
   text-shadow: none;
 }
+
+/* cel skin: white cards, solid colour-block header with a slanted right
+   edge, no stripes or corner cuts. */
+:global([data-ui-skin='cel']) .panel {
+  border-width: 2px;
+}
+
+:global([data-ui-skin='cel']) .panel::before,
+:global([data-ui-skin='cel']) .panel::after {
+  display: none;
+}
+
+:global([data-ui-skin='cel']) .header {
+  background: var(--mode-accent);
+  background-image: none;
+  border-bottom: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+:global([data-ui-skin='cel']) .header .title {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+:global([data-ui-skin='cel']) .header .badge {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* glass skin: thin white hairline frames whose corner ticks extend past
+   the panel corners; translucent body, microtext headers. */
+:global([data-ui-skin='glass']) .panel {
+  border-color: rgba(235, 245, 240, 0.3);
+}
+
+:global([data-ui-skin='glass']) .panel::before {
+  display: none;
+}
+
+:global([data-ui-skin='glass']) .panel::after {
+  inset: -4px;
+  background:
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 top 0 / 9px 1px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 top 0 / 1px 9px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 top 0 / 9px 1px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 top 0 / 1px 9px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 bottom 0 / 9px 1px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 bottom 0 / 1px 9px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 bottom 0 / 9px 1px
+      no-repeat,
+    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 bottom 0 / 1px 9px
+      no-repeat;
+}
+
+:global([data-ui-skin='glass']) .header {
+  background-image: none;
+  border-bottom-color: rgba(235, 245, 240, 0.14);
+}
+
+:global([data-ui-skin='glass']) .header .title {
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+}
+
+:global([data-ui-skin='glass']) .body {
+  font-size: var(--text-sm);
+}
+
+/* paper skin: matte paper cards, dashed ink header rule, no stripes. */
+:global([data-ui-skin='paper']) .panel::before,
+:global([data-ui-skin='paper']) .panel::after {
+  display: none;
+}
+
+:global([data-ui-skin='paper']) .header {
+  background-image: none;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+:global([data-ui-skin='paper']) .header .title {
+  letter-spacing: 0.04em;
+}
