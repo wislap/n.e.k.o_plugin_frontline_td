@@ -86,17 +86,19 @@
   --mode-accent-glow: rgba(61, 220, 151, 0.36);
 }
 
-/* Skin tokens: lighter panels, rounder pills, signal-yellow accent. */
+/* Glass material tokens: frosted dark glass, hairline white frames,
+   high-contrast white type, signal-yellow primary accent. */
 :root {
-  --surface-panel: rgba(20, 24, 27, 0.9);
-  --surface-elevated: rgba(26, 31, 35, 0.94);
-  --surface-ghost: rgba(22, 27, 31, 0.72);
-  --surface-inset: rgba(10, 13, 15, 0.8);
-  --border-subtle: rgba(230, 233, 226, 0.16);
-  --border-strong: rgba(230, 233, 226, 0.4);
-  --text-primary: #f0f1ea;
-  --text-secondary: #d6d9cf;
-  --text-muted: #9aa094;
+  --surface-panel: rgba(14, 18, 22, 0.55);
+  --surface-elevated: rgba(18, 23, 28, 0.68);
+  --surface-ghost: rgba(16, 21, 26, 0.42);
+  --surface-inset: rgba(8, 11, 15, 0.55);
+  --backdrop-blur: blur(8px);
+  --border-subtle: rgba(255, 255, 255, 0.28);
+  --border-strong: rgba(255, 255, 255, 0.55);
+  --text-primary: #ffffff;
+  --text-secondary: #e4e8e0;
+  --text-muted: #aab2a4;
   --mode-accent: #ffe600;
   --mode-accent-dim: rgba(255, 230, 0, 0.14);
   --mode-accent-glow: rgba(255, 230, 0, 0.32);

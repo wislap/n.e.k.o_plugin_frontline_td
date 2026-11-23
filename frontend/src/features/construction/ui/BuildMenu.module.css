@@ -146,7 +146,7 @@
 
 /* field skin: the hotbar floats — no framed panel, dark translucent
    rounded tiles with ≥64px thumbnails, name + cost underneath. */
-:global() .panel {
+.panel {
   border: none;
   background: transparent;
   box-shadow: none;
@@ -155,36 +155,36 @@
 
 /* The toolbar row floats above the tiles — the demolish toggle reads as
    one of the dark rounded controls, clearly separated from the grid. */
-:global() .toolbar {
+.toolbar {
   margin-bottom: var(--space-2);
 }
 
-:global() .toolbar > button:last-child {
+.toolbar > button:last-child {
   border-radius: 999px;
   border-color: rgba(238, 240, 232, 0.14);
   background: rgba(18, 22, 20, 0.78);
 }
 
-:global() .grid {
+.grid {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 }
 
-:global() .card {
+.card {
   border: none;
   border-radius: 12px;
   background: rgba(18, 22, 20, 0.78);
 }
 
-:global() .card:hover {
+.card:hover {
   background: rgba(30, 36, 32, 0.88);
 }
 
-:global() .cardActive {
+.cardActive {
   border: 1px solid var(--mode-accent);
   box-shadow: 0 0 14px var(--mode-accent-glow);
 }
 
-:global() .thumb {
+.thumb {
   height: 68px;
   border: none;
   background: rgba(255, 255, 255, 0.05);

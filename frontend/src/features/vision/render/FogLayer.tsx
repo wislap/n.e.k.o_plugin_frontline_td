@@ -106,7 +106,7 @@ function createSoftFogMaterial(theme: {
         // Outside the rect the film keeps the border state for ~1.5 cells,
         // then blends smoothly to full unexplored — the darkening reads as
         // a radial falloff starting beyond the edge, never a hard line.
-        a = mix(a, 0.85, smoothstep(1.5, 7.0, oob));
+        a = mix(a, 0.85, smoothstep(2.0, 16.0, oob));
         // And dissolves entirely before the film's outer rim so it never
         // ends in a visible hard edge against the void or horizon.
         a *= 1.0 - smoothstep(uMargin * 0.55, uMargin * 0.95, oob);
@@ -114,7 +114,10 @@ function createSoftFogMaterial(theme: {
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
         float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
-        vec3 col = mix(uColor, uHaze, hz * 0.65);
+        // The film converges to the haze colour as it dissolves at its outer
+        // rim, so its edge never reads as a dark ring over the hazed skirt.
+        float rim = smoothstep(uMargin * 0.35, uMargin * 0.9, oob);
+        vec3 col = mix(uColor, uHaze, max(hz * 0.65, rim));
         float alpha = a * mix(0.35, 0.6, unexplored);
         gl_FragColor = vec4(col, alpha);
       }

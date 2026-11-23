@@ -18,7 +18,12 @@
     "pause": "暂停",
     "resume": "继续",
     "grass_density": "草密度",
-    "info2d": "2D 信息视图"
+    "info2d": "2D 信息视图",
+    "palette": "调色板",
+    "palette_field": "原野",
+    "palette_warm": "暖调",
+    "palette_mid": "折中",
+    "atmosphere": "氛围"
   },
   "hud": {
     "paused": "已暂停",

@@ -147,22 +147,56 @@
   padding: var(--space-2);
 }
 
-/* field skin: soft rounded cards — no accent stripes, corner cuts or
-   hatched headers. Compact panels become full pills. */
-:global() .panel {
-  border-color: rgba(238, 240, 232, 0.14);
+/* Glass material: frosted cards on a hairline white frame whose strokes
+   overshoot each corner as ticks; no accent stripes or hatched headers.
+   Compact panels become full pills (no ticks). */
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  overflow: visible;
 }
 
-:global() .panel::before,
-:global() .panel::after {
+.panel::before {
+  display: block;
+  content: '';
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: -1px;
+  bottom: -1px;
+  height: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.42);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+  background: none;
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.panel::after {
+  display: block;
+  content: '';
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  left: -1px;
+  right: -1px;
+  border-left: 1px solid rgba(255, 255, 255, 0.42);
+  border-right: 1px solid rgba(255, 255, 255, 0.42);
+  background: none;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.compact::before,
+.compact::after {
   display: none;
 }
 
-:global() .compact {
+.compact {
   border-radius: 999px;
 }
 
-:global() .header {
+.header {
   background-image: none;
   border-bottom-color: rgba(238, 240, 232, 0.1);
 }
@@ -176,16 +210,17 @@
   backdrop-filter: none;
 }
 
-/* field skin: the top-centre context hint (tone-mode) is a white pill
-   with dark ink; the gauge pill keeps its own dark instrument look. */
+/* The top-centre context hint (tone-mode) is a frosted-glass pill with
+   pure-white text — legible over the bright meadow and the dark info view. */
 :global([data-hud-slot='topCenter']) .tone-mode {
-  border: none;
-  background: rgba(244, 246, 238, 0.94);
-  color: #23261f;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--surface-panel);
+  backdrop-filter: var(--backdrop-blur);
+  color: #ffffff;
 }
 
 :global([data-hud-slot='topCenter']) .tone-mode .body,
 :global([data-hud-slot='topCenter']) .tone-mode .body span {
-  color: #23261f;
-  text-shadow: none;
+  color: #ffffff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
 }

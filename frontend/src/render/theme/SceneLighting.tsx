@@ -9,9 +9,6 @@ import { useRenderTheme } from './useTheme';
 import type { RenderVisual } from './visual';
 
 const SHADOW_MAP_SIZE = 2048;
-// Scene-fog near/far in map-diagonal units (horizon haze only).
-const FOG_NEAR = 0.45;
-const FOG_FAR = 1.3;
 const SHADOW_MARGIN = 1.15;
 
 // Renderer/scene mutations live in module-scope helpers: the react-compiler
@@ -167,7 +164,7 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   // map sits inside the fog range and washes out to paper, so the fog is
   // pushed out of range while the camera is in the 2D info view.
   useFrame(() => {
-    updateSceneFog(scene, useCameraStore.getState().mode, diag, FOG_NEAR, FOG_FAR);
+    updateSceneFog(scene, useCameraStore.getState().mode, diag, theme.hazeNear, theme.hazeFar);
   });
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;

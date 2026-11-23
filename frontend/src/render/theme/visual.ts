@@ -128,6 +128,11 @@ export interface RenderVisual {
   envIntensity?: number | undefined;
   fogColor: string;
   fogSoft: boolean;
+  // Horizon haze: scene-fog near/far in map-diagonal units and the warm/
+  // cool split-tone strength (0 = off, 1 = full atmosphere).
+  hazeNear: number;
+  hazeFar: number;
+  splitTone: number;
   // Tactical 2D info treatment (弱化显示); the debug toggle gates it further.
   info2d: boolean;
   lighting: VisualLighting;
@@ -141,12 +146,17 @@ export interface RenderVisual {
   pad: VisualPad;
 }
 
-export const VISUAL: RenderVisual = {
+const VISUAL: RenderVisual = {
   accent: '#FFE600',
   exposure: 0.9,
   toneMapping: 'agx',
   fogColor: '#3d453a',
   fogSoft: true,
+  // Fog sits past the map: at overview distance it only catches the
+  // skirt rim and the horizon, never the playfield itself.
+  hazeNear: 0.95,
+  hazeFar: 2.2,
+  splitTone: 0.5,
   info2d: true,
   lighting: {
     // Hemisphere is dimmed — most ambient comes from the PMREM sky.
@@ -230,3 +240,116 @@ export const VISUAL: RenderVisual = {
     emissiveBoost: 1.6,
   },
 };
+
+// --- Temporary debug axes (owner A/B; delete after palette selection) ---
+
+export const PALETTE_IDS = ['field', 'warm', 'mid'] as const;
+export type PaletteId = (typeof PALETTE_IDS)[number];
+
+// `warm` borrows diorama's golden-hour palette: yellow-green grass, cream
+// paint, warm earth, warm void — while keeping field's value range.
+const WARM: RenderVisual = {
+  ...VISUAL,
+  fogColor: '#4a4438',
+  lighting: {
+    ...VISUAL.lighting,
+    hemiSky: '#c8d8e8',
+    hemiGround: '#7a6f4d',
+    sunColor: '#ffe3b0',
+    rimColor: '#e8d8b8',
+  },
+  terrain: {
+    ...VISUAL.terrain,
+    rampLow: '#7d9a5c',
+    rampHigh: '#c4cc8a',
+    cliffColor: '#b9a98c',
+    dirt: '#ab9a78',
+  },
+  materials: {
+    ...VISUAL.materials,
+    unitBody: '#ddd6c4',
+    structureBody: '#ded7c5',
+    structureEmissive: '#f0a860',
+  },
+  background: {
+    ...VISUAL.background,
+    top: '#b8cfe8',
+    horizon: '#f0e6cf',
+    bottom: '#b0a888',
+    platform: '#a8ab72',
+    haze: '#ece0c8',
+  },
+  pad: { ...VISUAL.pad, color: '#33302a', edge: '#f0a860' },
+};
+
+function hexLerp(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const r = Math.round(((pa >> 16) & 255) + (((pb >> 16) & 255) - ((pa >> 16) & 255)) * t);
+  const g = Math.round(((pa >> 8) & 255) + (((pb >> 8) & 255) - ((pa >> 8) & 255)) * t);
+  const bl = Math.round((pa & 255) + ((pb & 255) - (pa & 255)) * t);
+  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
+}
+
+// Resolves the effective visual for the two temporary debug axes:
+// palette picks the colour world (mid lerps field→warm 50/50) and
+// atmosphere (0..1) scales sun warmth/elevation, cool sky fill, horizon
+// haze and the split-tone grade — without veiling the scene.
+export function resolveVisual(palette: PaletteId, atmosphere: number): RenderVisual {
+  const a = Math.min(1, Math.max(0, atmosphere));
+  let v = VISUAL;
+  if (palette !== 'field') {
+    const t = palette === 'warm' ? 1 : 0.5;
+    const f = VISUAL;
+    const w = WARM;
+    const L = (x: string, y: string) => hexLerp(x, y, t);
+    v = {
+      ...f,
+      fogColor: L(f.fogColor, w.fogColor),
+      lighting: {
+        ...f.lighting,
+        hemiSky: L(f.lighting.hemiSky, w.lighting.hemiSky),
+        hemiGround: L(f.lighting.hemiGround, w.lighting.hemiGround),
+        sunColor: L(f.lighting.sunColor, w.lighting.sunColor),
+        rimColor: L(f.lighting.rimColor, w.lighting.rimColor),
+      },
+      terrain: {
+        ...f.terrain,
+        rampLow: L(f.terrain.rampLow, w.terrain.rampLow),
+        rampHigh: L(f.terrain.rampHigh, w.terrain.rampHigh),
+        cliffColor: L(f.terrain.cliffColor, w.terrain.cliffColor),
+        dirt: L(f.terrain.dirt ?? '#8d8368', w.terrain.dirt ?? '#8d8368'),
+      },
+      materials: {
+        ...f.materials,
+        unitBody: L(f.materials.unitBody, w.materials.unitBody),
+        structureBody: L(f.materials.structureBody, w.materials.structureBody),
+        structureEmissive: L(f.materials.structureEmissive, w.materials.structureEmissive),
+      },
+      background: {
+        ...f.background,
+        top: L(f.background.top, w.background.top),
+        horizon: L(f.background.horizon, w.background.horizon),
+        bottom: L(f.background.bottom, w.background.bottom),
+        platform: L(f.background.platform, w.background.platform),
+        haze: L(f.background.haze, w.background.haze),
+      },
+      pad: { ...f.pad, color: L(f.pad.color, w.pad.color), edge: L(f.pad.edge, w.pad.edge) },
+    };
+  }
+  return {
+    ...v,
+    lighting: {
+      ...v.lighting,
+      // Warmer, lower sun (longer soft shadows) with a cooler sky fill.
+      sunColor: hexLerp(v.lighting.sunColor, '#ffc078', a * 0.6),
+      sunDir: [v.lighting.sunDir[0], 0.6 - a * 0.18, v.lighting.sunDir[2]],
+      hemiSky: hexLerp(v.lighting.hemiSky, '#8fb8e8', a * 0.5),
+    },
+    // Haze lives only near the horizon: fog pulls in as atmosphere rises,
+    // but even at a=1 its near plane stays beyond the map edge.
+    hazeNear: v.hazeNear * (1 - a * 0.15),
+    hazeFar: v.hazeFar * (1 - a * 0.3),
+    splitTone: a,
+  };
+}

@@ -96,7 +96,7 @@ export function StructuresLayer({
   useEffect(() => {
     return () => {
       themed.material.dispose();
-      themed.codes.dispose();
+      themed.codes?.dispose();
     };
   }, [themed]);
 

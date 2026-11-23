@@ -39,7 +39,7 @@ function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
         // uHorizon to a thin stripe at h=0 that read as a stray ribbon at
         // eye level wherever no platform/skirt hides it.
         vec3 col = mix(uBottom, uTop, smoothstep(-0.55, 0.8, h));
-        col = mix(col, uHorizon, exp(-h * h * 18.0) * 0.55);
+        col = mix(col, uHorizon, exp(-h * h * 5.0) * 0.42);
         gl_FragColor = vec4(col, 1.0);
       }
     `,

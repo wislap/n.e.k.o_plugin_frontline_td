@@ -83,7 +83,7 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const propMats = useMemo(() => createPropMaterials(palette), [palette]);
 
   useEffect(() => {
-    grassTimeRef.current = grassMat.userData['uTime'] as { value: number };
+    grassTimeRef.current = (grassMat.userData['uTime'] as { value: number } | undefined) ?? null;
     return () => {
       grassMat.dispose();
     };

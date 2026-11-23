@@ -61,25 +61,25 @@
 
 /* field skin: text tabs — the active one is a white pill with dark ink,
    the rest are white text floating on the world. */
-:global() .list {
+.list {
   padding: 0;
   gap: var(--space-2);
   border: none;
   background: transparent;
 }
 
-:global() .tab {
+.tab {
   border-radius: 999px;
   color: rgba(246, 248, 242, 0.92);
   text-shadow: 0 1px 6px rgba(10, 14, 10, 0.65);
 }
 
-:global() .tab:hover:not(:disabled):not(.active) {
+.tab:hover:not(:disabled):not(.active) {
   background: rgba(246, 248, 242, 0.14);
   color: #ffffff;
 }
 
-:global() .active {
+.active {
   border-color: transparent;
   background: rgba(244, 246, 238, 0.96);
   color: #22251f;

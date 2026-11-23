@@ -49,11 +49,11 @@
 
 /* field skin: dark translucent instrument pill; the developer tick
    counter is not part of the player-facing language. */
-:global() .clockTick {
+.clockTick {
   display: none;
 }
 
-:global() .clockPill {
+.clockPill {
   padding: 2px 0;
   border: none;
   background: transparent;
