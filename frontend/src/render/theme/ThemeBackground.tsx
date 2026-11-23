@@ -1,16 +1,15 @@
-// Theme background: a sky dome (vertical gradient, optional procedural
-// nebula + stars) plus a far ground platform fading out radially toward
-// the map edge. All GPU objects are memoized per theme and disposed on
-// change/unmount (ADR 0050).
+// Background: a sky dome (vertical gradient) plus a far ground platform
+// fading out radially toward the map edge. GPU objects are memoized and
+// disposed on unmount (ADR 0050).
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useRenderTheme } from './useTheme';
-import type { RenderTheme } from './themes';
+import type { RenderVisual } from './visual';
 
 const DOME_RADIUS = 380;
 
-function buildDomeMaterial(theme: RenderTheme): THREE.ShaderMaterial {
+function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
   const bg = theme.background;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -20,7 +19,6 @@ function buildDomeMaterial(theme: RenderTheme): THREE.ShaderMaterial {
       uTop: { value: new THREE.Color(bg.top) },
       uHorizon: { value: new THREE.Color(bg.horizon) },
       uBottom: { value: new THREE.Color(bg.bottom) },
-      uClouds: { value: bg.clouds === true ? 1 : 0 },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -33,23 +31,7 @@ function buildDomeMaterial(theme: RenderTheme): THREE.ShaderMaterial {
       uniform vec3 uTop;
       uniform vec3 uHorizon;
       uniform vec3 uBottom;
-      uniform float uClouds;
       varying vec3 vDir;
-
-      float cloudHash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-      }
-      float cloudNoise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        return mix(
-          mix(cloudHash(i), cloudHash(i + vec2(1.0, 0.0)), f.x),
-          mix(cloudHash(i + vec2(0.0, 1.0)), cloudHash(i + vec2(1.0, 1.0)), f.x),
-          f.y
-        );
-      }
-
       void main() {
         float h = vDir.y;
         // Smooth three-stop gradient: a continuous bottom→top ramp plus a
@@ -58,22 +40,13 @@ function buildDomeMaterial(theme: RenderTheme): THREE.ShaderMaterial {
         // eye level wherever no platform/skirt hides it.
         vec3 col = mix(uBottom, uTop, smoothstep(-0.55, 0.8, h));
         col = mix(col, uHorizon, exp(-h * h * 18.0) * 0.55);
-        if (uClouds > 0.5 && h > 0.02) {
-          // Stylized anime cloud band: flat-bottomed blobs drifting with
-          // azimuth, denser near the horizon, white against the gradient.
-          float az = atan(vDir.z, vDir.x);
-          vec2 cp = vec2(az * 3.0, h * 9.0);
-          float n = cloudNoise(cp) * 0.55 + cloudNoise(cp * 2.3 + 7.1) * 0.45;
-          float band = smoothstep(0.55, 0.72, n) * smoothstep(0.75, 0.2, h);
-          col = mix(col, vec3(1.0), band * 0.75);
-        }
         gl_FragColor = vec4(col, 1.0);
       }
     `,
   });
 }
 
-function buildPlatformMaterial(theme: RenderTheme): THREE.ShaderMaterial {
+function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
   const bg = theme.background;
   return new THREE.ShaderMaterial({
     transparent: true,
@@ -114,28 +87,18 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
   const domeRef = useRef<THREE.Mesh>(null);
   // Skybox-style: the dome follows the camera so its far limb can never
   // expose the clear color — before, at max zoom-out the camera sat
-  // outside the map-centered sphere and the void showed through as a
-  // black wedge once the platform plane was removed for island themes.
+  // outside the map-centered sphere and the void showed through.
   useFrame(({ camera }) => {
     domeRef.current?.position.copy(camera.position);
   });
 
   const dome = useMemo(() => {
-    if (theme.background.kind === 'none') {
-      return null;
-    }
     const geo = new THREE.SphereGeometry(DOME_RADIUS, 32, 16);
     const mat = buildDomeMaterial(theme);
     return { geo, mat };
   }, [theme]);
 
   const platform = useMemo(() => {
-    // Floating-island themes replace the far platform entirely — the island
-    // block + contact shadow carry the ground read; a platform disc would
-    // slice the void as a visible edge-on streak at the horizon.
-    if (theme.background.kind === 'none' || theme.terrain.island !== undefined) {
-      return null;
-    }
     const radius = DOME_RADIUS * 0.98;
     const geo = new THREE.PlaneGeometry(radius * 2, radius * 2);
     const mat = buildPlatformMaterial(theme);
@@ -145,28 +108,25 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
       uRadius.value = radius;
     }
     uCenter?.value.set(mapWidth / 2, mapHeight / 2);
-    return { geo, mat, radius };
+    return { geo, mat };
   }, [theme, mapWidth, mapHeight]);
 
   useEffect(() => {
     return () => {
-      dome?.geo.dispose();
-      dome?.mat.dispose();
+      dome.geo.dispose();
+      dome.mat.dispose();
     };
   }, [dome]);
 
   useEffect(() => {
     return () => {
-      platform?.geo.dispose();
-      platform?.mat.dispose();
+      platform.geo.dispose();
+      platform.mat.dispose();
     };
   }, [platform]);
 
-  if (theme.background.kind === 'none' || dome === null) {
-    return null;
-  }
   return (
-    <group key={theme.id}>
+    <group>
       <mesh
         ref={domeRef}
         geometry={dome.geo}
@@ -175,16 +135,14 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
         renderOrder={-10}
         frustumCulled={false}
       />
-      {platform !== null && (
-        <mesh
-          geometry={platform.geo}
-          material={platform.mat}
-          position={[mapWidth / 2, -0.4, mapHeight / 2]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          renderOrder={-9}
-          frustumCulled={false}
-        />
-      )}
+      <mesh
+        geometry={platform.geo}
+        material={platform.mat}
+        position={[mapWidth / 2, -0.4, mapHeight / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={-9}
+        frustumCulled={false}
+      />
     </group>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTerrainGeometry, buildTerrainSkirtGeometry } from './geometry';
+import { buildTerrainGeometry } from './geometry';
 
 interface Vec {
   x: number;
@@ -192,38 +192,5 @@ describe('terrain tactical contrast & buffer sizing', () => {
     expect(geo.indices.length).toBe(expectedQuads * 6);
     expect(geo.positions.length).toBe(expectedQuads * 4 * 3);
     expect(geo.colors.length).toBe(expectedQuads * 4 * 3);
-  });
-
-  it('buildTerrainSkirtGeometry wraps all four borders with outward normals aligned to border elevation', () => {
-    const width = 4;
-    const height = 3;
-    const heights = new Uint8Array(width * height);
-    const ramps = new Uint8Array(width * height);
-    heights[0] = 2; // NW corner cell (height 2 -> y = 1.0)
-    const skirt = buildTerrainSkirtGeometry(width, height, heights, ramps);
-    const expectedQuads = width * 2 + height * 2;
-    expect(skirt.indices.length).toBe(expectedQuads * 6);
-
-    const dirs = new Map<string, number>();
-    let maxY = -Infinity;
-    let minY = Infinity;
-    for (let v = 0; v < skirt.positions.length / 3; v++) {
-      const y = skirt.positions[v * 3 + 1] ?? 0;
-      if (y > maxY) maxY = y;
-      if (y < minY) minY = y;
-    }
-    expect(maxY).toBeCloseTo(1.0, 6);
-    expect(minY).toBeLessThan(0);
-
-    for (let t = 0; t < skirt.indices.length / 3; t++) {
-      const n = triNormal(skirt.positions, skirt.indices, t);
-      expect(n.y).toBeCloseTo(0, 6);
-      const key = `${Math.round(n.x)},${Math.round(n.z)}`;
-      dirs.set(key, (dirs.get(key) ?? 0) + 1);
-    }
-    expect(dirs.get('0,-1')).toBe(width * 2);
-    expect(dirs.get('0,1')).toBe(width * 2);
-    expect(dirs.get('-1,0')).toBe(height * 2);
-    expect(dirs.get('1,0')).toBe(height * 2);
   });
 });

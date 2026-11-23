@@ -6,8 +6,7 @@
 // Optional haze-fade tint blends the out-of-bounds skirt into the
 // horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
-import type { RenderTheme } from '../../../render/theme/index';
-import { applyToonBands } from '../../../render/theme/toonify';
+import type { RenderVisual } from '../../../render/theme/index';
 
 export interface ThemedTerrainParams {
   heightMin: number;
@@ -27,7 +26,7 @@ export interface ThemedTerrainUniforms {
 }
 
 export function createThemedTerrainMaterial(
-  theme: RenderTheme,
+  theme: RenderVisual,
   params: ThemedTerrainParams,
 ): { material: THREE.MeshStandardMaterial; uniforms: ThemedTerrainUniforms } {
   const t = theme.terrain;
@@ -55,7 +54,7 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uEdgeFade'] = { value: t.edgeFadeDist };
     shader.uniforms['uInfo2D'] = uniforms.info2d;
     shader.uniforms['uInfo2DTint'] = {
-      value: new THREE.Vector3(...(t.info2dTint ?? [0.2, 0.26, 0.22])),
+      value: new THREE.Vector3(0.2, 0.26, 0.22),
     };
     shader.uniforms['uHazeOn'] = { value: haze === undefined ? 0 : 1 };
     shader.uniforms['uHazeColor'] = { value: new THREE.Color(haze?.color ?? '#000000') };
@@ -197,9 +196,6 @@ export function createThemedTerrainMaterial(
         }`,
       );
   };
-  if (theme.toon === true) {
-    applyToonBands(mat);
-  }
-  mat.customProgramCacheKey = () => `themed-terrain-${theme.id}`;
+  mat.customProgramCacheKey = () => 'themed-terrain';
   return { material: mat, uniforms };
 }

@@ -1,15 +1,17 @@
-// Theme-driven scene lighting + renderer setup: hemisphere fill, shadow-
-// casting sun fitted to the map bounds, rim light, tone mapping.
-// GPU/state changes are applied in effects so theme switches restore the
-// renderer cleanly; light objects themselves are recreated via `key`.
+// Scene lighting + renderer setup: hemisphere fill, shadow-casting sun
+// fitted to the map bounds, rim light, AgX tone mapping, PMREM sky
+// environment. GPU/state changes are applied in effects.
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
 import { useRenderTheme } from './useTheme';
-import type { RenderTheme } from './themes';
+import type { RenderVisual } from './visual';
 
 const SHADOW_MAP_SIZE = 2048;
+// Scene-fog near/far in map-diagonal units (horizon haze only).
+const FOG_NEAR = 0.45;
+const FOG_FAR = 1.3;
 const SHADOW_MARGIN = 1.15;
 
 // Renderer/scene mutations live in module-scope helpers: the react-compiler
@@ -18,7 +20,6 @@ const SHADOW_MARGIN = 1.15;
 // texture upload in FogLayer).
 function applyRendererSettings(
   gl: THREE.WebGLRenderer,
-  themed: boolean,
   exposure: number,
   toneMapping: 'none' | 'aces' | 'agx',
 ): () => void {
@@ -28,16 +29,10 @@ function applyRendererSettings(
     shadow: gl.shadowMap.enabled,
     shadowType: gl.shadowMap.type,
   };
-  if (themed) {
-    gl.toneMapping = toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = exposure;
-    gl.shadowMap.enabled = true;
-    gl.shadowMap.type = THREE.PCFShadowMap;
-  } else {
-    gl.toneMapping = THREE.NoToneMapping;
-    gl.toneMappingExposure = 1;
-    gl.shadowMap.enabled = false;
-  }
+  gl.toneMapping = toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+  gl.toneMappingExposure = exposure;
+  gl.shadowMap.enabled = true;
+  gl.shadowMap.type = THREE.PCFShadowMap;
   return () => {
     gl.toneMapping = prev.tone;
     gl.toneMappingExposure = prev.exposure;
@@ -48,7 +43,7 @@ function applyRendererSettings(
 
 // Builds the tiny gradient-sky scene the PMREM generator samples so
 // ambient light/reflections come from the theme's own sky palette.
-function buildSkyEnvScene(theme: RenderTheme): { scene: THREE.Scene; dispose: () => void } {
+function buildSkyEnvScene(theme: RenderVisual): { scene: THREE.Scene; dispose: () => void } {
   const geo = new THREE.SphereGeometry(50, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -92,7 +87,7 @@ function buildSkyEnvScene(theme: RenderTheme): { scene: THREE.Scene; dispose: ()
 function applyPmremEnvironment(
   gl: THREE.WebGLRenderer,
   scene: THREE.Scene,
-  theme: RenderTheme,
+  theme: RenderVisual,
 ): () => void {
   const sky = buildSkyEnvScene(theme);
   const pmrem = new THREE.PMREMGenerator(gl);
@@ -134,18 +129,10 @@ function updateSceneFog(
   }
 }
 
-function applySceneBackground(
-  scene: THREE.Scene,
-  themed: boolean,
-  haze: string,
-  extent: number,
-): () => void {
+function applySceneBackground(scene: THREE.Scene, haze: string, extent: number): () => void {
   const prev = scene.background;
   const prevFog = scene.fog;
-  if (!themed) {
-    scene.background = null;
-  }
-  if (themed && haze !== '') {
+  if (haze !== '') {
     scene.fog = new THREE.Fog(new THREE.Color(haze), extent * 0.9, extent * 2.6);
   }
   return () => {
@@ -158,40 +145,29 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   const theme = useRenderTheme();
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
-  const { lighting, exposure, id } = theme;
+  const { lighting, exposure } = theme;
 
-  // Tone mapping + shadow map toggle; restored to renderer defaults on
-  // theme change/unmount so `legacy` stays the untouched control.
   useEffect(() => {
-    return applyRendererSettings(gl, id !== 'legacy', exposure, theme.toneMapping);
-  }, [gl, id, exposure, theme.toneMapping]);
+    return applyRendererSettings(gl, exposure, theme.toneMapping);
+  }, [gl, exposure, theme.toneMapping]);
 
-  // PMREM environment from the procedural sky (field): MeshStandardMaterials
-  // pick up ambient/reflection light from scene.environment.
+  // PMREM environment from the procedural sky: MeshStandardMaterials pick
+  // up ambient/reflection light from scene.environment.
   useEffect(() => {
-    if (theme.environment !== 'pmrem-sky') {
-      return undefined;
-    }
     return applyPmremEnvironment(gl, scene, theme);
   }, [gl, scene, theme]);
 
   const diag = Math.hypot(mapWidth, mapHeight);
 
   useEffect(() => {
-    return applySceneBackground(scene, id !== 'legacy', theme.background.haze, diag * 0.5);
-  }, [scene, id, theme.background.haze, diag]);
+    return applySceneBackground(scene, theme.background.haze, diag * 0.5);
+  }, [scene, theme.background.haze, diag]);
 
   // The horizon haze is a 3D-spectate effect: at tactical height the whole
   // map sits inside the fog range and washes out to paper, so the fog is
   // pushed out of range while the camera is in the 2D info view.
   useFrame(() => {
-    updateSceneFog(
-      scene,
-      useCameraStore.getState().mode,
-      diag,
-      theme.background.fogNear ?? 0.45,
-      theme.background.fogFar ?? 1.3,
-    );
+    updateSceneFog(scene, useCameraStore.getState().mode, diag, FOG_NEAR, FOG_FAR);
   });
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;
@@ -210,7 +186,7 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   const target = useMemo(() => new THREE.Object3D(), []);
 
   return (
-    <group key={id}>
+    <group>
       <primitive object={target} position={[cx, 0, cz]} />
       <hemisphereLight args={[lighting.hemiSky, lighting.hemiGround, lighting.hemiIntensity]} />
       <directionalLight

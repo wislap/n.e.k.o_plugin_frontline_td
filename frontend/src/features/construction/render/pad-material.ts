@@ -3,26 +3,26 @@
 // footprint; the edge distance is recovered from the instance scale so
 // the trim stays a constant world-space width regardless of footprint.
 import * as THREE from 'three';
-import type { RenderTheme } from '../../../render/theme/index';
+import type { RenderVisual } from '../../../render/theme/index';
 
 export interface PadUniforms {
   info2d: { value: number };
 }
 
-export function createPadMaterial(theme: RenderTheme): {
+export function createPadMaterial(theme: RenderVisual): {
   material: THREE.MeshStandardMaterial;
   uniforms: PadUniforms;
 } {
   const pad = theme.pad;
   const uniforms: PadUniforms = { info2d: { value: 0 } };
   const mat = new THREE.MeshStandardMaterial({
-    color: pad?.color ?? '#26292c',
+    color: pad.color,
     roughness: 0.55,
     metalness: 0.25,
   });
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms['uEdge'] = { value: new THREE.Color(pad?.edge ?? '#ff9a2a') };
-    shader.uniforms['uEmissiveBoost'] = { value: pad?.emissiveBoost ?? 1 };
+    shader.uniforms['uEdge'] = { value: new THREE.Color(pad.edge) };
+    shader.uniforms['uEmissiveBoost'] = { value: pad.emissiveBoost };
     shader.uniforms['uInfo2D'] = uniforms.info2d;
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -74,6 +74,6 @@ export function createPadMaterial(theme: RenderTheme): {
         }`,
       );
   };
-  mat.customProgramCacheKey = () => `pad-${theme.id}`;
+  mat.customProgramCacheKey = () => 'pad';
   return { material: mat, uniforms };
 }

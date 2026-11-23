@@ -13,7 +13,6 @@ import { useRenderTheme } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import { ROAD_LAYER_ID } from '../protocol';
 
-const ROAD_COLOR = '#8f7355';
 const LIFT = 0.03;
 const CAP = 65536;
 const ATTACH_MATERIAL = 'material';
@@ -61,13 +60,10 @@ export function RoadLayer({ client, map, heights }: RoadLayerProps) {
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  const glowMat = useMemo(
-    () => (theme.id === 'field' ? createRoadGlowMaterial(theme.markers.link) : null),
-    [theme],
-  );
+  const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link), [theme]);
   useEffect(() => {
     return () => {
-      glowMat?.dispose();
+      glowMat.dispose();
     };
   }, [glowMat]);
 
@@ -106,11 +102,7 @@ export function RoadLayer({ client, map, heights }: RoadLayerProps) {
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, CAP]} frustumCulled={false}>
       <planeGeometry args={[1, 1]} rotateX={-Math.PI / 2} />
-      {glowMat === null ? (
-        <meshLambertMaterial color={ROAD_COLOR} />
-      ) : (
-        <primitive object={glowMat} attach={ATTACH_MATERIAL} />
-      )}
+      <primitive object={glowMat} attach={ATTACH_MATERIAL} />
     </instancedMesh>
   );
 }

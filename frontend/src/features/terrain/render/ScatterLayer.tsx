@@ -10,7 +10,6 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
-import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { useRenderTheme } from '../../../render/theme/index';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
@@ -49,33 +48,15 @@ export interface ScatterLayerProps {
 
 export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const theme = useRenderTheme();
-  const outlineOn = useUiStore((s) => s.outline);
-  const outlineMat = useMemo(
-    () =>
-      theme.id !== 'legacy' && (outlineOn || theme.outlineAlways === true)
-        ? createOutlineMaterial(theme.outline)
-        : null,
-    [theme, outlineOn],
-  );
-  useEffect(() => {
-    return () => {
-      outlineMat?.dispose();
-    };
-  }, [outlineMat]);
-
   const groupRef = useRef<THREE.Group>(null);
   const dummyRef = useRef(new THREE.Object3D());
   const colorRef = useRef(new THREE.Color());
   const occupiedRef = useRef<Uint8Array | null>(null);
   const watchedRef = useRef<readonly unknown[]>([]);
   const grassTimeRef = useRef<{ value: number } | null>(null);
-  const kind = theme.scatter.kind;
 
   // Terrain-matched grass tint: same height ramp the terrain shader uses.
   const meadowTint = useMemo((): MeadowTint | null => {
-    if (kind !== 'meadow') {
-      return null;
-    }
     let lo = Infinity;
     let hi = -Infinity;
     for (let i = 0; i < heights.length; i++) {
@@ -93,23 +74,18 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       hMin: lo,
       hMax: hi,
     };
-  }, [kind, heights, theme.terrain.rampLow, theme.terrain.rampHigh]);
+  }, [heights, theme.terrain.rampLow, theme.terrain.rampHigh]);
 
   const palette = useMemo(() => propPalette(theme), [theme]);
-  const toon = theme.toon === true;
-  const rockGeo = useMemo(() => createRockGeometry(0.24, 17), []);
   const grassGeo = useMemo(() => createGrassGeometry(), []);
   const stoneGeo = useMemo(() => createRockGeometry(0.13, 53), []);
-  const grassMat = useMemo(
-    () => (kind === 'meadow' ? createGrassMaterial(palette.grass, toon) : null),
-    [kind, palette.grass, toon],
-  );
-  const propMats = useMemo(() => createPropMaterials(palette, toon), [palette, toon]);
+  const grassMat = useMemo(() => createGrassMaterial(palette.grass), [palette.grass]);
+  const propMats = useMemo(() => createPropMaterials(palette), [palette]);
 
   useEffect(() => {
-    grassTimeRef.current = (grassMat?.userData['uTime'] as { value: number } | undefined) ?? null;
+    grassTimeRef.current = grassMat.userData['uTime'] as { value: number };
     return () => {
-      grassMat?.dispose();
+      grassMat.dispose();
     };
   }, [grassMat]);
   useEffect(() => {
@@ -121,23 +97,19 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   }, [propMats]);
   useEffect(() => {
     return () => {
-      rockGeo.dispose();
       grassGeo.dispose();
       stoneGeo.dispose();
     };
-  }, [rockGeo, grassGeo, stoneGeo]);
+  }, [grassGeo, stoneGeo]);
 
   const grid = map.grid;
 
   const props = useMemo(
-    () => computeProps(kind, theme.scatter.density, grid, db),
-    [kind, theme.scatter.density, grid, db],
+    () => computeProps(theme.scatter.density, grid, db),
+    [theme.scatter.density, grid, db],
   );
 
   useFrame(() => {
-    if (kind === 'none') {
-      return;
-    }
     const latest = client.snapshots().latest;
     if (latest === null) {
       return;
@@ -245,73 +217,17 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       meadowTint,
       camCenter.x,
       camCenter.y,
-      (propKind, mesh) => {
-        const ol = group.getObjectByName(`${SCATTER_MESH_PREFIX}ol-${propKind}`);
-        if (ol instanceof THREE.InstancedMesh) {
-          bindOutline(ol, mesh);
-        }
-      },
     );
     if (grassTimeRef.current !== null) {
       grassTimeRef.current.value = performance.now() / 1000;
     }
   });
 
-  if (kind === 'none') {
-    return null;
-  }
   const cap = (k: PropKind) => Math.max(1, props[k].length);
-  const outlineKinds = (Object.keys(props) as PropKind[]).filter((k) => props[k].length > 0);
 
   return (
-    <group key={`${theme.id}-${kind}`} ref={groupRef}>
-      {outlineMat !== null &&
-        outlineKinds.map((k) => (
-          <instancedMesh
-            key={`ol-${k}`}
-            name={`${SCATTER_MESH_PREFIX}ol-${k}`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap(k)]}
-            frustumCulled={false}
-          >
-            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
-          </instancedMesh>
-        ))}
-      {kind === 'clutter' && (
-        <>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}rock`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('rock')]}
-            frustumCulled={false}
-            castShadow
-            receiveShadow
-            geometry={rockGeo}
-            material={propMats.rock}
-          />
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}crate`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('crate')]}
-            frustumCulled={false}
-            castShadow
-            receiveShadow
-            material={propMats.crate}
-          >
-            <boxGeometry args={[0.34, 0.28, 0.34]} />
-          </instancedMesh>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}tuft`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('tuft')]}
-            frustumCulled={false}
-            material={propMats.tuft}
-          >
-            <coneGeometry args={[0.14, 0.34, 5]} />
-          </instancedMesh>
-        </>
-      )}
-      {kind === 'meadow' && grassMat !== null && (
+    <group ref={groupRef}>
+      {
         <>
           <instancedMesh
             name={`${SCATTER_MESH_PREFIX}grass`}
@@ -342,7 +258,7 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
             <octahedronGeometry args={[0.07, 0]} />
           </instancedMesh>
         </>
-      )}
+      }
     </group>
   );
 }

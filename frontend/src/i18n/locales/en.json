@@ -17,22 +17,8 @@
     "error": "Error: ",
     "pause": "Pause",
     "resume": "Resume",
-    "theme": "Theme",
-    "theme_legacy": "Legacy",
-    "theme_endfield-day": "Endfield (Day)",
-    "outline": "Outline",
-    "theme_field": "Field",
-    "ui": "UI skin",
-    "ui_legacy": "Legacy",
-    "ui_field": "Field",
     "grass_density": "Grass density",
-    "info2d": "Info 2D view",
-    "theme_cel": "Cel",
-    "theme_mist": "Mist",
-    "theme_diorama": "Diorama",
-    "ui_cel": "Cel",
-    "ui_glass": "Glass",
-    "ui_paper": "Paper"
+    "info2d": "Info 2D view"
   },
   "hud": {
     "paused": "Paused",

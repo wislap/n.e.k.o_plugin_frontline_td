@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import type { PrimaryMode } from '../client/interaction-store';
-import { useUiStore } from '../client/ui-store';
 import { cx } from './kit/index';
 import styles from './HudShell.module.css';
 
@@ -25,9 +24,8 @@ export function HudShell({
   bottomCenter?: ReactNode | undefined;
   bottomRight?: ReactNode | undefined;
 }) {
-  const uiSkin = useUiStore((s) => s.uiSkin);
   return (
-    <div className={styles['shell']} data-mode={primaryMode} data-ui-skin={uiSkin}>
+    <div className={styles['shell']} data-mode={primaryMode}>
       <div className={styles['colLeft']}>
         <div className={cx(styles['slot'], styles['topLeft'])} data-hud-slot="topLeft">
           {topLeft}

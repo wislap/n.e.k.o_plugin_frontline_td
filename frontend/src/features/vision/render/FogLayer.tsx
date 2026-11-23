@@ -15,7 +15,6 @@ import { useRenderTheme } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 
-const FOG_COLOR = '#05070d';
 const LIFT = 0.045;
 // Minimum film margin (cells) so the dark film always dissolves into a
 // smooth falloff several cells beyond the border instead of ending in a
@@ -43,37 +42,20 @@ export interface FogLayerProps {
   map: ResolvedMap;
 }
 
-// Themed fog uses a dedicated shader: a 5-tap blur over the linear-filtered
-// alpha smooths cell edges over ~1.5 cells (no staircase), explored cells
-// get a lower-alpha desaturated-darkening treatment instead of a flat film,
-// and unexplored regions can carry a faint pattern (survey paper:
-// height-contour lines + dot grid) driven by theme.fogStyle.
+// Fog film shader: a 5-tap blur over the linear-filtered alpha smooths
+// cell edges over ~1.5 cells (no staircase); the terrain reads through a
+// translucent dark slate film — darkened and desaturated — and the film
+// drifts toward the sky haze with camera distance so far fog merges into
+// the horizon.
 function createSoftFogMaterial(theme: {
   fogColor: string;
-  fogStyle: 'plain' | 'survey' | 'dim';
-  fogWash?: boolean | undefined;
   background: { haze: string };
 }): THREE.ShaderMaterial {
-  // Survey paper: explored cells get a dark ink film so dimmed terrain and
-  // structure footprints still read through; other styles lift slightly.
-  const explored =
-    theme.fogStyle === 'survey'
-      ? new THREE.Color(theme.fogColor).multiplyScalar(0.55)
-      : new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
-  // Survey paper draws darker ink lines on a pale ground; dark themes draw
-  // lighter pattern lines on their fog color.
-  const pattern =
-    theme.fogStyle === 'survey'
-      ? new THREE.Color(theme.fogColor).multiplyScalar(0.62)
-      : new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
-  const dim = theme.fogStyle === 'dim';
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     uniforms: {
       uColor: { value: new THREE.Color(theme.fogColor) },
-      uExplored: { value: explored },
-      uPattern: { value: pattern },
       uHaze: { value: new THREE.Color(theme.background.haze || theme.fogColor) },
       // Distance haze is spectate-only: the tactical info view must stay
       // a flat dark slate, so uHazeAmt is driven by camera mode per frame.
@@ -81,8 +63,6 @@ function createSoftFogMaterial(theme: {
       uMap: { value: null },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
-      uStyle: { value: theme.fogStyle === 'survey' ? 3 : dim ? 4 : 0 },
-      uWash: { value: theme.fogWash === true ? 1 : 0 },
       uMargin: { value: FOG_RIM_MARGIN },
     },
     vertexShader: `
@@ -99,15 +79,11 @@ function createSoftFogMaterial(theme: {
     `,
     fragmentShader: `
       uniform vec3 uColor;
-      uniform vec3 uExplored;
-      uniform vec3 uPattern;
       uniform vec3 uHaze;
       uniform float uHazeAmt;
       uniform sampler2D uMap;
       uniform vec2 uTexel;
       uniform vec2 uMapSize;
-      uniform float uStyle;
-      uniform float uWash;
       uniform float uMargin;
       varying vec2 vUv;
       varying vec3 vWorld;
@@ -137,35 +113,9 @@ function createSoftFogMaterial(theme: {
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
-        if (uStyle > 3.5) {
-          // 'dim' (field): the terrain itself reads through a translucent
-          // dark slate film — darkened and desaturated, never painted
-          // paper — and the film drifts toward the sky haze with camera
-          // distance so far fog merges into the horizon.
-          float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
-          vec3 col = mix(uColor, uHaze, hz * 0.65);
-          float alpha = a * mix(0.35, mix(0.6, 0.42, uWash), unexplored);
-          gl_FragColor = vec4(col, alpha);
-          return;
-        }
-        float pat = 0.0;
-        vec2 cell = vUv * uMapSize;
-        if (uStyle > 2.5) {
-          // Survey paper: height-contour lines plus a faint dot grid.
-          float c = abs(fract(vWorld.y * 2.0) - 0.5);
-          float cont = 1.0 - min(c / 0.05, 1.0);
-          vec2 dg = fract(cell) - 0.5;
-          float dotG = 1.0 - min(length(dg) / 0.09, 1.0);
-          pat = cont * 0.8 + dotG * 0.45;
-        }
-        // Explored cells: dim with a slightly lifted tone at reduced alpha
-        // so terrain stays readable through the film.
-        vec3 col = mix(uExplored, uColor, unexplored);
-        col = mix(col, uPattern, pat * unexplored * 0.6);
-        // Survey keeps the explored film thinner so the info2d treatment
-        // (desaturated/darkened world + bright markers) stays readable.
-        float exploredA = uStyle > 2.5 ? 0.26 : 0.72;
-        float alpha = a * mix(exploredA, 1.0, unexplored);
+        float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
+        vec3 col = mix(uColor, uHaze, hz * 0.65);
+        float alpha = a * mix(0.35, 0.6, unexplored);
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -176,12 +126,10 @@ function createSoftFogMaterial(theme: {
 export function FogLayer({ client, map }: FogLayerProps) {
   const theme = useRenderTheme();
   const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshBasicMaterial>(null);
   const softMatRef = useRef<THREE.ShaderMaterial | null>(null);
   const built = useRef<{ geometry: THREE.BufferGeometry; texture: THREE.DataTexture } | null>(null);
-  const builtFor = useRef<{ map: ResolvedMap; theme: string; layer: ArrayLike<number> | null }>({
+  const builtFor = useRef<{ map: ResolvedMap; layer: ArrayLike<number> | null }>({
     map,
-    theme: theme.id,
     layer: null,
   });
 
@@ -197,15 +145,10 @@ export function FogLayer({ client, map }: FogLayerProps) {
 
   useFrame(() => {
     const mesh = meshRef.current;
-    const material = materialRef.current;
-    if (mesh === null || material === null) {
+    if (mesh === null) {
       return;
     }
-    if (
-      built.current === null ||
-      builtFor.current.map !== map ||
-      builtFor.current.theme !== theme.id
-    ) {
+    if (built.current === null || builtFor.current.map !== map) {
       built.current?.geometry.dispose();
       built.current?.texture.dispose();
       const grid = map.grid;
@@ -221,9 +164,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
       // cells instead of ending at a straight edge: out-of-range UV clamps
       // to the border texels, and the shader fades alpha over the outer
       // half of the margin.
-      const margin = theme.fogSoft
-        ? Math.max(theme.terrain.skirtCells, FOG_RIM_MARGIN)
-        : theme.terrain.skirtCells;
+      const margin = Math.max(theme.terrain.skirtCells, FOG_RIM_MARGIN);
       const skirt =
         margin > 0
           ? buildOutskirtsGeometry(grid.width, grid.height, grid.heights, grid.ramps, margin)
@@ -254,51 +195,31 @@ export function FogLayer({ client, map }: FogLayerProps) {
       geometry.setIndex(new THREE.BufferAttribute(indices, 1));
       const texData = new Uint8Array(grid.width * grid.height * 4);
       const texture = new THREE.DataTexture(texData, grid.width, grid.height, THREE.RGBAFormat);
-      if (theme.fogSoft) {
-        texture.magFilter = THREE.LinearFilter;
-        texture.minFilter = THREE.LinearFilter;
-      } else {
-        texture.magFilter = THREE.NearestFilter;
-        texture.minFilter = THREE.NearestFilter;
-      }
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearFilter;
       texture.needsUpdate = true;
       built.current = { geometry, texture };
       builtFor.current.map = map;
-      builtFor.current.theme = theme.id;
       mesh.geometry = geometry;
-      if (theme.fogSoft) {
-        if (softMatRef.current === null) {
-          softMatRef.current = createSoftFogMaterial(theme);
-        }
-        const mat = softMatRef.current;
-        const uColor = mat.uniforms['uColor'] as { value: THREE.Color } | undefined;
-        uColor?.value.set(theme.fogColor);
-        const uExplored = mat.uniforms['uExplored'] as { value: THREE.Color } | undefined;
-        uExplored?.value.set(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
-        const uPattern = mat.uniforms['uPattern'] as { value: THREE.Color } | undefined;
-        if (theme.fogStyle === 'survey') {
-          uPattern?.value.set(theme.fogColor).multiplyScalar(0.62);
-        } else {
-          uPattern?.value.set(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
-        }
-        const uTexel = mat.uniforms['uTexel'] as { value: THREE.Vector2 } | undefined;
-        uTexel?.value.set(1 / grid.width, 1 / grid.height);
-        const uMapSize = mat.uniforms['uMapSize'] as { value: THREE.Vector2 } | undefined;
-        uMapSize?.value.set(grid.width, grid.height);
-        const uMargin = mat.uniforms['uMargin'] as { value: number } | undefined;
-        if (uMargin !== undefined) {
-          uMargin.value = margin;
-        }
-        const uMap = mat.uniforms['uMap'] as { value: THREE.DataTexture } | undefined;
-        if (uMap !== undefined) {
-          uMap.value = texture;
-        }
-        mesh.material = mat;
-      } else {
-        mesh.material = material;
-        material.alphaMap = texture;
-        material.needsUpdate = true;
+      if (softMatRef.current === null) {
+        softMatRef.current = createSoftFogMaterial(theme);
       }
+      const mat = softMatRef.current;
+      const uColor = mat.uniforms['uColor'] as { value: THREE.Color } | undefined;
+      uColor?.value.set(theme.fogColor);
+      const uTexel = mat.uniforms['uTexel'] as { value: THREE.Vector2 } | undefined;
+      uTexel?.value.set(1 / grid.width, 1 / grid.height);
+      const uMapSize = mat.uniforms['uMapSize'] as { value: THREE.Vector2 } | undefined;
+      uMapSize?.value.set(grid.width, grid.height);
+      const uMargin = mat.uniforms['uMargin'] as { value: number } | undefined;
+      if (uMargin !== undefined) {
+        uMargin.value = margin;
+      }
+      const uMap = mat.uniforms['uMap'] as { value: THREE.DataTexture } | undefined;
+      if (uMap !== undefined) {
+        uMap.value = texture;
+      }
+      mesh.material = mat;
       builtFor.current.layer = null;
     }
     const soft = softMatRef.current;
@@ -325,15 +246,5 @@ export function FogLayer({ client, map }: FogLayerProps) {
     uploadFog(built.current.texture, layer, map.grid.width * map.grid.height);
   });
 
-  return (
-    <mesh ref={meshRef} renderOrder={2} frustumCulled={false}>
-      <meshBasicMaterial
-        ref={materialRef}
-        color={FOG_COLOR}
-        transparent
-        depthWrite={false}
-        opacity={1}
-      />
-    </mesh>
-  );
+  return <mesh ref={meshRef} renderOrder={2} frustumCulled={false} />;
 }

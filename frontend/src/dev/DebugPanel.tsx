@@ -5,8 +5,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRuntimeStore } from '../client/runtime-store';
 import type { SimClient } from '../client/sim-client';
-import { THEME_IDS, type ThemeId } from '../client/theme';
-import { UI_SKIN_IDS, type UiSkinId } from '../client/ui-skin';
 import { useUiStore } from '../client/ui-store';
 import { localName } from '../content/index';
 import { SPEED_STEPS } from '../protocol/index';
@@ -17,12 +15,6 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const { t } = useTranslation();
   const stats = useRuntimeStore((state) => state.stats);
   const error = useRuntimeStore((state) => state.error);
-  const theme = useUiStore((state) => state.theme);
-  const setTheme = useUiStore((state) => state.setTheme);
-  const outline = useUiStore((state) => state.outline);
-  const setOutline = useUiStore((state) => state.setOutline);
-  const uiSkin = useUiStore((state) => state.uiSkin);
-  const setUiSkin = useUiStore((state) => state.setUiSkin);
   const grassDensity = useUiStore((state) => state.grassDensity);
   const setGrassDensity = useUiStore((state) => state.setGrassDensity);
   const info2d = useUiStore((state) => state.info2d);
@@ -111,49 +103,6 @@ export function DebugPanel({ client }: { client: SimClient }) {
           {error}
         </div>
       )}
-
-      <div className={styles['row']}>
-        <span className={styles['label']}>{t('dev.theme')}</span>
-        <select
-          value={theme}
-          onChange={(e) => {
-            setTheme(e.target.value as ThemeId);
-          }}
-        >
-          {THEME_IDS.map((id) => (
-            <option key={id} value={id}>
-              {t(`dev.theme_${id}`)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className={styles['row']}>
-        <span className={styles['label']}>{t('dev.ui')}</span>
-        <select
-          value={uiSkin}
-          onChange={(e) => {
-            setUiSkin(e.target.value as UiSkinId);
-          }}
-        >
-          {UI_SKIN_IDS.map((id) => (
-            <option key={id} value={id}>
-              {t(`dev.ui_${id}`)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className={styles['row']}>
-        <span className={styles['label']}>{t('dev.outline')}</span>
-        <input
-          type="checkbox"
-          checked={outline}
-          onChange={(e) => {
-            setOutline(e.target.checked);
-          }}
-        />
-      </div>
 
       <div className={styles['row']}>
         <span className={styles['label']}>{t('dev.grass_density')}</span>

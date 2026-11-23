@@ -27,7 +27,7 @@
 }
 
 /* field skin: light keycap chips. */
-:global([data-ui-skin='field']) .kbd {
+:global() .kbd {
   border: none;
   border-radius: 4px;
   background: rgba(238, 240, 232, 0.9);
@@ -35,42 +35,15 @@
   box-shadow: 0 1px 3px rgba(10, 14, 10, 0.35);
 }
 
-:global([data-ui-skin='field']) .active {
+:global() .active {
   border: none;
   background: rgba(255, 230, 0, 0.92);
   color: #22251f;
 }
 
 /* field skin: dark chips on the white context-hint pills. */
-:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .kbd {
+:global([data-hud-slot='topCenter']) .kbd {
   background: #2a2e26;
   color: #f0f1ea;
   box-shadow: none;
-}
-
-/* cel skin: ink-violet keycap chips. */
-:global([data-ui-skin='cel']) .kbd {
-  border: none;
-  border-radius: 5px;
-  background: rgba(45, 39, 82, 0.12);
-  color: #2d2752;
-  font-weight: 700;
-}
-
-/* glass skin: hairline ghost keycaps. */
-:global([data-ui-skin='glass']) .kbd {
-  border: 1px solid rgba(235, 245, 240, 0.35);
-  border-radius: 2px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 9px;
-}
-
-/* paper skin: soft paper keycaps. */
-:global([data-ui-skin='paper']) .kbd {
-  border: 1px solid var(--border-subtle);
-  border-radius: 5px;
-  background: #fffdf6;
-  color: #5c5340;
-  box-shadow: 0 1px 0 rgba(90, 80, 60, 0.2);
 }

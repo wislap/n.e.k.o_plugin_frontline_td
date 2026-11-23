@@ -1,4 +1,4 @@
-export type { RenderTheme } from './themes';
+export type { RenderVisual } from './visual';
 export { useRenderTheme } from './useTheme';
 export { SceneLighting } from './SceneLighting';
 export { ThemeBackground } from './ThemeBackground';

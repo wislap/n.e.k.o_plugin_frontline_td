@@ -31,11 +31,9 @@ const ATTACH_MATERIAL = 'material';
 const COVER_COLOR = '#3f7fbf';
 const COVER_ALPHA = Math.round(0.22 * 255);
 const COVER_LIFT = 0.038;
-const LINK_COLOR = new THREE.Color('#7fd4ff');
 const LINK_SAT_COLOR = new THREE.Color('#ff5a4f');
 const MAX_LINK_VERTS = 8192;
 const RING_CAP = 64;
-const RING_COLOR = '#7fd4ff';
 const RING_SEGMENTS = 48;
 const LIFT = 0.05;
 
@@ -48,7 +46,6 @@ function buildCover(
   map: ResolvedMap,
   mesh: THREE.Mesh,
   material: THREE.MeshBasicMaterial,
-  edgeMode: boolean,
 ): BuiltCover {
   const grid = map.grid;
   const data = buildTerrainGeometry(
@@ -73,8 +70,8 @@ function buildCover(
   geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
   const texData = new Uint8Array(grid.width * grid.height * 4);
   const texture = new THREE.DataTexture(texData, grid.width, grid.height, THREE.RGBAFormat);
-  texture.magFilter = edgeMode ? THREE.LinearFilter : THREE.NearestFilter;
-  texture.minFilter = edgeMode ? THREE.LinearFilter : THREE.NearestFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   mesh.geometry = geometry;
   material.alphaMap = texture;
@@ -111,7 +108,6 @@ function updateLinks(
   heights: ArrayLike<number>,
   scratchColor: THREE.Color,
   dashTime: number,
-  themed: boolean,
   linkColor: THREE.Color,
 ): void {
   linkLines.geometry = linkBuf.geometry;
@@ -130,16 +126,14 @@ function updateLinks(
       scratchColor
         .copy(sat ? LINK_SAT_COLOR : linkColor)
         .multiplyScalar(0.3 + flow * 0.7)
-        .multiplyScalar(themed ? 1.4 : 1);
+        .multiplyScalar(1.4);
       const from = links.pathOffsets[i] ?? 0;
       const to = links.pathOffsets[i + 1] ?? 0;
       for (let c = from; c + 1 < to && verts < MAX_LINK_VERTS - 2; c++) {
-        if (themed) {
-          // Flowing dashes: cells scroll toward the destination endpoint.
-          const phase = (((c - from - dashTime * 2) % 2.2) + 2.2) % 2.2;
-          if (phase > 1.1) {
-            continue;
-          }
+        // Flowing dashes: cells scroll toward the destination endpoint.
+        const phase = (((c - from - dashTime * 2) % 2.2) + 2.2) % 2.2;
+        if (phase > 1.1) {
+          continue;
         }
         const ca = links.pathCells[c] ?? 0;
         const cb = links.pathCells[c + 1] ?? 0;
@@ -219,7 +213,6 @@ export interface LogisticsOverlayProps {
 
 export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
   const theme = useRenderTheme();
-  const themed = theme.id !== 'legacy';
   const toggled = useUiStore((s) => s.logisticsOverlay);
   const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');
   const on = toggled || modeOn;
@@ -228,11 +221,9 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const coverBuiltRef = useRef<BuiltCover | null>(null);
   const coverBuiltForRef = useRef<{
     map: ResolvedMap;
-    themed: boolean;
     layer: ArrayLike<number> | undefined | null;
   }>({
     map,
-    themed,
     layer: null,
   });
   const linkRef = useRef<THREE.LineSegments>(null);
@@ -240,18 +231,13 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const linkBufRef = useRef<LineBuffer | null>(null);
   const dummyRef = useRef<THREE.Object3D | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
+  const linkColorRef = useRef(new THREE.Color('#7fd4ff'));
   const ringDashMatRef = useRef<DashRingMaterial | null>(null);
-  const ringDashMat = useMemo(
-    () => (themed ? createDashRingMaterial(theme.markers.accent) : null),
-    [theme, themed],
-  );
+  const ringDashMat = useMemo(() => createDashRingMaterial(theme.markers.accent), [theme]);
   const focusSetRef = useRef(new Set<number>());
-  const linkColorRef = useRef(new THREE.Color(LINK_COLOR));
+
   const coverShaderRef = useRef<CoverMaterial | null>(null);
-  const coverShader = useMemo(
-    () => (themed ? createCoverMaterial(theme.markers.link) : null),
-    [theme, themed],
-  );
+  const coverShader = useMemo(() => createCoverMaterial(theme.markers.link), [theme]);
 
   useEffect(() => {
     return () => {
@@ -265,13 +251,13 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   useEffect(() => {
     ringDashMatRef.current = ringDashMat;
     return () => {
-      ringDashMat?.dispose();
+      ringDashMat.dispose();
     };
   }, [ringDashMat]);
   useEffect(() => {
     coverShaderRef.current = coverShader;
     return () => {
-      coverShader?.dispose();
+      coverShader.dispose();
     };
   }, [coverShader]);
 
@@ -286,27 +272,19 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
     if (coverBuiltRef.current === null || coverBuiltForRef.current.map !== map) {
       coverBuiltRef.current?.geometry.dispose();
       coverBuiltRef.current?.texture.dispose();
-      coverBuiltRef.current = buildCover(map, coverMesh, coverMat, themed);
+      coverBuiltRef.current = buildCover(map, coverMesh, coverMat);
       coverBuiltForRef.current.map = map;
       coverBuiltForRef.current.layer = null;
     }
-    if (coverBuiltForRef.current.themed !== themed) {
-      coverBuiltForRef.current.themed = themed;
-      coverBuiltForRef.current.layer = null;
-      coverBuiltRef.current.texture.magFilter = themed ? THREE.LinearFilter : THREE.NearestFilter;
-      coverBuiltRef.current.texture.minFilter = themed ? THREE.LinearFilter : THREE.NearestFilter;
-      coverBuiltRef.current.texture.needsUpdate = true;
-    }
     const coverShaderMat = coverShaderRef.current;
-    if (coverShaderMat !== null) {
-      coverShaderMat.uniforms.uCover.value = coverBuiltRef.current.texture;
-      coverShaderMat.uniforms.uColor.value.set(theme.markers.link);
-      coverMesh.material = coverShaderMat;
-    } else {
-      coverMesh.material = coverMat;
-      coverMat.color.set(COVER_COLOR);
+    if (coverShaderMat === null) {
+      return;
     }
-    linkColorRef.current.set(themed ? theme.markers.link : LINK_COLOR);
+    linkColorRef.current.set(theme.markers.link);
+    coverShaderMat.uniforms.uCover.value = coverBuiltRef.current.texture;
+    coverShaderMat.uniforms.uColor.value.set(theme.markers.link);
+    coverMesh.material = coverShaderMat;
+
     const ringDash = ringDashMatRef.current;
     if (ringDash !== null) {
       ringDash.uniforms.uTime.value = performance.now() / 1000;
@@ -346,11 +324,9 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       heights,
       colorRef.current,
       performance.now() / 1000,
-      themed,
       linkColorRef.current,
     );
-    let focus: ReadonlySet<number> | null = null;
-    if (themed) {
+    {
       const focusSet = focusSetRef.current;
       focusSet.clear();
       for (const h of useSelectionStore.getState().selected) {
@@ -367,9 +343,18 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       if (pHandle !== null) {
         focusSet.add(pHandle);
       }
-      focus = focusSet;
+      updateRings(
+        rings,
+        structures,
+        observer,
+        db,
+        width,
+        height,
+        heights,
+        dummyRef.current,
+        focusSet,
+      );
     }
-    updateRings(rings, structures, observer, db, width, height, heights, dummyRef.current, focus);
   });
 
   return (
@@ -387,23 +372,13 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
         <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
       </lineSegments>
       <instancedMesh
-        key={`rings-${theme.id}`}
+        key={`rings`}
         ref={ringRef}
         args={[undefined, undefined, RING_CAP]}
         frustumCulled={false}
       >
         <ringGeometry args={[0.95, 1, RING_SEGMENTS]} />
-        {ringDashMat === null ? (
-          <meshBasicMaterial
-            color={RING_COLOR}
-            transparent
-            opacity={0.5}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-          />
-        ) : (
-          <primitive object={ringDashMat} attach={ATTACH_MATERIAL} />
-        )}
+        <primitive object={ringDashMat} attach={ATTACH_MATERIAL} />
       </instancedMesh>
     </group>
   );

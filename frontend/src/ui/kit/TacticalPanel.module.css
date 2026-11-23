@@ -149,27 +149,27 @@
 
 /* field skin: soft rounded cards — no accent stripes, corner cuts or
    hatched headers. Compact panels become full pills. */
-:global([data-ui-skin='field']) .panel {
+:global() .panel {
   border-color: rgba(238, 240, 232, 0.14);
 }
 
-:global([data-ui-skin='field']) .panel::before,
-:global([data-ui-skin='field']) .panel::after {
+:global() .panel::before,
+:global() .panel::after {
   display: none;
 }
 
-:global([data-ui-skin='field']) .compact {
+:global() .compact {
   border-radius: 999px;
 }
 
-:global([data-ui-skin='field']) .header {
+:global() .header {
   background-image: none;
   border-bottom-color: rgba(238, 240, 232, 0.1);
 }
 
 /* field skin: the mode-switcher panel disappears — tabs float on the
    world (white pill = current, white text = rest). */
-:global([data-ui-skin='field'] [data-hud-slot='topLeft']) .panel {
+:global([data-hud-slot='topLeft']) .panel {
   border: none;
   background: transparent;
   box-shadow: none;
@@ -178,103 +178,14 @@
 
 /* field skin: the top-centre context hint (tone-mode) is a white pill
    with dark ink; the gauge pill keeps its own dark instrument look. */
-:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode {
+:global([data-hud-slot='topCenter']) .tone-mode {
   border: none;
   background: rgba(244, 246, 238, 0.94);
   color: #23261f;
 }
 
-:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode .body,
-:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode .body span {
+:global([data-hud-slot='topCenter']) .tone-mode .body,
+:global([data-hud-slot='topCenter']) .tone-mode .body span {
   color: #23261f;
   text-shadow: none;
-}
-
-/* cel skin: white cards, solid colour-block header with a slanted right
-   edge, no stripes or corner cuts. */
-:global([data-ui-skin='cel']) .panel {
-  border-width: 2px;
-}
-
-:global([data-ui-skin='cel']) .panel::before,
-:global([data-ui-skin='cel']) .panel::after {
-  display: none;
-}
-
-:global([data-ui-skin='cel']) .header {
-  background: var(--mode-accent);
-  background-image: none;
-  border-bottom: none;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
-}
-
-:global([data-ui-skin='cel']) .header .title {
-  color: #ffffff;
-  font-weight: 700;
-}
-
-:global([data-ui-skin='cel']) .header .badge {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-}
-
-/* glass skin: thin white hairline frames whose corner ticks extend past
-   the panel corners; translucent body, microtext headers. */
-:global([data-ui-skin='glass']) .panel {
-  border-color: rgba(235, 245, 240, 0.3);
-}
-
-:global([data-ui-skin='glass']) .panel::before {
-  display: none;
-}
-
-:global([data-ui-skin='glass']) .panel::after {
-  inset: -4px;
-  background:
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 top 0 / 9px 1px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 top 0 / 1px 9px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 top 0 / 9px 1px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 top 0 / 1px 9px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 bottom 0 / 9px 1px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) left 0 bottom 0 / 1px 9px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 bottom 0 / 9px 1px
-      no-repeat,
-    linear-gradient(rgba(235, 245, 240, 0.75), rgba(235, 245, 240, 0.75)) right 0 bottom 0 / 1px 9px
-      no-repeat;
-}
-
-:global([data-ui-skin='glass']) .header {
-  background-image: none;
-  border-bottom-color: rgba(235, 245, 240, 0.14);
-}
-
-:global([data-ui-skin='glass']) .header .title {
-  font-size: var(--text-xs);
-  letter-spacing: 0.14em;
-}
-
-:global([data-ui-skin='glass']) .body {
-  font-size: var(--text-sm);
-}
-
-/* paper skin: matte paper cards, dashed ink header rule, no stripes. */
-:global([data-ui-skin='paper']) .panel::before,
-:global([data-ui-skin='paper']) .panel::after {
-  display: none;
-}
-
-:global([data-ui-skin='paper']) .header {
-  background-image: none;
-  border-bottom: 1px dashed var(--border-strong);
-}
-
-:global([data-ui-skin='paper']) .header .title {
-  letter-spacing: 0.04em;
 }

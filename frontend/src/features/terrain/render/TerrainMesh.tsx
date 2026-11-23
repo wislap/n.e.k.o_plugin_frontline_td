@@ -12,14 +12,7 @@ import { useUiStore } from '../../../client/ui-store';
 import { useRenderTheme } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import type { Snapshot } from '../../../core/index';
-import {
-  buildIslandGeometry,
-  buildOutskirtsGeometry,
-  buildTerrainGeometry,
-  buildTerrainSkirtGeometry,
-  parseHexColor,
-} from './geometry';
-import { HEIGHT_STEP } from '../../../render/world';
+import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
 import { createThemedTerrainMaterial, type ThemedTerrainUniforms } from './themed-material';
 
 export interface TerrainMeshProps {
@@ -145,19 +138,6 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     return geo;
   }, [data]);
 
-  const skirtGeometry = useMemo(() => {
-    if (heights === undefined || theme.id === 'legacy' || theme.terrain.pedestal === false) {
-      return null;
-    }
-    const skirt = buildTerrainSkirtGeometry(width, height, heights, ramps);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(skirt.positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(skirt.colors, 3));
-    geo.setIndex(new THREE.BufferAttribute(skirt.indices, 1));
-    geo.computeVertexNormals();
-    return geo;
-  }, [heights, width, height, ramps, theme.id, theme.terrain.pedestal]);
-
   // Out-of-bounds noise-hill ring (visual-languages): same themed ramp
   // material, faded toward the horizon haze by distance past the border.
   const outskirtsGeometry = useMemo(() => {
@@ -184,70 +164,9 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
 
   useEffect(() => {
     return () => {
-      skirtGeometry?.dispose();
-    };
-  }, [skirtGeometry]);
-
-  useEffect(() => {
-    return () => {
       outskirtsGeometry?.dispose();
     };
   }, [outskirtsGeometry]);
-
-  // Diorama floating island: tapered strata block under the map plus a
-  // soft contact shadow in the void below. Replaces the skirt.
-  const island = useMemo(() => {
-    const cfg = theme.terrain.island;
-    if (heights === undefined || cfg === undefined) {
-      return null;
-    }
-    let edgeMin = Infinity;
-    for (let x = 0; x < width; x++) {
-      edgeMin = Math.min(edgeMin, heights[x] ?? 0, heights[(height - 1) * width + x] ?? 0);
-    }
-    for (let y = 0; y < height; y++) {
-      edgeMin = Math.min(edgeMin, heights[y * width] ?? 0, heights[y * width + width - 1] ?? 0);
-    }
-    const topY = edgeMin * HEIGHT_STEP - 0.02;
-    const data = buildIslandGeometry(width, height, topY, cfg.depth, cfg.strata);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
-    geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
-    geo.computeVertexNormals();
-    const shadowMat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      uniforms: { uAlpha: { value: 0.42 } },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uAlpha;
-        varying vec2 vUv;
-        void main() {
-          float d = length(vUv - 0.5) * 2.0;
-          float a = (1.0 - smoothstep(0.25, 1.0, d)) * uAlpha;
-          gl_FragColor = vec4(0.1, 0.09, 0.08, a);
-        }
-      `,
-    });
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    const shadowY = topY - cfg.depth - cfg.shadowGap;
-    return { geo, mat, shadowMat, shadowY, shadowW: width * 1.05, shadowH: height * 1.05 };
-  }, [heights, width, height, theme]);
-
-  useEffect(() => {
-    return () => {
-      island?.geo.dispose();
-      island?.mat.dispose();
-      island?.shadowMat.dispose();
-    };
-  }, [island]);
 
   useEffect(() => {
     return () => {
@@ -256,12 +175,10 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     };
   }, []);
 
-  // Themed terrain swaps the Lambert material for a light-aware standard
-  // material with the theme's shader parameters; legacy keeps the original.
-  // The same material instance serves the skirt meshes (in-bounds cells
-  // see dOut = 0 so the haze fade is a no-op there).
+  // The same material instance serves the outskirts skirt mesh (in-bounds
+  // cells see dOut = 0 so the haze fade is a no-op there).
   const themed = useMemo(() => {
-    if (theme.id === 'legacy' || heights === undefined) {
+    if (heights === undefined) {
       return null;
     }
     let lo = Infinity;
@@ -315,40 +232,9 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         ref={meshRef}
         geometry={geometry}
         frustumCulled={false}
-        receiveShadow={theme.id !== 'legacy'}
+        receiveShadow
         {...(themed !== null ? { material: themed.material } : {})}
-      >
-        {themed === null && <meshLambertMaterial vertexColors />}
-      </mesh>
-      {skirtGeometry !== null && (
-        <mesh
-          geometry={skirtGeometry}
-          frustumCulled={false}
-          raycast={NO_RAYCAST}
-          {...(themed !== null ? { material: themed.material } : {})}
-        >
-          {themed === null && <meshLambertMaterial vertexColors />}
-        </mesh>
-      )}
-      {island !== null && (
-        <>
-          <mesh
-            geometry={island.geo}
-            material={island.mat}
-            frustumCulled={false}
-            raycast={NO_RAYCAST}
-          />
-          <mesh
-            position={[width / 2, island.shadowY, height / 2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            frustumCulled={false}
-            raycast={NO_RAYCAST}
-            material={island.shadowMat}
-          >
-            <planeGeometry args={[island.shadowW, island.shadowH]} />
-          </mesh>
-        </>
-      )}
+      />
       {outskirtsGeometry !== null && (
         <mesh
           geometry={outskirtsGeometry}

@@ -4,14 +4,13 @@
 // (unitEmissive or faction). aDim carries per-instance dimming (empty
 // energy, selection brightening). uInfo2D dims units in tactical view.
 import * as THREE from 'three';
-import type { RenderTheme } from '../../../render/theme/index';
-import { applyToonBands } from '../../../render/theme/toonify';
+import type { RenderVisual } from '../../../render/theme/index';
 
 export interface ThemedUnitUniforms {
   info2d: { value: number };
 }
 
-export function createThemedUnitMaterial(theme: RenderTheme): {
+export function createThemedUnitMaterial(theme: RenderVisual): {
   material: THREE.MeshStandardMaterial;
   uniforms: ThemedUnitUniforms;
 } {
@@ -90,9 +89,6 @@ export function createThemedUnitMaterial(theme: RenderTheme): {
         }`,
       );
   };
-  if (theme.toon === true) {
-    applyToonBands(mat);
-  }
-  mat.customProgramCacheKey = () => `themed-unit-${theme.id}`;
+  mat.customProgramCacheKey = () => 'themed-unit';
   return { material: mat, uniforms };
 }

@@ -29,7 +29,6 @@ import {
   type ConstructionSalvage,
   type ConstructionStructures,
 } from '../protocol';
-import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { createPadMaterial } from './pad-material';
 import { createThemedStructureMaterial } from './themed-structure-material';
 import { ACTIVE_STRUCTURE_GLYPHS, disposeGlyphMaterials } from './structure-glyphs';
@@ -80,23 +79,7 @@ export function StructuresLayer({
 }: StructuresLayerProps) {
   const [capacity, setCapacity] = useState(64);
   const theme = useRenderTheme();
-  const outlineOn = useUiStore((s) => s.outline);
-  const outlineMat = useMemo(
-    () =>
-      theme.id !== 'legacy' && (outlineOn || theme.outlineAlways === true)
-        ? createOutlineMaterial(theme.outline)
-        : null,
-    [theme, outlineOn],
-  );
-  useEffect(() => {
-    return () => {
-      outlineMat?.dispose();
-    };
-  }, [outlineMat]);
   const silRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>({});
-  const silOutlineRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>(
-    {},
-  );
   const glyphRefs = useRef<Partial<Record<ActiveGlyph, THREE.InstancedMesh | null>>>({});
   const blueprintRef = useRef<THREE.InstancedMesh>(null);
   const waitingRef = useRef<THREE.InstancedMesh>(null);
@@ -109,23 +92,20 @@ export function StructuresLayer({
     {},
   );
 
-  const themed = useMemo(
-    () => (theme.id === 'legacy' ? null : createThemedStructureMaterial(theme)),
-    [theme],
-  );
+  const themed = useMemo(() => createThemedStructureMaterial(theme), [theme]);
   useEffect(() => {
     return () => {
-      themed?.material.dispose();
-      themed?.codes?.dispose();
+      themed.material.dispose();
+      themed.codes.dispose();
     };
   }, [themed]);
 
   // Foundation pads (field): graphite slab + emissive edge under each
   // structure — what separates industry from nature.
-  const pad = useMemo(() => (theme.pad === null ? null : createPadMaterial(theme)), [theme]);
+  const pad = useMemo(() => createPadMaterial(theme), [theme]);
   useEffect(() => {
     return () => {
-      pad?.material.dispose();
+      pad.material.dispose();
     };
   }, [pad]);
 
@@ -209,12 +189,10 @@ export function StructuresLayer({
     // toward 1 while the camera is in tactical mode.
     const infoTarget =
       theme.info2d && useUiStore.getState().info2d && cam.mode === 'tactical' ? 1 : 0;
-    for (const u of [themed?.uniforms.info2d, pad?.uniforms.info2d]) {
-      if (u !== undefined) {
-        u.value += (infoTarget - u.value) * 0.25;
-        if (Math.abs(u.value - infoTarget) < 0.01) {
-          u.value = infoTarget;
-        }
+    for (const u of [themed.uniforms.info2d, pad.uniforms.info2d]) {
+      u.value += (infoTarget - u.value) * 0.25;
+      if (Math.abs(u.value - infoTarget) < 0.01) {
+        u.value = infoTarget;
       }
     }
     const glyphYawRot = camera.rotation.y;
@@ -308,7 +286,7 @@ export function StructuresLayer({
         // Foundation pad under built structures (field): graphite slab
         // slightly larger than the footprint, sunk into the terrain.
         const padMesh = padRef.current;
-        if (padMesh !== null && state !== STATE_RUIN && theme.pad !== null) {
+        if (padMesh !== null && state !== STATE_RUIN) {
           const margin = theme.pad.margin;
           dummy.position.set(cx, groundY - 0.04 + theme.pad.height / 2, cy);
           dummy.rotation.set(0, 0, 0);
@@ -322,7 +300,6 @@ export function StructuresLayer({
         // (themed modes only; uses hpBp already in the channel).
         if (
           statusMesh !== null &&
-          themed !== null &&
           state === STATE_OPERATIONAL &&
           (channel.hpBp[i] ?? 10000) < 9000 &&
           statusCount < capacity
@@ -347,10 +324,8 @@ export function StructuresLayer({
             dummy.updateMatrix();
             gMesh.setMatrixAt(gSlot, dummy.matrix);
             color.set(resolveGlyphTint(faction, localFaction, isHostile));
-            if (themed !== null) {
-              // HDR tint so roof glyphs feed bloom in themed modes.
-              color.multiplyScalar(theme.materials.emissiveBoost);
-            }
+            // HDR tint so roof glyphs feed bloom.
+            color.multiplyScalar(theme.materials.emissiveBoost);
             gMesh.setColorAt(gSlot, color);
             glyphCounts[glyph] = gSlot + 1;
           }
@@ -362,7 +337,6 @@ export function StructuresLayer({
       const silMesh = silRefs.current[s];
       if (silMesh !== undefined && silMesh !== null) {
         commitMeshBuffers(silMesh, silCounts[s]);
-        bindOutline(silOutlineRefs.current[s] ?? null, silMesh);
       }
       const dimAttr = dimAttrs[s];
       if (dimAttr !== undefined) {
@@ -413,7 +387,7 @@ export function StructuresLayer({
     <group>
       {STRUCTURE_SILHOUETTES.map((s) => (
         <instancedMesh
-          key={`sil-${s}-${capacity}-${theme.id}`}
+          key={`sil-${s}-${capacity}`}
           ref={(m) => {
             silRefs.current[s] = m;
           }}
@@ -421,26 +395,9 @@ export function StructuresLayer({
           frustumCulled={false}
           castShadow
         >
-          {themed === null ? (
-            <meshLambertMaterial vertexColors />
-          ) : (
-            <primitive object={themed.material} attach={ATTACH_MATERIAL} />
-          )}
+          <primitive object={themed.material} attach={ATTACH_MATERIAL} />
         </instancedMesh>
       ))}
-      {outlineMat !== null &&
-        STRUCTURE_SILHOUETTES.map((s) => (
-          <instancedMesh
-            key={`ol-${s}-${capacity}-${theme.id}`}
-            ref={(m) => {
-              silOutlineRefs.current[s] = m;
-            }}
-            args={[undefined, undefined, capacity]}
-            frustumCulled={false}
-          >
-            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
-          </instancedMesh>
-        ))}
       {ACTIVE_STRUCTURE_GLYPHS.map((g) => (
         <instancedMesh
           key={`gly-${g}-${capacity}`}
@@ -479,29 +436,25 @@ export function StructuresLayer({
         <boxGeometry args={[1, 1, 1]} />
         <meshLambertMaterial color={SALVAGE_COLOR} />
       </instancedMesh>
-      {themed !== null && (
-        <instancedMesh
-          key={`status-${capacity}`}
-          ref={statusRef}
-          args={[undefined, undefined, capacity]}
-          frustumCulled={false}
-        >
-          <octahedronGeometry args={[0.16, 0]} />
-          <meshBasicMaterial color={STATUS_COLOR} toneMapped={false} />
-        </instancedMesh>
-      )}
-      {pad !== null && (
-        <instancedMesh
-          key={`pad-${capacity}-${theme.id}`}
-          ref={padRef}
-          args={[undefined, undefined, capacity]}
-          frustumCulled={false}
-          receiveShadow
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <primitive object={pad.material} attach={ATTACH_MATERIAL} />
-        </instancedMesh>
-      )}
+      <instancedMesh
+        key={`status-${capacity}`}
+        ref={statusRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+      >
+        <octahedronGeometry args={[0.16, 0]} />
+        <meshBasicMaterial color={STATUS_COLOR} toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh
+        key={`pad-${capacity}`}
+        ref={padRef}
+        args={[undefined, undefined, capacity]}
+        frustumCulled={false}
+        receiveShadow
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <primitive object={pad.material} attach={ATTACH_MATERIAL} />
+      </instancedMesh>
     </group>
   );
 }

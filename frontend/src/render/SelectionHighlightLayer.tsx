@@ -284,7 +284,7 @@ export function SelectionHighlightLayer({
       demolishHoverHandle: interaction.demolishHover?.handle ?? null,
       demolishConfirmTargets: interaction.demolishConfirm?.targets ?? EMPTY_TARGETS,
       isHostile,
-      unitGroupBracket: theme.id !== 'legacy',
+      unitGroupBracket: true,
     });
 
     writeHighlights(
@@ -296,18 +296,13 @@ export function SelectionHighlightLayer({
       mapWidth,
       mapHeight,
       tempColorRef.current,
-      theme.id === 'legacy' ? null : theme.markers.accent,
+      theme.markers.accent,
     );
   });
 
   return (
     <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
-      <lineBasicMaterial
-        vertexColors
-        transparent
-        opacity={theme.id === 'legacy' ? 0.9 : 0.65}
-        depthWrite={false}
-      />
+      <lineBasicMaterial vertexColors transparent opacity={0.65} depthWrite={false} />
     </lineSegments>
   );
 }

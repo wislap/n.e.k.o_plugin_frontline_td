@@ -1,7 +1,7 @@
-// Hook: current render theme from the client UI store.
-import { useUiStore } from '../../client/ui-store';
-import { RENDER_THEMES, type RenderTheme } from './themes';
+// The game's single render visual (merged language). Kept as a hook so
+// debug-panel look toggles (step 2) can re-render consumers when changed.
+import { VISUAL, type RenderVisual } from './visual';
 
-export function useRenderTheme(): RenderTheme {
-  return RENDER_THEMES[useUiStore((s) => s.theme)];
+export function useRenderTheme(): RenderVisual {
+  return VISUAL;
 }

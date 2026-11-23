@@ -61,77 +61,28 @@
 
 /* field skin: text tabs — the active one is a white pill with dark ink,
    the rest are white text floating on the world. */
-:global([data-ui-skin='field']) .list {
+:global() .list {
   padding: 0;
   gap: var(--space-2);
   border: none;
   background: transparent;
 }
 
-:global([data-ui-skin='field']) .tab {
+:global() .tab {
   border-radius: 999px;
   color: rgba(246, 248, 242, 0.92);
   text-shadow: 0 1px 6px rgba(10, 14, 10, 0.65);
 }
 
-:global([data-ui-skin='field']) .tab:hover:not(:disabled):not(.active) {
+:global() .tab:hover:not(:disabled):not(.active) {
   background: rgba(246, 248, 242, 0.14);
   color: #ffffff;
 }
 
-:global([data-ui-skin='field']) .active {
+:global() .active {
   border-color: transparent;
   background: rgba(244, 246, 238, 0.96);
   color: #22251f;
   box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
   text-shadow: none;
-}
-
-/* cel skin: white card tabs — the active one is a slanted accent block. */
-:global([data-ui-skin='cel']) .list {
-  border-radius: 10px;
-}
-
-:global([data-ui-skin='cel']) .tab {
-  border-radius: 8px;
-  color: var(--text-secondary);
-}
-
-:global([data-ui-skin='cel']) .active {
-  border-color: transparent;
-  background: var(--mode-accent);
-  color: #ffffff;
-  font-weight: 700;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-}
-
-/* glass skin: frosted tabs — the active one is a lime pill. */
-:global([data-ui-skin='glass']) .list {
-  border-color: rgba(235, 245, 240, 0.24);
-  background: rgba(13, 17, 18, 0.45);
-}
-
-:global([data-ui-skin='glass']) .tab {
-  color: var(--text-secondary);
-}
-
-:global([data-ui-skin='glass']) .active {
-  border-color: transparent;
-  border-radius: 999px;
-  background: var(--mode-accent);
-  color: #14200a;
-  font-weight: 600;
-}
-
-/* paper skin: paper tabs — the active one is an ink pill. */
-:global([data-ui-skin='paper']) .list {
-  border-color: var(--border-subtle);
-  background: var(--surface-inset);
-}
-
-:global([data-ui-skin='paper']) .active {
-  border-color: transparent;
-  border-radius: 999px;
-  background: #3a3428;
-  color: #f7f3e9;
 }

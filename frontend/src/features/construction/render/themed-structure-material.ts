@@ -10,8 +10,7 @@
 // hazard stripes on accent trim and a printed-code decal on top faces.
 // uInfo2D dims structures into dark footprints for the tactical info view.
 import * as THREE from 'three';
-import type { RenderTheme } from '../../../render/theme/index';
-import { applyToonBands } from '../../../render/theme/toonify';
+import type { RenderVisual } from '../../../render/theme/index';
 import { createCodesTexture } from './decal-texture';
 
 interface ThemedStructureUniforms {
@@ -26,7 +25,7 @@ export interface ThemedStructureMaterial {
   codes: THREE.CanvasTexture | null;
 }
 
-export function createThemedStructureMaterial(theme: RenderTheme): ThemedStructureMaterial {
+export function createThemedStructureMaterial(theme: RenderVisual): ThemedStructureMaterial {
   const m = theme.materials;
   const factionEmissive = m.structureEmissive === 'faction';
   const detail = m.detail > 0;
@@ -137,9 +136,6 @@ export function createThemedStructureMaterial(theme: RenderTheme): ThemedStructu
         }`,
       );
   };
-  if (theme.toon === true) {
-    applyToonBands(mat);
-  }
-  mat.customProgramCacheKey = () => `themed-structure-${theme.id}`;
+  mat.customProgramCacheKey = () => 'themed-structure';
   return { material: mat, uniforms, codes };
 }

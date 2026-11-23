@@ -146,7 +146,7 @@
 
 /* field skin: the hotbar floats — no framed panel, dark translucent
    rounded tiles with ≥64px thumbnails, name + cost underneath. */
-:global([data-ui-skin='field']) .panel {
+:global() .panel {
   border: none;
   background: transparent;
   box-shadow: none;
@@ -155,98 +155,37 @@
 
 /* The toolbar row floats above the tiles — the demolish toggle reads as
    one of the dark rounded controls, clearly separated from the grid. */
-:global([data-ui-skin='field']) .toolbar {
+:global() .toolbar {
   margin-bottom: var(--space-2);
 }
 
-:global([data-ui-skin='field']) .toolbar > button:last-child {
+:global() .toolbar > button:last-child {
   border-radius: 999px;
   border-color: rgba(238, 240, 232, 0.14);
   background: rgba(18, 22, 20, 0.78);
 }
 
-:global([data-ui-skin='field']) .grid {
+:global() .grid {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 }
 
-:global([data-ui-skin='field']) .card {
+:global() .card {
   border: none;
   border-radius: 12px;
   background: rgba(18, 22, 20, 0.78);
 }
 
-:global([data-ui-skin='field']) .card:hover {
+:global() .card:hover {
   background: rgba(30, 36, 32, 0.88);
 }
 
-:global([data-ui-skin='field']) .cardActive {
+:global() .cardActive {
   border: 1px solid var(--mode-accent);
   box-shadow: 0 0 14px var(--mode-accent-glow);
 }
 
-:global([data-ui-skin='field']) .thumb {
+:global() .thumb {
   height: 68px;
   border: none;
   background: rgba(255, 255, 255, 0.05);
-}
-
-/* cel skin: white tiles with bold ink names; demolish = accent pill. */
-:global([data-ui-skin='cel']) .card {
-  border: 2px solid rgba(58, 53, 96, 0.25);
-  border-radius: 12px;
-  background: rgba(253, 253, 255, 0.95);
-  color: #2d2752;
-}
-
-:global([data-ui-skin='cel']) .cardActive {
-  border-color: var(--mode-accent);
-  background: #ffffff;
-}
-
-:global([data-ui-skin='cel']) .thumb {
-  background: rgba(58, 53, 96, 0.06);
-  border: none;
-}
-
-:global([data-ui-skin='cel']) .toolbar > button:last-child {
-  border-radius: 999px;
-}
-
-/* glass skin: frosted tiles with hairline borders. */
-:global([data-ui-skin='glass']) .panel {
-  border-color: rgba(235, 245, 240, 0.28);
-}
-
-:global([data-ui-skin='glass']) .card {
-  border: 1px solid rgba(235, 245, 240, 0.22);
-  border-radius: 4px;
-  background: rgba(17, 22, 23, 0.6);
-}
-
-:global([data-ui-skin='glass']) .cardActive {
-  border-color: var(--mode-accent);
-  background: rgba(200, 245, 66, 0.08);
-}
-
-:global([data-ui-skin='glass']) .thumb {
-  border: none;
-  background: rgba(235, 245, 240, 0.05);
-}
-
-/* paper skin: paper tiles with soft shadows. */
-:global([data-ui-skin='paper']) .card {
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--surface-elevated);
-  color: #3a3428;
-  box-shadow: 0 2px 8px rgba(90, 80, 60, 0.14);
-}
-
-:global([data-ui-skin='paper']) .cardActive {
-  border-color: var(--mode-accent);
-}
-
-:global([data-ui-skin='paper']) .thumb {
-  border: none;
-  background: rgba(94, 82, 60, 0.08);
 }

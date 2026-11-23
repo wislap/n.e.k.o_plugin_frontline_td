@@ -111,7 +111,7 @@
 /* field skin: resources are a floating row of glyph + number + rate in
    white with a soft shadow — no warehouse table chrome. The priority
    swap is a small round icon button; its text lives in the tooltip. */
-:global([data-ui-skin='field']) .panel {
+:global() .panel {
   min-width: 0;
   border: none;
   background: transparent;
@@ -119,11 +119,11 @@
   backdrop-filter: none;
 }
 
-:global([data-ui-skin='field']) .panel header {
+:global() .panel header {
   display: none;
 }
 
-:global([data-ui-skin='field']) .rows {
+:global() .rows {
   flex-direction: row;
   flex-wrap: nowrap;
   justify-content: flex-end;
@@ -132,11 +132,11 @@
 
 /* Zero-rate badges add noise without information; hiding them keeps the
    resource row on a single line at every supported width. */
-:global([data-ui-skin='field']) .rateZero {
+:global() .rateZero {
   display: none;
 }
 
-:global([data-ui-skin='field']) .row {
+:global() .row {
   padding: 0;
   gap: 4px;
   background: transparent;
@@ -144,29 +144,29 @@
   text-shadow: 0 1px 6px rgba(10, 14, 10, 0.7);
 }
 
-:global([data-ui-skin='field']) .cargoIcon {
+:global() .cargoIcon {
   color: rgba(246, 248, 242, 0.9);
 }
 
-:global([data-ui-skin='field']) .cargoName {
+:global() .cargoName {
   display: none;
 }
 
-:global([data-ui-skin='field']) .amount {
+:global() .amount {
   color: #ffffff;
 }
 
-:global([data-ui-skin='field']) .warnings {
+:global() .warnings {
   border-top: none;
 }
 
-:global([data-ui-skin='field']) .warnItem {
+:global() .warnItem {
   border-radius: 999px;
   border: none;
   background: rgba(20, 24, 20, 0.72);
 }
 
-:global([data-ui-skin='field']) .footer {
+:global() .footer {
   margin-top: var(--space-1);
   padding-top: 0;
   border-top: none;
@@ -174,7 +174,7 @@
   justify-content: flex-end;
 }
 
-:global([data-ui-skin='field']) .priorityBtn {
+:global() .priorityBtn {
   width: 30px;
   min-width: 0;
   height: 30px;
@@ -186,6 +186,6 @@
   box-shadow: 0 2px 8px rgba(10, 14, 10, 0.4);
 }
 
-:global([data-ui-skin='field']) .priorityLabel {
+:global() .priorityLabel {
   display: none;
 }

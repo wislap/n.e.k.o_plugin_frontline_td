@@ -16,7 +16,6 @@ import {
   type ConstructionStructures,
 } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
-import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { useRenderTheme } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { terrainY } from '../../../render/world';
@@ -27,14 +26,12 @@ import { createThemedUnitMaterial } from './themed-unit-material';
 const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
-const RING_SCALE = 1.5;
 const RING_SCALE_THEMED = 1.15;
 const DEFAULT_LOW_ENERGY_BP = 2500;
 const EMPTY_ENERGY_DIM = 0.42;
 const EMPTY_ENERGY_COLOR = '#ff5c5c';
 const LOW_ENERGY_COLOR = '#ffc14d';
 const LOW_ENERGY_TINT = new THREE.Color(LOW_ENERGY_COLOR);
-const RING_COLOR = new THREE.Color('#ffffff');
 // Render-only unit shapes (content `visual`, M4); index order matches
 // the instanced-mesh order in the JSX below.
 type UnitShape = 'cylinder' | 'box' | 'cone' | 'sphere';
@@ -74,22 +71,7 @@ export function UnitsLayer({
 }: UnitsLayerProps) {
   const [capacity, setCapacity] = useState(256);
   const theme = useRenderTheme();
-  const themed = theme.id !== 'legacy';
-  const outlineOn = useUiStore((s) => s.outline);
-  const outlineMat = useMemo(
-    () =>
-      themed && (outlineOn || theme.outlineAlways === true)
-        ? createOutlineMaterial(theme.outline)
-        : null,
-    [themed, outlineOn, theme],
-  );
-  useEffect(() => {
-    return () => {
-      outlineMat?.dispose();
-    };
-  }, [outlineMat]);
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
-  const outlineRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const dimAttrsRef = useRef<(THREE.InstancedBufferAttribute | null)[]>([null, null, null, null]);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const energyPipRef = useRef<THREE.InstancedMesh>(null);
@@ -105,28 +87,22 @@ export function UnitsLayer({
   // Each shape's InstancedMesh owns a clone: per-instance aDim attributes
   // live on the geometry, so they cannot be shared across meshes.
   const robotGeos = useMemo(() => {
-    if (!themed) {
-      return null;
-    }
     const base = buildRobotGeometry(theme.geometry.bevel);
-    const geos = [base, base.clone(), base.clone(), base.clone()];
-    return geos;
-  }, [themed, theme]);
+    return [base, base.clone(), base.clone(), base.clone()];
+  }, [theme]);
   useEffect(() => {
     return () => {
-      if (robotGeos !== null) {
-        for (const g of robotGeos) {
-          g.dispose();
-        }
+      for (const g of robotGeos) {
+        g.dispose();
       }
     };
   }, [robotGeos]);
-  const unitMat = useMemo(() => (themed ? createThemedUnitMaterial(theme) : null), [themed, theme]);
+  const unitMat = useMemo(() => createThemedUnitMaterial(theme), [theme]);
   const infoUniformRef = useRef<{ value: number } | null>(null);
   useEffect(() => {
-    infoUniformRef.current = unitMat?.uniforms.info2d ?? null;
+    infoUniformRef.current = unitMat.uniforms.info2d;
     return () => {
-      unitMat?.material.dispose();
+      unitMat.material.dispose();
     };
   }, [unitMat]);
 
@@ -231,7 +207,7 @@ export function UnitsLayer({
 
       // Robot geometry has its base at y=0 (unit space), so it sits on
       // the terrain; legacy primitives are centered and need the lift.
-      const lift = themed ? 0 : (UNIT_HEIGHT * visual.scale) / 2;
+      const lift = 0;
       dummy.position.set(x, groundY + lift, y);
       dummy.scale.set(radius * 2 * visual.scale, visual.scale, radius * 2 * visual.scale);
       dummy.rotation.set(0, 0, 0);
@@ -280,10 +256,10 @@ export function UnitsLayer({
         if (ring !== null && rings < capacity && !info2dOn) {
           dummy.position.set(x, groundY + 0.055, y);
           // Legacy rings are drawn at radius*1.5*2 (diameter scale);
-          // themed rings sit at ~1.6x unit radius — small enough to stay
+          // Rings sit at ~1.6x unit radius — small enough to stay
           // per-unit, large enough to clear the body silhouette so the
           // ellipse reads as flat on the ground at low camera pitch.
-          const ringScale = themed ? radius * RING_SCALE_THEMED : radius * RING_SCALE * 2;
+          const ringScale = radius * RING_SCALE_THEMED;
           dummy.scale.set(ringScale, 1, ringScale);
           // The ring geometry lies in the XY plane; rotate it flat.
           dummy.rotation.set(-Math.PI / 2, 0, 0);
@@ -309,7 +285,6 @@ export function UnitsLayer({
       if (dimAttr !== null && dimAttr !== undefined) {
         dimAttr.needsUpdate = true;
       }
-      bindOutline(outlineRefs.current[s] ?? null, mesh);
     }
     if (ring !== null) {
       ring.count = rings;
@@ -328,10 +303,10 @@ export function UnitsLayer({
     <group>
       {SHAPE_KEYS.map((shape, i) => (
         <instancedMesh
-          key={`${shape}-${capacity}-${theme.id}`}
+          key={`${shape}-${capacity}`}
           ref={(m) => {
             meshRefs.current[i] = m;
-            if (m !== null && robotGeos !== null) {
+            if (m !== null) {
               const geo = robotGeos[i] ?? null;
               if (geo !== null) {
                 m.geometry = geo;
@@ -348,17 +323,7 @@ export function UnitsLayer({
           frustumCulled={false}
           castShadow
         >
-          {!themed && shape === 'cylinder' && (
-            <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />
-          )}
-          {!themed && shape === 'box' && <boxGeometry args={[1, UNIT_HEIGHT, 1]} />}
-          {!themed && shape === 'cone' && <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />}
-          {!themed && shape === 'sphere' && <sphereGeometry args={[0.5, 12, 10]} />}
-          {unitMat === null ? (
-            <meshLambertMaterial />
-          ) : (
-            <primitive object={unitMat.material} attach={ATTACH_MATERIAL} />
-          )}
+          <primitive object={unitMat.material} attach={ATTACH_MATERIAL} />
         </instancedMesh>
       ))}
       <instancedMesh
@@ -367,12 +332,12 @@ export function UnitsLayer({
         args={[undefined, undefined, capacity]}
         frustumCulled={false}
       >
-        <ringGeometry args={themed ? [0.93, 1, 24] : [0.7, 1, 16]} />
+        <ringGeometry args={[0.93, 1, 24]} />
         <meshBasicMaterial
-          color={themed ? theme.markers.accent : RING_COLOR}
+          color={theme.markers.accent}
           side={THREE.DoubleSide}
           transparent
-          opacity={themed ? 0.5 : 0.9}
+          opacity={0.5}
           depthWrite={false}
         />
       </instancedMesh>
@@ -385,26 +350,6 @@ export function UnitsLayer({
         <octahedronGeometry args={[0.13, 0]} />
         <meshBasicMaterial />
       </instancedMesh>
-      {themed &&
-        outlineMat !== null &&
-        SHAPE_KEYS.map((shape, i) => (
-          <instancedMesh
-            key={`ol-${i}-${capacity}-${theme.id}`}
-            ref={(m) => {
-              outlineRefs.current[i] = m;
-              if (m !== null && robotGeos !== null) {
-                const geo = robotGeos[i] ?? null;
-                if (geo !== null) {
-                  m.geometry = geo;
-                }
-              }
-            }}
-            args={[undefined, undefined, capacity]}
-            frustumCulled={false}
-          >
-            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
-          </instancedMesh>
-        ))}
     </group>
   );
 }

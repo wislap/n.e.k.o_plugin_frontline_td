@@ -39,9 +39,6 @@ const RAMP_HIGH_SHADE = 1.18;
 const RAMP_HIGH_ELEV_OFFSET = 0.06;
 const CHECKER_LIGHT = 1.04;
 const CHECKER_DARK = 0.96;
-const SKIRT_BOTTOM_Y = -1.4;
-const SKIRT_TOP_COLOR: Rgb = parseHexColor('#1c2638');
-const SKIRT_BOT_COLOR: Rgb = parseHexColor('#0b1020');
 
 // Ramp cells slope towards the first higher neighbour in this fixed order
 // (east, south, west, north) — deterministic, mirrors the terrain rule.
@@ -245,107 +242,6 @@ export function buildTerrainGeometry(
 
 // Solid dark slate pedestal walls framing the four map borders so low-pitch
 // 360° camera orbits read as a solid carved tactical sandbox table.
-export function buildTerrainSkirtGeometry(
-  width: number,
-  height: number,
-  heights: ArrayLike<number>,
-  ramps: ArrayLike<number>,
-): TerrainGeometryData {
-  if (width <= 0 || height <= 0) {
-    return {
-      positions: new Float32Array(0),
-      colors: new Float32Array(0),
-      indices: new Uint32Array(0),
-    };
-  }
-  const quadCount = width * 2 + height * 2;
-  const positions = new Float32Array(quadCount * 4 * 3);
-  const colors = new Float32Array(quadCount * 4 * 3);
-  const indices = new Uint32Array(quadCount * 6);
-  const cursor: QuadCursor = { v: 0, i: 0 };
-  const skirtColors: readonly [Rgb, Rgb, Rgb, Rgb] = [
-    SKIRT_TOP_COLOR,
-    SKIRT_TOP_COLOR,
-    SKIRT_BOT_COLOR,
-    SKIRT_BOT_COLOR,
-  ];
-  const shades: QuadShades = [1, 1, 1, 1];
-  const bot = SKIRT_BOTTOM_Y;
-
-  for (let cx = 0; cx < width; cx++) {
-    const north = cellCornerHeights(cx, 0, width, height, heights, ramps);
-    writeQuad(
-      positions,
-      colors,
-      indices,
-      cursor,
-      [
-        [cx, north.nw, 0],
-        [cx + 1, north.ne, 0],
-        [cx + 1, bot, 0],
-        [cx, bot, 0],
-      ],
-      skirtColors,
-      shades,
-    );
-
-    const south = cellCornerHeights(cx, height - 1, width, height, heights, ramps);
-    writeQuad(
-      positions,
-      colors,
-      indices,
-      cursor,
-      [
-        [cx + 1, south.se, height],
-        [cx, south.sw, height],
-        [cx, bot, height],
-        [cx + 1, bot, height],
-      ],
-      skirtColors,
-      shades,
-    );
-  }
-
-  for (let cy = 0; cy < height; cy++) {
-    const west = cellCornerHeights(0, cy, width, height, heights, ramps);
-    writeQuad(
-      positions,
-      colors,
-      indices,
-      cursor,
-      [
-        [0, west.sw, cy + 1],
-        [0, west.nw, cy],
-        [0, bot, cy],
-        [0, bot, cy + 1],
-      ],
-      skirtColors,
-      shades,
-    );
-
-    const east = cellCornerHeights(width - 1, cy, width, height, heights, ramps);
-    writeQuad(
-      positions,
-      colors,
-      indices,
-      cursor,
-      [
-        [width, east.ne, cy],
-        [width, east.se, cy + 1],
-        [width, bot, cy + 1],
-        [width, bot, cy],
-      ],
-      skirtColors,
-      shades,
-    );
-  }
-
-  return {
-    positions: positions.subarray(0, cursor.v),
-    colors: colors.subarray(0, cursor.v),
-    indices: indices.subarray(0, cursor.i),
-  };
-}
 
 // Out-of-bounds terrain skirt (visual-languages): a ring of rolling noise
 // hills beyond the map rect so themed worlds sit in a landscape instead of
@@ -494,83 +390,6 @@ export function buildOutskirtsGeometry(
     }
   }
 
-  return {
-    positions: new Float32Array(positions),
-    colors: new Float32Array(colors),
-    indices: new Uint32Array(indices),
-  };
-}
-
-// Diorama floating island: a tapered block under the map with soil/rock
-// strata vertex colors banded on its sides (no top face — the terrain
-// covers it). topY is the terrain edge height in world units so the rim
-// tucks just under the map edge.
-export function buildIslandGeometry(
-  width: number,
-  height: number,
-  topY: number,
-  depth: number,
-  strata: readonly string[],
-): { positions: Float32Array; colors: Float32Array; indices: Uint32Array } {
-  const inset = Math.min(width, height) * 0.28;
-  const bottomY = topY - depth;
-  const strataRgb = strata.map(parseHexColor);
-  const bandCount = Math.max(strataRgb.length, 1);
-
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const emitVert = (x: number, y: number, z: number): number => {
-    const band = Math.min(
-      bandCount - 1,
-      Math.max(0, Math.floor(((topY - y) / Math.max(depth, 1e-3)) * bandCount)),
-    );
-    const rgb = strataRgb[band] ?? { r: 0.5, g: 0.4, b: 0.3 };
-    positions.push(x, y, z);
-    colors.push(rgb.r, rgb.g, rgb.b);
-    return positions.length / 3 - 1;
-  };
-  // Each wall is a column of bandCount strips so the strata read as
-  // discrete soil/rock layers, each strip slightly more inset downward.
-  const LIP = 0.5;
-  const wall = (x0: number, z0: number, x1: number, z1: number, dx: number, dz: number): void => {
-    const cx = width / 2;
-    const cz = height / 2;
-    const k = (inset / Math.min(width, height)) * 2.0;
-    const lerp = (a: number, c: number, f: number): number => a + (c - a) * f * k;
-    for (let b = 0; b < bandCount; b++) {
-      const f0 = b / bandCount;
-      const f1 = (b + 1) / bandCount;
-      const y0 = topY - depth * f0;
-      const y1 = topY - depth * f1;
-      // The top band edge flares outward past the map rect so the wall
-      // tucks under the terrain edge at every height.
-      const mx0 = dx * LIP * (1 - f0);
-      const mz0 = dz * LIP * (1 - f0);
-      const mx1 = dx * LIP * (1 - f1);
-      const mz1 = dz * LIP * (1 - f1);
-      const a = emitVert(lerp(x0, cx, f0) + mx0, y0, lerp(z0, cz, f0) + mz0);
-      const bb = emitVert(lerp(x1, cx, f0) + mx0, y0, lerp(z1, cz, f0) + mz0);
-      const c = emitVert(lerp(x1, cx, f1) + mx1, y1, lerp(z1, cz, f1) + mz1);
-      const d = emitVert(lerp(x0, cx, f1) + mx1, y1, lerp(z0, cz, f1) + mz1);
-      indices.push(a, d, c, a, c, bb);
-    }
-  };
-  wall(0, 0, width, 0, 0, -1);
-  wall(width, 0, width, height, 1, 0);
-  wall(width, height, 0, height, 0, 1);
-  wall(0, height, 0, 0, -1, 0);
-  // Bottom face — same shrink factor as the deepest wall band (f = 1).
-  const k = (inset / Math.min(width, height)) * 2.0;
-  const bx0 = (width / 2) * k;
-  const bx1 = width * (1 - k / 2);
-  const bz0 = (height / 2) * k;
-  const bz1 = height * (1 - k / 2);
-  const p0 = emitVert(bx0, bottomY, bz0);
-  const p1 = emitVert(bx1, bottomY, bz0);
-  const p2 = emitVert(bx1, bottomY, bz1);
-  const p3 = emitVert(bx0, bottomY, bz1);
-  indices.push(p0, p3, p2, p0, p2, p1);
   return {
     positions: new Float32Array(positions),
     colors: new Float32Array(colors),

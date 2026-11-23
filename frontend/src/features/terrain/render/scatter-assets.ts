@@ -3,8 +3,7 @@
 // per-theme prop palettes and the per-frame instanced-matrix writer.
 import * as THREE from 'three';
 import type { ContentDb } from '../../../content/index';
-import type { RenderTheme } from '../../../render/theme/index';
-import { applyToonBands } from '../../../render/theme/toonify';
+import type { RenderVisual } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 
 export interface PropInstance {
@@ -17,10 +16,9 @@ export interface PropInstance {
   tint: number;
 }
 
-export type PropKind = 'rock' | 'crate' | 'tuft' | 'grass' | 'flower' | 'stone';
+export type PropKind = 'grass' | 'flower' | 'stone';
 
 export const SCATTER_MESH_PREFIX = 'scatter-';
-const TUFT_COLOR = '#5d6e38';
 const FLOWER_COLORS = ['#f4f2e8', '#ffd94d', '#e8ecf4', '#d7e8ff'] as const;
 // Spawn cap is generous — the per-frame camera-distance cull decides how
 // many instances actually get written, so dense fields don't truncate
@@ -124,7 +122,6 @@ export function applyScatter(
   meadowTint: MeadowTint | null,
   camX: number,
   camZ: number,
-  outlineFor: (kind: PropKind, mesh: THREE.InstancedMesh) => void,
 ): void {
   const hSpan = meadowTint === null ? 1 : Math.max(meadowTint.hMax - meadowTint.hMin, 1e-3);
   for (const kind of Object.keys(props) as PropKind[]) {
@@ -186,7 +183,6 @@ export function applyScatter(
     if (mesh.instanceColor !== null) {
       mesh.instanceColor.needsUpdate = true;
     }
-    outlineFor(kind, mesh as THREE.InstancedMesh);
   }
 }
 
@@ -194,18 +190,11 @@ export function applyScatter(
 // rocks/crates/tufts; meadow themes get grass clumps, rare stones and
 // clustered flower specks.
 export function computeProps(
-  kind: 'clutter' | 'meadow' | 'none',
   density: number,
   grid: { width: number; height: number; surfaces: ArrayLike<number> },
   db: ContentDb,
 ): Record<PropKind, PropInstance[]> {
-  const empty = {} as Record<PropKind, PropInstance[]>;
-  for (const k of ['rock', 'crate', 'tuft', 'grass', 'flower', 'stone'] as const) {
-    empty[k] = [];
-  }
-  if (kind === 'none') {
-    return empty;
-  }
+  const empty: Record<PropKind, PropInstance[]> = { grass: [], flower: [], stone: [] };
   const surfaces = grid.surfaces;
   const list = db.surfaces.list;
   for (let y = 0; y < grid.height; y++) {
@@ -232,10 +221,7 @@ export function computeProps(
       }
       const bucket = cellHash(x, y, 5) * U32;
       const scale = 0.7 + h4 * 0.6;
-      if (kind === 'clutter') {
-        const target = bucket < 0.45 ? 'rock' : bucket < 0.7 ? 'crate' : 'tuft';
-        empty[target].push({ x: px, z: pz, cell, rotY, lean: 0, scale, tint });
-      } else if (empty.grass.length < MAX_MEADOW_PROPS) {
+      if (empty.grass.length < MAX_MEADOW_PROPS) {
         // Meadow: several small grass clumps per cell, rare stones, and
         // flower specks gathered into clusters instead of scattered
         // uniformly — the field reads as tufts and drifts, not dots.
@@ -288,24 +274,18 @@ export function computeProps(
 }
 
 export interface PropPalette {
-  rock: string;
-  crate: string;
-  tuft: string;
   stone: string;
   grass: string;
 }
 
 // Prop palette from the theme: rocks/tufts take the terrain ramp so they
 // sit in the same ground; crates share the structure palette.
-export function propPalette(theme: RenderTheme): PropPalette {
+export function propPalette(theme: RenderVisual): PropPalette {
   const mid = new THREE.Color(theme.terrain.rampLow).lerp(
     new THREE.Color(theme.terrain.rampHigh),
     0.5,
   );
   return {
-    rock: `#${mid.clone().multiplyScalar(0.72).getHexString()}`,
-    crate: theme.materials.structureTrim,
-    tuft: TUFT_COLOR,
     stone: `#${mid.clone().multiplyScalar(0.85).getHexString()}`,
     grass: `#${new THREE.Color(theme.terrain.rampHigh).multiplyScalar(1.08).getHexString()}`,
   };
@@ -314,7 +294,7 @@ export function propPalette(theme: RenderTheme): PropPalette {
 // Meadow grass material: vertex-colored tapered blades with a wind-sway
 // vertex displacement keyed on the instance's world offset; the uTime
 // uniform is fed per frame via material.userData.
-export function createGrassMaterial(tint: string, toon: boolean): THREE.MeshStandardMaterial {
+export function createGrassMaterial(tint: string): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     // White base: the per-instance color carries the terrain-matched
     // tint and the vertex color carries the root→tip gradient.
@@ -343,33 +323,23 @@ export function createGrassMaterial(tint: string, toon: boolean): THREE.MeshStan
         #endif`,
       );
   };
-  if (toon) {
-    applyToonBands(mat);
-  }
-  mat.customProgramCacheKey = () => `meadow-grass${toon ? '-toon' : ''}`;
+  mat.customProgramCacheKey = () => 'meadow-grass';
   return mat;
 }
 
-// Solid prop materials (rock/crate/tuft/stone/flower) as owned objects so
-// the cel theme can band-quantize them; callers dispose the map's values.
+// Solid prop materials (stone/flower) as owned objects; callers dispose
+// the map's values.
 export function createPropMaterials(
   palette: PropPalette,
-  toon: boolean,
-): Record<'rock' | 'crate' | 'tuft' | 'stone' | 'flower', THREE.MeshStandardMaterial> {
+): Record<'stone' | 'flower', THREE.MeshStandardMaterial> {
   const mk = (color: string | undefined, roughness: number): THREE.MeshStandardMaterial => {
     const mat = new THREE.MeshStandardMaterial({ roughness });
     if (color !== undefined) {
       mat.color.set(color);
     }
-    if (toon) {
-      applyToonBands(mat);
-    }
     return mat;
   };
   return {
-    rock: mk(palette.rock, 0.95),
-    crate: mk(palette.crate, 0.85),
-    tuft: mk(palette.tuft, 1),
     stone: mk(palette.stone, 1),
     flower: mk(undefined, 0.8),
   };

@@ -17,22 +17,8 @@
     "error": "错误：",
     "pause": "暂停",
     "resume": "继续",
-    "theme": "主题",
-    "theme_legacy": "Legacy",
-    "theme_endfield-day": "Endfield（白昼）",
-    "outline": "描边",
-    "theme_field": "晴野",
-    "ui": "界面皮肤",
-    "ui_legacy": "Legacy",
-    "ui_field": "晴野",
     "grass_density": "草密度",
-    "info2d": "2D 信息视图",
-    "theme_cel": "赛璐",
-    "theme_mist": "雾境",
-    "theme_diorama": "沙盘",
-    "ui_cel": "赛璐",
-    "ui_glass": "玻璃",
-    "ui_paper": "纸面"
+    "info2d": "2D 信息视图"
   },
   "hud": {
     "paused": "已暂停",
