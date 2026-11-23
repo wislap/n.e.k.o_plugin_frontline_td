@@ -19,12 +19,14 @@
     "resume": "继续",
     "theme": "主题",
     "theme_legacy": "Legacy",
-    "theme_endfield": "Endfield",
-    "theme_shapez": "Shapez",
-    "theme_mindustry": "Mindustry",
     "theme_endfield-day": "Endfield（白昼）",
-    "theme_mindustry-pixel": "Mindustry（像素）",
-    "outline": "描边"
+    "outline": "描边",
+    "theme_field": "晴野",
+    "ui": "界面皮肤",
+    "ui_legacy": "Legacy",
+    "ui_field": "晴野",
+    "grass_density": "草密度",
+    "info2d": "2D 信息视图"
   },
   "hud": {
     "paused": "已暂停",

@@ -29,7 +29,7 @@ describe('resetClientState', () => {
     useUiStore.getState().toggleKeymapHelp();
     useUiStore.getState().toggleMinimap();
     expect(useUiStore.getState().debugPanelOpen).toBe(true);
-    expect(useUiStore.getState().keymapHelpOpen).toBe(false);
+    expect(useUiStore.getState().keymapHelpOpen).toBe(true);
     expect(useUiStore.getState().minimapOpen).toBe(false);
     useCameraStore.getState().setCenter({ x: 40, y: 40 });
     useCameraStore.getState().toggleMode();
@@ -56,7 +56,7 @@ describe('resetClientState', () => {
     const ui = useUiStore.getState();
     expect(ui.debugPanelOpen).toBe(false);
     expect(ui.logisticsOverlay).toBe(false);
-    expect(ui.keymapHelpOpen).toBe(true);
+    expect(ui.keymapHelpOpen).toBe(false);
     expect(ui.minimapOpen).toBe(true);
     const camera = useCameraStore.getState();
     expect(camera.mode).toBe('spectate');

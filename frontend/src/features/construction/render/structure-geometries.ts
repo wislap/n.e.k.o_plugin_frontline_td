@@ -4,6 +4,7 @@
 // shading so MeshLambertMaterial({ vertexColors: true }) multiplies cleanly
 // with instanceColor.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
 
 type Vec3 = readonly [number, number, number];
@@ -13,12 +14,20 @@ type Vec3 = readonly [number, number, number];
 // material ignores the attribute entirely.
 type PartSlot = 0 | 1 | 2 | 3;
 
+const BEVEL_SEGMENTS = 2;
+
 class MeshBuilder {
   private readonly pos: number[] = [];
   private readonly norm: number[] = [];
   private readonly col: number[] = [];
   private readonly slots: number[] = [];
   private readonly idx: number[] = [];
+
+  // Chamfer radius in unit-box space; 0 keeps razor-sharp boxes (legacy).
+  private readonly bevel: number;
+  constructor(bevel = 0) {
+    this.bevel = bevel;
+  }
 
   private pushVertex(p: Vec3, n: Vec3, shade: number, slot: PartSlot): number {
     const v = this.pos.length / 3;
@@ -52,6 +61,34 @@ class MeshBuilder {
     this.idx.push(ia, ib, ic, ia, ic, id);
   }
 
+  // Bake an arbitrary generated BufferGeometry (indexed) into the merged
+  // buffers at a translation — used for chamfered primitives whose
+  // topology comes from three's geometry helpers.
+  private bake(
+    geo: THREE.BufferGeometry,
+    ox: number,
+    oy: number,
+    oz: number,
+    shade: number,
+    slot: PartSlot,
+  ): void {
+    const posAttr = geo.getAttribute('position');
+    const normAttr = geo.getAttribute('normal');
+    // RoundedBoxGeometry is non-indexed; emit sequential triangles.
+    const index = geo.getIndex();
+    const base = this.pos.length / 3;
+    for (let i = 0; i < posAttr.count; i++) {
+      this.pos.push(posAttr.getX(i) + ox, posAttr.getY(i) + oy, posAttr.getZ(i) + oz);
+      this.norm.push(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+      this.col.push(shade, shade, shade);
+      this.slots.push(slot);
+    }
+    const triCount = index === null ? posAttr.count : index.count;
+    for (let i = 0; i < triCount; i++) {
+      this.idx.push(base + (index === null ? i : index.getX(i)));
+    }
+  }
+
   pushBox(
     cx: number,
     y0: number,
@@ -62,6 +99,14 @@ class MeshBuilder {
     shade: number,
     slot: PartSlot = 0,
   ): void {
+    const minDim = Math.min(sx, sy, sz);
+    const r = Math.min(this.bevel, minDim * 0.45);
+    if (r > 1e-4) {
+      const rounded = new RoundedBoxGeometry(sx, sy, sz, BEVEL_SEGMENTS, r);
+      this.bake(rounded, cx, y0 + sy / 2, cz, shade, slot);
+      rounded.dispose();
+      return;
+    }
     const x0 = cx - sx / 2;
     const x1 = cx + sx / 2;
     const y1 = y0 + sy;
@@ -261,28 +306,36 @@ function populateSilhouette(b: MeshBuilder, silhouette: StructureSilhouette): vo
   }
 }
 
-export function buildSilhouetteGeometryData(silhouette: StructureSilhouette): {
+export function buildSilhouetteGeometryData(
+  silhouette: StructureSilhouette,
+  bevel = 0,
+): {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
   slots: Float32Array;
   indices: Uint16Array;
 } {
-  const builder = new MeshBuilder();
+  const builder = new MeshBuilder(bevel);
   populateSilhouette(builder, silhouette);
   return builder.finish();
 }
 
-export function createSilhouetteGeometries(): Record<StructureSilhouette, THREE.BufferGeometry> {
+// Per-theme geometry set: `bevel` is the language's chamfer radius
+// (RoundedBoxGeometry) applied to every MeshBuilder box part.
+export function createSilhouetteGeometries(
+  bevel = 0,
+): Record<StructureSilhouette, THREE.BufferGeometry> {
   const record: Partial<Record<StructureSilhouette, THREE.BufferGeometry>> = {};
   for (const silhouette of STRUCTURE_SILHOUETTES) {
-    const data = buildSilhouetteGeometryData(silhouette);
+    const data = buildSilhouetteGeometryData(silhouette, bevel);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
     geo.setAttribute('aSlot', new THREE.BufferAttribute(data.slots, 1));
     geo.setIndex(new THREE.BufferAttribute(data.indices, 1));
+    geo.userData['shared'] = true;
     record[silhouette] = geo;
   }
   return record as Record<StructureSilhouette, THREE.BufferGeometry>;

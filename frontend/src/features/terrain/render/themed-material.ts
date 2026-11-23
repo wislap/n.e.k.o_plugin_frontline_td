@@ -1,8 +1,10 @@
 // Themed terrain material (visual-slice item 4): MeshStandardMaterial so
 // the ground still receives light and shadow, with onBeforeCompile
-// injections for the theme height ramp, per-cell/pixel hash noise, grid
+// injections for the theme height ramp, per-cell hash noise, grid
 // lines, cliff-face recolor by slope, slope darkening and map-edge
 // occlusion. One material per theme; callers dispose on change.
+// Optional haze-fade tint blends the out-of-bounds skirt into the
+// horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
 import type { RenderTheme } from '../../../render/theme/index';
 
@@ -11,13 +13,25 @@ export interface ThemedTerrainParams {
   heightMax: number;
   mapWidth: number;
   mapHeight: number;
+  // Skirt mode: fade the surface toward the horizon haze color outside
+  // the map rect (distance in cells past the border).
+  hazeFade?: { color: string; start: number; end: number } | undefined;
+}
+
+// Shared mutable uniforms (module-scope, mutated per frame by callers):
+// uInfo2D is the tactical-info dim factor, uTime drives nothing here but
+// is reserved for parity with other themed materials.
+export interface ThemedTerrainUniforms {
+  info2d: { value: number };
 }
 
 export function createThemedTerrainMaterial(
   theme: RenderTheme,
   params: ThemedTerrainParams,
-): THREE.MeshStandardMaterial {
+): { material: THREE.MeshStandardMaterial; uniforms: ThemedTerrainUniforms } {
   const t = theme.terrain;
+  const uniforms: ThemedTerrainUniforms = { info2d: { value: 0 } };
+  const haze = params.hazeFade;
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.95,
@@ -32,10 +46,15 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uCliffEnd'] = { value: t.cliffEnd };
     shader.uniforms['uGridStrength'] = { value: t.gridStrength };
     shader.uniforms['uNoiseAmp'] = { value: t.noiseAmp };
-    shader.uniforms['uPixelMode'] = { value: t.noiseStyle === 'pixel' ? 1 : 0 };
     shader.uniforms['uSlopeDarken'] = { value: t.slopeDarken };
     shader.uniforms['uEdgeOcc'] = { value: t.edgeOcc };
     shader.uniforms['uEdgeFade'] = { value: t.edgeFadeDist };
+    shader.uniforms['uInfo2D'] = uniforms.info2d;
+    shader.uniforms['uHazeOn'] = { value: haze === undefined ? 0 : 1 };
+    shader.uniforms['uHazeColor'] = { value: new THREE.Color(haze?.color ?? '#000000') };
+    shader.uniforms['uHazeRange'] = {
+      value: new THREE.Vector2(haze?.start ?? 0, Math.max(haze?.end ?? 1, 0.001)),
+    };
     shader.uniforms['uHRange'] = {
       value: new THREE.Vector2(
         params.heightMin,
@@ -70,10 +89,13 @@ export function createThemedTerrainMaterial(
         uniform float uCliffEnd;
         uniform float uGridStrength;
         uniform float uNoiseAmp;
-        uniform float uPixelMode;
         uniform float uSlopeDarken;
         uniform float uEdgeOcc;
         uniform float uEdgeFade;
+        uniform float uInfo2D;
+        uniform float uHazeOn;
+        uniform vec3 uHazeColor;
+        uniform vec2 uHazeRange;
         uniform vec2 uHRange;
         uniform vec2 uMapSize;
         varying vec3 vTerWorld;
@@ -90,6 +112,12 @@ export function createThemedTerrainMaterial(
             mix(terHash(i + vec2(0.0, 1.0)), terHash(i + vec2(1.0, 1.0)), f.x),
             f.y
           );
+        }
+        float terEdgeDist(vec2 p, vec2 size) {
+          vec2 a = min(p, vec2(0.0));
+          vec2 b = max(p - size, vec2(0.0));
+          vec2 outV = a + b;
+          return length(outV);
         }`,
       )
       .replace(
@@ -100,8 +128,7 @@ export function createThemedTerrainMaterial(
           float hNorm = clamp((vTerWorld.y - uHRange.x) / (uHRange.y - uHRange.x), 0.0, 1.0);
           vec3 ramp = mix(uRampLow, uRampHigh, hNorm);
           diffuseColor.rgb = mix(diffuseColor.rgb, ramp, uRampStrength);
-          vec2 np = uPixelMode > 0.5 ? floor(terP * 8.0) / 8.0 : floor(terP);
-          float hn = fract(sin(dot(np, vec2(127.1, 311.7))) * 43758.5453);
+          float hn = fract(sin(dot(floor(terP), vec2(127.1, 311.7))) * 43758.5453);
           diffuseColor.rgb *= 1.0 + (hn - 0.5) * uNoiseAmp;
           // Macro variation: 3-octave value noise at ~6-20 cell scales, a few
           // percent of lightness plus a slight hue drift toward the ramp ends.
@@ -126,9 +153,19 @@ export function createThemedTerrainMaterial(
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
           float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
+          // Tactical info view (弱化显示): desaturate + darken so the
+          // markers layer reads as the bright information layer.
+          float grey = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(grey) * 0.5, uInfo2D);
+          // Out-of-bounds skirt: blend into the horizon haze by distance
+          // outside the map rect.
+          if (uHazeOn > 0.5) {
+            float dOut = terEdgeDist(terP, uMapSize);
+            diffuseColor.rgb = mix(diffuseColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
+          }
         }`,
       );
   };
   mat.customProgramCacheKey = () => `themed-terrain-${theme.id}`;
-  return mat;
+  return { material: mat, uniforms };
 }

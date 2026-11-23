@@ -346,3 +346,127 @@ export function buildTerrainSkirtGeometry(
     indices: indices.subarray(0, cursor.i),
   };
 }
+
+// Out-of-bounds terrain skirt (visual-languages): a ring of rolling noise
+// hills beyond the map rect so themed worlds sit in a landscape instead of
+// on a floating table. Heights blend from the nearest border cell into
+// deterministic hills that sink below the platform at the outer rim; the
+// horizon haze hides the join. Render-only — never pickable.
+function outskirtsHash(x: number, y: number): number {
+  let h = (x * 73856093) ^ (y * 19349663) ^ 0x9e3779b9;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+  return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
+}
+
+function outskirtsNoise(x: number, y: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const a = outskirtsHash(ix, iy);
+  const b = outskirtsHash(ix + 1, iy);
+  const c = outskirtsHash(ix, iy + 1);
+  const d = outskirtsHash(ix + 1, iy + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+const SKIRT_SINK_Y = -1.6;
+const SKIRT_SHADE_LOW = 0.9;
+const SKIRT_SHADE_HIGH = 1.05;
+
+export function buildOutskirtsGeometry(
+  width: number,
+  height: number,
+  heights: ArrayLike<number>,
+  skirtCells: number,
+): TerrainGeometryData {
+  if (width <= 0 || height <= 0 || skirtCells <= 0) {
+    return {
+      positions: new Float32Array(0),
+      colors: new Float32Array(0),
+      indices: new Uint32Array(0),
+    };
+  }
+  const s = skirtCells;
+  const nx = width + s * 2;
+  const ny = height + s * 2;
+  // Grid nodes indexed (iy * (nx + 1) + ix); -1 = unused.
+  const nodeIndex = new Int32Array((nx + 1) * (ny + 1)).fill(-1);
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const edgeH = (x: number, y: number): number => {
+    const cx = Math.min(Math.max(x, 0), width - 1);
+    const cy = Math.min(Math.max(y, 0), height - 1);
+    return (heights[cy * width + cx] ?? 0) * HEIGHT_STEP;
+  };
+  const distOutside = (x: number, y: number): number => Math.max(-x, x - width, -y, y - height, 0);
+
+  const nodeY = (ix: number, iy: number): number => {
+    const x = ix - s;
+    const y = iy - s;
+    const d = distOutside(x - 0.5, y - 0.5);
+    const base = edgeH(
+      Math.min(Math.max(x - 1, 0), width - 1),
+      Math.min(Math.max(y - 1, 0), height - 1),
+    );
+    const rim = 1 - Math.min(Math.max((d / s - 0.75) / 0.25, 0), 1);
+    const amp = Math.min(d * 0.45, 1.7);
+    const hills =
+      (outskirtsNoise(x * 0.09, y * 0.09) * 0.62 +
+        outskirtsNoise(x * 0.31, y * 0.31) * 0.38 -
+        0.5) *
+      amp *
+      rim;
+    const sink = Math.min(Math.max((d / s - 0.82) / 0.18, 0), 1) * (base - SKIRT_SINK_Y + 0.5);
+    return base + hills - sink;
+  };
+
+  const nodeShade = (ix: number, iy: number, y: number): number => {
+    const n = outskirtsNoise(ix * 0.7 + 3.1, iy * 0.7 + 9.7);
+    const hMix = Math.min(Math.max(y * 0.35 + 0.55, 0), 1);
+    return (SKIRT_SHADE_LOW + (SKIRT_SHADE_HIGH - SKIRT_SHADE_LOW) * hMix) * (0.94 + n * 0.12);
+  };
+
+  const emitNode = (ix: number, iy: number): number => {
+    const key = iy * (nx + 1) + ix;
+    let idx = nodeIndex[key] ?? -1;
+    if (idx >= 0) {
+      return idx;
+    }
+    const y = nodeY(ix, iy);
+    const shade = nodeShade(ix, iy, y);
+    idx = positions.length / 3;
+    positions.push(ix - s + 0.5, y, iy - s + 0.5);
+    colors.push(shade, shade, shade);
+    nodeIndex[key] = idx;
+    return idx;
+  };
+
+  for (let iy = 0; iy < ny; iy++) {
+    for (let ix = 0; ix < nx; ix++) {
+      // Quad cells fully inside the map rect are covered by TerrainMesh.
+      const x0 = ix - s;
+      const y0 = iy - s;
+      const inside = x0 >= -1 && y0 >= -1 && x0 < width && y0 < height;
+      if (inside) {
+        continue;
+      }
+      const a = emitNode(ix, iy);
+      const b = emitNode(ix, iy + 1);
+      const c = emitNode(ix + 1, iy + 1);
+      const d = emitNode(ix + 1, iy);
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colors),
+    indices: new Uint32Array(indices),
+  };
+}

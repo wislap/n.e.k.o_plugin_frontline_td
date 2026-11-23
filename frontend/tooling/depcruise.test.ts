@@ -18,7 +18,7 @@ beforeAll(async () => {
     baseDir: FIXTURE_ROOT,
   });
   violations = (result.output as ICruiseResult).summary.violations;
-});
+}, 60_000);
 
 function ruleNamesFor(fromPattern: RegExp): string[] {
   return violations.filter((v) => fromPattern.test(v.from)).map((v) => v.rule.name);

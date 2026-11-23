@@ -1,16 +1,24 @@
 // Merged static terrain mesh (M2 C2): built once from the first snapshot's
 // height/surface layers plus the content palette; disposed on unmount.
+// Themed worlds also get an out-of-bounds noise-hill skirt (never
+// pickable) and a uInfo2D uniform for the tactical info dim.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { visibleGroundHeight } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useUiStore } from '../../../client/ui-store';
 import { useRenderTheme } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import type { Snapshot } from '../../../core/index';
-import { buildTerrainGeometry, buildTerrainSkirtGeometry, parseHexColor } from './geometry';
-import { createThemedTerrainMaterial } from './themed-material';
+import {
+  buildOutskirtsGeometry,
+  buildTerrainGeometry,
+  buildTerrainSkirtGeometry,
+  parseHexColor,
+} from './geometry';
+import { createThemedTerrainMaterial, type ThemedTerrainUniforms } from './themed-material';
 
 export interface TerrainMeshProps {
   snapshot: Snapshot | null;
@@ -80,6 +88,27 @@ function updateTerrainGrid(mesh: THREE.Mesh, mat: THREE.ShaderMaterial): void {
   }
 }
 
+// Tactical info view (弱化显示): lerp the terrain's uInfo2D uniform toward
+// 1 while the camera is in tactical mode and the debug toggle allows it.
+function updateInfoUniform(
+  uniforms: ThemedTerrainUniforms | null,
+  themeInfo: boolean,
+  delta: number,
+): void {
+  if (uniforms === null) {
+    return;
+  }
+  const cam = useCameraStore.getState();
+  const target = themeInfo && useUiStore.getState().info2d && cam.mode === 'tactical' ? 1 : 0;
+  const u = uniforms.info2d;
+  u.value += (target - u.value) * Math.min(1, delta * 8);
+  if (Math.abs(u.value - target) < 0.01) {
+    u.value = target;
+  }
+}
+
+const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
+
 export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: TerrainMeshProps) {
   const theme = useRenderTheme();
   const meshRef = useRef<THREE.Mesh>(null);
@@ -115,7 +144,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   }, [data]);
 
   const skirtGeometry = useMemo(() => {
-    if (heights === undefined) {
+    if (heights === undefined || theme.id === 'legacy') {
       return null;
     }
     const skirt = buildTerrainSkirtGeometry(width, height, heights, ramps);
@@ -125,7 +154,25 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     geo.setIndex(new THREE.BufferAttribute(skirt.indices, 1));
     geo.computeVertexNormals();
     return geo;
-  }, [heights, width, height, ramps]);
+  }, [heights, width, height, ramps, theme.id]);
+
+  // Out-of-bounds noise-hill ring (visual-languages): same themed ramp
+  // material, faded toward the horizon haze by distance past the border.
+  const outskirtsGeometry = useMemo(() => {
+    if (heights === undefined || theme.terrain.skirtCells <= 0) {
+      return null;
+    }
+    const out = buildOutskirtsGeometry(width, height, heights, theme.terrain.skirtCells);
+    if (out.indices.length === 0) {
+      return null;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(out.positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(out.colors, 3));
+    geo.setIndex(new THREE.BufferAttribute(out.indices, 1));
+    geo.computeVertexNormals();
+    return geo;
+  }, [heights, width, height, theme]);
 
   useEffect(() => {
     return () => {
@@ -141,6 +188,12 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
 
   useEffect(() => {
     return () => {
+      outskirtsGeometry?.dispose();
+    };
+  }, [outskirtsGeometry]);
+
+  useEffect(() => {
+    return () => {
       gridMatRef.current?.dispose();
       gridMatRef.current = null;
     };
@@ -148,7 +201,9 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
 
   // Themed terrain swaps the Lambert material for a light-aware standard
   // material with the theme's shader parameters; legacy keeps the original.
-  const themedMaterial = useMemo(() => {
+  // The same material instance serves the skirt meshes (in-bounds cells
+  // see dOut = 0 so the haze fade is a no-op there).
+  const themed = useMemo(() => {
     if (theme.id === 'legacy' || heights === undefined) {
       return null;
     }
@@ -168,22 +223,30 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
       heightMax: hi,
       mapWidth: width,
       mapHeight: height,
+      hazeFade:
+        theme.terrain.skirtCells > 0 && theme.background.haze !== ''
+          ? {
+              color: theme.background.haze,
+              start: theme.terrain.skirtCells * 0.4,
+              end: theme.terrain.skirtCells * 1.05,
+            }
+          : undefined,
     });
   }, [theme, heights, width, height]);
 
   useEffect(() => {
     return () => {
-      themedMaterial?.dispose();
+      themed?.material.dispose();
     };
-  }, [themedMaterial]);
+  }, [themed]);
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     const gridMesh = gridMeshRef.current;
-    if (gridMesh === null) {
-      return;
+    if (gridMesh !== null) {
+      gridMatRef.current ??= createTerrainGridMaterial();
+      updateTerrainGrid(gridMesh, gridMatRef.current);
     }
-    gridMatRef.current ??= createTerrainGridMaterial();
-    updateTerrainGrid(gridMesh, gridMatRef.current);
+    updateInfoUniform(themed?.uniforms ?? null, theme.info2d, delta);
   });
 
   if (geometry === null) {
@@ -196,18 +259,28 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         geometry={geometry}
         frustumCulled={false}
         receiveShadow={theme.id !== 'legacy'}
-        {...(themedMaterial !== null ? { material: themedMaterial } : {})}
+        {...(themed !== null ? { material: themed.material } : {})}
       >
-        {themedMaterial === null && <meshLambertMaterial vertexColors />}
+        {themed === null && <meshLambertMaterial vertexColors />}
       </mesh>
       {skirtGeometry !== null && (
         <mesh
           geometry={skirtGeometry}
           frustumCulled={false}
-          {...(themedMaterial !== null ? { material: themedMaterial } : {})}
+          raycast={NO_RAYCAST}
+          {...(themed !== null ? { material: themed.material } : {})}
         >
-          {themedMaterial === null && <meshLambertMaterial vertexColors />}
+          {themed === null && <meshLambertMaterial vertexColors />}
         </mesh>
+      )}
+      {outskirtsGeometry !== null && (
+        <mesh
+          geometry={outskirtsGeometry}
+          frustumCulled={false}
+          raycast={NO_RAYCAST}
+          receiveShadow
+          {...(themed !== null ? { material: themed.material } : {})}
+        />
       )}
       <mesh
         ref={gridMeshRef}

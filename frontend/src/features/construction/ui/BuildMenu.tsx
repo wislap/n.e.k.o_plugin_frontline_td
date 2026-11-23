@@ -1,14 +1,16 @@
 // Build menu (ADR 0048 / ADR 0049, bottomCenter): shown only in build
 // primary mode (F2). Filters buildable structures by category and
 // provides the [C] Demolish tool toggle inside a flow TacticalPanel.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useIntentRouter } from '../../../client/intent';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useRenderTheme } from '../../../render/theme/index';
 import { localName, type ContentDb } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
 import { ActionButton, SegmentedTabs, TacticalPanel, cx } from '../../../ui/kit/index';
 import { BUILD_CATEGORIES, type BuildCategory } from '../content';
+import { renderStructureThumbnails } from '../render/thumbnails';
 import styles from './BuildMenu.module.css';
 
 type CategoryFilter = 'all' | BuildCategory;
@@ -24,6 +26,25 @@ export function BuildMenu({ db }: { db: ContentDb }) {
   const mode = useInteractionStore((s) => s.mode);
   const tool = useInteractionStore((s) => s.tool);
   const [category, setCategory] = useState<CategoryFilter>('all');
+  const bevel = useRenderTheme().geometry.bevel;
+
+  // Structure thumbnails render offscreen once per theme (silhouette
+  // geometry changes with the bevel radius); the helper disposes its
+  // renderer and geometries itself.
+  const [thumbs, setThumbs] = useState<ReadonlyMap<string, string> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const id = setTimeout(() => {
+      const rendered = renderStructureThumbnails(db, bevel);
+      if (alive) {
+        setThumbs(rendered);
+      }
+    }, 0);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
+  }, [db, bevel]);
 
   const categoryTabs = useMemo(
     (): { value: CategoryFilter; label: string }[] => [
@@ -96,6 +117,9 @@ export function BuildMenu({ db }: { db: ContentDb }) {
               }}
               className={cx(styles['card'], selected && styles['cardActive'])}
             >
+              {thumbs?.get(kind.id) !== undefined && (
+                <img className={styles['thumb']} src={thumbs.get(kind.id)} alt="" />
+              )}
               <div className={styles['cardHeader']}>
                 <span className={styles['name']}>
                   {t(`structure.${name}`, { defaultValue: name })}

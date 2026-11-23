@@ -19,12 +19,14 @@
     "resume": "Resume",
     "theme": "Theme",
     "theme_legacy": "Legacy",
-    "theme_endfield": "Endfield",
-    "theme_shapez": "Shapez",
-    "theme_mindustry": "Mindustry",
     "theme_endfield-day": "Endfield (Day)",
-    "theme_mindustry-pixel": "Mindustry (Pixel)",
-    "outline": "Outline"
+    "outline": "Outline",
+    "theme_field": "Field",
+    "ui": "UI skin",
+    "ui_legacy": "Legacy",
+    "ui_field": "Field",
+    "grass_density": "Grass density",
+    "info2d": "Info 2D view"
   },
   "hud": {
     "paused": "Paused",

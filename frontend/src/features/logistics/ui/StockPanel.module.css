@@ -21,6 +21,11 @@
   background: rgba(5, 8, 15, 0.42);
 }
 
+.cargoIcon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 .cargoName {
   color: var(--text-secondary);
   font-size: var(--text-sm);

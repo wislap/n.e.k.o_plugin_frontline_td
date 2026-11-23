@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { PrimaryMode } from '../client/interaction-store';
+import { useUiStore } from '../client/ui-store';
 import { cx } from './kit/index';
 import styles from './HudShell.module.css';
 
@@ -9,6 +10,7 @@ export function HudShell({
   topCenter,
   topRight,
   middleLeft,
+  middleRight,
   bottomLeft,
   bottomCenter,
   bottomRight,
@@ -18,12 +20,14 @@ export function HudShell({
   topCenter?: ReactNode | undefined;
   topRight?: ReactNode | undefined;
   middleLeft?: ReactNode | undefined;
+  middleRight?: ReactNode | undefined;
   bottomLeft?: ReactNode | undefined;
   bottomCenter?: ReactNode | undefined;
   bottomRight?: ReactNode | undefined;
 }) {
+  const uiSkin = useUiStore((s) => s.uiSkin);
   return (
-    <div className={styles['shell']} data-mode={primaryMode}>
+    <div className={styles['shell']} data-mode={primaryMode} data-ui-skin={uiSkin}>
       <div className={styles['colLeft']}>
         <div className={cx(styles['slot'], styles['topLeft'])} data-hud-slot="topLeft">
           {topLeft}
@@ -46,6 +50,9 @@ export function HudShell({
       <div className={styles['colRight']}>
         <div className={cx(styles['slot'], styles['topRight'])} data-hud-slot="topRight">
           {topRight}
+        </div>
+        <div className={cx(styles['slot'], styles['middleRight'])} data-hud-slot="middleRight">
+          {middleRight}
         </div>
         <div className={cx(styles['slot'], styles['bottomRight'])} data-hud-slot="bottomRight">
           {bottomRight}

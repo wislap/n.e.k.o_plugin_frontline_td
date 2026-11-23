@@ -41,13 +41,18 @@ export interface FogLayerProps {
 // Themed fog uses a dedicated shader: a 5-tap blur over the linear-filtered
 // alpha smooths cell edges over ~1.5 cells (no staircase), explored cells
 // get a lower-alpha desaturated-darkening treatment instead of a flat film,
-// and unexplored regions can carry a faint pattern (diagonal hatch for
-// endfield, cell grid for shapez) driven by theme.fogStyle.
+// and unexplored regions can carry a faint pattern (survey paper:
+// height-contour lines + dot grid) driven by theme.fogStyle.
 function createSoftFogMaterial(theme: {
   fogColor: string;
-  fogStyle: 'plain' | 'hatch' | 'grid' | 'survey';
+  fogStyle: 'plain' | 'survey';
 }): THREE.ShaderMaterial {
-  const explored = new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
+  // Survey paper: explored cells get a dark ink film so dimmed terrain and
+  // structure footprints still read through; other styles lift slightly.
+  const explored =
+    theme.fogStyle === 'survey'
+      ? new THREE.Color(theme.fogColor).multiplyScalar(0.55)
+      : new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.08);
   // Survey paper draws darker ink lines on a pale ground; dark themes draw
   // lighter pattern lines on their fog color.
   const pattern =
@@ -64,16 +69,7 @@ function createSoftFogMaterial(theme: {
       uMap: { value: null },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
-      uStyle: {
-        value:
-          theme.fogStyle === 'hatch'
-            ? 1
-            : theme.fogStyle === 'grid'
-              ? 2
-              : theme.fogStyle === 'survey'
-                ? 3
-                : 0,
-      },
+      uStyle: { value: theme.fogStyle === 'survey' ? 3 : 0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -113,17 +109,15 @@ function createSoftFogMaterial(theme: {
           vec2 dg = fract(cell) - 0.5;
           float dotG = 1.0 - min(length(dg) / 0.09, 1.0);
           pat = cont * 0.8 + dotG * 0.45;
-        } else if (uStyle > 1.5) {
-          vec2 g = abs(fract(cell - 0.5) - 0.5);
-          pat = (1.0 - min(min(g.x, g.y) / 0.08, 1.0)) * 0.5;
-        } else if (uStyle > 0.5) {
-          pat = step(0.94, fract((cell.x + cell.y) * 0.3)) * 0.14;
         }
         // Explored cells: dim with a slightly lifted tone at reduced alpha
         // so terrain stays readable through the film.
         vec3 col = mix(uExplored, uColor, unexplored);
         col = mix(col, uPattern, pat * unexplored * 0.6);
-        float alpha = a * mix(0.72, 1.0, unexplored);
+        // Survey keeps the explored film thinner so the info2d treatment
+        // (desaturated/darkened world + bright markers) stays readable.
+        float exploredA = uStyle > 2.5 ? 0.45 : 0.72;
+        float alpha = a * mix(exploredA, 1.0, unexplored);
         gl_FragColor = vec4(col, alpha);
       }
     `,

@@ -7,7 +7,6 @@ import { formatClock } from '../client/match-info';
 import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
 import type { SimClient } from '../client/sim-client';
-import { useUiStore } from '../client/ui-store';
 import { subscribeSnapshotClock } from '../client/use-snapshot';
 import { localName, type ContentDb, type ResolvedMap } from '../content/index';
 import { COMMAND_REJECTED } from '../core/index';
@@ -16,10 +15,11 @@ import { RoadPanel, StockPanel } from '../features/logistics/ui/index';
 import { SquadsChannel, type SquadsSnapshot } from '../features/squads/protocol';
 import { bannerThreat } from '../features/squads/render/index';
 import { SquadPanel } from '../features/squads/ui/index';
+import { GaugePill } from './GaugePill';
 import { HudShell } from './HudShell';
 import styles from './HudShell.module.css';
 import { KeyGuideRail } from './KeyGuideRail';
-import { TopLeftPod } from './TopLeftPod';
+import { RightRail } from './RightRail';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import { Minimap } from './minimap/Minimap';
 import {
@@ -67,7 +67,6 @@ export function Hud({
   const ghost = useInteractionStore((s) => s.ghost);
   const demolishConfirm = useInteractionStore((s) => s.demolishConfirm);
   const selected = useSelectionStore((s) => s.selected);
-  const logisticsOverlay = useUiStore((s) => s.logisticsOverlay);
   const box = useBoxStore((s) => s.box);
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -163,15 +162,34 @@ export function Hud({
     }
   })();
 
+  // Top-left: primary-mode pill (F1/F2/F3) + radar minimap.
   const topLeft = (
     <>
-      <TopLeftPod client={client} onDisplayMessage={handleDisplayMessage} />
+      <TacticalPanel tone="mode" compact>
+        <SegmentedTabs
+          size="sm"
+          ariaLabel={t('hud.mode_switcher')}
+          value={primaryMode}
+          items={PRIMARY_MODES.map(({ mode, keyLabel }) => ({
+            value: mode,
+            label: t(`hud.mode.${mode}`),
+            kbd: keyLabel,
+          }))}
+          onChange={(mode) => {
+            router.dispatch({ kind: 'mode.select', mode });
+          }}
+        />
+      </TacticalPanel>
+      {map !== null && map !== undefined && (
+        <Minimap client={client} db={db} map={map} isHostile={isHostile ?? defaultIsHostile} />
+      )}
       <ToastStack workerError={workerError} errorPrefix={t('dev.error')} items={toasts} />
     </>
   );
 
   const topCenter = (
     <>
+      <GaugePill client={client} />
       {threat !== null && (
         <TacticalPanel tone="danger" compact>
           <span className={styles['bannerTextDanger']}>
@@ -241,48 +259,21 @@ export function Hud({
     </>
   );
 
+  // Bottom-left: squad strip + selection count (mode info moved to the
+  // top-left primary-mode pill).
   const bottomLeft = (
     <>
-      {map !== null && map !== undefined && (
-        <Minimap client={client} db={db} map={map} isHostile={isHostile ?? defaultIsHostile} />
-      )}
+      <SquadPanel client={client} />
       <TacticalPanel tone="mode" compact>
-        <div className={styles['bottomLeftBar']}>
-          <SegmentedTabs
-            size="sm"
-            ariaLabel={t('hud.mode_switcher')}
-            value={primaryMode}
-            items={PRIMARY_MODES.map(({ mode, keyLabel }) => ({
-              value: mode,
-              label: t(`hud.mode.${mode}`),
-              kbd: keyLabel,
-            }))}
-            onChange={(mode) => {
-              router.dispatch({ kind: 'mode.select', mode });
-            }}
-          />
-          <ActionButton
-            size="sm"
-            kbd="L"
-            variant={logisticsOverlay ? 'active' : 'default'}
-            aria-pressed={logisticsOverlay}
-            onClick={() => {
-              router.dispatch({ kind: 'overlay.toggle_logistics' });
-            }}
-          >
-            {t('hud.logistics_layer')}
-          </ActionButton>
-          <span className={styles['selectionBadge']}>
-            {t('hud.selected', { count: selected.size })}
-          </span>
-        </div>
+        <span className={styles['selectionBadge']}>
+          {t('hud.selected', { count: selected.size })}
+        </span>
       </TacticalPanel>
     </>
   );
 
   const bottomCenter = (
     <>
-      <SquadPanel client={client} />
       <BuildMenu db={db} />
       <RoadPanel client={client} db={db} />
     </>
@@ -296,6 +287,7 @@ export function Hud({
         topCenter={topCenter}
         topRight={topRight}
         middleLeft={<KeyGuideRail />}
+        middleRight={<RightRail onDisplayMessage={handleDisplayMessage} />}
         bottomLeft={bottomLeft}
         bottomCenter={bottomCenter}
         bottomRight={<InspectorPanel client={client} db={db} map={map} isHostile={isHostile} />}

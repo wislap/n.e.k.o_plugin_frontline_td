@@ -2,8 +2,7 @@
 // props placed by per-cell integer hash — never Math.random, so frames
 // don't shimmer. One InstancedMesh per prop type keeps draw calls bounded.
 // Props are hidden under structures, roads, roadworks and salvage by an
-// occupancy mask rebuilt whenever those channel identities change; cells
-// hosting deposits (ore fields) get crystal props in mindustry instead.
+// occupancy mask rebuilt whenever those channel identities change.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -33,7 +32,7 @@ interface PropInstance {
   tint: number;
 }
 
-type PropKind = 'rock' | 'crate' | 'tuft' | 'stud' | 'panel' | 'boulder' | 'pebble' | 'crystal';
+type PropKind = 'rock' | 'crate' | 'tuft' | 'grass' | 'flower' | 'stone';
 
 function cellHash(x: number, y: number, salt: number): number {
   let h = (x * 73856093) ^ (y * 19349663) ^ (salt * 83492791);
@@ -48,8 +47,10 @@ const ATTACH_MATERIAL = 'material';
 const SCATTER_MESH_PREFIX = 'scatter-';
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 const TUFT_COLOR = '#5d6e38';
-const CRYSTAL_COLOR = '#8a5adf';
-const CRYSTAL_EMISSIVE = '#6a3adf';
+const FLOWER_COLORS = ['#f4f2e8', '#ffd94d', '#e8ecf4', '#d7e8ff'] as const;
+// Grass instances are culled by a hash-fraction cutoff so the debug
+// density slider removes a stable subset instead of popping.
+const MAX_MEADOW_PROPS = 9000;
 
 // Irregular low-poly rock: icosahedron with deterministic per-vertex jitter
 // and a flattened base so props read as stone, not dice.
@@ -67,6 +68,49 @@ function createRockGeometry(radius: number, seed: number): THREE.BufferGeometry 
   return geo;
 }
 
+// Grass clump: three thin tapered blades merged, anchored at y=0; wind
+// sway displaces tips in the material shader by instance world position.
+function createGrassGeometry(): THREE.BufferGeometry {
+  const blade = (rot: number, dx: number, dz: number) => {
+    const g = new THREE.PlaneGeometry(0.09, 0.4, 1, 2);
+    const pos = g.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const taper = 1 - Math.max(0, y + 0.2) * 2.2;
+      pos.setX(i, pos.getX(i) * Math.max(0.15, taper));
+    }
+    g.translate(0, 0.2, 0);
+    g.rotateY(rot);
+    g.translate(dx, 0, dz);
+    return g;
+  };
+  const parts = [blade(0.3, 0, 0), blade(1.4, 0.06, 0.04), blade(2.6, -0.05, 0.05)];
+  const pos: number[] = [];
+  const norm: number[] = [];
+  const idx: number[] = [];
+  for (const g of parts) {
+    const base = pos.length / 3;
+    const p = g.getAttribute('position');
+    const n = g.getAttribute('normal');
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      norm.push(n.getX(i), n.getY(i), n.getZ(i));
+    }
+    const gi = g.getIndex();
+    if (gi !== null) {
+      for (let i = 0; i < gi.count; i++) {
+        idx.push(base + gi.getX(i));
+      }
+    }
+    g.dispose();
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
+  geo.setIndex(idx);
+  return geo;
+}
+
 // Explored-but-not-visible cells dim props to roughly match the fog film;
 // unexplored cells hide them entirely (state 0/1/2 mirrors FogLayer).
 const EXPLORED_DIM = 0.45;
@@ -81,6 +125,7 @@ function applyScatter(
   mapHeight: number,
   dummy: THREE.Object3D,
   scratchColor: THREE.Color,
+  grassScale: number,
 ): void {
   for (const kind of Object.keys(props) as PropKind[]) {
     const mesh = group.getObjectByName(`${SCATTER_MESH_PREFIX}${kind}`);
@@ -88,9 +133,12 @@ function applyScatter(
       continue;
     }
     let count = 0;
-    const lift = kind === 'stud' || kind === 'panel' ? 0.03 : 0.1;
+    const lift = kind === 'grass' || kind === 'flower' ? 0.02 : 0.1;
     for (const p of props[kind]) {
       if (occupied[p.cell] !== 0) {
+        continue;
+      }
+      if (kind === 'grass' && p.rotY > grassScale * Math.PI * 2) {
         continue;
       }
       const state = vision?.[p.cell] ?? 2;
@@ -104,7 +152,14 @@ function applyScatter(
       dummy.updateMatrix();
       mesh.setMatrixAt(count, dummy.matrix);
       const t = p.tint * dim;
-      mesh.setColorAt(count, scratchColor.setRGB(t, t, t));
+      if (kind === 'flower') {
+        const ci = Math.floor((p.rotY / (Math.PI * 2)) * FLOWER_COLORS.length);
+        scratchColor.set(FLOWER_COLORS[ci % FLOWER_COLORS.length] ?? '#ffffff');
+        scratchColor.multiplyScalar(t);
+      } else {
+        scratchColor.setRGB(t, t, t);
+      }
+      mesh.setColorAt(count, scratchColor);
       count += 1;
     }
     mesh.count = count;
@@ -142,7 +197,9 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const dummyRef = useRef(new THREE.Object3D());
   const colorRef = useRef(new THREE.Color());
   const occupiedRef = useRef<Uint8Array | null>(null);
+  const grassTimeRef = useRef<{ value: number } | null>(null);
   const watchedRef = useRef<unknown[]>([]);
+  const kind = theme.scatter.kind;
 
   // Prop tints derive from the terrain palette so scatter blends into the
   // local ground instead of reading as black spots.
@@ -156,41 +213,71 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       rock: `#${stone.getHexString()}`,
       crate: theme.materials.structureBody,
       tuft: TUFT_COLOR,
-      stud: theme.markers.accent,
-      panel: theme.materials.structureTrim,
-      boulder: `#${stone.getHexString()}`,
-      pebble: `#${ramp.multiplyScalar(0.85).getHexString()}`,
-      crystal: CRYSTAL_COLOR,
+      grass: `#${new THREE.Color(theme.terrain.rampHigh).multiplyScalar(1.08).getHexString()}`,
+      flower: FLOWER_COLORS[0],
+      stone: `#${stone.multiplyScalar(1.1).getHexString()}`,
     };
   }, [theme]);
 
   const rockGeo = useMemo(() => createRockGeometry(0.24, 17), []);
-  const boulderGeo = useMemo(() => createRockGeometry(0.26, 41), []);
+  const grassGeo = useMemo(() => createGrassGeometry(), []);
+  const stoneGeo = useMemo(() => createRockGeometry(0.13, 53), []);
+  // Wind sway for meadow grass: standard material + vertex displacement
+  // keyed on the instance's world offset; time uniform fed per frame.
+  const grassMat = useMemo(() => {
+    if (kind !== 'meadow') {
+      return null;
+    }
+    const mat = new THREE.MeshStandardMaterial({
+      color: propColors.grass,
+      roughness: 1,
+      side: THREE.DoubleSide,
+      // Slight self-illumination keeps the backlit side of thin blades
+      // from reading as black spikes against the bright terrain.
+      emissive: propColors.grass,
+      emissiveIntensity: 0.35,
+    });
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms['uTime'] = { value: 0 };
+      mat.userData['uTime'] = shader.uniforms['uTime'];
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            float swayPh = instanceMatrix[3][0] * 2.31 + instanceMatrix[3][2] * 1.73;
+            float swayW = smoothstep(0.05, 0.4, position.y);
+            transformed.x += sin(uTime * 1.9 + swayPh) * 0.07 * swayW;
+            transformed.z += cos(uTime * 1.35 + swayPh * 1.7) * 0.05 * swayW;
+          #endif`,
+        );
+    };
+    mat.customProgramCacheKey = () => 'meadow-grass';
+    return mat;
+  }, [kind, propColors.grass]);
+  useEffect(() => {
+    grassTimeRef.current = (grassMat?.userData['uTime'] as { value: number } | undefined) ?? null;
+    return () => {
+      grassMat?.dispose();
+    };
+  }, [grassMat]);
   useEffect(() => {
     return () => {
       rockGeo.dispose();
-      boulderGeo.dispose();
+      grassGeo.dispose();
+      stoneGeo.dispose();
     };
-  }, [rockGeo, boulderGeo]);
+  }, [rockGeo, grassGeo, stoneGeo]);
 
   const grid = map.grid;
-  const kind = theme.scatter.kind;
 
   const props = useMemo(() => {
     const empty = {} as Record<PropKind, PropInstance[]>;
     if (kind === 'none') {
       return empty;
     }
-    for (const k of [
-      'rock',
-      'crate',
-      'tuft',
-      'stud',
-      'panel',
-      'boulder',
-      'pebble',
-      'crystal',
-    ] as const) {
+    for (const k of ['rock', 'crate', 'tuft', 'grass', 'flower', 'stone'] as const) {
       empty[k] = [];
     }
     const density = theme.scatter.density;
@@ -204,7 +291,6 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
           continue;
         }
         const walkable = surface.costs.some((c) => c >= 0);
-        const isOre = surface.deposit !== undefined;
         if (!walkable) {
           continue;
         }
@@ -216,12 +302,6 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
         const pz = y + 0.5 + (h3 - 0.5) * 0.6;
         const rotY = h4 * Math.PI * 2;
         const tint = 0.92 + cellHash(x, y, 6) * U32 * 0.16;
-        if (kind === 'boulders' && isOre) {
-          if (h1 < 0.5) {
-            empty.crystal.push({ x: px, z: pz, cell, rotY, scale: 0.7 + h4 * 0.7, tint });
-          }
-          continue;
-        }
         if (h1 >= density) {
           continue;
         }
@@ -230,14 +310,10 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
         if (kind === 'clutter') {
           const target = bucket < 0.45 ? 'rock' : bucket < 0.7 ? 'crate' : 'tuft';
           empty[target].push({ x: px, z: pz, cell, rotY, scale, tint });
-        } else if (kind === 'studs') {
-          const target = bucket < 0.6 ? 'stud' : 'panel';
-          // Studs sit on tile corners, panels center on the cell.
-          const sx = target === 'stud' ? x + (h2 < 0.5 ? 0 : 1) : x + 0.5;
-          const sz = target === 'stud' ? y + (h3 < 0.5 ? 0 : 1) : y + 0.5;
-          empty[target].push({ x: sx, z: sz, cell, rotY, scale, tint });
-        } else {
-          const target = bucket < 0.55 ? 'boulder' : 'pebble';
+        } else if (empty.grass.length < MAX_MEADOW_PROPS) {
+          // Meadow: a grass clump on most cells, rare stones, rarer flower
+          // specks tinted per instance from FLOWER_COLORS.
+          const target = bucket < 0.82 ? 'grass' : bucket < 0.92 ? 'stone' : 'flower';
           empty[target].push({ x: px, z: pz, cell, rotY, scale, tint });
         }
       }
@@ -333,7 +409,11 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       grid.height,
       dummyRef.current,
       colorRef.current,
+      useUiStore.getState().grassDensity,
     );
+    if (grassTimeRef.current !== null) {
+      grassTimeRef.current.value = performance.now() / 1000;
+    }
   });
 
   if (kind === 'none') {
@@ -391,66 +471,36 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
           </instancedMesh>
         </>
       )}
-      {kind === 'studs' && (
+      {kind === 'meadow' && grassMat !== null && (
         <>
           <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}stud`}
+            name={`${SCATTER_MESH_PREFIX}grass`}
             raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('stud')]}
+            args={[undefined, undefined, cap('grass')]}
+            frustumCulled={false}
+            geometry={grassGeo}
+          >
+            <primitive object={grassMat} attach={ATTACH_MATERIAL} />
+          </instancedMesh>
+          <instancedMesh
+            name={`${SCATTER_MESH_PREFIX}stone`}
+            raycast={NO_RAYCAST}
+            args={[undefined, undefined, cap('stone')]}
+            frustumCulled={false}
+            castShadow
+            receiveShadow
+            geometry={stoneGeo}
+          >
+            <meshStandardMaterial color={propColors.stone} roughness={1} />
+          </instancedMesh>
+          <instancedMesh
+            name={`${SCATTER_MESH_PREFIX}flower`}
+            raycast={NO_RAYCAST}
+            args={[undefined, undefined, cap('flower')]}
             frustumCulled={false}
           >
             <octahedronGeometry args={[0.07, 0]} />
-            <meshBasicMaterial color={propColors.stud} toneMapped={false} />
-          </instancedMesh>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}panel`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('panel')]}
-            frustumCulled={false}
-            receiveShadow
-          >
-            <boxGeometry args={[0.9, 0.03, 0.9]} />
-            <meshStandardMaterial color={propColors.panel} roughness={0.7} />
-          </instancedMesh>
-        </>
-      )}
-      {kind === 'boulders' && (
-        <>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}boulder`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('boulder')]}
-            frustumCulled={false}
-            castShadow
-            receiveShadow
-            geometry={boulderGeo}
-          >
-            <meshStandardMaterial color={propColors.boulder} roughness={1} />
-          </instancedMesh>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}pebble`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('pebble')]}
-            frustumCulled={false}
-            receiveShadow
-          >
-            <icosahedronGeometry args={[0.09, 0]} />
-            <meshStandardMaterial color={propColors.pebble} roughness={1} />
-          </instancedMesh>
-          <instancedMesh
-            name={`${SCATTER_MESH_PREFIX}crystal`}
-            raycast={NO_RAYCAST}
-            args={[undefined, undefined, cap('crystal')]}
-            frustumCulled={false}
-            castShadow
-          >
-            <octahedronGeometry args={[0.2, 0]} />
-            <meshStandardMaterial
-              color={CRYSTAL_COLOR}
-              emissive={CRYSTAL_EMISSIVE}
-              emissiveIntensity={0.9}
-              roughness={0.4}
-            />
+            <meshStandardMaterial roughness={0.8} />
           </instancedMesh>
         </>
       )}

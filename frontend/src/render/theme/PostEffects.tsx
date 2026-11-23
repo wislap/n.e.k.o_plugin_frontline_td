@@ -9,7 +9,6 @@ import {
   HueSaturation,
   N8AO,
   Noise,
-  Pixelation,
   SMAA,
   Vignette,
 } from '@react-three/postprocessing';
@@ -34,7 +33,7 @@ export function PostEffects() {
       <HueSaturation saturation={post.saturation - 1} />
       <Vignette offset={0.25} darkness={post.vignette} />
       {post.noiseOpacity > 0 ? <Noise opacity={post.noiseOpacity} /> : <></>}
-      {post.pixelation > 0 ? <Pixelation granularity={post.pixelation} /> : <SMAA />}
+      <SMAA />
     </EffectComposer>
   );
 }

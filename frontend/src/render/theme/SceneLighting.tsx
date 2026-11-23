@@ -6,6 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useRenderTheme } from './useTheme';
+import type { RenderTheme } from './themes';
 
 const SHADOW_MAP_SIZE = 2048;
 const SHADOW_MARGIN = 1.15;
@@ -18,6 +19,7 @@ function applyRendererSettings(
   gl: THREE.WebGLRenderer,
   themed: boolean,
   exposure: number,
+  toneMapping: 'none' | 'aces' | 'agx',
 ): () => void {
   const prev = {
     tone: gl.toneMapping,
@@ -26,7 +28,7 @@ function applyRendererSettings(
     shadowType: gl.shadowMap.type,
   };
   if (themed) {
-    gl.toneMapping = THREE.ACESFilmicToneMapping;
+    gl.toneMapping = toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
     gl.toneMappingExposure = exposure;
     gl.shadowMap.enabled = true;
     gl.shadowMap.type = THREE.PCFShadowMap;
@@ -40,6 +42,67 @@ function applyRendererSettings(
     gl.toneMappingExposure = prev.exposure;
     gl.shadowMap.enabled = prev.shadow;
     gl.shadowMap.type = prev.shadowType;
+  };
+}
+
+// Builds the tiny gradient-sky scene the PMREM generator samples so
+// ambient light/reflections come from the theme's own sky palette.
+function buildSkyEnvScene(theme: RenderTheme): { scene: THREE.Scene; dispose: () => void } {
+  const geo = new THREE.SphereGeometry(50, 32, 16);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    uniforms: {
+      uTop: { value: new THREE.Color(theme.background.top) },
+      uHorizon: { value: new THREE.Color(theme.background.horizon) },
+      uBottom: { value: new THREE.Color(theme.background.bottom) },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uTop;
+      uniform vec3 uHorizon;
+      uniform vec3 uBottom;
+      varying vec3 vDir;
+      void main() {
+        float h = vDir.y;
+        vec3 col = h > 0.0
+          ? mix(uHorizon, uTop, pow(min(h * 1.6, 1.0), 0.7))
+          : mix(uHorizon, uBottom, min(-h * 2.5, 1.0));
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `,
+  });
+  const scene = new THREE.Scene();
+  scene.add(new THREE.Mesh(geo, mat));
+  return {
+    scene,
+    dispose: () => {
+      geo.dispose();
+      mat.dispose();
+    },
+  };
+}
+
+function applyPmremEnvironment(
+  gl: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  theme: RenderTheme,
+): () => void {
+  const sky = buildSkyEnvScene(theme);
+  const pmrem = new THREE.PMREMGenerator(gl);
+  const rt = pmrem.fromScene(sky.scene, 0.06);
+  const prev = scene.environment;
+  scene.environment = rt.texture;
+  return () => {
+    scene.environment = prev;
+    rt.dispose();
+    pmrem.dispose();
+    sky.dispose();
   };
 }
 
@@ -72,8 +135,17 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   // Tone mapping + shadow map toggle; restored to renderer defaults on
   // theme change/unmount so `legacy` stays the untouched control.
   useEffect(() => {
-    return applyRendererSettings(gl, id !== 'legacy', exposure);
-  }, [gl, id, exposure]);
+    return applyRendererSettings(gl, id !== 'legacy', exposure, theme.toneMapping);
+  }, [gl, id, exposure, theme.toneMapping]);
+
+  // PMREM environment from the procedural sky (field): MeshStandardMaterials
+  // pick up ambient/reflection light from scene.environment.
+  useEffect(() => {
+    if (theme.environment !== 'pmrem-sky') {
+      return undefined;
+    }
+    return applyPmremEnvironment(gl, scene, theme);
+  }, [gl, scene, theme]);
 
   const diag = Math.hypot(mapWidth, mapHeight);
 

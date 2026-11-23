@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useRuntimeStore } from '../client/runtime-store';
 import type { SimClient } from '../client/sim-client';
 import { THEME_IDS, type ThemeId } from '../client/theme';
+import { UI_SKIN_IDS, type UiSkinId } from '../client/ui-skin';
 import { useUiStore } from '../client/ui-store';
 import { localName } from '../content/index';
 import { SPEED_STEPS } from '../protocol/index';
@@ -20,6 +21,12 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const setTheme = useUiStore((state) => state.setTheme);
   const outline = useUiStore((state) => state.outline);
   const setOutline = useUiStore((state) => state.setOutline);
+  const uiSkin = useUiStore((state) => state.uiSkin);
+  const setUiSkin = useUiStore((state) => state.setUiSkin);
+  const grassDensity = useUiStore((state) => state.grassDensity);
+  const setGrassDensity = useUiStore((state) => state.setGrassDensity);
+  const info2d = useUiStore((state) => state.info2d);
+  const setInfo2d = useUiStore((state) => state.setInfo2d);
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
@@ -122,12 +129,52 @@ export function DebugPanel({ client }: { client: SimClient }) {
       </div>
 
       <div className={styles['row']}>
+        <span className={styles['label']}>{t('dev.ui')}</span>
+        <select
+          value={uiSkin}
+          onChange={(e) => {
+            setUiSkin(e.target.value as UiSkinId);
+          }}
+        >
+          {UI_SKIN_IDS.map((id) => (
+            <option key={id} value={id}>
+              {t(`dev.ui_${id}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className={styles['row']}>
         <span className={styles['label']}>{t('dev.outline')}</span>
         <input
           type="checkbox"
           checked={outline}
           onChange={(e) => {
             setOutline(e.target.checked);
+          }}
+        />
+      </div>
+
+      <div className={styles['row']}>
+        <span className={styles['label']}>{t('dev.grass_density')}</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(grassDensity * 100)}
+          onChange={(e) => {
+            setGrassDensity(Number(e.target.value) / 100);
+          }}
+        />
+      </div>
+
+      <div className={styles['row']}>
+        <span className={styles['label']}>{t('dev.info2d')}</span>
+        <input
+          type="checkbox"
+          checked={info2d}
+          onChange={(e) => {
+            setInfo2d(e.target.checked);
           }}
         />
       </div>

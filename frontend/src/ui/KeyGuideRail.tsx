@@ -17,13 +17,8 @@ export function KeyGuideRail() {
   };
 
   if (!open) {
-    return (
-      <div className={styles['collapsed']}>
-        <ActionButton size="sm" kbd="K" onClick={toggle}>
-          {t('hud.guide_expand')}
-        </ActionButton>
-      </div>
-    );
+    // Collapsed state is the K chip in the right tool rail.
+    return null;
   }
 
   const modeGroup = KEYBINDING_GROUPS.find((g) => g.mode === primaryMode);

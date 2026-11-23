@@ -1,0 +1,55 @@
+.rail {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 34px;
+  min-height: 34px;
+  padding: 4px 2px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background 0.12s var(--ease-snap),
+    color 0.12s var(--ease-snap),
+    border-color 0.12s var(--ease-snap);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btnActive {
+  border-color: var(--mode-accent);
+  color: var(--mode-accent);
+  background: var(--mode-accent-dim);
+}
+
+.cap {
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.btnActive .cap {
+  color: var(--mode-accent);
+}

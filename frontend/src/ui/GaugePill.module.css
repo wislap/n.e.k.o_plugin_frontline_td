@@ -1,0 +1,48 @@
+.root {
+  pointer-events: auto;
+}
+
+.body {
+  padding: var(--space-1) var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.clockPill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--semantic-ok);
+  box-shadow: 0 0 6px var(--semantic-ok);
+}
+
+.dotPaused {
+  background: var(--semantic-warn);
+  box-shadow: 0 0 6px var(--semantic-warn);
+}
+
+.clockTime {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  color: var(--text-primary);
+}
+
+.clockTick {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}

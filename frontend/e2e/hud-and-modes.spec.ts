@@ -175,34 +175,35 @@ test('primary modes, auto-tactical camera, view lock, Tab toggle, and pause came
   await bootAndWaitForTick(page);
 
   const topLeft = page.locator('[data-hud-slot="topLeft"]');
-  const middleLeft = page.locator('[data-hud-slot="middleLeft"]');
-  const bottomLeft = page.locator('[data-hud-slot="bottomLeft"]');
+  const middleRight = page.locator('[data-hud-slot="middleRight"]');
+  const topCenter = page.locator('[data-hud-slot="topCenter"]');
   const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
   const topRight = page.locator('[data-hud-slot="topRight"]');
 
-  // Initial boot state
+  // Initial boot state (visual-languages HUD: mode pill + radar top-left,
+  // gauge top-center, round tool rail on the right edge).
   await expect(page.locator('[data-mode="command"]')).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
-  const lockBtn = topLeft.getByRole('button', { name: '视角锁定：关' });
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  const lockBtn = middleRight.getByRole('button', { name: '视角锁定：关' });
   await expect(lockBtn).toBeVisible();
   await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
-  await expect(middleLeft).toContainText('快捷键引导');
-  await expect(bottomLeft.locator('[data-testid="minimap-panel"]')).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
+  await expect(topLeft.locator('[data-testid="minimap-panel"]')).toBeVisible();
   await expect(topRight).toContainText('仓库');
   await expect(topRight).not.toContainText('运行遥测');
 
-  // Space pause/resume never auto-switches camera
+  // Space pause/resume never auto-switches camera (gauge pill top-center)
   await page.keyboard.press('Space');
-  await expect(topLeft.getByRole('button', { name: /继续/ })).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  await expect(topCenter.getByRole('button', { name: /继续/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
   await page.keyboard.press('Space');
-  await expect(topLeft.getByRole('button', { name: /暂停/ })).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  await expect(topCenter.getByRole('button', { name: /暂停/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
 
   // F2 -> build mode, auto-tactical camera, BuildMenu tabs
   await page.keyboard.press('F2');
   await expect(page.locator('[data-mode="build"]')).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /战术视角/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /战术视角/ })).toBeVisible();
   await expect(bottomCenter.getByRole('tab', { name: '全部' })).toBeVisible();
   await expect(bottomCenter.getByRole('tab', { name: '物流' })).toBeVisible();
   await expect(bottomCenter.getByRole('tab', { name: '生产' })).toBeVisible();
@@ -220,24 +221,24 @@ test('primary modes, auto-tactical camera, view lock, Tab toggle, and pause came
   // F1 -> command mode, restores spectate camera, BuildMenu unmounts
   await page.keyboard.press('F1');
   await expect(page.locator('[data-mode="command"]')).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
   await expect(bottomCenter.getByRole('tab', { name: '全部' })).toHaveCount(0);
 
   // View lock prevents auto-tactical switch on F3, manual Tab still toggles
   await lockBtn.click();
-  const lockedBtn = topLeft.getByRole('button', { name: '视角锁定：开' });
+  const lockedBtn = middleRight.getByRole('button', { name: '视角锁定：开' });
   await expect(lockedBtn).toBeVisible();
   await expect(lockedBtn).toHaveAttribute('aria-pressed', 'true');
 
   await page.keyboard.press('F3');
   await expect(page.locator('[data-mode="logistics"]')).toBeVisible();
   await expect(bottomCenter.getByRole('button', { name: /道路工具/ })).toBeVisible();
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
 
   await page.keyboard.press('Tab');
-  await expect(topLeft.getByRole('button', { name: /战术视角/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /战术视角/ })).toBeVisible();
   await page.keyboard.press('Tab');
-  await expect(topLeft.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
 
   expect(failures).toEqual([]);
 });
@@ -249,6 +250,7 @@ test('secondary tools, Esc and right-click exit hierarchy, K/? key guide rail, a
   await bootAndWaitForTick(page);
 
   const middleLeft = page.locator('[data-hud-slot="middleLeft"]');
+  const middleRight = page.locator('[data-hud-slot="middleRight"]');
   const topCenter = page.locator('[data-hud-slot="topCenter"]');
   const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
   const topRight = page.locator('[data-hud-slot="topRight"]');
@@ -262,7 +264,7 @@ test('secondary tools, Esc and right-click exit hierarchy, K/? key guide rail, a
   await page.keyboard.press('Escape');
   await expect(topCenter).not.toContainText('放置 炮塔');
   await expect(page.locator('[data-mode="build"]')).toBeVisible();
-  await expect(middleLeft).toContainText('快捷键引导');
+  await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
 
   // KeyC -> demolish banner -> right-click near center of canvas exits demolish, stays in F2
   await page.keyboard.press('KeyC');
@@ -286,13 +288,13 @@ test('secondary tools, Esc and right-click exit hierarchy, K/? key guide rail, a
   await page.keyboard.press('Escape');
   await expect(topCenter).not.toContainText('道路工具');
 
-  // KeyK collapses KeyGuideRail, ? (Shift+Slash) expands again
+  // KeyK expands the collapsed key guide, ? (Shift+Slash) collapses again
   await page.keyboard.press('KeyK');
-  await expect(middleLeft.getByRole('button', { name: /快捷键 ›/ })).toBeVisible();
-  await expect(middleLeft).not.toContainText('快捷键引导');
+  await expect(middleLeft).toContainText('快捷键引导');
 
   await page.keyboard.press('Shift+Slash');
-  await expect(middleLeft).toContainText('快捷键引导');
+  await expect(middleLeft).not.toContainText('快捷键引导');
+  await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
 
   // Backquote toggles DebugPanel in topRight
   await page.keyboard.press('Backquote');

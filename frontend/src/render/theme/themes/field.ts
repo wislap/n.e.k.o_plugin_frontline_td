@@ -1,0 +1,95 @@
+// Language 1 「晴野」— stylized PBR daylight, the closest language to
+// Endfield in-game: PMREM environment from the procedural sky, AgX tone
+// mapping, soft shadows, lush grass + flowers, graphite foundation pads
+// with emissive trim, procedural seams/stripes/printed codes, glowing
+// road tracks.
+import type { RenderTheme } from './types';
+
+export const FIELD_THEME: RenderTheme = {
+  id: 'field',
+  accent: '#FFE600',
+  exposure: 1.05,
+  toneMapping: 'agx',
+  environment: 'pmrem-sky',
+  outline: '#22251f',
+  fogColor: '#e6e5dd',
+  fogSoft: true,
+  fogStyle: 'survey',
+  info2d: true,
+  lighting: {
+    // Hemisphere is dimmed — most ambient comes from the PMREM sky.
+    hemiSky: '#bcd8ee',
+    hemiGround: '#6f8f5a',
+    hemiIntensity: 0.35,
+    sunColor: '#fff3da',
+    sunIntensity: 2.4,
+    sunDir: [-0.5, 0.66, -0.42],
+    rimColor: '#d8ecfa',
+    rimIntensity: 0.3,
+    rimDir: [0.55, 0.32, 0.6],
+    shadow: true,
+  },
+  terrain: {
+    // Fresh grass ramp: valley → sunlit meadow, warm dirt on cliffs.
+    rampLow: '#5c8a45',
+    rampHigh: '#a4c47f',
+    rampStrength: 0.95,
+    cliffColor: '#b3ab98',
+    cliffStart: 0.55,
+    cliffEnd: 0.82,
+    gridStrength: 0.04,
+    noiseAmp: 0.12,
+    slopeDarken: 0.22,
+    edgeOcc: 0.1,
+    edgeFadeDist: 14,
+    skirtCells: 14,
+  },
+  post: {
+    enabled: true,
+    aoIntensity: 1.1,
+    aoRadius: 0.7,
+    bloomIntensity: 0.35,
+    bloomThreshold: 0.85,
+    vignette: 0,
+    noiseOpacity: 0,
+    contrast: 1.05,
+    saturation: 1.06,
+  },
+  materials: {
+    unitBody: '#ecebe5',
+    unitTrim: '#2e3234',
+    structureBody: '#edede8',
+    structureTrim: '#30343a',
+    unitEmissive: 'faction',
+    structureEmissive: '#ff9a2a',
+    emissiveBoost: 1.2,
+    roughness: 0.45,
+    metalness: 0.06,
+    detail: 1,
+  },
+  markers: {
+    accent: '#FFE600',
+    secondary: '#1f2123',
+    invalid: '#d43a2e',
+    link: '#ff9a2a',
+  },
+  scatter: { kind: 'meadow', density: 0.34 },
+  background: {
+    kind: 'sky',
+    top: '#a9ccec',
+    horizon: '#eef3ec',
+    bottom: '#a8b49a',
+    platform: '#92ad72',
+    platformFadeStart: 0.5,
+    platformFadeEnd: 1.05,
+    haze: '#e4ecdf',
+  },
+  geometry: { bevel: 0.05 },
+  pad: {
+    color: '#26292c',
+    edge: '#ff9a2a',
+    margin: 0.35,
+    height: 0.12,
+    emissiveBoost: 1.6,
+  },
+};

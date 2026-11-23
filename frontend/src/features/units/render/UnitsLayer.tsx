@@ -7,6 +7,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { pruneSelected, useSelectionStore } from '../../../client/selection-store';
+import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
 import {
   SalvageChannel,
@@ -20,6 +21,8 @@ import { useRenderTheme } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
+import { buildRobotGeometry } from './robot-geometry';
+import { createThemedUnitMaterial } from './themed-unit-material';
 
 const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
@@ -41,6 +44,7 @@ const SHAPE_INDEX: Readonly<Record<UnitShape, number>> = {
   cone: 2,
   sphere: 3,
 };
+const SHAPE_KEYS = ['cylinder', 'box', 'cone', 'sphere'] as const;
 
 interface UnitVisual {
   shape: UnitShape;
@@ -83,16 +87,45 @@ export function UnitsLayer({
   }, [outlineMat]);
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const outlineRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const dimAttrsRef = useRef<(THREE.InstancedBufferAttribute | null)[]>([null, null, null, null]);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const energyPipRef = useRef<THREE.InstancedMesh>(null);
-  const bandRef = useRef<THREE.InstancedMesh>(null);
-  const eyeRef = useRef<THREE.InstancedMesh>(null);
   const interp = useRef(new UnitInterpolator());
   const dummyRef = useRef(new THREE.Object3D());
   const colorRef = useRef(new THREE.Color());
   const pipColorRef = useRef(new THREE.Color());
   const validHandlesRef = useRef(new Set<number>());
   const countsRef = useRef([0, 0, 0, 0]);
+
+  // Themed modes draw all four content shapes as the same small robot
+  // silhouette (kind variety comes from per-kind scale, not primitives).
+  // Each shape's InstancedMesh owns a clone: per-instance aDim attributes
+  // live on the geometry, so they cannot be shared across meshes.
+  const robotGeos = useMemo(() => {
+    if (!themed) {
+      return null;
+    }
+    const base = buildRobotGeometry(theme.geometry.bevel);
+    const geos = [base, base.clone(), base.clone(), base.clone()];
+    return geos;
+  }, [themed, theme]);
+  useEffect(() => {
+    return () => {
+      if (robotGeos !== null) {
+        for (const g of robotGeos) {
+          g.dispose();
+        }
+      }
+    };
+  }, [robotGeos]);
+  const unitMat = useMemo(() => (themed ? createThemedUnitMaterial(theme) : null), [themed, theme]);
+  const infoUniformRef = useRef<{ value: number } | null>(null);
+  useEffect(() => {
+    infoUniformRef.current = unitMat?.uniforms.info2d ?? null;
+    return () => {
+      unitMat?.material.dispose();
+    };
+  }, [unitMat]);
 
   useFrame(() => {
     const meshes = meshRefs.current;
@@ -104,11 +137,6 @@ export function UnitsLayer({
     const dummy = dummyRef.current;
     const color = colorRef.current;
     const pipColor = pipColorRef.current;
-    const band = bandRef.current;
-    const eye = eyeRef.current;
-    const bodyColor = theme.materials.unitBody;
-    const eyeIsFaction = theme.materials.unitEmissive === 'faction';
-    const emissiveBoost = theme.materials.emissiveBoost;
     const pair = client.snapshots();
     const latest = interp.current.update(pair);
     if (latest === null) {
@@ -122,12 +150,6 @@ export function UnitsLayer({
       }
       if (energyPip !== null) {
         energyPip.count = 0;
-      }
-      if (band !== null) {
-        band.count = 0;
-      }
-      if (eye !== null) {
-        eye.count = 0;
       }
       return;
     }
@@ -175,7 +197,18 @@ export function UnitsLayer({
     counts.fill(0);
     let rings = 0;
     let epips = 0;
-    let accents = 0;
+
+    // Tactical info view: dim units toward dark silhouettes while the
+    // camera is in tactical mode (shared info2d treatment).
+    if (infoUniformRef.current !== null) {
+      const camMode = useCameraStore.getState().mode;
+      const target = theme.info2d && useUiStore.getState().info2d && camMode === 'tactical' ? 1 : 0;
+      const u = infoUniformRef.current;
+      u.value += (target - u.value) * 0.25;
+      if (Math.abs(u.value - target) < 0.01) {
+        u.value = target;
+      }
+    }
     for (let i = 0; i < n; i++) {
       const handle = latest.handles[i] ?? 0;
       const { x, y } = interp.current.interpolated(latest, i, alpha);
@@ -192,7 +225,10 @@ export function UnitsLayer({
         continue;
       }
 
-      dummy.position.set(x, groundY + (UNIT_HEIGHT * visual.scale) / 2, y);
+      // Robot geometry has its base at y=0 (unit space), so it sits on
+      // the terrain; legacy primitives are centered and need the lift.
+      const lift = themed ? 0 : (UNIT_HEIGHT * visual.scale) / 2;
+      dummy.position.set(x, groundY + lift, y);
       dummy.scale.set(radius * 2 * visual.scale, visual.scale, radius * 2 * visual.scale);
       dummy.rotation.set(0, 0, 0);
       dummy.updateMatrix();
@@ -200,10 +236,14 @@ export function UnitsLayer({
       counts[SHAPE_INDEX[visual.shape]] = slot + 1;
 
       const faction = latest.faction[i] ?? 0;
-      color.set(themed ? bodyColor : factionColorHex(faction, localFaction));
+      // Themed: instanceColor is the faction accent slot color; body
+      // tint/dimming travels through aDim.
+      color.set(factionColorHex(faction, localFaction));
+      let dim = 1;
       const energyBp = latest.energyBp[i] ?? 0xffff;
       if (energyBp === 0) {
         color.multiplyScalar(EMPTY_ENERGY_DIM);
+        dim = EMPTY_ENERGY_DIM;
         if (energyPip !== null && epips < capacity) {
           dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
           dummy.scale.set(1, 1, 1);
@@ -216,6 +256,7 @@ export function UnitsLayer({
         }
       } else if (energyBp > 0 && energyBp < lowThresholdBp) {
         color.lerp(LOW_ENERGY_TINT, 0.35);
+        dim = 0.8;
         if (energyPip !== null && epips < capacity) {
           dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
           dummy.scale.set(1, 1, 1);
@@ -229,6 +270,7 @@ export function UnitsLayer({
       }
       if (selected.has(handle)) {
         color.multiplyScalar(SELECTED_BRIGHTEN);
+        dim = Math.min(SELECTED_BRIGHTEN, dim * SELECTED_BRIGHTEN);
         if (ring !== null && rings < capacity) {
           dummy.position.set(x, groundY + 0.055, y);
           // Legacy rings are drawn at radius*1.5*2 (diameter scale);
@@ -245,29 +287,7 @@ export function UnitsLayer({
         }
       }
       mesh.setColorAt(slot, color);
-      if (themed && band !== null && eye !== null && accents < capacity) {
-        // Faction accent band around the body + small emissive top light.
-        dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale * 0.62, y);
-        dummy.scale.set(radius * 2.4 * visual.scale, visual.scale, radius * 2.4 * visual.scale);
-        dummy.rotation.set(0, 0, 0);
-        dummy.updateMatrix();
-        band.setMatrixAt(accents, dummy.matrix);
-        pipColor.set(factionColorHex(faction, localFaction));
-        band.setColorAt(accents, pipColor);
-        dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.08 + radius * 0.3, y);
-        dummy.scale.set(radius, radius, radius);
-        dummy.rotation.set(0, 0, 0);
-        dummy.updateMatrix();
-        eye.setMatrixAt(accents, dummy.matrix);
-        if (eyeIsFaction) {
-          pipColor.set(factionColorHex(faction, localFaction));
-        } else {
-          pipColor.set(theme.materials.unitEmissive);
-        }
-        pipColor.multiplyScalar(emissiveBoost);
-        eye.setColorAt(accents, pipColor);
-        accents += 1;
-      }
+      dimAttrsRef.current[SHAPE_INDEX[visual.shape]]?.setX(slot, dim);
     }
     for (let s = 0; s < meshes.length; s++) {
       const mesh = meshes[s];
@@ -278,6 +298,10 @@ export function UnitsLayer({
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor !== null) {
         mesh.instanceColor.needsUpdate = true;
+      }
+      const dimAttr = dimAttrsRef.current[s];
+      if (dimAttr !== null && dimAttr !== undefined) {
+        dimAttr.needsUpdate = true;
       }
       bindOutline(outlineRefs.current[s] ?? null, mesh);
     }
@@ -292,100 +316,45 @@ export function UnitsLayer({
         energyPip.instanceColor.needsUpdate = true;
       }
     }
-    if (band !== null) {
-      band.count = accents;
-      band.instanceMatrix.needsUpdate = true;
-      if (band.instanceColor !== null) {
-        band.instanceColor.needsUpdate = true;
-      }
-    }
-    if (eye !== null) {
-      eye.count = accents;
-      eye.instanceMatrix.needsUpdate = true;
-      if (eye.instanceColor !== null) {
-        eye.instanceColor.needsUpdate = true;
-      }
-    }
   });
 
   return (
     <group>
-      <instancedMesh
-        key={`cyl-${capacity}-${theme.id}`}
-        ref={(m) => {
-          meshRefs.current[0] = m;
-        }}
-        args={[undefined, undefined, capacity]}
-        frustumCulled={false}
-        castShadow
-      >
-        <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />
-        {themed ? (
-          <meshStandardMaterial
-            roughness={theme.materials.roughness}
-            metalness={theme.materials.metalness}
-          />
-        ) : (
-          <meshLambertMaterial />
-        )}
-      </instancedMesh>
-      <instancedMesh
-        key={`box-${capacity}-${theme.id}`}
-        ref={(m) => {
-          meshRefs.current[1] = m;
-        }}
-        args={[undefined, undefined, capacity]}
-        frustumCulled={false}
-        castShadow
-      >
-        <boxGeometry args={[1, UNIT_HEIGHT, 1]} />
-        {themed ? (
-          <meshStandardMaterial
-            roughness={theme.materials.roughness}
-            metalness={theme.materials.metalness}
-          />
-        ) : (
-          <meshLambertMaterial />
-        )}
-      </instancedMesh>
-      <instancedMesh
-        key={`cone-${capacity}-${theme.id}`}
-        ref={(m) => {
-          meshRefs.current[2] = m;
-        }}
-        args={[undefined, undefined, capacity]}
-        frustumCulled={false}
-        castShadow
-      >
-        <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />
-        {themed ? (
-          <meshStandardMaterial
-            roughness={theme.materials.roughness}
-            metalness={theme.materials.metalness}
-          />
-        ) : (
-          <meshLambertMaterial />
-        )}
-      </instancedMesh>
-      <instancedMesh
-        key={`sph-${capacity}-${theme.id}`}
-        ref={(m) => {
-          meshRefs.current[3] = m;
-        }}
-        args={[undefined, undefined, capacity]}
-        frustumCulled={false}
-        castShadow
-      >
-        <sphereGeometry args={[0.5, 12, 10]} />
-        {themed ? (
-          <meshStandardMaterial
-            roughness={theme.materials.roughness}
-            metalness={theme.materials.metalness}
-          />
-        ) : (
-          <meshLambertMaterial />
-        )}
-      </instancedMesh>
+      {SHAPE_KEYS.map((shape, i) => (
+        <instancedMesh
+          key={`${shape}-${capacity}-${theme.id}`}
+          ref={(m) => {
+            meshRefs.current[i] = m;
+            if (m !== null && robotGeos !== null) {
+              const geo = robotGeos[i] ?? null;
+              if (geo !== null) {
+                m.geometry = geo;
+                const attr = new THREE.InstancedBufferAttribute(
+                  new Float32Array(capacity).fill(1),
+                  1,
+                );
+                geo.setAttribute('aDim', attr);
+                dimAttrsRef.current[i] = attr;
+              }
+            }
+          }}
+          args={[undefined, undefined, capacity]}
+          frustumCulled={false}
+          castShadow
+        >
+          {!themed && shape === 'cylinder' && (
+            <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />
+          )}
+          {!themed && shape === 'box' && <boxGeometry args={[1, UNIT_HEIGHT, 1]} />}
+          {!themed && shape === 'cone' && <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />}
+          {!themed && shape === 'sphere' && <sphereGeometry args={[0.5, 12, 10]} />}
+          {unitMat === null ? (
+            <meshLambertMaterial />
+          ) : (
+            <primitive object={unitMat.material} attach={ATTACH_MATERIAL} />
+          )}
+        </instancedMesh>
+      ))}
       <instancedMesh
         key={`ring-${capacity}`}
         ref={ringRef}
@@ -410,52 +379,26 @@ export function UnitsLayer({
         <octahedronGeometry args={[0.13, 0]} />
         <meshBasicMaterial />
       </instancedMesh>
-      {themed && outlineMat !== null && (
-        <>
-          {[0, 1, 2, 3].map((i) => (
-            <instancedMesh
-              key={`ol-${i}-${capacity}-${theme.id}`}
-              ref={(m) => {
-                outlineRefs.current[i] = m;
-              }}
-              args={[undefined, undefined, capacity]}
-              frustumCulled={false}
-            >
-              {i === 0 && <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT, 8]} />}
-              {i === 1 && <boxGeometry args={[1, UNIT_HEIGHT, 1]} />}
-              {i === 2 && <coneGeometry args={[0.5, UNIT_HEIGHT, 8]} />}
-              {i === 3 && <sphereGeometry args={[0.5, 12, 10]} />}
-              <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
-            </instancedMesh>
-          ))}
-        </>
-      )}
-      {themed && (
-        <instancedMesh
-          key={`band-${capacity}`}
-          ref={bandRef}
-          args={[undefined, undefined, capacity]}
-          frustumCulled={false}
-        >
-          <cylinderGeometry args={[0.5, 0.5, UNIT_HEIGHT * 0.22, 10, 1, true]} />
-          <meshStandardMaterial
-            roughness={theme.materials.roughness}
-            metalness={theme.materials.metalness}
-            side={THREE.DoubleSide}
-          />
-        </instancedMesh>
-      )}
-      {themed && (
-        <instancedMesh
-          key={`eye-${capacity}`}
-          ref={eyeRef}
-          args={[undefined, undefined, capacity]}
-          frustumCulled={false}
-        >
-          <octahedronGeometry args={[0.16, 0]} />
-          <meshBasicMaterial toneMapped={false} />
-        </instancedMesh>
-      )}
+      {themed &&
+        outlineMat !== null &&
+        SHAPE_KEYS.map((shape, i) => (
+          <instancedMesh
+            key={`ol-${i}-${capacity}-${theme.id}`}
+            ref={(m) => {
+              outlineRefs.current[i] = m;
+              if (m !== null && robotGeos !== null) {
+                const geo = robotGeos[i] ?? null;
+                if (geo !== null) {
+                  m.geometry = geo;
+                }
+              }
+            }}
+            args={[undefined, undefined, capacity]}
+            frustumCulled={false}
+          >
+            <primitive object={outlineMat} attach={ATTACH_MATERIAL} />
+          </instancedMesh>
+        ))}
     </group>
   );
 }

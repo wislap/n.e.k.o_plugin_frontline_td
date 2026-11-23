@@ -30,6 +30,7 @@ import {
 } from '../protocol';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
 import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
+import { createPadMaterial } from './pad-material';
 import { createThemedStructureMaterial } from './themed-structure-material';
 import {
   ACTIVE_STRUCTURE_GLYPHS,
@@ -60,6 +61,8 @@ interface StructureGpuAssets {
   geos: Record<StructureSilhouette, THREE.BufferGeometry>;
   glyphs: Record<ActiveGlyph, GlyphMaterialEntry>;
   roofGeo: THREE.PlaneGeometry;
+  // Bevel the geos were built with — rebuilt when the theme changes it.
+  bevel: number;
 }
 
 function makeSilhouetteCounts(): Record<StructureSilhouette, number> {
@@ -90,14 +93,22 @@ function resetGlyphCounts(counts: Record<ActiveGlyph, number>): void {
   }
 }
 
-function ensureGpuAssets(gpuRef: { current: StructureGpuAssets | null }): StructureGpuAssets {
+function ensureGpuAssets(
+  gpuRef: { current: StructureGpuAssets | null },
+  bevel: number,
+): StructureGpuAssets {
+  if (gpuRef.current !== null && gpuRef.current.bevel !== bevel) {
+    disposeSilhouetteGeometries(gpuRef.current.geos);
+    gpuRef.current = null;
+  }
   if (gpuRef.current === null) {
     const roofGeo = new THREE.PlaneGeometry(1, 1);
     roofGeo.rotateX(-Math.PI / 2);
     gpuRef.current = {
-      geos: createSilhouetteGeometries(),
+      geos: createSilhouetteGeometries(bevel),
       glyphs: createGlyphMaterials(),
       roofGeo,
+      bevel,
     };
   }
   return gpuRef.current;
@@ -115,7 +126,11 @@ function bindGpuToMeshes(
     }
     const geo = gpu.geos[s];
     if (mesh.geometry !== geo) {
-      mesh.geometry.dispose();
+      // Silhouette geos are shared GPU assets (userData.shared); only the
+      // default geometry R3F created for the mesh gets disposed here.
+      if (mesh.geometry.userData['shared'] !== true) {
+        mesh.geometry.dispose();
+      }
       mesh.geometry = geo;
     }
   }
@@ -227,21 +242,32 @@ export function StructuresLayer({
   const waitingRef = useRef<THREE.InstancedMesh>(null);
   const crateRef = useRef<THREE.InstancedMesh>(null);
   const statusRef = useRef<THREE.InstancedMesh>(null);
+  const padRef = useRef<THREE.InstancedMesh>(null);
   // Per-silhouette aDim instanced attributes (body/trim dim factor for the
   // themed material; legacy ignores them).
   const dimAttrsRef = useRef<Partial<Record<StructureSilhouette, THREE.InstancedBufferAttribute>>>(
     {},
   );
 
-  const themedMat = useMemo(
+  const themed = useMemo(
     () => (theme.id === 'legacy' ? null : createThemedStructureMaterial(theme)),
     [theme],
   );
   useEffect(() => {
     return () => {
-      themedMat?.dispose();
+      themed?.material.dispose();
+      themed?.codes?.dispose();
     };
-  }, [themedMat]);
+  }, [themed]);
+
+  // Foundation pads (field): graphite slab + emissive edge under each
+  // structure — what separates industry from nature.
+  const pad = useMemo(() => (theme.pad === null ? null : createPadMaterial(theme)), [theme]);
+  useEffect(() => {
+    return () => {
+      pad?.material.dispose();
+    };
+  }, [pad]);
 
   const gpuRef = useRef<StructureGpuAssets | null>(null);
   const silCountsRef = useRef<Record<StructureSilhouette, number> | null>(null);
@@ -270,7 +296,7 @@ export function StructuresLayer({
       return;
     }
 
-    const gpu = ensureGpuAssets(gpuRef);
+    const gpu = ensureGpuAssets(gpuRef, theme.geometry.bevel);
     if (!bindGpuToMeshes(silRefs.current, glyphRefs.current, gpu)) {
       return;
     }
@@ -316,8 +342,21 @@ export function StructuresLayer({
     let bpCount = 0;
     let waitCount = 0;
     let statusCount = 0;
+    let padCount = 0;
 
     const cam = useCameraStore.getState();
+    // Tactical info view (弱化显示): lerp the structure/pad dim uniforms
+    // toward 1 while the camera is in tactical mode.
+    const infoTarget =
+      theme.info2d && useUiStore.getState().info2d && cam.mode === 'tactical' ? 1 : 0;
+    for (const u of [themed?.uniforms.info2d, pad?.uniforms.info2d]) {
+      if (u !== undefined) {
+        u.value += (infoTarget - u.value) * 0.25;
+        if (Math.abs(u.value - infoTarget) < 0.01) {
+          u.value = infoTarget;
+        }
+      }
+    }
     const glyphYawRot = camera.rotation.y;
     updateGlyphOpacity(
       gpu.glyphs,
@@ -406,11 +445,24 @@ export function StructuresLayer({
           silCounts[silhouette] = slot + 1;
         }
 
+        // Foundation pad under built structures (field): graphite slab
+        // slightly larger than the footprint, sunk into the terrain.
+        const padMesh = padRef.current;
+        if (padMesh !== null && state !== STATE_RUIN && theme.pad !== null) {
+          const margin = theme.pad.margin;
+          dummy.position.set(cx, groundY - 0.04 + theme.pad.height / 2, cy);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(w + margin * 2, theme.pad.height, h + margin * 2);
+          dummy.updateMatrix();
+          padMesh.setMatrixAt(padCount, dummy.matrix);
+          padCount += 1;
+        }
+
         // Damaged operational structures get a floating warning marker
         // (themed modes only; uses hpBp already in the channel).
         if (
           statusMesh !== null &&
-          themedMat !== null &&
+          themed !== null &&
           state === STATE_OPERATIONAL &&
           (channel.hpBp[i] ?? 10000) < 9000 &&
           statusCount < capacity
@@ -435,7 +487,7 @@ export function StructuresLayer({
             dummy.updateMatrix();
             gMesh.setMatrixAt(gSlot, dummy.matrix);
             color.set(resolveGlyphTint(faction, localFaction, isHostile));
-            if (themedMat !== null) {
+            if (themed !== null) {
               // HDR tint so roof glyphs feed bloom in themed modes.
               color.multiplyScalar(theme.materials.emissiveBoost);
             }
@@ -489,6 +541,12 @@ export function StructuresLayer({
       crates.count = 0;
     }
     crates.instanceMatrix.needsUpdate = true;
+
+    const padMesh = padRef.current;
+    if (padMesh !== null) {
+      padMesh.count = padCount;
+      padMesh.instanceMatrix.needsUpdate = true;
+    }
   });
 
   return (
@@ -503,10 +561,10 @@ export function StructuresLayer({
           frustumCulled={false}
           castShadow
         >
-          {themedMat === null ? (
+          {themed === null ? (
             <meshLambertMaterial vertexColors />
           ) : (
-            <primitive object={themedMat} attach={ATTACH_MATERIAL} />
+            <primitive object={themed.material} attach={ATTACH_MATERIAL} />
           )}
         </instancedMesh>
       ))}
@@ -561,7 +619,7 @@ export function StructuresLayer({
         <boxGeometry args={[1, 1, 1]} />
         <meshLambertMaterial color={SALVAGE_COLOR} />
       </instancedMesh>
-      {themedMat !== null && (
+      {themed !== null && (
         <instancedMesh
           key={`status-${capacity}`}
           ref={statusRef}
@@ -570,6 +628,18 @@ export function StructuresLayer({
         >
           <octahedronGeometry args={[0.16, 0]} />
           <meshBasicMaterial color={STATUS_COLOR} toneMapped={false} />
+        </instancedMesh>
+      )}
+      {pad !== null && (
+        <instancedMesh
+          key={`pad-${capacity}-${theme.id}`}
+          ref={padRef}
+          args={[undefined, undefined, capacity]}
+          frustumCulled={false}
+          receiveShadow
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <primitive object={pad.material} attach={ATTACH_MATERIAL} />
         </instancedMesh>
       )}
     </group>

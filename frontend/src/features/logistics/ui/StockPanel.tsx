@@ -8,6 +8,7 @@ import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import { createStockRateTracker } from '../../../client/stock-rate';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { localName, type ContentDb } from '../../../content/index';
+import { IconCargo, IconSwap } from '../../../ui/icons';
 import { ActionButton, RateBadge, TacticalPanel } from '../../../ui/kit/index';
 import {
   ADJUSTABLE_CLASSES,
@@ -73,6 +74,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
           const rateMilli = rates[cargo] ?? 0;
           return (
             <div key={id} className={styles['row']}>
+              <IconCargo id={cargoKey} size={13} className={styles['cargoIcon']} />
               <span className={styles['cargoName']}>
                 {t(`cargo.${cargoKey}`, { defaultValue: cargoKey })}
               </span>
@@ -107,6 +109,9 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
           <ActionButton
             size="sm"
             className={styles['priorityBtn']}
+            title={t('stock.priorities', {
+              order: adjustable.map((c) => t(`class.${c}`)).join(' ⇄ '),
+            })}
             onClick={() => {
               client.submit({
                 type: SetPrioritiesCommand.type,
@@ -114,6 +119,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
               });
             }}
           >
+            <IconSwap size={13} />
             {t('stock.priorities', {
               order: adjustable.map((c) => t(`class.${c}`)).join(' ⇄ '),
             })}
