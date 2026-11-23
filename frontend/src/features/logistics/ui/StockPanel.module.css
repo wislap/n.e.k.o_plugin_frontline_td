@@ -107,3 +107,79 @@
     min-width: 196px;
   }
 }
+
+/* field skin: resources are a floating row of glyph + number + rate in
+   white with a soft shadow — no warehouse table chrome. The priority
+   swap is a small round icon button; its text lives in the tooltip. */
+:global([data-ui-skin='field']) .panel {
+  min-width: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global([data-ui-skin='field']) .panel header {
+  display: none;
+}
+
+:global([data-ui-skin='field']) .rows {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+:global([data-ui-skin='field']) .row {
+  padding: 0;
+  gap: 4px;
+  background: transparent;
+  color: rgba(246, 248, 242, 0.95);
+  text-shadow: 0 1px 6px rgba(10, 14, 10, 0.7);
+}
+
+:global([data-ui-skin='field']) .cargoIcon {
+  color: rgba(246, 248, 242, 0.9);
+}
+
+:global([data-ui-skin='field']) .cargoName {
+  display: none;
+}
+
+:global([data-ui-skin='field']) .amount {
+  color: #ffffff;
+}
+
+:global([data-ui-skin='field']) .warnings {
+  border-top: none;
+}
+
+:global([data-ui-skin='field']) .warnItem {
+  border-radius: 999px;
+  border: none;
+  background: rgba(20, 24, 20, 0.72);
+}
+
+:global([data-ui-skin='field']) .footer {
+  margin-top: var(--space-1);
+  padding-top: 0;
+  border-top: none;
+  display: flex;
+  justify-content: flex-end;
+}
+
+:global([data-ui-skin='field']) .priorityBtn {
+  width: 30px;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(244, 246, 238, 0.94);
+  color: #23261f;
+  box-shadow: 0 2px 8px rgba(10, 14, 10, 0.4);
+}
+
+:global([data-ui-skin='field']) .priorityLabel {
+  display: none;
+}

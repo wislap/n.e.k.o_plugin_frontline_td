@@ -10,6 +10,7 @@ import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { bindOutline, createOutlineMaterial } from '../../../render/outline-material';
 import { useRenderTheme } from '../../../render/theme/index';
+import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
 import { terrainY } from '../../../render/world';
 import {
@@ -28,6 +29,7 @@ interface PropInstance {
   z: number;
   cell: number;
   rotY: number;
+  lean: number;
   scale: number;
   tint: number;
 }
@@ -50,7 +52,10 @@ const TUFT_COLOR = '#5d6e38';
 const FLOWER_COLORS = ['#f4f2e8', '#ffd94d', '#e8ecf4', '#d7e8ff'] as const;
 // Grass instances are culled by a hash-fraction cutoff so the debug
 // density slider removes a stable subset instead of popping.
-const MAX_MEADOW_PROPS = 9000;
+// Spawn cap is generous — the per-frame camera-distance cull decides how
+// many instances actually get written, so dense fields don't truncate
+// partway through the scan order.
+const MAX_MEADOW_PROPS = 64000;
 
 // Irregular low-poly rock: icosahedron with deterministic per-vertex jitter
 // and a flattened base so props read as stone, not dice.
@@ -68,52 +73,66 @@ function createRockGeometry(radius: number, seed: number): THREE.BufferGeometry 
   return geo;
 }
 
-// Grass clump: three thin tapered blades merged, anchored at y=0; wind
-// sway displaces tips in the material shader by instance world position.
+// Grass clump: five thin tapered blades fanned around the origin,
+// ~0.2–0.34 cells tall (far below a robot). Vertex colors carry a
+// dark-root → light-tip gradient; wind sway displaces tips in the
+// material shader by instance world position.
 function createGrassGeometry(): THREE.BufferGeometry {
-  const blade = (rot: number, dx: number, dz: number) => {
-    const g = new THREE.PlaneGeometry(0.09, 0.4, 1, 2);
-    const pos = g.getAttribute('position');
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      const taper = 1 - Math.max(0, y + 0.2) * 2.2;
-      pos.setX(i, pos.getX(i) * Math.max(0.15, taper));
-    }
-    g.translate(0, 0.2, 0);
-    g.rotateY(rot);
-    g.translate(dx, 0, dz);
-    return g;
-  };
-  const parts = [blade(0.3, 0, 0), blade(1.4, 0.06, 0.04), blade(2.6, -0.05, 0.05)];
   const pos: number[] = [];
-  const norm: number[] = [];
+  const col: number[] = [];
   const idx: number[] = [];
-  for (const g of parts) {
+  const BLADES = 6;
+  for (let i = 0; i < BLADES; i++) {
+    const a = (i / BLADES) * Math.PI * 2 + i * 0.73;
+    const lean = 0.16 + (i % 3) * 0.12;
+    const h = 0.2 + (i % 4) * 0.045;
+    const w = 0.022;
+    const dx = Math.cos(a) * 0.05;
+    const dz = Math.sin(a) * 0.05;
+    const px = -Math.sin(a) * w;
+    const pz = Math.cos(a) * w;
+    const lx = Math.cos(a) * lean;
+    const lz = Math.sin(a) * lean;
     const base = pos.length / 3;
-    const p = g.getAttribute('position');
-    const n = g.getAttribute('normal');
-    for (let i = 0; i < p.count; i++) {
-      pos.push(p.getX(i), p.getY(i), p.getZ(i));
-      norm.push(n.getX(i), n.getY(i), n.getZ(i));
-    }
-    const gi = g.getIndex();
-    if (gi !== null) {
-      for (let i = 0; i < gi.count; i++) {
-        idx.push(base + gi.getX(i));
-      }
-    }
-    g.dispose();
+    pos.push(
+      dx - px,
+      0,
+      dz - pz,
+      dx + px,
+      0,
+      dz + pz,
+      dx + lx - px * 0.3,
+      h,
+      dz + lz - pz * 0.3,
+      dx + lx + px * 0.3,
+      h,
+      dz + lz + pz * 0.3,
+    );
+    col.push(0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 1.15, 1.15, 1.15, 1.15, 1.15, 1.15);
+    idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
+  geo.computeVertexNormals();
   return geo;
 }
 
 // Explored-but-not-visible cells dim props to roughly match the fog film;
 // unexplored cells hide them entirely (state 0/1/2 mirrors FogLayer).
 const EXPLORED_DIM = 0.45;
+
+// Meadow grass is culled by distance from the camera focus so dense
+// fields stay cheap; stones/clutter are sparse enough to keep everywhere.
+const MEADOW_VIEW_DIST = 85;
+
+interface MeadowTint {
+  rampLow: THREE.Color;
+  rampHigh: THREE.Color;
+  hMin: number;
+  hMax: number;
+}
 
 function applyScatter(
   group: THREE.Group,
@@ -126,7 +145,11 @@ function applyScatter(
   dummy: THREE.Object3D,
   scratchColor: THREE.Color,
   grassScale: number,
+  meadowTint: MeadowTint | null,
+  camX: number,
+  camZ: number,
 ): void {
+  const hSpan = meadowTint === null ? 1 : Math.max(meadowTint.hMax - meadowTint.hMin, 1e-3);
   for (const kind of Object.keys(props) as PropKind[]) {
     const mesh = group.getObjectByName(`${SCATTER_MESH_PREFIX}${kind}`);
     if (mesh === undefined || !(mesh instanceof THREE.InstancedMesh)) {
@@ -141,13 +164,20 @@ function applyScatter(
       if (kind === 'grass' && p.rotY > grassScale * Math.PI * 2) {
         continue;
       }
+      if (kind === 'grass' || kind === 'flower') {
+        const ddx = p.x - camX;
+        const ddz = p.z - camZ;
+        if (ddx * ddx + ddz * ddz > MEADOW_VIEW_DIST * MEADOW_VIEW_DIST) {
+          continue;
+        }
+      }
       const state = vision?.[p.cell] ?? 2;
       if (state === 0) {
         continue;
       }
       const dim = state === 1 ? EXPLORED_DIM : 1;
       dummy.position.set(p.x, terrainY(heights, mapWidth, mapHeight, p.x, p.z) + lift, p.z);
-      dummy.rotation.set(0, p.rotY, 0);
+      dummy.rotation.set(p.lean, p.rotY, 0);
       dummy.scale.set(p.scale, p.scale, p.scale);
       dummy.updateMatrix();
       mesh.setMatrixAt(count, dummy.matrix);
@@ -155,6 +185,12 @@ function applyScatter(
       if (kind === 'flower') {
         const ci = Math.floor((p.rotY / (Math.PI * 2)) * FLOWER_COLORS.length);
         scratchColor.set(FLOWER_COLORS[ci % FLOWER_COLORS.length] ?? '#ffffff');
+        scratchColor.multiplyScalar(t);
+      } else if (kind === 'grass' && meadowTint !== null) {
+        // Match the terrain ramp at the prop's height so blades grow out
+        // of the same ground colour, then keep the vertex root→tip shade.
+        const hNorm = Math.min(1, Math.max(0, ((heights[p.cell] ?? 0) - meadowTint.hMin) / hSpan));
+        scratchColor.copy(meadowTint.rampLow).lerp(meadowTint.rampHigh, hNorm);
         scratchColor.multiplyScalar(t);
       } else {
         scratchColor.setRGB(t, t, t);
@@ -201,6 +237,30 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const watchedRef = useRef<unknown[]>([]);
   const kind = theme.scatter.kind;
 
+  // Terrain-matched grass tint: same height ramp the terrain shader uses.
+  const meadowTint = useMemo((): MeadowTint | null => {
+    if (kind !== 'meadow') {
+      return null;
+    }
+    let hMin = Infinity;
+    let hMax = -Infinity;
+    for (let i = 0; i < heights.length; i++) {
+      const h = heights[i] ?? 0;
+      if (h < hMin) {
+        hMin = h;
+      }
+      if (h > hMax) {
+        hMax = h;
+      }
+    }
+    return {
+      rampLow: new THREE.Color(theme.terrain.rampLow),
+      rampHigh: new THREE.Color(theme.terrain.rampHigh),
+      hMin,
+      hMax,
+    };
+  }, [kind, theme, heights]);
+
   // Prop tints derive from the terrain palette so scatter blends into the
   // local ground instead of reading as black spots.
   const propColors = useMemo(() => {
@@ -229,13 +289,16 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       return null;
     }
     const mat = new THREE.MeshStandardMaterial({
-      color: propColors.grass,
+      // White base: the per-instance color carries the terrain-matched
+      // tint and the vertex color carries the root→tip gradient.
+      color: '#ffffff',
+      vertexColors: true,
       roughness: 1,
       side: THREE.DoubleSide,
       // Slight self-illumination keeps the backlit side of thin blades
       // from reading as black spikes against the bright terrain.
       emissive: propColors.grass,
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.3,
     });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms['uTime'] = { value: 0 };
@@ -247,7 +310,7 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
           `#include <begin_vertex>
           #ifdef USE_INSTANCING
             float swayPh = instanceMatrix[3][0] * 2.31 + instanceMatrix[3][2] * 1.73;
-            float swayW = smoothstep(0.05, 0.4, position.y);
+            float swayW = smoothstep(0.05, 0.25, position.y);
             transformed.x += sin(uTime * 1.9 + swayPh) * 0.07 * swayW;
             transformed.z += cos(uTime * 1.35 + swayPh * 1.7) * 0.05 * swayW;
           #endif`,
@@ -309,12 +372,53 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
         const scale = 0.7 + h4 * 0.6;
         if (kind === 'clutter') {
           const target = bucket < 0.45 ? 'rock' : bucket < 0.7 ? 'crate' : 'tuft';
-          empty[target].push({ x: px, z: pz, cell, rotY, scale, tint });
+          empty[target].push({ x: px, z: pz, cell, rotY, lean: 0, scale, tint });
         } else if (empty.grass.length < MAX_MEADOW_PROPS) {
-          // Meadow: a grass clump on most cells, rare stones, rarer flower
-          // specks tinted per instance from FLOWER_COLORS.
-          const target = bucket < 0.82 ? 'grass' : bucket < 0.92 ? 'stone' : 'flower';
-          empty[target].push({ x: px, z: pz, cell, rotY, scale, tint });
+          // Meadow: several small grass clumps per cell, rare stones, and
+          // flower specks gathered into clusters instead of scattered
+          // uniformly — the field reads as tufts and drifts, not dots.
+          if (bucket < 0.8) {
+            const tufts = 3 + Math.floor(h2 * 3);
+            for (let ti = 0; ti < tufts; ti++) {
+              if (empty.grass.length >= MAX_MEADOW_PROPS) {
+                break;
+              }
+              const jx = cellHash(x, y, 21 + ti) * U32;
+              const jz = cellHash(x, y, 41 + ti) * U32;
+              const jr = cellHash(x, y, 61 + ti) * U32;
+              empty.grass.push({
+                x: x + 0.12 + jx * 0.76,
+                z: y + 0.12 + jz * 0.76,
+                cell,
+                rotY: jr * Math.PI * 2,
+                lean: (cellHash(x, y, 81 + ti) * U32 - 0.5) * 0.22,
+                scale: 0.75 + jx * 0.55,
+                tint: 0.85 + jr * 0.3,
+              });
+            }
+          } else if (bucket < 0.92) {
+            empty.stone.push({ x: px, z: pz, cell, rotY, lean: 0, scale, tint });
+          } else {
+            const fx = x + 0.3 + h2 * 0.4;
+            const fz = y + 0.3 + h3 * 0.4;
+            const specks = 2 + Math.floor(h4 * 3);
+            for (let fi = 0; fi < specks; fi++) {
+              if (empty.flower.length >= MAX_MEADOW_PROPS) {
+                break;
+              }
+              const fjx = cellHash(x, y, 91 + fi) * U32;
+              const fjz = cellHash(x, y, 111 + fi) * U32;
+              empty.flower.push({
+                x: fx + (fjx - 0.5) * 0.5,
+                z: fz + (fjz - 0.5) * 0.5,
+                cell,
+                rotY: fjx * Math.PI * 2,
+                lean: 0,
+                scale: 0.5 + fjz * 0.45,
+                tint: 0.9 + fjx * 0.2,
+              });
+            }
+          }
         }
       }
     }
@@ -335,6 +439,21 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
     const road = latest.layers[ROAD_LAYER_ID] as ArrayLike<number> | undefined;
     const vision = latest.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
       ArrayLike<number> | undefined;
+    // Re-filter when the camera focus crosses ~4 cells — the meadow
+    // distance cull needs a fresh pass even when channels are unchanged.
+    const camState = useCameraStore.getState();
+    const camCenter = camState.center;
+    // The tactical info view drops props entirely — grass and stones are
+    // noise on the dark slate read, not information.
+    const groupVis = groupRef.current;
+    if (groupVis !== null) {
+      groupVis.visible = !(
+        theme.info2d &&
+        useUiStore.getState().info2d &&
+        camState.mode === 'tactical'
+      );
+    }
+    const camQ = Math.floor(camCenter.x / 4) * 4096 + Math.floor(camCenter.y / 4);
     const watched = watchedRef.current;
     if (
       occupiedRef.current !== null &&
@@ -342,11 +461,15 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       watched[1] === salvage &&
       watched[2] === roadworks &&
       watched[3] === road &&
-      watched[4] === vision
+      watched[4] === vision &&
+      watched[5] === camQ
     ) {
+      if (grassTimeRef.current !== null) {
+        grassTimeRef.current.value = performance.now() / 1000;
+      }
       return;
     }
-    watchedRef.current = [structures, salvage, roadworks, road, vision];
+    watchedRef.current = [structures, salvage, roadworks, road, vision, camQ];
 
     const cells = grid.width * grid.height;
     const occupied = (occupiedRef.current ??= new Uint8Array(cells));
@@ -410,6 +533,9 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       dummyRef.current,
       colorRef.current,
       useUiStore.getState().grassDensity,
+      meadowTint,
+      camCenter.x,
+      camCenter.y,
     );
     if (grassTimeRef.current !== null) {
       grassTimeRef.current.value = performance.now() / 1000;

@@ -45,7 +45,10 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uCliffStart'] = { value: t.cliffStart };
     shader.uniforms['uCliffEnd'] = { value: t.cliffEnd };
     shader.uniforms['uGridStrength'] = { value: t.gridStrength };
+    shader.uniforms['uGrid3D'] = { value: t.grid3d ?? 1 };
     shader.uniforms['uNoiseAmp'] = { value: t.noiseAmp };
+    shader.uniforms['uDirtColor'] = { value: new THREE.Color(t.dirt ?? '#000000') };
+    shader.uniforms['uDirtOn'] = { value: t.dirt === undefined ? 0 : 1 };
     shader.uniforms['uSlopeDarken'] = { value: t.slopeDarken };
     shader.uniforms['uEdgeOcc'] = { value: t.edgeOcc };
     shader.uniforms['uEdgeFade'] = { value: t.edgeFadeDist };
@@ -88,7 +91,10 @@ export function createThemedTerrainMaterial(
         uniform float uCliffStart;
         uniform float uCliffEnd;
         uniform float uGridStrength;
+        uniform float uGrid3D;
         uniform float uNoiseAmp;
+        uniform vec3 uDirtColor;
+        uniform float uDirtOn;
         uniform float uSlopeDarken;
         uniform float uEdgeOcc;
         uniform float uEdgeFade;
@@ -130,17 +136,26 @@ export function createThemedTerrainMaterial(
           diffuseColor.rgb = mix(diffuseColor.rgb, ramp, uRampStrength);
           float hn = fract(sin(dot(floor(terP), vec2(127.1, 311.7))) * 43758.5453);
           diffuseColor.rgb *= 1.0 + (hn - 0.5) * uNoiseAmp;
-          // Macro variation: 3-octave value noise at ~6-20 cell scales, a few
-          // percent of lightness plus a slight hue drift toward the ramp ends.
-          float macro = terNoise(terP / 17.0) * 0.5
-            + terNoise(terP / 8.5 + 13.7) * 0.3
-            + terNoise(terP / 4.2 + 41.3) * 0.2;
-          diffuseColor.rgb *= 1.0 + (macro - 0.5) * 0.14;
-          diffuseColor.rgb = mix(diffuseColor.rgb, mix(uRampLow, uRampHigh, macro), 0.1);
+          // Macro variation: continuous multi-octave value noise at
+          // ~4-35 cell scales — large meadow patches with a slight hue
+          // drift between the ramp ends, no per-cell tiling.
+          float macro = terNoise(terP / 34.0) * 0.4
+            + terNoise(terP / 17.0 + 13.7) * 0.3
+            + terNoise(terP / 8.5 + 41.3) * 0.2
+            + terNoise(terP / 4.2 + 71.9) * 0.1;
+          diffuseColor.rgb *= 1.0 + (macro - 0.5) * 0.16;
+          diffuseColor.rgb = mix(diffuseColor.rgb, mix(uRampLow, uRampHigh, macro), 0.16);
+          if (uDirtOn > 0.5) {
+            // Dirt/gravel patches: a second low-frequency field picks out
+            // worn ground around ~10-cell blobs.
+            float dirtM = smoothstep(0.56, 0.72, terNoise(terP / 11.0 + 91.3))
+              * (0.75 + terNoise(terP / 3.0 + 17.7) * 0.5);
+            diffuseColor.rgb = mix(diffuseColor.rgb, uDirtColor, dirtM * 0.65);
+          }
           vec2 gw = max(fwidth(terP), vec2(1e-4));
           vec2 g = abs(fract(terP - 0.5) - 0.5) / gw;
           float gline = 1.0 - min(min(g.x, g.y), 1.0);
-          diffuseColor.rgb *= 1.0 - uGridStrength * gline;
+          diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
           // Cliff edges: where the up-normal changes fast across pixels the
           // fragment sits in a top/bottom transition band; brighten the top
@@ -153,10 +168,11 @@ export function createThemedTerrainMaterial(
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
           float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
-          // Tactical info view (弱化显示): desaturate + darken so the
-          // markers layer reads as the bright information layer.
+          // Tactical info view (弱化显示): sink the ground into a dark
+          // slate grey-green so markers read as the bright layer on top.
           float grey = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(grey) * 0.5, uInfo2D);
+          vec3 slate = vec3(grey) * vec3(0.2, 0.26, 0.22);
+          diffuseColor.rgb = mix(diffuseColor.rgb, slate, uInfo2D);
           // Out-of-bounds skirt: blend into the horizon haze by distance
           // outside the map rect.
           if (uHazeOn > 0.5) {

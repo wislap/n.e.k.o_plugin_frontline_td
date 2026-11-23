@@ -27,7 +27,7 @@ import {
   type PlacementRule,
 } from '../rules/index';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
-import { structureKindHeight } from './StructuresLayer';
+import { structureKindHeight } from './structure-gpu';
 
 const ATTACH_MATERIAL = 'material';
 

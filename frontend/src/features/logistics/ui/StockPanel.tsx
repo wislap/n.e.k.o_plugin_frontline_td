@@ -120,9 +120,11 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
             }}
           >
             <IconSwap size={13} />
-            {t('stock.priorities', {
-              order: adjustable.map((c) => t(`class.${c}`)).join(' ⇄ '),
-            })}
+            <span className={styles['priorityLabel']}>
+              {t('stock.priorities', {
+                order: adjustable.map((c) => t(`class.${c}`)).join(' ⇄ '),
+              })}
+            </span>
           </ActionButton>
         </div>
       )}

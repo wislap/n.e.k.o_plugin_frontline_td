@@ -33,19 +33,24 @@ function part(
 // Small hard-surface robot ~0.5 tall in unit space (scaled by the layer
 // to 2*radius wide × scale tall per unit kind).
 export function buildRobotGeometry(bevel: number): THREE.BufferGeometry {
-  const r = (a: number, b: number, c: number) => Math.min(bevel, Math.min(a, b, c) * 0.45);
+  const r = (a: number, b: number, c: number) => Math.min(bevel, Math.min(a, b, c) * 0.1);
   const parts: THREE.BufferGeometry[] = [
-    // Treads: two dark graphite rails.
-    part(new RoundedBoxGeometry(0.3, 0.16, 0.5, 2, r(0.3, 0.16, 0.5)), -0.16, 0.08, 0, 1),
-    part(new RoundedBoxGeometry(0.3, 0.16, 0.5, 2, r(0.3, 0.16, 0.5)), 0.16, 0.08, 0, 1),
-    // Body shell.
-    part(new RoundedBoxGeometry(0.44, 0.24, 0.4, 2, r(0.44, 0.24, 0.4)), 0, 0.28, 0, 0),
-    // Faction accent band across the body top edge.
-    part(new THREE.BoxGeometry(0.46, 0.05, 0.42), 0, 0.4, 0, 2),
-    // Head / sensor block, slightly forward.
-    part(new RoundedBoxGeometry(0.26, 0.16, 0.26, 2, r(0.26, 0.16, 0.26)), 0, 0.5, 0.04, 0),
-    // Emissive eye slit on the head front.
-    part(new THREE.BoxGeometry(0.18, 0.04, 0.02), 0, 0.52, 0.18, 3),
+    // Treads: two dark graphite rails, tall enough to clear grass.
+    part(new RoundedBoxGeometry(0.28, 0.2, 0.5, 2, r(0.28, 0.2, 0.5)), -0.16, 0.1, 0, 1),
+    part(new RoundedBoxGeometry(0.28, 0.2, 0.5, 2, r(0.28, 0.2, 0.5)), 0.16, 0.1, 0, 1),
+    // Dark chassis plate bridging the treads — the visible graphite
+    // chassis line that separates shell from running gear.
+    part(new THREE.BoxGeometry(0.34, 0.07, 0.42), 0, 0.235, 0, 1),
+    // Body shell (white armor plates).
+    part(new RoundedBoxGeometry(0.42, 0.2, 0.36, 2, r(0.42, 0.2, 0.36)), 0, 0.36, 0, 0),
+    // Faction accent stripe along the shell top edge.
+    part(new THREE.BoxGeometry(0.43, 0.04, 0.37), 0, 0.43, 0, 2),
+    // Graphite neck joint so the head reads as a separate part.
+    part(new THREE.BoxGeometry(0.18, 0.07, 0.18), 0, 0.49, 0.02, 1),
+    // Head / sensor block, pushed forward.
+    part(new RoundedBoxGeometry(0.24, 0.13, 0.24, 2, r(0.24, 0.13, 0.24)), 0, 0.59, 0.05, 0),
+    // Emissive visor slit on the head front.
+    part(new THREE.BoxGeometry(0.17, 0.05, 0.03), 0, 0.59, 0.18, 3),
   ];
   const merged = mergeGeometries(parts, false);
   for (const p of parts) {

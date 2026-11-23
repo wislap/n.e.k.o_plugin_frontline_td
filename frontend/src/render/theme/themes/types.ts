@@ -9,8 +9,10 @@ type ToneMappingId = 'none' | 'aces' | 'agx';
 // from the theme's procedural sky so ambient/reflections come from it.
 type EnvironmentKind = 'none' | 'pmrem-sky';
 // Fog of war treatment: 'plain' = soft dark film, 'survey' = pale
-// cartography paper with height contours + dot grid.
-type FogStyle = 'plain' | 'survey';
+// cartography paper with height contours + dot grid, 'dim' = the natural
+// terrain reads through a translucent dark film, hazed toward the sky at
+// distance (field).
+type FogStyle = 'plain' | 'survey' | 'dim';
 // Which prop sets to spawn: 'clutter' (rocks/debris/tufts), 'meadow'
 // (grass blades/clumps + flower specks + rare stones, field).
 type ScatterKind = 'none' | 'clutter' | 'meadow';
@@ -41,8 +43,13 @@ interface ThemeTerrain {
   cliffStart: number;
   cliffEnd: number;
   gridStrength: number;
+  // Fraction of gridStrength drawn in the 3D view; the info2d view always
+  // draws the full grid (1 = grid everywhere, 0 = grid only in info2d).
+  grid3d?: number | undefined;
   noiseAmp: number;
   slopeDarken: number;
+  // Dirt/gravel macro patches blended over the ramp (undefined = off).
+  dirt?: string | undefined;
   // Edge occlusion: fraction of darkening at the map border, fading inward
   // over edgeFadeDist cells.
   edgeOcc: number;
@@ -50,6 +57,10 @@ interface ThemeTerrain {
   // Out-of-bounds terrain skirt: distance in cells the noise-hill skirt
   // extends past the map rect, fading into the horizon haze (0 = off).
   skirtCells: number;
+  // Solid slate pedestal walls under the map edge (default true); set
+  // false when the out-of-bounds skirt should meet the map edge directly
+  // with no slab side visible.
+  pedestal?: boolean | undefined;
 }
 
 interface ThemePost {

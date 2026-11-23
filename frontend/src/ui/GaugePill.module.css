@@ -46,3 +46,15 @@
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
+
+/* field skin: dark translucent instrument pill; the developer tick
+   counter is not part of the player-facing language. */
+:global([data-ui-skin='field']) .clockTick {
+  display: none;
+}
+
+:global([data-ui-skin='field']) .clockPill {
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+}

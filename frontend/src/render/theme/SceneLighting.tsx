@@ -3,8 +3,9 @@
 // GPU/state changes are applied in effects so theme switches restore the
 // renderer cleanly; light objects themselves are recreated via `key`.
 import { useEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useCameraStore } from '../../client/camera-store';
 import { useRenderTheme } from './useTheme';
 import type { RenderTheme } from './themes';
 
@@ -106,6 +107,24 @@ function applyPmremEnvironment(
   };
 }
 
+// Per-frame haze gate: the horizon fog is a 3D-spectate effect. At
+// tactical height the whole map sits inside the fog range and washes out
+// to paper, so near/far are pushed out of range in the 2D info view.
+// Module-scope so the react-compiler immutability rule does not track
+// the hook-derived scene.
+function updateSceneFog(scene: THREE.Scene, mode: string, diag: number): void {
+  const fog = scene.fog;
+  if (fog === null || !(fog instanceof THREE.Fog)) {
+    return;
+  }
+  const near = mode === 'tactical' ? diag * 20 : diag * 0.45;
+  const far = mode === 'tactical' ? diag * 21 : diag * 1.3;
+  if (fog.near !== near) {
+    fog.near = near;
+    fog.far = far;
+  }
+}
+
 function applySceneBackground(
   scene: THREE.Scene,
   themed: boolean,
@@ -152,6 +171,13 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   useEffect(() => {
     return applySceneBackground(scene, id !== 'legacy', theme.background.haze, diag * 0.5);
   }, [scene, id, theme.background.haze, diag]);
+
+  // The horizon haze is a 3D-spectate effect: at tactical height the whole
+  // map sits inside the fog range and washes out to paper, so the fog is
+  // pushed out of range while the camera is in the 2D info view.
+  useFrame(() => {
+    updateSceneFog(scene, useCameraStore.getState().mode, diag);
+  });
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;
   const sunPos: [number, number, number] = [

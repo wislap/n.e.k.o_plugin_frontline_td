@@ -53,3 +53,54 @@
 .btnActive .cap {
   color: var(--mode-accent);
 }
+
+/* Item wrapper + left-of-button caption. The caption is hidden in the
+   legacy skin, which keeps the original bare round buttons. */
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lbl {
+  display: none;
+}
+
+/* field skin: larger white circles with dark icons, caption + keycap to
+   the left of the button — never inside the circle. */
+:global([data-ui-skin='field']) .btn {
+  width: 38px;
+  min-height: 38px;
+  padding: 6px;
+  border: none;
+  background: rgba(244, 246, 238, 0.94);
+  color: #23261f;
+  box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
+}
+
+:global([data-ui-skin='field']) .btn:hover:not(:disabled) {
+  background: #ffffff;
+  color: #101310;
+}
+
+:global([data-ui-skin='field']) .btnActive {
+  border: none;
+  background: var(--mode-accent);
+  color: #22251f;
+}
+
+:global([data-ui-skin='field']) .cap {
+  display: none;
+}
+
+:global([data-ui-skin='field']) .lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  order: -1;
+  color: rgba(246, 248, 242, 0.95);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(10, 14, 10, 0.65);
+}

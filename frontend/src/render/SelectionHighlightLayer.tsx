@@ -302,7 +302,12 @@ export function SelectionHighlightLayer({
 
   return (
     <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
-      <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
+      <lineBasicMaterial
+        vertexColors
+        transparent
+        opacity={theme.id === 'legacy' ? 0.9 : 0.65}
+        depthWrite={false}
+      />
     </lineSegments>
   );
 }

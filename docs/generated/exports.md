@@ -411,6 +411,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `buildOutskirtsGeometry` | function |  |
 | `buildTerrainGeometry` | function |  |
 | `ScatterLayer` | function |  |
 | `TerrainMesh` | function |  |

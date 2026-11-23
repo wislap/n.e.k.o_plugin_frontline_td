@@ -100,7 +100,9 @@ class MeshBuilder {
     slot: PartSlot = 0,
   ): void {
     const minDim = Math.min(sx, sy, sz);
-    const r = Math.min(this.bevel, minDim * 0.45);
+    // Hard-surface chamfer: ~5% of the part's smallest dimension — enough
+    // to catch a highlight line, far from the rounded "inflatable" look.
+    const r = Math.min(this.bevel, minDim * 0.05);
     if (r > 1e-4) {
       const rounded = new RoundedBoxGeometry(sx, sy, sz, BEVEL_SEGMENTS, r);
       this.bake(rounded, cx, y0 + sy / 2, cz, shade, slot);
@@ -220,7 +222,10 @@ function populateSilhouette(b: MeshBuilder, silhouette: StructureSilhouette): vo
         }
       }
       b.pushBox(0, 0.16, 0, 0.64, 0.5, 0.64, 0.95);
-      b.pushCylinderPrism(0, 0.66, 0, 0.26, 0.2, 0.22, 8, 1.08, Math.PI / 8, 2);
+      // Thin accent band under the roof cap — a stripe of faction colour,
+      // not a whole striped top face.
+      b.pushCylinderPrism(0, 0.64, 0, 0.27, 0.27, 0.05, 8, 1.06, Math.PI / 8, 2);
+      b.pushCylinderPrism(0, 0.69, 0, 0.26, 0.2, 0.19, 8, 1.08, Math.PI / 8);
       b.pushCylinderPrism(0, 0.88, 0, 0.08, 0.03, 0.12, 8, 1.15, 0, 3);
       return;
 

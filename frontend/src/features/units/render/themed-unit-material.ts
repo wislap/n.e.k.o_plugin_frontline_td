@@ -68,7 +68,13 @@ export function createThemedUnitMaterial(theme: RenderTheme): {
             base = mix(base, vColor.rgb, accM);
           #endif
           diffuseColor.rgb = base * mix(vDim, 1.0, accM);
-          diffuseColor.rgb = mix(diffuseColor.rgb, uTrim * 0.5, uInfo2D);
+          // Tactical info view: units become small bright markers in
+          // faction colour on the darkened slate world.
+          vec3 marker = vec3(0.85, 0.88, 0.8);
+          #ifdef USE_INSTANCING_COLOR
+            marker = mix(vColor.rgb, vec3(1.0), 0.35);
+          #endif
+          diffuseColor.rgb = mix(diffuseColor.rgb, marker, uInfo2D);
         }`,
       )
       .replace(

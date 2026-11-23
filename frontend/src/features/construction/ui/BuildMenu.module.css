@@ -143,3 +143,37 @@
     max-height: 116px;
   }
 }
+
+/* field skin: the hotbar floats — no framed panel, dark translucent
+   rounded tiles with ≥64px thumbnails, name + cost underneath. */
+:global([data-ui-skin='field']) .panel {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+:global([data-ui-skin='field']) .grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+:global([data-ui-skin='field']) .card {
+  border: none;
+  border-radius: 12px;
+  background: rgba(18, 22, 20, 0.78);
+}
+
+:global([data-ui-skin='field']) .card:hover {
+  background: rgba(30, 36, 32, 0.88);
+}
+
+:global([data-ui-skin='field']) .cardActive {
+  border: 1px solid var(--mode-accent);
+  box-shadow: 0 0 14px var(--mode-accent-glow);
+}
+
+:global([data-ui-skin='field']) .thumb {
+  height: 68px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+}

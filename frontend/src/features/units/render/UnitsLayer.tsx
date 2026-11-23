@@ -28,7 +28,7 @@ const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
 const RING_SCALE = 1.5;
-const RING_SCALE_THEMED = 1.6;
+const RING_SCALE_THEMED = 1.15;
 const DEFAULT_LOW_ENERGY_BP = 2500;
 const EMPTY_ENERGY_DIM = 0.42;
 const EMPTY_ENERGY_COLOR = '#ff5c5c';
@@ -200,9 +200,10 @@ export function UnitsLayer({
 
     // Tactical info view: dim units toward dark silhouettes while the
     // camera is in tactical mode (shared info2d treatment).
+    const camMode = useCameraStore.getState().mode;
+    const info2dOn = theme.info2d && useUiStore.getState().info2d && camMode === 'tactical';
     if (infoUniformRef.current !== null) {
-      const camMode = useCameraStore.getState().mode;
-      const target = theme.info2d && useUiStore.getState().info2d && camMode === 'tactical' ? 1 : 0;
+      const target = info2dOn ? 1 : 0;
       const u = infoUniformRef.current;
       u.value += (target - u.value) * 0.25;
       if (Math.abs(u.value - target) < 0.01) {
@@ -271,7 +272,9 @@ export function UnitsLayer({
       if (selected.has(handle)) {
         color.multiplyScalar(SELECTED_BRIGHTEN);
         dim = Math.min(SELECTED_BRIGHTEN, dim * SELECTED_BRIGHTEN);
-        if (ring !== null && rings < capacity) {
+        // In the tactical info view the group bracket carries selection;
+        // per-unit rings would stack into unreadable ellipses.
+        if (ring !== null && rings < capacity && !info2dOn) {
           dummy.position.set(x, groundY + 0.055, y);
           // Legacy rings are drawn at radius*1.5*2 (diameter scale);
           // themed rings sit at ~1.6x unit radius — small enough to stay
@@ -361,12 +364,12 @@ export function UnitsLayer({
         args={[undefined, undefined, capacity]}
         frustumCulled={false}
       >
-        <ringGeometry args={themed ? [0.9, 1, 24] : [0.7, 1, 16]} />
+        <ringGeometry args={themed ? [0.93, 1, 24] : [0.7, 1, 16]} />
         <meshBasicMaterial
           color={themed ? theme.markers.accent : RING_COLOR}
           side={THREE.DoubleSide}
           transparent
-          opacity={0.9}
+          opacity={themed ? 0.5 : 0.9}
           depthWrite={false}
         />
       </instancedMesh>

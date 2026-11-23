@@ -8,10 +8,11 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useCameraStore } from '../../../client/camera-store';
 import type { ResolvedMap } from '../../../content/index';
 import type { SimClient } from '../../../client/sim-client';
 import { useRenderTheme } from '../../../render/theme/index';
-import { buildTerrainGeometry } from '../../terrain/render/index';
+import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 
 const FOG_COLOR = '#05070d';
@@ -45,7 +46,8 @@ export interface FogLayerProps {
 // height-contour lines + dot grid) driven by theme.fogStyle.
 function createSoftFogMaterial(theme: {
   fogColor: string;
-  fogStyle: 'plain' | 'survey';
+  fogStyle: 'plain' | 'survey' | 'dim';
+  background: { haze: string };
 }): THREE.ShaderMaterial {
   // Survey paper: explored cells get a dark ink film so dimmed terrain and
   // structure footprints still read through; other styles lift slightly.
@@ -59,37 +61,48 @@ function createSoftFogMaterial(theme: {
     theme.fogStyle === 'survey'
       ? new THREE.Color(theme.fogColor).multiplyScalar(0.62)
       : new THREE.Color(theme.fogColor).lerp(new THREE.Color('#ffffff'), 0.22);
-  return new THREE.ShaderMaterial({
+  const dim = theme.fogStyle === 'dim';
+  const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     uniforms: {
       uColor: { value: new THREE.Color(theme.fogColor) },
       uExplored: { value: explored },
       uPattern: { value: pattern },
+      uHaze: { value: new THREE.Color(theme.background.haze || theme.fogColor) },
+      // Distance haze is spectate-only: the tactical info view must stay
+      // a flat dark slate, so uHazeAmt is driven by camera mode per frame.
+      uHazeAmt: { value: 1 },
       uMap: { value: null },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
-      uStyle: { value: theme.fogStyle === 'survey' ? 3 : 0 },
+      uStyle: { value: theme.fogStyle === 'survey' ? 3 : dim ? 4 : 0 },
     },
     vertexShader: `
       varying vec2 vUv;
       varying vec3 vWorld;
+      varying float vDist;
       void main() {
         vUv = uv;
         vWorld = position;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vDist = distance(wp.xyz, cameraPosition);
+        gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
     fragmentShader: `
       uniform vec3 uColor;
       uniform vec3 uExplored;
       uniform vec3 uPattern;
+      uniform vec3 uHaze;
+      uniform float uHazeAmt;
       uniform sampler2D uMap;
       uniform vec2 uTexel;
       uniform vec2 uMapSize;
       uniform float uStyle;
       varying vec2 vUv;
       varying vec3 vWorld;
+      varying float vDist;
       float fogA(vec2 uv) { return texture2D(uMap, uv).g; }
       void main() {
         vec2 o = uTexel * 0.8;
@@ -100,6 +113,17 @@ function createSoftFogMaterial(theme: {
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
+        if (uStyle > 3.5) {
+          // 'dim' (field): the terrain itself reads through a translucent
+          // dark slate film — darkened and desaturated, never painted
+          // paper — and the film drifts toward the sky haze with camera
+          // distance so far fog merges into the horizon.
+          float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
+          vec3 col = mix(uColor, uHaze, hz * 0.65);
+          float alpha = a * mix(0.35, 0.6, unexplored);
+          gl_FragColor = vec4(col, alpha);
+          return;
+        }
         float pat = 0.0;
         vec2 cell = vUv * uMapSize;
         if (uStyle > 2.5) {
@@ -122,6 +146,7 @@ function createSoftFogMaterial(theme: {
       }
     `,
   });
+  return mat;
 }
 
 export function FogLayer({ client, map }: FogLayerProps) {
@@ -168,18 +193,37 @@ export function FogLayer({ client, map }: FogLayerProps) {
         grid.ramps,
         [{ r: 1, g: 1, b: 1 }],
       );
-      for (let i = 1; i < data.positions.length; i += 3) {
-        data.positions[i] = (data.positions[i] ?? 0) + LIFT;
+      // Extend the film over the out-of-bounds skirt (dim-fog themes):
+      // out-of-range UV clamps to the border texels, so the dark film
+      // continues past the map edge with no visible seam.
+      const skirt =
+        theme.terrain.skirtCells > 0
+          ? buildOutskirtsGeometry(grid.width, grid.height, grid.heights, theme.terrain.skirtCells)
+          : null;
+      const vertCount = data.positions.length / 3 + (skirt?.positions.length ?? 0) / 3;
+      const positions = new Float32Array(vertCount * 3);
+      const uvs = new Float32Array(vertCount * 2);
+      const indices = new Uint32Array(data.indices.length + (skirt?.indices.length ?? 0));
+      positions.set(data.positions);
+      indices.set(data.indices);
+      const skirtVertBase = data.positions.length / 3;
+      if (skirt !== null) {
+        positions.set(skirt.positions, data.positions.length);
+        for (let i = 0; i < skirt.indices.length; i++) {
+          indices[data.indices.length + i] = (skirt.indices[i] ?? 0) + skirtVertBase;
+        }
       }
-      const uvs = new Float32Array((data.positions.length / 3) * 2);
-      for (let i = 0; i < data.positions.length; i += 3) {
-        uvs[(i / 3) * 2] = (data.positions[i] ?? 0) / grid.width;
-        uvs[(i / 3) * 2 + 1] = (data.positions[i + 2] ?? 0) / grid.height;
+      for (let i = 1; i < positions.length; i += 3) {
+        positions[i] = (positions[i] ?? 0) + LIFT;
+      }
+      for (let i = 0; i < positions.length; i += 3) {
+        uvs[(i / 3) * 2] = (positions[i] ?? 0) / grid.width;
+        uvs[(i / 3) * 2 + 1] = (positions[i + 2] ?? 0) / grid.height;
       }
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-      geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
+      geometry.setIndex(new THREE.BufferAttribute(indices, 1));
       const texData = new Uint8Array(grid.width * grid.height * 4);
       const texture = new THREE.DataTexture(texData, grid.width, grid.height, THREE.RGBAFormat);
       if (theme.fogSoft) {
@@ -224,6 +268,15 @@ export function FogLayer({ client, map }: FogLayerProps) {
         material.needsUpdate = true;
       }
       builtFor.current.layer = null;
+    }
+    const soft = softMatRef.current;
+    if (soft !== null) {
+      // Tactical info view keeps the dark slate; only the 3D spectate
+      // camera fades far fog into the sky haze.
+      const uHazeAmt = soft.uniforms['uHazeAmt'] as { value: number } | undefined;
+      if (uHazeAmt !== undefined) {
+        uHazeAmt.value = useCameraStore.getState().mode === 'tactical' ? 0 : 1;
+      }
     }
     const latest = client.snapshots().latest;
     if (latest === null) {

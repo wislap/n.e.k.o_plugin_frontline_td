@@ -146,3 +146,46 @@
 .compact .body {
   padding: var(--space-2);
 }
+
+/* field skin: soft rounded cards — no accent stripes, corner cuts or
+   hatched headers. Compact panels become full pills. */
+:global([data-ui-skin='field']) .panel {
+  border-color: rgba(238, 240, 232, 0.14);
+}
+
+:global([data-ui-skin='field']) .panel::before,
+:global([data-ui-skin='field']) .panel::after {
+  display: none;
+}
+
+:global([data-ui-skin='field']) .compact {
+  border-radius: 999px;
+}
+
+:global([data-ui-skin='field']) .header {
+  background-image: none;
+  border-bottom-color: rgba(238, 240, 232, 0.1);
+}
+
+/* field skin: the mode-switcher panel disappears — tabs float on the
+   world (white pill = current, white text = rest). */
+:global([data-ui-skin='field'] [data-hud-slot='topLeft']) .panel {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* field skin: the top-centre context hint (tone-mode) is a white pill
+   with dark ink; the gauge pill keeps its own dark instrument look. */
+:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode {
+  border: none;
+  background: rgba(244, 246, 238, 0.94);
+  color: #23261f;
+}
+
+:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode .body,
+:global([data-ui-skin='field'] [data-hud-slot='topCenter']) .tone-mode .body span {
+  color: #23261f;
+  text-shadow: none;
+}

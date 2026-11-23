@@ -105,9 +105,12 @@ export function createThemedStructureMaterial(theme: RenderTheme): ThemedStructu
             vec2 sg = abs(fract(seamP * 4.0 - 0.5) - 0.5) / (sw * 4.0);
             float seam = (1.0 - min(min(sg.x, sg.y), 1.0)) * (1.0 - accM);
             base *= 1.0 - seam * 0.1 * uDetail;
-            // Hazard stripes on accent parts: alternating accent/ink bands.
+            // Hazard stripes only on accent parts near the unit-box edge —
+            // small warning bands at the structure's perimeter, never a
+            // fully striped roof face.
+            float bandM = smoothstep(0.3, 0.42, max(abs(vLocal.x), abs(vLocal.z)));
             float stripe = step(0.5, fract((vLocal.x + vLocal.y) * 10.0));
-            base = mix(base, mix(uAccent * 0.22, uAccent, stripe), accM * 0.55 * uDetail);
+            base = mix(base, mix(uAccent * 0.22, uAccent, stripe), accM * bandM * 0.6 * uDetail);
             // Printed codes on upward body faces (stencil decals).
             if (vLocalN.y > 0.6) {
               vec2 cuv = vec2(fract(vLocal.x * 2.0 + 0.5), fract(vLocal.z * 2.0));

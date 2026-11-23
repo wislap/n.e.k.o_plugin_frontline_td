@@ -144,7 +144,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   }, [data]);
 
   const skirtGeometry = useMemo(() => {
-    if (heights === undefined || theme.id === 'legacy') {
+    if (heights === undefined || theme.id === 'legacy' || theme.terrain.pedestal === false) {
       return null;
     }
     const skirt = buildTerrainSkirtGeometry(width, height, heights, ramps);
@@ -154,7 +154,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     geo.setIndex(new THREE.BufferAttribute(skirt.indices, 1));
     geo.computeVertexNormals();
     return geo;
-  }, [heights, width, height, ramps, theme.id]);
+  }, [heights, width, height, ramps, theme.id, theme.terrain.pedestal]);
 
   // Out-of-bounds noise-hill ring (visual-languages): same themed ramp
   // material, faded toward the horizon haze by distance past the border.
@@ -227,8 +227,8 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         theme.terrain.skirtCells > 0 && theme.background.haze !== ''
           ? {
               color: theme.background.haze,
-              start: theme.terrain.skirtCells * 0.4,
-              end: theme.terrain.skirtCells * 1.05,
+              start: theme.terrain.skirtCells * 0.3,
+              end: theme.terrain.skirtCells * 0.95,
             }
           : undefined,
     });
