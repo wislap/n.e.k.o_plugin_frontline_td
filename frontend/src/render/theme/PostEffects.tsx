@@ -1,4 +1,4 @@
-// Postprocessing chain: N8AO + bloom + SMAA + vignette + optional film
+// Postprocessing chain: N8AO + bloom + SMAA + optional film
 // grain, parameterized by the render visual. N8AO and bloom are too
 // expensive for software rasterizers (SwiftShader/llvmpipe), so they
 // are skipped there; every other pass stays at full quality.
@@ -12,10 +12,8 @@ import {
   N8AO,
   Noise,
   SMAA,
-  Vignette,
 } from '@react-three/postprocessing';
 import { useRenderTheme } from './useTheme';
-import { SplitTone } from './SplitTone';
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
 
@@ -47,8 +45,6 @@ export function PostEffects() {
       )}
       <BrightnessContrast contrast={post.contrast - 1} />
       <HueSaturation saturation={post.saturation - 1} />
-      <SplitTone strength={theme.splitTone} />
-      <Vignette offset={0.25} darkness={post.vignette} />
       {post.noiseOpacity > 0 ? <Noise opacity={post.noiseOpacity} /> : <></>}
       <SMAA />
     </EffectComposer>

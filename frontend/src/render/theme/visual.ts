@@ -55,7 +55,6 @@ interface VisualPost {
   aoRadius: number;
   bloomIntensity: number;
   bloomThreshold: number;
-  vignette: number;
   noiseOpacity: number;
   // Grade: contrast multiplier around mid-grey, saturation scale.
   contrast: number;
@@ -131,11 +130,9 @@ export interface RenderVisual {
   envIntensity?: number | undefined;
   fogColor: string;
   fogSoft: boolean;
-  // Horizon haze: scene-fog near/far in map-diagonal units and the warm/
-  // cool split-tone strength (0 = off, 1 = full atmosphere).
+  // Horizon haze: scene-fog near/far in map-diagonal units.
   hazeNear: number;
   hazeFar: number;
-  splitTone: number;
   // Tactical 2D info treatment (弱化显示); the debug toggle gates it further.
   info2d: boolean;
   lighting: VisualLighting;
@@ -149,9 +146,9 @@ export interface RenderVisual {
   pad: VisualPad;
 }
 
-// 'clean' — the approved field look (b8bd104) exactly: 'dim' fog film,
-// strong distance haze, sunlit meadow, no grading.
-const CLEAN: RenderVisual = {
+// The approved field look (b8bd104) exactly: 'dim' fog film, strong
+// distance haze, sunlit meadow, no grading.
+export const VISUAL: RenderVisual = {
   accent: '#FFE600',
   exposure: 0.9,
   toneMapping: 'agx',
@@ -161,7 +158,6 @@ const CLEAN: RenderVisual = {
   // the far fog merges into the horizon (b8bd104 near/far).
   hazeNear: 0.45,
   hazeFar: 1.3,
-  splitTone: 0,
   info2d: true,
   lighting: {
     // Hemisphere is dimmed — most ambient comes from the PMREM sky.
@@ -201,7 +197,6 @@ const CLEAN: RenderVisual = {
     aoRadius: 0.55,
     bloomIntensity: 0.25,
     bloomThreshold: 0.9,
-    vignette: 0,
     noiseOpacity: 0,
     contrast: 1.06,
     saturation: 1.08,
@@ -249,63 +244,3 @@ const CLEAN: RenderVisual = {
   },
 };
 
-// 'mood' — the warm atmospheric alternative (509ab5f at mid/atmosphere
-// 0.5, baked): golden-hour sun, warm meadow ramp, split-tone grade and
-// vignette. Far handling (dim fog, skirt, haze, platform) stays shared
-// with clean — only the near-field palette/lighting/grade differ.
-const MOOD: RenderVisual = {
-  ...CLEAN,
-  splitTone: 0.5,
-  lighting: {
-    ...CLEAN.lighting,
-    hemiSky: '#b5d0ea',
-    hemiGround: '#6d774d',
-    hemiIntensity: 0.32,
-    sunColor: '#ffddaa',
-    sunDir: [-0.55, 0.51, -0.42],
-    rimColor: '#dcded4',
-  },
-  terrain: {
-    ...CLEAN.terrain,
-    rampLow: '#668b4d',
-    rampHigh: '#b0c67f',
-    cliffColor: '#b1a48a',
-    dirt: '#9c8f70',
-  },
-  materials: {
-    ...CLEAN.materials,
-    unitBody: '#dbd8cb',
-    unitTrim: '#0f1113',
-    structureBody: '#dcd9cc',
-    structureTrim: '#101214',
-    structureEmissive: '#f8a145',
-  },
-  post: { ...CLEAN.post, vignette: 0.2 },
-  background: {
-    ...CLEAN.background,
-    top: '#b1ceea',
-    horizon: '#efedde',
-  },
-  pad: {
-    ...CLEAN.pad,
-    color: '#030302',
-    edge: '#f8a145',
-    roughness: 0.9,
-    metalness: 0,
-    envMapIntensity: 0,
-  },
-};
-
-// Temporary owner A/B (deleted after the pick): ?look=clean|mood,
-// default clean. Static per page load — no runtime axis.
-const LOOK_IDS = ['clean', 'mood'] as const;
-export type LookId = (typeof LOOK_IDS)[number];
-
-export function lookFromSearch(search: string): LookId {
-  const p = new URLSearchParams(search).get('look');
-  return (LOOK_IDS as readonly string[]).includes(p ?? '') ? (p as LookId) : 'clean';
-}
-
-export function resolveLook(look: LookId): RenderVisual {
-  return look === 'mood' ? MOOD : CLEAN;
-}
