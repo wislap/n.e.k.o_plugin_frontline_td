@@ -124,11 +124,13 @@ function createSoftFogMaterial(theme: {
         float rim = smoothstep(uMargin * 0.7, uMargin * 0.95, oob);
         vec3 col = mix(uColor, uHaze, rim);
         float alpha = a * mix(0.35, 0.85, unexplored);
-        // Past the border nothing beneath the film needs to read: a
-        // translucent film over lit skirt hills shows their shading as
-        // dirty smears, so the film converges to near-opaque over the
-        // same falloff band and the darkening stays smooth.
-        alpha = mix(alpha, 0.92, smoothstep(1.0, 4.0, oob));
+        // Past the border the terrain's own out-of-bounds dim (post-
+        // lighting, converging within ~4 cells) carries the outskirts
+        // darkening. Holding the film near-opaque over that same range
+        // double-darkens into a black frame hugging the map rect, so the
+        // film instead dissolves in step with the dim and hands off:
+        // unexplored interior → bare dimmed skirt → horizon haze.
+        alpha *= 1.0 - smoothstep(0.5, 4.0, oob);
         gl_FragColor = vec4(col, alpha);
       }
     `,

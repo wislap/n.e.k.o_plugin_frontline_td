@@ -212,7 +212,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
           ? {
               color: theme.background.haze,
               start: theme.terrain.skirtCells * 0.6,
-              end: theme.terrain.skirtCells * 1.05,
+              end: theme.terrain.skirtCells * 0.95,
             }
           : undefined,
       oobDim:

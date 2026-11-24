@@ -225,8 +225,12 @@ const VISUAL: RenderVisual = {
   background: {
     top: '#a9ccec',
     horizon: '#eef3ec',
-    bottom: '#a8b49a',
-    platform: '#5f7a4a',
+    // Platform and dome bottom carry the horizon haze colour: the skirt
+    // rim is fully haze-saturated (hazeFade ends before skirtCells), so a
+    // matching far ground keeps one continuous falloff — no colour step
+    // where the skirt geometry ends.
+    bottom: '#e4ecdf',
+    platform: '#e4ecdf',
     platformFadeStart: 0.5,
     platformFadeEnd: 1.05,
     haze: '#e4ecdf',
@@ -275,8 +279,8 @@ const WARM: RenderVisual = {
     ...VISUAL.background,
     top: '#b8cfe8',
     horizon: '#f0e6cf',
-    bottom: '#b0a888',
-    platform: '#a8ab72',
+    bottom: '#ece0c8',
+    platform: '#ece0c8',
     haze: '#ece0c8',
   },
   pad: { ...VISUAL.pad, color: '#060504', edge: '#f0a860' },
