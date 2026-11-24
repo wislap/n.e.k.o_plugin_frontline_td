@@ -53,7 +53,6 @@ interface VisualPost {
   aoRadius: number;
   bloomIntensity: number;
   bloomThreshold: number;
-  noiseOpacity: number;
   // Grade: contrast multiplier around mid-grey, saturation scale.
   contrast: number;
   saturation: number;
@@ -191,7 +190,6 @@ export const VISUAL: RenderVisual = {
     aoRadius: 0.55,
     bloomIntensity: 0.25,
     bloomThreshold: 0.9,
-    noiseOpacity: 0,
     contrast: 1.06,
     saturation: 1.08,
   },

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { useRenderTheme } from './useTheme';
+import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
 const DOME_RADIUS = 380;
@@ -83,7 +83,7 @@ function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
 }
 
 export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; mapHeight: number }) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const domeRef = useRef<THREE.Mesh>(null);
   // Skybox-style: the dome follows the camera so its far limb can never
   // expose the clear color — before, at max zoom-out the camera sat

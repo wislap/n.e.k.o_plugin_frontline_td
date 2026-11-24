@@ -15,7 +15,7 @@ import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { createHoloMaterial, type HoloMaterial } from '../../../render/holo-material';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import type { StructureSilhouette } from '../content';
 import { STATE_OPERATIONAL, StructuresChannel, type ConstructionStructures } from '../protocol';
@@ -75,7 +75,7 @@ export interface GhostPreviewProps {
 }
 
 export function GhostPreview({ client, db, map, heights, isHostile }: GhostPreviewProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const boxRef = useRef<THREE.Mesh>(null);
   const holoMat = useMemo(
     () => createHoloMaterial(theme.markers.accent, theme.markers.invalid),

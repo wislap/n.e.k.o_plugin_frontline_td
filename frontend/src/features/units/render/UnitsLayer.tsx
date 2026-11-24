@@ -16,7 +16,7 @@ import {
   type ConstructionStructures,
 } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
@@ -71,7 +71,7 @@ export function UnitsLayer({
   lowThresholdBp = DEFAULT_LOW_ENERGY_BP,
 }: UnitsLayerProps) {
   const [capacity, setCapacity] = useState(256);
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const dimAttrsRef = useRef<(THREE.InstancedBufferAttribute | null)[]>([null, null, null, null]);
   const ringRef = useRef<THREE.InstancedMesh>(null);

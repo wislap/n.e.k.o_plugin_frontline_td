@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
-import { useRenderTheme } from './useTheme';
+import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
 const SHADOW_MAP_SIZE = 2048;
@@ -148,7 +148,7 @@ function applySceneBackground(scene: THREE.Scene, haze: string, extent: number):
 }
 
 export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHeight: number }) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const { lighting } = theme;

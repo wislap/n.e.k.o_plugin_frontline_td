@@ -10,7 +10,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
 import {
@@ -48,7 +48,7 @@ export interface ScatterLayerProps {
 }
 
 export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const groupRef = useRef<THREE.Group>(null);
   const dummyRef = useRef(new THREE.Object3D());
   const colorRef = useRef(new THREE.Color());

@@ -21,7 +21,7 @@ import {
   type LineBuffer,
 } from './line-buffer';
 import { writeRingVertices } from './rings';
-import { useRenderTheme } from './theme/index';
+import { VISUAL } from './theme/index';
 import {
   collectSelectionHighlights,
   type HighlightBracket,
@@ -228,7 +228,7 @@ export function SelectionHighlightLayer({
   mapHeight,
   isHostile,
 }: SelectionHighlightLayerProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const segsRef = useRef<THREE.LineSegments>(null);
   const bufRef = useRef<LineBuffer | null>(null);
   const tempColorRef = useRef(new THREE.Color());

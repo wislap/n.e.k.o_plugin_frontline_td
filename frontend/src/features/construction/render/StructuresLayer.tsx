@@ -13,7 +13,7 @@ import { useCameraStore } from '../../../client/camera-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb } from '../../../content/index';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from '../../units/render/index';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
@@ -79,7 +79,7 @@ export function StructuresLayer({
   isHostile,
 }: StructuresLayerProps) {
   const [capacity, setCapacity] = useState(64);
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const silRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>({});
   const glyphRefs = useRef<Partial<Record<ActiveGlyph, THREE.InstancedMesh | null>>>({});
   const blueprintRef = useRef<THREE.InstancedMesh>(null);

@@ -9,7 +9,7 @@ import { visibleGroundHeight } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { useUiStore } from '../../../client/ui-store';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
@@ -105,7 +105,7 @@ function updateInfoUniform(
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 
 export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: TerrainMeshProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const meshRef = useRef<THREE.Mesh>(null);
   const gridMeshRef = useRef<THREE.Mesh>(null);
   const gridMatRef = useRef<THREE.ShaderMaterial | null>(null);

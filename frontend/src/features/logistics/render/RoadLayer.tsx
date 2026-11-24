@@ -9,7 +9,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import { ROAD_LAYER_ID } from '../protocol';
 
@@ -55,7 +55,7 @@ export interface RoadLayerProps {
 }
 
 export function RoadLayer({ client, map, heights }: RoadLayerProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);

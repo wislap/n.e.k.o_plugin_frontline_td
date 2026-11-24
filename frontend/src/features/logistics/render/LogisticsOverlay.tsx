@@ -15,7 +15,7 @@ import type { Snapshot } from '../../../core/index';
 import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-material';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import {
   StructuresChannel,
@@ -213,7 +213,7 @@ export interface LogisticsOverlayProps {
 }
 
 export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const toggled = useUiStore((s) => s.logisticsOverlay);
   const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');
   const on = toggled || modeOn;

@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { useCameraStore } from '../../../client/camera-store';
 import type { ResolvedMap } from '../../../content/index';
 import type { SimClient } from '../../../client/sim-client';
-import { useRenderTheme } from '../../../render/theme/index';
+import { VISUAL } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 
@@ -109,7 +109,7 @@ function createSoftFogMaterial(theme: {
 }
 
 export function FogLayer({ client, map }: FogLayerProps) {
-  const theme = useRenderTheme();
+  const theme = VISUAL;
   const meshRef = useRef<THREE.Mesh>(null);
   const softMatRef = useRef<THREE.ShaderMaterial | null>(null);
   const built = useRef<{ geometry: THREE.BufferGeometry; texture: THREE.DataTexture } | null>(null);
