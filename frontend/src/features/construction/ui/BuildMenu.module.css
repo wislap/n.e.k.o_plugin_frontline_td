@@ -7,6 +7,7 @@
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+  overflow: visible;
 }
 
 /* The toolbar row floats above the tiles — the demolish toggle reads as
@@ -65,7 +66,7 @@
 
 .cardActive {
   border: 1px solid var(--mode-accent);
-  box-shadow: 0 0 14px var(--mode-accent-glow);
+  box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
 }
 
 .thumb {

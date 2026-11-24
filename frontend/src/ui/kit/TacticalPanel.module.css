@@ -76,12 +76,17 @@
   line-height: 1.45;
 }
 
+/* Compact strips (clock bar, banners, selection badge) are capsules. */
+.compact {
+  border-radius: 999px;
+}
+
 .compact .body {
   padding: var(--space-2);
 }
 
 /* Low-intrusion slots: the mode-switcher panel disappears — tabs float
-   on the world (yellow pill = current, white text = rest). */
+   on the world (light pill = current, white text = rest). */
 :global([data-hud-slot='topLeft']) .panel {
   border: none;
   background: transparent;
@@ -89,10 +94,16 @@
   backdrop-filter: none;
 }
 
-/* The top-centre context hint is a dark card; text stays pure white with
-   a soft shadow so it reads over the bright meadow and the dark map. */
+/* The top-centre context hint (tone-mode) is a light capsule with dark
+   ink; the gauge pill keeps its own dark instrument look. */
+:global([data-hud-slot='topCenter']) .tone-mode {
+  border: none;
+  background: rgba(244, 246, 238, 0.94);
+  color: #23261f;
+}
+
 :global([data-hud-slot='topCenter']) .tone-mode .body,
 :global([data-hud-slot='topCenter']) .tone-mode .body span {
-  color: #ffffff;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  color: #23261f;
+  text-shadow: none;
 }

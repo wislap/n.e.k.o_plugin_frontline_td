@@ -30,7 +30,7 @@
 .pillActive {
   border-color: var(--mode-accent);
   background: var(--mode-accent-dim);
-  box-shadow: 0 0 10px var(--mode-accent-glow);
+  box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
 }
 
 .pillMain {
