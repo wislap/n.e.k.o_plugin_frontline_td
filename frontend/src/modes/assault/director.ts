@@ -16,12 +16,11 @@
 // 'garrison:<x>,<y>', 'wave:<n>' — never by heuristics. All mutable
 // state lives in save()/load() so save/restore mid-match stays
 // deterministic.
-import { TICKS_PER_SECOND } from '../../core/index';
+import { TICKS_PER_SECOND, readChannel } from '../../core/index';
 import type { ContentDb } from '../../content/index';
-import type { FactionId } from '../../core/index';
+import type { FactionId, Snapshot } from '../../core/index';
 import { garrisonTag, nearest, scanStructures } from './director-scan';
 import { DenseUnitsChannel } from '../../features/units/protocol';
-import type { DenseUnits } from '../../features/units/protocol';
 import { SquadsChannel } from '../../features/squads/protocol';
 import type { SquadView } from '../../features/squads/protocol';
 import {
@@ -85,11 +84,11 @@ export function createDirectorController(options: DirectorOptions): Controller {
     y: number;
   }
 
-  function ownUnits(snapshot: { channels: Record<string, unknown> }): {
+  function ownUnits(snapshot: Snapshot): {
     monsters: UnitRow[];
     raiders: UnitRow[];
   } {
-    const dense = snapshot.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+    const dense = readChannel(snapshot, DenseUnitsChannel) ?? undefined;
     const out = { monsters: [] as UnitRow[], raiders: [] as UnitRow[] };
     if (dense === undefined) {
       return out;
@@ -108,8 +107,8 @@ export function createDirectorController(options: DirectorOptions): Controller {
     return out;
   }
 
-  function ownSquads(snapshot: { channels: Record<string, unknown> }): SquadView[] {
-    const snap = snapshot.channels[SquadsChannel.id] as { squads: SquadView[] } | undefined;
+  function ownSquads(snapshot: Snapshot): SquadView[] {
+    const snap = readChannel(snapshot, SquadsChannel) ?? undefined;
     return (snap?.squads ?? []).filter((s) => s.faction === Number(faction));
   }
 

@@ -1,6 +1,7 @@
 // Assault mode entry: setup, mode-owned sim modules, the director
 // controller and the ended predicate the runtime uses to freeze the
 // clock. Only app/ imports this.
+import { readChannel } from '../../core/index';
 import type { Snapshot } from '../../core/index';
 import type { ContentDb, ResolvedMap } from '../../content/index';
 import type { FactionId } from '../../core/index';
@@ -41,7 +42,7 @@ export function assaultDirector(
 }
 
 export function assaultEnded(snapshot: Snapshot): boolean {
-  return ((snapshot.channels[AssaultChannel.id] as AssaultState | undefined)?.ended ?? 0) === 1;
+  return (readChannel(snapshot, AssaultChannel)?.ended ?? 0) === 1;
 }
 
 export { ASSAULT_MODE_ID, defaultSetup, AssaultChannel };

@@ -22,11 +22,11 @@ import {
   StructuresLayer,
   structureKindHeight,
 } from '../features/construction/render/index';
-import { StructuresChannel, type ConstructionStructures } from '../features/construction/protocol';
+import { StructuresChannel } from '../features/construction/protocol';
 import { LogisticsOverlay, RoadLayer, RoadToolLayer } from '../features/logistics/render/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
 import { TerrainMesh, ScatterLayer } from '../features/terrain/render/index';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
+import { DenseUnitsChannel } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
 import { ThreatsLayer } from '../features/squads/render/index';
 import { FogLayer, MemoryLayer } from '../features/vision/render/index';
@@ -38,6 +38,7 @@ import { makeDispatch } from './input-dispatch';
 import { SelectionHighlightLayer } from './SelectionHighlightLayer';
 import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
 import { terrainY } from './world';
+import { readChannel, readLayer } from '../core/index';
 
 const BACKGROUND = '#0b1020';
 const MARKER_COLOR = '#ffe08a';
@@ -54,7 +55,7 @@ export interface GameCanvasProps {
 
 // Damaged-unit bars from the dense units channel.
 function unitHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
-  const units = pair.latest?.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+  const units = readChannel(pair.latest, DenseUnitsChannel) ?? undefined;
   if (units === undefined) {
     return;
   }
@@ -141,8 +142,7 @@ function InputBridge({
 // Damaged-structure bars from the structures channel.
 function makeStructureHpItems(db: ContentDb): HpBarCollector {
   return (pair: SnapshotPair, _alpha: number, sink: HpBarSink): void => {
-    const channel = pair.latest?.channels[StructuresChannel.id] as
-      ConstructionStructures | undefined;
+    const channel = readChannel(pair.latest, StructuresChannel) ?? undefined;
     if (channel === undefined) {
       return;
     }
@@ -236,7 +236,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
 
   const grid = map.grid;
   const snapshot = ready ? client.snapshots().latest : null;
-  const heights = (snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID] ?? grid.heights) as ArrayLike<number>;
+  const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? grid.heights;
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
   const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);

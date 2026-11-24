@@ -1,19 +1,15 @@
 // Pure, DOM-free minimap projection, terrain compositing, entity
 // collection, and viewport bounds math. Strictly preserves fog of war:
 // unexplored cells never touch base terrain or road layers.
+import { readChannel, readLayer } from '../core/index';
 import type { Snapshot } from '../core/index';
 import type { ContentDb, ResolvedMap } from '../content/index';
-import { CapturePointsChannel, type CapturePoints } from '../features/capture/protocol';
-import {
-  STATE_BLUEPRINT,
-  STATE_RUIN,
-  StructuresChannel,
-  type ConstructionStructures,
-} from '../features/construction/protocol';
-import { SquadsChannel, type SquadsSnapshot } from '../features/squads/protocol';
+import { CapturePointsChannel } from '../features/capture/protocol';
+import { STATE_BLUEPRINT, STATE_RUIN, StructuresChannel } from '../features/construction/protocol';
+import { SquadsChannel } from '../features/squads/protocol';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../features/terrain/protocol';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
-import { VisionMemoryChannel, type VisionMemory } from '../features/vision/protocol';
+import { DenseUnitsChannel } from '../features/units/protocol';
+import { VisionMemoryChannel } from '../features/vision/protocol';
 import {
   SPECTATE_FOV_DEG,
   SPECTATE_MIN_PITCH_DEG,
@@ -151,8 +147,8 @@ export function buildBaseTerrainRgb(
   const { width, height } = map;
   const cellCount = width * height;
   const out = new Uint8Array(cellCount * 3);
-  const surfaces = snapshot?.layers[TERRAIN_SURFACE_LAYER_ID] ?? map.grid.surfaces;
-  const heights = snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID] ?? map.grid.heights;
+  const surfaces = readLayer(snapshot, TERRAIN_SURFACE_LAYER_ID) ?? map.grid.surfaces;
+  const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? map.grid.heights;
   const ramps = map.grid.ramps;
 
   const palette = new Map<number, readonly [number, number, number]>();
@@ -282,7 +278,7 @@ export function collectMinimapEntities(
   const units: MinimapUnitEntity[] = [];
   const threats: MinimapThreatSquad[] = [];
 
-  const mem = snapshot.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+  const mem = readChannel(snapshot, VisionMemoryChannel) ?? undefined;
   if (mem !== undefined) {
     for (let i = 0; i < mem.handles.length; i++) {
       const st = db.structures.byIndex(mem.kind[i] ?? 0);
@@ -302,8 +298,8 @@ export function collectMinimapEntities(
     }
   }
 
-  const structChan = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-  const cpChan = snapshot.channels[CapturePointsChannel.id] as CapturePoints | undefined;
+  const structChan = readChannel(snapshot, StructuresChannel) ?? undefined;
+  const cpChan = readChannel(snapshot, CapturePointsChannel) ?? undefined;
   const cpIndexByHandle = new Map<number, number>();
   if (cpChan !== undefined) {
     for (let i = 0; i < cpChan.handles.length; i++) {
@@ -352,7 +348,7 @@ export function collectMinimapEntities(
     }
   }
 
-  const unitChan = snapshot.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+  const unitChan = readChannel(snapshot, DenseUnitsChannel) ?? undefined;
   if (unitChan !== undefined) {
     for (let i = 0; i < unitChan.handles.length; i++) {
       const handle = unitChan.handles[i] ?? 0;
@@ -367,7 +363,7 @@ export function collectMinimapEntities(
     }
   }
 
-  const squadsChan = snapshot.channels[SquadsChannel.id] as SquadsSnapshot | undefined;
+  const squadsChan = readChannel(snapshot, SquadsChannel) ?? undefined;
   if (squadsChan !== undefined) {
     for (const s of squadsChan.squads) {
       if (

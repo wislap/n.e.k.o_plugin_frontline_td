@@ -5,8 +5,9 @@
 // the snapshot each decide.
 import type { ContentDb } from '../../content/index';
 import { StructuresChannel } from '../../features/construction/protocol';
-import type { ConstructionStructures } from '../../features/construction/protocol';
 import { STATE_OPERATIONAL, STATE_RUIN, STATE_SITE } from '../../features/construction/protocol';
+import { readChannel } from '../../core/index';
+import type { Snapshot } from '../../core/index';
 
 interface StructureRow {
   handle: number;
@@ -35,13 +36,13 @@ export interface StructureScan {
 }
 
 export function scanStructures(
-  snapshot: { channels: Record<string, unknown> },
+  snapshot: Snapshot,
   db: ContentDb,
   faction: number,
   hostile: ReadonlySet<number>,
   nodeKinds: ReadonlySet<number>,
 ): StructureScan {
-  const st = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+  const st = readChannel(snapshot, StructuresChannel) ?? undefined;
   const hostileAll: StructureRow[] = [];
   const nodes: StructureRow[] = [];
   const retake: StructureRow[] = [];

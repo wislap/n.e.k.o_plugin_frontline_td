@@ -7,7 +7,6 @@ import { useInspectorStore } from '../client/inspector-store';
 import { targetKeyForHandles, useInteractionStore } from '../client/interaction-store';
 import type { IntentDispatch, IntentRouter } from '../client/intent';
 import { nextSpeedIndex } from '../client/match-info';
-import { structuresChannel } from '../client/pick';
 import { submitRoadOrder } from '../client/road-order';
 import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
@@ -20,14 +19,15 @@ import {
 } from '../client/squad-controls';
 import { useUiStore } from '../client/ui-store';
 import type { ContentDb } from '../content/index';
+import { readChannel } from '../core/index';
 import {
   ActivateCommand,
   CancelCommand,
   RoadWorksChannel,
-  type RoadWorks,
+  StructuresChannel,
 } from '../features/construction/protocol';
 import { classifyCancelSelection } from '../features/construction/rules/index';
-import { SquadsChannel, SquadsCreate, type SquadsSnapshot } from '../features/squads/protocol';
+import { SquadsChannel, SquadsCreate } from '../features/squads/protocol';
 import { SPEED_STEPS } from '../protocol/index';
 
 export interface AppIntentRouter extends IntentRouter {
@@ -75,8 +75,7 @@ export function createIntentRouter(deps: { client: SimClient; db: ContentDb }): 
           return;
         }
         const latest = client.snapshots().latest;
-        const squads =
-          (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+        const squads = readChannel(latest, SquadsChannel)?.squads ?? [];
         const observer = latest?.observer ?? -1;
         if (intent.ctrl) {
           // Ctrl+digit: create/re-bind a squad from the current selection.
@@ -151,11 +150,11 @@ export function createIntentRouter(deps: { client: SimClient; db: ContentDb }): 
         }
         const latest = client.snapshots().latest;
         const observer = latest?.observer ?? -1;
-        const roadWorks = (latest?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
+        const roadWorks = readChannel(latest, RoadWorksChannel);
         const selected = useSelectionStore.getState().selected;
         const { cancellable, operational } = classifyCancelSelection(
           db,
-          structuresChannel(latest),
+          readChannel(latest, StructuresChannel),
           roadWorks,
           observer,
           selected,

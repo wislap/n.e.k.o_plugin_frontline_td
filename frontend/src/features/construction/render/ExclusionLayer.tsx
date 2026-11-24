@@ -17,10 +17,9 @@ import {
 import { writeRingVertices } from '../../../render/rings';
 import { terrainY } from '../../../render/world';
 import { VisionMemoryChannel } from '../../vision/protocol';
-import type { VisionMemory } from '../../vision/protocol';
 import { hostileExcluders } from '../../vision/rules/index';
 import { StructuresChannel } from '../protocol';
-import type { ConstructionStructures } from '../protocol';
+import { readChannel } from '../../../core/index';
 
 const RING_COLOR = new THREE.Color('#ff5a4f');
 const SEGMENTS = 48;
@@ -82,8 +81,8 @@ export function ExclusionLayer({
       return;
     }
     const observer = latest.observer;
-    const structures = latest.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-    const memory = latest.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+    const structures = readChannel(latest, StructuresChannel) ?? undefined;
+    const memory = readChannel(latest, VisionMemoryChannel) ?? undefined;
     const circles = hostileExcluders(db, (f) => isHostile(observer, f), [structures, memory]);
     const buf = ensureExclusionBuffer(bufRef, segs, circles.length * SEGMENTS * 2);
     const positions = buf.positions;

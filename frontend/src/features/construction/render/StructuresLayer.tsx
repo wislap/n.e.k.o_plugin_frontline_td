@@ -26,8 +26,6 @@ import {
   STATE_SITE,
   STATE_WAITING,
   StructuresChannel,
-  type ConstructionSalvage,
-  type ConstructionStructures,
 } from '../protocol';
 import { createPadMaterial } from './pad-material';
 import { createThemedStructureMaterial } from './themed-structure-material';
@@ -58,6 +56,7 @@ import {
 } from './structure-gpu';
 import { disposeSilhouetteGeometries } from './structure-geometries';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readChannel } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 
@@ -167,8 +166,8 @@ export function StructuresLayer({
 
     const pair = client.snapshots();
     const latest = pair.latest;
-    const channel = latest?.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-    const salvage = latest?.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
+    const channel = readChannel(latest, StructuresChannel) ?? undefined;
+    const salvage = readChannel(latest, SalvageChannel) ?? undefined;
     const localFaction = latest?.observer ?? null;
 
     const n = channel?.handles.length ?? 0;

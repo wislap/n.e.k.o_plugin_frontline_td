@@ -10,7 +10,8 @@ import { useInteractionStore } from '../../../client/interaction-store';
 import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { localName, type ContentDb } from '../../../content/index';
-import { TICKS_PER_SECOND } from '../../../core/index';
+import { TICKS_PER_SECOND, readChannel, readLayer } from '../../../core/index';
+import type { SerializableTypedArray } from '../../../core/index';
 import { ActionButton, TacticalPanel } from '../../../ui/kit/index';
 import { lowestBuildableRoadLevel } from '../content';
 import { LogisticsNetworkChannel, ROAD_LAYER_ID, type LogisticsNetwork } from '../protocol';
@@ -23,7 +24,7 @@ const ENTER_KBD = 'Enter';
 interface RoadSnapshotSlice {
   tick: number;
   network: LogisticsNetwork | null;
-  road: Uint8Array | null;
+  road: SerializableTypedArray | null;
   sx: number;
   sy: number;
 }
@@ -66,9 +67,8 @@ export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) 
 
   const selectRoadSlice = useCallback((pair: SnapshotPair): RoadSnapshotSlice => {
     const latest = pair.latest;
-    const network =
-      (latest?.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined) ?? null;
-    const road = (latest?.layers[ROAD_LAYER_ID] as Uint8Array | undefined) ?? null;
+    const network = readChannel(latest, LogisticsNetworkChannel);
+    const road = readLayer(latest, ROAD_LAYER_ID);
     const screen = cursorState.screen();
     return {
       tick: latest?.tick ?? -1,

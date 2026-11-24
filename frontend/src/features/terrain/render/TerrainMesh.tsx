@@ -11,6 +11,7 @@ import { useInteractionStore } from '../../../client/interaction-store';
 import { useUiStore } from '../../../client/ui-store';
 import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
+import { readLayer } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
 import { createThemedTerrainMaterial, type ThemedTerrainUniforms } from './themed-material';
@@ -109,11 +110,11 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   const meshRef = useRef<THREE.Mesh>(null);
   const gridMeshRef = useRef<THREE.Mesh>(null);
   const gridMatRef = useRef<THREE.ShaderMaterial | null>(null);
-  const heights = snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID];
-  const surfaces = snapshot?.layers[TERRAIN_SURFACE_LAYER_ID];
+  const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID);
+  const surfaces = readLayer(snapshot, TERRAIN_SURFACE_LAYER_ID);
 
   const data = useMemo(() => {
-    if (heights === undefined || surfaces === undefined) {
+    if (heights === null || surfaces === null) {
       return null;
     }
     return buildTerrainGeometry(
@@ -141,7 +142,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   // Out-of-bounds noise-hill ring (visual-languages): same themed ramp
   // material, faded toward the horizon haze by distance past the border.
   const outskirtsGeometry = useMemo(() => {
-    if (heights === undefined || theme.terrain.skirtCells <= 0) {
+    if (heights === null || theme.terrain.skirtCells <= 0) {
       return null;
     }
     const out = buildOutskirtsGeometry(width, height, heights, ramps, theme.terrain.skirtCells);
@@ -178,7 +179,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
   // The same material instance serves the outskirts skirt mesh (in-bounds
   // cells see dOut = 0 so the haze fade is a no-op there).
   const themed = useMemo(() => {
-    if (heights === undefined) {
+    if (heights === null) {
       return null;
     }
     let lo = Infinity;

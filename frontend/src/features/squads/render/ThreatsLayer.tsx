@@ -7,9 +7,10 @@ import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { formatClock } from '../../../client/match-info';
 import { terrainY } from '../../../render/world';
-import { SquadsChannel, type SquadsSnapshot } from '../protocol';
+import { SquadsChannel } from '../protocol';
 import { arrowSpots, gatheringThreats, routedThreats } from './threat-info';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readChannel } from '../../../core/index';
 
 const THREAT_COLOR = '#ff5a4a';
 const MARKER_CAPACITY = 16;
@@ -120,7 +121,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     const quat = quatRef.current;
     const latest = client.snapshots().latest;
     const observer = latest?.observer ?? -1;
-    const squads = (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+    const squads = readChannel(latest, SquadsChannel)?.squads ?? [];
     const tick = latest?.tick ?? 0;
     const gathers = gatheringThreats(squads, observer);
     const routed = routedThreats(squads, observer);

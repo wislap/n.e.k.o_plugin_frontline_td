@@ -2,9 +2,10 @@
 // joins HoverSubject / PinnableSubject with snapshot channels, terrain
 // layers, ContentDb stats, and debounced own-entity SimClient.inspect
 // sections without ever leaking unseen fog data or enemy internals.
+import { readChannel, readLayer } from '../core/index';
 import type { Inspection, Snapshot } from '../core/index';
 import type { ContentDb, ResolvedMap, ResolvedStructure, ResolvedUnit } from '../content/index';
-import { CapturePointsChannel, type CapturePoints } from '../features/capture/protocol';
+import { CapturePointsChannel } from '../features/capture/protocol';
 import { COMBAT_INSPECTOR_ID, type CombatInspection } from '../features/combat/protocol';
 import {
   CONSTRUCTION_INSPECTOR_ID,
@@ -13,10 +14,7 @@ import {
   STATE_NAMES,
   StructuresChannel,
   type ConstructionInspection,
-  type ConstructionSalvage,
   type ConstructionStateName,
-  type ConstructionStructures,
-  type RoadWorks,
 } from '../features/construction/protocol';
 import {
   LOGISTICS_INSPECTOR_ID,
@@ -29,12 +27,8 @@ import {
   type ProductionInspection,
 } from '../features/production/protocol';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../features/terrain/protocol';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
-import {
-  VISION_STATE_LAYER_ID,
-  VisionMemoryChannel,
-  type VisionMemory,
-} from '../features/vision/protocol';
+import { DenseUnitsChannel } from '../features/units/protocol';
+import { VISION_STATE_LAYER_ID, VisionMemoryChannel } from '../features/vision/protocol';
 import { hostileExcluders } from '../features/vision/rules/index';
 import type { HoverSubject } from './inspector-store';
 
@@ -198,9 +192,8 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
 
   switch (subject.kind) {
     case 'multi_own': {
-      const units = snapshot?.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
-      const structures = snapshot?.channels[StructuresChannel.id] as
-        ConstructionStructures | undefined;
+      const units = readChannel(snapshot, DenseUnitsChannel) ?? undefined;
+      const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
       const unitCounts = new Map<string, number>();
       const structureCounts = new Map<string, number>();
       if (units !== undefined) {
@@ -248,32 +241,30 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
         return null;
       }
       const idx = y * map.width + x;
-      const fogLayer = snapshot?.layers[`${VISION_STATE_LAYER_ID}#${observer}`];
-      if (fogLayer !== undefined && (fogLayer[idx] ?? 0) === 0) {
+      const fogLayer = readLayer(snapshot, `${VISION_STATE_LAYER_ID}#${observer}`);
+      if (fogLayer !== null && (fogLayer[idx] ?? 0) === 0) {
         return { kind: 'cell_unexplored', x, y };
       }
-      const visionState: 1 | 2 = fogLayer !== undefined && (fogLayer[idx] ?? 0) === 1 ? 1 : 2;
-      const surfaceLayer = snapshot?.layers[TERRAIN_SURFACE_LAYER_ID];
+      const visionState: 1 | 2 = fogLayer !== null && (fogLayer[idx] ?? 0) === 1 ? 1 : 2;
+      const surfaceLayer = readLayer(snapshot, TERRAIN_SURFACE_LAYER_ID);
       const surfaceIdx =
-        surfaceLayer !== undefined ? (surfaceLayer[idx] ?? 0) : (map.grid.surfaces[idx] ?? 0);
+        surfaceLayer !== null ? (surfaceLayer[idx] ?? 0) : (map.grid.surfaces[idx] ?? 0);
       const surface = db.surfaces.byIndex(surfaceIdx);
       const depositId =
         surface?.deposit !== undefined ? (db.cargos.byIndex(surface.deposit)?.id ?? null) : null;
 
-      const heightLayer = snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID];
-      const height =
-        heightLayer !== undefined ? (heightLayer[idx] ?? 0) : (map.grid.heights[idx] ?? 0);
+      const heightLayer = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID);
+      const height = heightLayer !== null ? (heightLayer[idx] ?? 0) : (map.grid.heights[idx] ?? 0);
       const isRamp = (map.grid.ramps[idx] ?? 0) !== 0;
 
-      const roadLayer = snapshot?.layers[ROAD_LAYER_ID];
-      const roadLevel = roadLayer !== undefined ? (roadLayer[idx] ?? 0) : 0;
+      const roadLayer = readLayer(snapshot, ROAD_LAYER_ID);
+      const roadLevel = roadLayer !== null ? (roadLayer[idx] ?? 0) : 0;
 
-      const serviceLayer = snapshot?.layers[`${SERVICE_LAYER_ID}#${observer}`];
-      const covered = serviceLayer !== undefined ? (serviceLayer[idx] ?? 0) !== 0 : false;
+      const serviceLayer = readLayer(snapshot, `${SERVICE_LAYER_ID}#${observer}`);
+      const covered = serviceLayer !== null ? (serviceLayer[idx] ?? 0) !== 0 : false;
 
-      const structures = snapshot?.channels[StructuresChannel.id] as
-        ConstructionStructures | undefined;
-      const memory = snapshot?.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+      const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
+      const memory = readChannel(snapshot, VisionMemoryChannel) ?? undefined;
       const excluders = hostileExcluders(db, (faction) => isHostile(observer, faction), [
         structures,
         memory,
@@ -301,7 +292,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
 
     case 'own_unit':
     case 'hostile_unit': {
-      const units = snapshot?.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+      const units = readChannel(snapshot, DenseUnitsChannel) ?? undefined;
       if (units === undefined) {
         return null;
       }
@@ -351,8 +342,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
 
     case 'own_structure':
     case 'hostile_structure': {
-      const structures = snapshot?.channels[StructuresChannel.id] as
-        ConstructionStructures | undefined;
+      const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
       if (structures === undefined) {
         return null;
       }
@@ -411,8 +401,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
     }
 
     case 'ruin': {
-      const structures = snapshot?.channels[StructuresChannel.id] as
-        ConstructionStructures | undefined;
+      const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
       if (structures === undefined) {
         return null;
       }
@@ -422,7 +411,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
       }
       const structure = db.structures.byIndex(structures.kind[i] ?? 0) ?? null;
       const contentId = structure?.id ?? 'unknown';
-      const cp = snapshot?.channels[CapturePointsChannel.id] as CapturePoints | undefined;
+      const cp = readChannel(snapshot, CapturePointsChannel) ?? undefined;
       const ci = cp === undefined ? -1 : indexOfHandle(cp.handles, subject.handle);
       return {
         kind: 'ruin',
@@ -439,7 +428,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
     }
 
     case 'salvage': {
-      const salvage = snapshot?.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
+      const salvage = readChannel(snapshot, SalvageChannel) ?? undefined;
       if (salvage === undefined) {
         return null;
       }
@@ -464,7 +453,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
     }
 
     case 'road_segment': {
-      const roadWorks = snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined;
+      const roadWorks = readChannel(snapshot, RoadWorksChannel) ?? undefined;
       if (roadWorks === undefined) {
         return null;
       }
@@ -493,7 +482,7 @@ export function resolveInspectedSubject(input: ResolveInspectInput): ResolvedSub
     }
 
     case 'memory': {
-      const memory = snapshot?.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+      const memory = readChannel(snapshot, VisionMemoryChannel) ?? undefined;
       const i = memory === undefined ? -1 : indexOfHandle(memory.handles, subject.handle);
       const kindIndex = i === -1 ? subject.kindIndex : (memory?.kind[i] ?? subject.kindIndex);
       const x = i === -1 ? subject.x : (memory?.x[i] ?? subject.x);

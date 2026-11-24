@@ -52,10 +52,13 @@
 | `NULL_HANDLE` | const |  |
 | `packHandle` | function |  |
 | `parseContentId` | function |  |
+| `readChannel` | function |  |
+| `readLayer` | function |  |
 | `rngNextIntBelow` | function | Unbiased integer in [0, n) via rejection sampling; n in 1..2^32. |
 | `RngState` | type |  |
 | `s` | export | A tiny schema DSL deriving both the TS type and the runtime validator. |
 | `Serializable` | type | JSON-like data plus TypedArrays. |
+| `SerializableTypedArray` | type |  |
 | `Snapshot` | interface |  |
 | `SnapshotChannelDef` | interface |  |
 | `SnapshotEventEntry` | interface |  |

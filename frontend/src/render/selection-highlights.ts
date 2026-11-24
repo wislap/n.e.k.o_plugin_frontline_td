@@ -4,6 +4,7 @@
 import type { HoverSubject, PinnableSubject } from '../client/inspector-store';
 import type { SecondaryTool } from '../client/interaction-store';
 import type { ContentDb } from '../content/index';
+import { readChannel, readLayer } from '../core/index';
 import type { Snapshot } from '../core/index';
 import {
   RoadWorksChannel,
@@ -14,7 +15,7 @@ import {
   type ConstructionStructures,
   type RoadWorks,
 } from '../features/construction/protocol';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
+import { DenseUnitsChannel } from '../features/units/protocol';
 import {
   VISION_STATE_LAYER_ID,
   VisionMemoryChannel,
@@ -187,19 +188,19 @@ export function collectSelectionHighlights(input: SelectionHighlightInput): {
   }
 
   const observer = snapshot.observer;
-  const structures = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-  const roadWorks = snapshot.channels[RoadWorksChannel.id] as RoadWorks | undefined;
-  const salvage = snapshot.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
-  const memory = snapshot.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
-  const denseUnits = snapshot.channels[DenseUnitsChannel.id] as DenseUnits | undefined;
+  const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
+  const roadWorks = readChannel(snapshot, RoadWorksChannel) ?? undefined;
+  const salvage = readChannel(snapshot, SalvageChannel) ?? undefined;
+  const memory = readChannel(snapshot, VisionMemoryChannel) ?? undefined;
+  const denseUnits = readChannel(snapshot, DenseUnitsChannel) ?? undefined;
 
   // 1. Fog-safe cell reticle: never reveal/highlight unexplored cells.
   if (hovered?.kind === 'cell' && toolKind === 'none') {
     const { x, y } = hovered;
     if (x >= 0 && y >= 0 && x < mapWidth && y < mapHeight) {
-      const fogLayer = snapshot.layers[`${VISION_STATE_LAYER_ID}#${observer}`];
+      const fogLayer = readLayer(snapshot, `${VISION_STATE_LAYER_ID}#${observer}`);
       const idx = y * mapWidth + x;
-      if (fogLayer === undefined || (fogLayer[idx] ?? 0) > 0) {
+      if (fogLayer === null || (fogLayer[idx] ?? 0) > 0) {
         brackets.push({ x, y, w: 1, h: 1, tone: 'cell_hover' });
       }
     }

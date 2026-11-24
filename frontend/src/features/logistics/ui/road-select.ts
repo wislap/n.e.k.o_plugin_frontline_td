@@ -3,9 +3,10 @@
 // indexed into the channel's links arrays; a/b are node indices into the
 // nodes arrays. Pure so the extension rules are unit-testable.
 import type { ContentDb } from '../../../content/index';
+import { readChannel } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
-import { StructuresChannel, type ConstructionStructures } from '../../construction/protocol';
-import { LogisticsNetworkChannel, type LogisticsNetwork, type RoadLinkKey } from '../protocol';
+import { StructuresChannel } from '../../construction/protocol';
+import { LogisticsNetworkChannel, type RoadLinkKey } from '../protocol';
 import { linkFlow } from '../render/link-flow';
 
 export type { RoadLinkKey };
@@ -204,11 +205,11 @@ export function extendRoadSelection(
   if (snapshot === null) {
     return [];
   }
-  const net = snapshot.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined;
+  const net = readChannel(snapshot, LogisticsNetworkChannel) ?? undefined;
   if (net === undefined || clickedLink < 0 || clickedLink >= net.links.a.length) {
     return [];
   }
-  const structures = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+  const structures = readChannel(snapshot, StructuresChannel) ?? undefined;
   const warehouses = new Set<number>();
   if (structures !== undefined) {
     for (let i = 0; i < structures.handles.length; i++) {

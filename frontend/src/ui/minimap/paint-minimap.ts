@@ -10,6 +10,7 @@ import {
   mapToCanvas,
 } from '../../client/minimap-model';
 import type { ContentDb, ResolvedMap } from '../../content/index';
+import { readLayer } from '../../core/index';
 import type { Snapshot } from '../../core/index';
 import { ROAD_LAYER_ID } from '../../features/logistics/protocol';
 import { VISION_STATE_LAYER_ID } from '../../features/vision/protocol';
@@ -121,9 +122,8 @@ function unitColor(disposition: 'own' | 'hostile' | 'ally'): string {
 }
 
 function syncTerrainLayer(cache: MinimapRenderCache, snapshot: Snapshot | null): void {
-  const visionLayer: ArrayLike<number> | null | undefined =
-    snapshot === null ? null : snapshot.layers[`${VISION_STATE_LAYER_ID}#${snapshot.observer}`];
-  const roadLayer: ArrayLike<number> | undefined = snapshot?.layers[ROAD_LAYER_ID];
+  const visionLayer = readLayer(snapshot, `${VISION_STATE_LAYER_ID}#${snapshot?.observer ?? 0}`);
+  const roadLayer = readLayer(snapshot, ROAD_LAYER_ID) ?? undefined;
   const hasSnapshot = snapshot !== null;
 
   if (

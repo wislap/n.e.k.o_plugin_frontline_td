@@ -19,6 +19,7 @@ import {
   type LogisticsNetwork,
 } from '../protocol';
 import styles from './StockPanel.module.css';
+import { readChannel } from '../../../core/index';
 
 const POLL_MS = 500;
 
@@ -39,8 +40,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
   const selectStock = useCallback(
     (pair: SnapshotPair): StockSlice => {
       const latest = pair.latest;
-      const network =
-        (latest?.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined) ?? null;
+      const network = readChannel(latest, LogisticsNetworkChannel);
       if (latest === null || network === null) {
         return { tick: -1, network: null, rates: [] };
       }

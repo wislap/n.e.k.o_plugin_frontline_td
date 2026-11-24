@@ -3,24 +3,18 @@
 // picking so shallow-pitch camera angles still click tall silhouettes accurately
 // while closer terrain occludes entities behind cliffs.
 import type { ContentDb } from '../content/index';
-import type { Snapshot } from '../core/index';
+import { readChannel, type Snapshot } from '../core/index';
 import {
   RoadWorksChannel,
   STATE_BLUEPRINT,
   STATE_RUIN,
   STATE_SITE,
   STATE_WAITING,
-  type RoadWorks,
+  StructuresChannel,
 } from '../features/construction/protocol';
 import { classifyCancelSelection } from '../features/construction/rules/index';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
-import {
-  pickDemolishableAt,
-  pickSubjectAt,
-  structuresChannel,
-  type DemolishPick,
-  type PickResult,
-} from './pick';
+import { DenseUnitsChannel } from '../features/units/protocol';
+import { pickDemolishableAt, pickSubjectAt, type DemolishPick, type PickResult } from './pick';
 
 interface PickRay {
   origin: { x: number; y: number; z: number };
@@ -174,7 +168,7 @@ export function pickSubjectByRay(
   if (nRay !== null) {
     const maxT = groundMaxT(nRay, groundHit, heights, mapDims, heightStep);
     const unitKindByHandle = new Map<number, number>();
-    const denseUnits = (snapshot?.channels[DenseUnitsChannel.id] as DenseUnits | undefined) ?? null;
+    const denseUnits = readChannel(snapshot, DenseUnitsChannel);
     if (denseUnits !== null) {
       for (let i = 0; i < denseUnits.handles.length; i++) {
         unitKindByHandle.set(denseUnits.handles[i] ?? 0, denseUnits.kind[i] ?? 0);
@@ -212,7 +206,7 @@ export function pickSubjectByRay(
       }
     }
 
-    const structures = structuresChannel(snapshot);
+    const structures = readChannel(snapshot, StructuresChannel);
     if (structures !== null) {
       for (let i = 0; i < structures.handles.length; i++) {
         const kindIdx = structures.kind[i] ?? 0;
@@ -283,8 +277,8 @@ export function pickDemolishableByRay(
   observer: number,
   radius = 0.6,
 ): DemolishPick | null {
-  const structures = structuresChannel(snapshot);
-  const roadWorks = (snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
+  const structures = readChannel(snapshot, StructuresChannel);
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
   const nRay = normalizeRay(ray);
   if (nRay !== null && structures !== null) {
     const maxT = groundMaxT(nRay, groundHit, heights, mapDims, heightStep);

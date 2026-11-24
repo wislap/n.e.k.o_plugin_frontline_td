@@ -2,14 +2,10 @@
 // command routing, and double-press detection. Digit→squad bindings live
 // only in the squads channel tags (`player:<digit>`), so they rebuild
 // themselves after any load or restart — no separate persistence.
+import { readChannel } from '../core/index';
 import type { Snapshot } from '../core/index';
 import { MoveCommand } from '../features/movement/protocol';
-import {
-  SquadsChannel,
-  SquadsOrder,
-  type SquadsSnapshot,
-  type SquadView,
-} from '../features/squads/protocol';
+import { SquadsChannel, SquadsOrder, type SquadView } from '../features/squads/protocol';
 import type { SimClient } from './sim-client';
 
 const PLAYER_SQUAD_PREFIX = 'player:';
@@ -83,7 +79,7 @@ export function submitMoveOrder(
   }
   const cellX = Math.floor(x);
   const cellY = Math.floor(y);
-  const squads = (snapshot?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+  const squads = readChannel(snapshot, SquadsChannel)?.squads ?? [];
   const routing = routeMoveSelection(selected, squads, snapshot?.observer ?? -1);
   for (const squad of routing.squads) {
     client.submit({

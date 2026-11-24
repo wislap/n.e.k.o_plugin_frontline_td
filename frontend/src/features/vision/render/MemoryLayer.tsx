@@ -10,7 +10,7 @@ import type { ContentDb } from '../../../content/index';
 import { structureKindHeight } from '../../construction/render/index';
 import { terrainY } from '../../../render/world';
 import { VisionMemoryChannel } from '../protocol';
-import type { VisionMemory } from '../protocol';
+import { readChannel } from '../../../core/index';
 
 const MEMORY_COLOR = '#5a6478';
 const MEMORY_OPACITY = 0.35;
@@ -34,8 +34,7 @@ export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: Memory
     if (mesh === null) {
       return;
     }
-    const memory = client.snapshots().latest?.channels[VisionMemoryChannel.id] as
-      VisionMemory | undefined;
+    const memory = readChannel(client.snapshots().latest, VisionMemoryChannel) ?? undefined;
     if (memory === undefined) {
       mesh.count = 0;
       return;

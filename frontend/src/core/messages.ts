@@ -7,7 +7,7 @@ import type { EntityHandle } from './handle';
 import type { Schema } from './schema';
 import type { Tick } from './time';
 
-type SerializableTypedArray =
+export type SerializableTypedArray =
   | Int8Array
   | Uint8Array
   | Int16Array
@@ -99,6 +99,20 @@ export interface CommandEnvelope {
 export interface SnapshotEventEntry {
   type: string;
   payload: Serializable;
+}
+
+export function readChannel<T>(
+  snapshot: Snapshot | null | undefined,
+  ch: SnapshotChannelDef<T>,
+): T | null {
+  return (snapshot?.channels[ch.id] as T | undefined) ?? null;
+}
+
+export function readLayer(
+  snapshot: Snapshot | null | undefined,
+  id: string,
+): SerializableTypedArray | null {
+  return snapshot?.layers[id] ?? null;
 }
 
 export interface Snapshot {

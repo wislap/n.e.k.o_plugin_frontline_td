@@ -18,7 +18,7 @@ import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../re
 import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import type { StructureSilhouette } from '../content';
-import { STATE_OPERATIONAL, StructuresChannel, type ConstructionStructures } from '../protocol';
+import { STATE_OPERATIONAL, StructuresChannel } from '../protocol';
 import {
   centeredFootprint,
   checkFootprint,
@@ -29,6 +29,7 @@ import {
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
 import { structureKindHeight } from './structure-gpu';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readChannel } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 
@@ -209,7 +210,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
       connectRing.scale.set(radius, radius, 1);
 
       // Dashed predicted links to own completed nodes inside the radius.
-      const channel = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+      const channel = readChannel(snapshot, StructuresChannel) ?? undefined;
       let segs = 0;
       if (channel !== undefined) {
         for (let i = 0; i < channel.handles.length && segs < 64; i++) {

@@ -6,16 +6,11 @@
 // the sim's path-cost check with straight-line edge distance, so the
 // preview may pass where the sim later rejects; the rejection toast then
 // explains the real reason.
+import { readChannel, readLayer } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import type { PlacementView } from './placement';
-import {
-  StructuresChannel,
-  STATE_BLUEPRINT,
-  STATE_OPERATIONAL,
-  STATE_WAITING,
-  type ConstructionStructures,
-} from '../protocol';
+import { StructuresChannel, STATE_BLUEPRINT, STATE_OPERATIONAL, STATE_WAITING } from '../protocol';
 import { SERVICE_LAYER_ID } from '../../logistics/protocol';
 import {
   TERRAIN_BLOCKED_LAYER_ID,
@@ -23,7 +18,6 @@ import {
   TERRAIN_SURFACE_LAYER_ID,
 } from '../../terrain/protocol';
 import { VisionMemoryChannel } from '../../vision/protocol';
-import type { VisionMemory } from '../../vision/protocol';
 
 // Conservative edge-to-edge estimate between two footprints: centre
 // distance minus each footprint's half extent along the dominant axis.
@@ -54,14 +48,12 @@ export function makePlacementView(
 ): PlacementView {
   const hostile = isHostile ?? ((f) => f !== 0 && f !== observer);
   const { width, height } = map.grid;
-  const heights =
-    (snapshot.layers[TERRAIN_HEIGHT_LAYER_ID] as Uint8Array | undefined) ?? map.grid.heights;
-  const surfaces =
-    (snapshot.layers[TERRAIN_SURFACE_LAYER_ID] as Uint16Array | undefined) ?? map.grid.surfaces;
-  const blocked = snapshot.layers[TERRAIN_BLOCKED_LAYER_ID] as Uint8Array | undefined;
-  const service = snapshot.layers[`${SERVICE_LAYER_ID}#${observer}`] as Uint8Array | undefined;
+  const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? map.grid.heights;
+  const surfaces = readLayer(snapshot, TERRAIN_SURFACE_LAYER_ID) ?? map.grid.surfaces;
+  const blocked = readLayer(snapshot, TERRAIN_BLOCKED_LAYER_ID) ?? undefined;
+  const service = readLayer(snapshot, `${SERVICE_LAYER_ID}#${observer}`) ?? undefined;
   const groundCls = db.movementClasses.byId('frontline_td:ground')?.index ?? 0;
-  const channel = snapshot.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+  const channel = readChannel(snapshot, StructuresChannel) ?? undefined;
 
   const inBounds = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < width && y < height;
   const idx = (x: number, y: number): number => y * width + x;
@@ -105,7 +97,7 @@ export function makePlacementView(
   // Remembered hostile structures (vision memory) keep excluding: the
   // sim still applies the zone while the structure may be alive unseen.
   // Memory rows only ever list non-visible rows, so no live-row dupes.
-  const memory = snapshot.channels[VisionMemoryChannel.id] as VisionMemory | undefined;
+  const memory = readChannel(snapshot, VisionMemoryChannel) ?? undefined;
   if (memory !== undefined) {
     for (let i = 0; i < memory.handles.length; i++) {
       const kind = db.structures.byIndex(memory.kind[i] ?? 0);

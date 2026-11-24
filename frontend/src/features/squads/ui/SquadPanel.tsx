@@ -14,14 +14,9 @@ import { digitForTag } from '../../../client/squad-controls';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { ActionButton, Kbd, TacticalPanel, cx } from '../../../ui/kit/index';
 import { DenseUnitsChannel, type DenseUnits } from '../../units/protocol';
-import {
-  SquadsChannel,
-  SquadsDisband,
-  SquadsSetStrength,
-  type SquadsSnapshot,
-  type SquadView,
-} from '../protocol';
+import { SquadsChannel, SquadsDisband, SquadsSetStrength, type SquadView } from '../protocol';
 import styles from './SquadPanel.module.css';
+import { readChannel } from '../../../core/index';
 
 const EMPTY_SQUADS: readonly SquadView[] = [];
 
@@ -73,9 +68,8 @@ export function SquadPanel({ client }: { client: SimClient }) {
   const selectSquads = useCallback((pair: SnapshotPair): SquadSlice => {
     const latest = pair.latest;
     const observer = latest?.observer ?? -1;
-    const rawSquads =
-      (latest?.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? EMPTY_SQUADS;
-    const units = (latest?.channels[DenseUnitsChannel.id] as DenseUnits | undefined) ?? null;
+    const rawSquads = readChannel(latest, SquadsChannel)?.squads ?? EMPTY_SQUADS;
+    const units = readChannel(latest, DenseUnitsChannel);
     return {
       tick: latest?.tick ?? -1,
       observer,

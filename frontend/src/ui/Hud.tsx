@@ -9,10 +9,10 @@ import { useSelectionStore } from '../client/selection-store';
 import type { SimClient } from '../client/sim-client';
 import { subscribeSnapshotClock } from '../client/use-snapshot';
 import { localName, type ContentDb, type ResolvedMap } from '../content/index';
-import { COMMAND_REJECTED } from '../core/index';
+import { COMMAND_REJECTED, readChannel } from '../core/index';
 import { BuildMenu } from '../features/construction/ui/index';
 import { RoadPanel, StockPanel } from '../features/logistics/ui/index';
-import { SquadsChannel, type SquadsSnapshot } from '../features/squads/protocol';
+import { SquadsChannel } from '../features/squads/protocol';
 import { bannerThreat } from '../features/squads/render/index';
 import { SquadPanel } from '../features/squads/ui/index';
 import { GaugePill } from './GaugePill';
@@ -118,8 +118,7 @@ export function Hud({
       if (latest === null) {
         return;
       }
-      const squads =
-        (latest.channels[SquadsChannel.id] as SquadsSnapshot | undefined)?.squads ?? [];
+      const squads = readChannel(latest, SquadsChannel)?.squads ?? [];
       const nextThreat = bannerThreat(squads, latest.observer, latest.tick);
       setThreat((cur) => {
         if (cur === null && nextThreat === null) {

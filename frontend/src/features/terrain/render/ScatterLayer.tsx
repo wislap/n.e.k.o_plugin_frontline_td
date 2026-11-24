@@ -13,14 +13,7 @@ import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
-import {
-  RoadWorksChannel,
-  SalvageChannel,
-  StructuresChannel,
-  type ConstructionSalvage,
-  type ConstructionStructures,
-  type RoadWorks,
-} from '../../construction/protocol';
+import { RoadWorksChannel, SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { ROAD_LAYER_ID } from '../../logistics/protocol';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
 import { renderNowMs } from '../../../client/capture-mode';
@@ -36,6 +29,7 @@ import {
   type MeadowTint,
   type PropKind,
 } from './scatter-assets';
+import { readChannel, readLayer } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
@@ -115,12 +109,11 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
     if (latest === null) {
       return;
     }
-    const structures = latest.channels[StructuresChannel.id] as ConstructionStructures | undefined;
-    const salvage = latest.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
-    const roadworks = latest.channels[RoadWorksChannel.id] as RoadWorks | undefined;
-    const road = latest.layers[ROAD_LAYER_ID] as ArrayLike<number> | undefined;
-    const vision = latest.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
-      ArrayLike<number> | undefined;
+    const structures = readChannel(latest, StructuresChannel) ?? undefined;
+    const salvage = readChannel(latest, SalvageChannel) ?? undefined;
+    const roadworks = readChannel(latest, RoadWorksChannel) ?? undefined;
+    const road = readLayer(latest, ROAD_LAYER_ID) ?? undefined;
+    const vision = readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
     // Re-filter when the camera focus crosses ~4 cells — the meadow
     // distance cull needs a fresh pass even when channels are unchanged.
     const camState = useCameraStore.getState();

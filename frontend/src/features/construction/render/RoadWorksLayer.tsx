@@ -12,6 +12,7 @@ import type { ResolvedMap } from '../../../content/index';
 import type { HpBarSink } from '../../../render/hp-bars';
 import { terrainY } from '../../../render/world';
 import { RoadWorksChannel, type RoadWorks } from '../protocol';
+import { readChannel } from '../../../core/index';
 
 const PLANNED_COLOR = '#b59a6a';
 const PLANNED_OPACITY = 0.22;
@@ -83,7 +84,7 @@ export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
     if (cells === null || segs === null) {
       return;
     }
-    const works = client.snapshots().latest?.channels[RoadWorksChannel.id] as RoadWorks | undefined;
+    const works = readChannel(client.snapshots().latest, RoadWorksChannel) ?? undefined;
     const { width, height } = map.grid;
     updateRoadWorksMeshes(cells, segs, works, width, height, heights, dummyRef.current);
   });
@@ -109,7 +110,7 @@ export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
 
 // HP-bar collector for road segments (only damaged ones render).
 export function roadWorksHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
-  const works = pair.latest?.channels[RoadWorksChannel.id] as RoadWorks | undefined;
+  const works = readChannel(pair.latest, RoadWorksChannel) ?? undefined;
   if (works === undefined) {
     return;
   }

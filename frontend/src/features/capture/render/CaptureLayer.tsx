@@ -15,9 +15,9 @@ import {
 import { factionColorHex } from '../../units/render/index';
 import { terrainY } from '../../../render/world';
 import { CapturePointsChannel } from '../protocol';
-import type { CapturePoints } from '../protocol';
 import { writeArcVertices, writeRingVertices } from '../../../render/rings';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readChannel } from '../../../core/index';
 
 const RING_COLOR = new THREE.Color('#8890a0');
 const CONTESTED_COLOR = new THREE.Color('#ffd24f');
@@ -52,7 +52,7 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
     bufRef.current ??= createLineBuffer(MAX_POINTS * SEGMENTS * 4, true);
     const buf = bufRef.current;
     const latest = client.snapshots().latest;
-    const points = latest?.channels[CapturePointsChannel.id] as CapturePoints | undefined;
+    const points = readChannel(latest, CapturePointsChannel) ?? undefined;
     if (points !== undefined) {
       const pointCount = Math.min(points.handles.length, MAX_POINTS);
       ensureLineCapacity(buf, pointCount * SEGMENTS * 6);

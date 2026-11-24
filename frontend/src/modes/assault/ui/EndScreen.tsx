@@ -11,6 +11,7 @@ import { useSnapshotValue } from '../../../client/use-snapshot';
 import { ActionButton, TacticalPanel, cx } from '../../../ui/kit/index';
 import { AssaultChannel, type AssaultState } from '../protocol';
 import styles from './EndScreen.module.css';
+import { readChannel } from '../../../core/index';
 
 const PROBE_PREFIX = 'frontline_td:assault.';
 
@@ -33,7 +34,7 @@ export function EndScreen({ client, onRestart }: { client: SimClient; onRestart:
 
   const selectEnd = useCallback((pair: SnapshotPair): EndSlice => {
     const latest = pair.latest;
-    const state = (latest?.channels[AssaultChannel.id] as AssaultState | undefined) ?? null;
+    const state = readChannel(latest, AssaultChannel);
     if (state === null || state.ended === 0) {
       return { state: null, observer: -1 };
     }

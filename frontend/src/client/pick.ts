@@ -3,19 +3,18 @@
 // ruin, own/hostile structure, road segment, salvage, fog memory, or
 // terrain cell); `pickDemolishableAt` resolves cancellable own structures
 // or road segments; `pickAt` remains for own-entity compatibility.
-import type { Snapshot } from '../core/index';
+import { readChannel, type Snapshot } from '../core/index';
 import type { ContentDb } from '../content/index';
 import {
   RoadWorksChannel,
   SalvageChannel,
   STATE_RUIN,
   StructuresChannel,
-  type ConstructionSalvage,
   type ConstructionStructures,
   type RoadWorks,
 } from '../features/construction/protocol';
 import { classifyCancelSelection } from '../features/construction/rules/index';
-import { VisionMemoryChannel, type VisionMemory } from '../features/vision/protocol';
+import { VisionMemoryChannel } from '../features/vision/protocol';
 import type { HoverSubject } from './inspector-store';
 
 export interface PickResult {
@@ -26,22 +25,6 @@ export interface PickResult {
 export interface DemolishPick {
   handle: number;
   refunds: { cargo: number; milli: number }[];
-}
-
-export function structuresChannel(snapshot: Snapshot | null): ConstructionStructures | null {
-  return (snapshot?.channels[StructuresChannel.id] as ConstructionStructures | undefined) ?? null;
-}
-
-function salvageChannel(snapshot: Snapshot | null): ConstructionSalvage | null {
-  return (snapshot?.channels[SalvageChannel.id] as ConstructionSalvage | undefined) ?? null;
-}
-
-function roadWorksChannel(snapshot: Snapshot | null): RoadWorks | null {
-  return (snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
-}
-
-function visionMemoryChannel(snapshot: Snapshot | null): VisionMemory | null {
-  return (snapshot?.channels[VisionMemoryChannel.id] as VisionMemory | undefined) ?? null;
 }
 
 function findOwnStructureAt(
@@ -132,7 +115,13 @@ function pickStructureAt(
   y: number,
   radius = 0.6,
 ): number | null {
-  const ownStructure = findOwnStructureAt(db, structuresChannel(snapshot), observer, x, y);
+  const ownStructure = findOwnStructureAt(
+    db,
+    readChannel(snapshot, StructuresChannel),
+    observer,
+    x,
+    y,
+  );
   if (ownStructure !== null) {
     return ownStructure;
   }
@@ -141,7 +130,7 @@ function pickStructureAt(
   // make road segments unpickable.
   let best: number | null = null;
   let bestDist = radius;
-  const salvage = salvageChannel(snapshot);
+  const salvage = readChannel(snapshot, SalvageChannel);
   if (salvage !== null) {
     for (let i = 0; i < salvage.handles.length; i++) {
       const d = Math.hypot((salvage.x[i] ?? 0) - x, (salvage.y[i] ?? 0) - y);
@@ -151,7 +140,7 @@ function pickStructureAt(
       }
     }
   }
-  const roadWorks = roadWorksChannel(snapshot);
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
   if (roadWorks !== null) {
     for (let i = 0; i < roadWorks.segments.handles.length; i++) {
       const d = Math.hypot((roadWorks.segments.x[i] ?? 0) - x, (roadWorks.segments.y[i] ?? 0) - y);
@@ -207,7 +196,7 @@ export function pickSubjectAt(
   }
 
   // (2) StructuresChannel footprint containing (x, y).
-  const structures = structuresChannel(snapshot);
+  const structures = readChannel(snapshot, StructuresChannel);
   if (structures !== null) {
     for (let i = 0; i < structures.handles.length; i++) {
       const kind = db.structures.byIndex(structures.kind[i] ?? 0);
@@ -237,7 +226,7 @@ export function pickSubjectAt(
   // (3) Nearest RoadWorks segment or Salvage pile within radius.
   let bestWorkDist = Infinity;
   let bestWork: PickResult | null = null;
-  const roadWorks = roadWorksChannel(snapshot);
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
   if (roadWorks !== null) {
     for (let i = 0; i < roadWorks.segments.handles.length; i++) {
       const d = Math.hypot((roadWorks.segments.x[i] ?? 0) - x, (roadWorks.segments.y[i] ?? 0) - y);
@@ -248,7 +237,7 @@ export function pickSubjectAt(
       }
     }
   }
-  const salvage = salvageChannel(snapshot);
+  const salvage = readChannel(snapshot, SalvageChannel);
   if (salvage !== null) {
     for (let i = 0; i < salvage.handles.length; i++) {
       const d = Math.hypot((salvage.x[i] ?? 0) - x, (salvage.y[i] ?? 0) - y);
@@ -264,7 +253,7 @@ export function pickSubjectAt(
   }
 
   // (4) VisionMemoryChannel footprint containing (x, y).
-  const memory = visionMemoryChannel(snapshot);
+  const memory = readChannel(snapshot, VisionMemoryChannel);
   if (memory !== null) {
     for (let i = 0; i < memory.handles.length; i++) {
       const kindIndex = memory.kind[i] ?? 0;
@@ -311,8 +300,8 @@ export function pickDemolishableAt(
   y: number,
   radius = 0.6,
 ): DemolishPick | null {
-  const structures = structuresChannel(snapshot);
-  const roadWorks = roadWorksChannel(snapshot);
+  const structures = readChannel(snapshot, StructuresChannel);
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
   const candidate =
     findOwnStructureAt(db, structures, observer, x, y) ??
     findNearestRoadSegment(roadWorks, x, y, radius);

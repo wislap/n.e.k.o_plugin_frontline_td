@@ -11,6 +11,7 @@ import { useSelectionStore } from '../../../client/selection-store';
 import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
+import { readChannel, readLayer } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
 import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-material';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
@@ -305,15 +306,15 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
 
     const { width, height } = map.grid;
     const observer = latest.observer;
-    const service = latest.layers[`${SERVICE_LAYER_ID}#${observer}`] as Uint8Array | undefined;
+    const service = readLayer(latest, `${SERVICE_LAYER_ID}#${observer}`) ?? undefined;
     if (service !== coverBuiltForRef.current.layer) {
       coverBuiltForRef.current.layer = service;
       uploadServiceCoverage(coverBuiltRef.current.texture, service, width * height);
     }
     coverMesh.visible = service !== undefined;
 
-    const network = latest.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined;
-    const structures = latest.channels[StructuresChannel.id] as ConstructionStructures | undefined;
+    const network = readChannel(latest, LogisticsNetworkChannel) ?? undefined;
+    const structures = readChannel(latest, StructuresChannel) ?? undefined;
 
     updateLinks(
       linkLines,

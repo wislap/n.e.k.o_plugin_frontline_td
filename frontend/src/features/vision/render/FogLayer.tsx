@@ -14,6 +14,7 @@ import type { SimClient } from '../../../client/sim-client';
 import { VISUAL } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
+import { readLayer } from '../../../core/index';
 
 // Lift + polygonOffset keep the film a hair above the ground: at grazing
 // overview angles a tiny constant lift loses depth precision and the film
@@ -221,8 +222,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
       return;
     }
     mesh.visible = true;
-    const layer = latest.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
-      ArrayLike<number> | undefined;
+    const layer = readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
     if (layer === undefined || layer === builtFor.current.layer) {
       return;
     }

@@ -9,12 +9,7 @@ import type { SimClient } from '../../../client/sim-client';
 import { pruneSelected, useSelectionStore } from '../../../client/selection-store';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
-import {
-  SalvageChannel,
-  StructuresChannel,
-  type ConstructionSalvage,
-  type ConstructionStructures,
-} from '../../construction/protocol';
+import { SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
 import { VISUAL } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
@@ -23,6 +18,7 @@ import { factionColorHex } from './colors';
 import { buildRobotGeometry } from './robot-geometry';
 import { createThemedUnitMaterial } from './themed-unit-material';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readChannel } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
@@ -142,14 +138,13 @@ export function UnitsLayer({
       for (let i = 0; i < latest.handles.length; i++) {
         valid.add(latest.handles[i] ?? 0);
       }
-      const structures = pair.latest?.channels[StructuresChannel.id] as
-        ConstructionStructures | undefined;
+      const structures = readChannel(pair.latest, StructuresChannel) ?? undefined;
       if (structures !== undefined) {
         for (let i = 0; i < structures.handles.length; i++) {
           valid.add(structures.handles[i] ?? 0);
         }
       }
-      const salvage = pair.latest?.channels[SalvageChannel.id] as ConstructionSalvage | undefined;
+      const salvage = readChannel(pair.latest, SalvageChannel) ?? undefined;
       if (salvage !== undefined) {
         for (let i = 0; i < salvage.handles.length; i++) {
           valid.add(salvage.handles[i] ?? 0);

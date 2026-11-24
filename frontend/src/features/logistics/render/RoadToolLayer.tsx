@@ -13,6 +13,7 @@ import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../re
 import { terrainY } from '../../../render/world';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
 import { linkIndices } from '../ui/road-select';
+import { readChannel } from '../../../core/index';
 
 const HOVER_COLOR = '#ffffff';
 const SELECT_COLOR = '#ffd166';
@@ -92,8 +93,7 @@ export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
       int: createLineBuffer(MAX_VERTS, false),
     };
     const bufs = bufsRef.current;
-    const network = client.snapshots().latest?.channels[LogisticsNetworkChannel.id] as
-      LogisticsNetwork | undefined;
+    const network = readChannel(client.snapshots().latest, LogisticsNetworkChannel) ?? undefined;
     const { width, height } = map.grid;
     const draw = (
       lines: THREE.LineSegments,

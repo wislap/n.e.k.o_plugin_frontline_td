@@ -20,6 +20,8 @@ export {
   defineEvent,
   defineIntent,
   defineSnapshotChannel,
+  readChannel,
+  readLayer,
 } from './messages';
 export type {
   CommandDef,
@@ -30,6 +32,7 @@ export type {
   Inspection,
   IntentDef,
   Serializable,
+  SerializableTypedArray,
   Snapshot,
   SnapshotChannelDef,
   SnapshotEventEntry,

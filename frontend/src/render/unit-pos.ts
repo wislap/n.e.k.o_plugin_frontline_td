@@ -2,6 +2,7 @@
 // implementation used by the instanced renderer and by selection. The
 // interpolator caches the previous-position handle map and rebuilds it
 // only when a new latest snapshot arrives.
+import { readChannel } from '../core/index';
 import type { Snapshot } from '../core/index';
 import type { SnapshotPair } from '../client/sim-client';
 import type { DenseUnits } from '../features/units/protocol';
@@ -14,11 +15,6 @@ export interface InterpUnit {
   faction: number;
 }
 
-function unitChannel(snapshot: { channels: Record<string, unknown> } | null): DenseUnits | null {
-  const ch = snapshot?.channels[DenseUnitsChannel.id];
-  return (ch as DenseUnits | undefined) ?? null;
-}
-
 // Stateful per-frame interpolator: call update() with the newest pair,
 // then interpolated() for each row of the latest channel.
 export class UnitInterpolator {
@@ -29,12 +25,12 @@ export class UnitInterpolator {
   prevSnapshotChanged = false;
 
   update(pair: SnapshotPair): DenseUnits | null {
-    const latest = unitChannel(pair.latest);
+    const latest = readChannel(pair.latest, DenseUnitsChannel);
     this.prevSnapshotChanged = pair.latest !== this.latestSnap;
     if (this.prevSnapshotChanged) {
       this.latestSnap = pair.latest;
       this.prevPos = new Map();
-      const prev = unitChannel(pair.previous);
+      const prev = readChannel(pair.previous, DenseUnitsChannel);
       if (prev !== null) {
         for (let i = 0; i < prev.handles.length; i++) {
           this.prevPos.set(prev.handles[i] ?? 0, {
@@ -64,7 +60,7 @@ export class UnitInterpolator {
 // selection paths).
 export function interpolatedUnits(pair: SnapshotPair, now: number): Map<number, InterpUnit> {
   const result = new Map<number, InterpUnit>();
-  const latest = unitChannel(pair.latest);
+  const latest = readChannel(pair.latest, DenseUnitsChannel);
   if (latest === null) {
     return result;
   }

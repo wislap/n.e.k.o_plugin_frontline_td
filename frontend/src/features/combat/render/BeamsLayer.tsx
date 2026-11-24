@@ -16,6 +16,7 @@ import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
 import { isCellVisible } from '../../vision/rules/index';
 import { BEAM_LIFE_MS, collectBeams, type Beam } from './beams';
 import { renderNowMs } from '../../../client/capture-mode';
+import { readLayer } from '../../../core/index';
 
 const MAX_BEAMS = 256;
 const BEAM_COLOR = new THREE.Color('#ffd24f');
@@ -56,11 +57,10 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
     if (delivered.events.length > 0) {
       // Fog: events are all-visible on the wire; hide a shot only when
       // neither endpoint's cell is visible to the observer.
-      const fog = latest?.layers[`${VISION_STATE_LAYER_ID}#${latest.observer}`] as
-        ArrayLike<number> | undefined;
+      const fog = readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest?.observer}`);
       for (const beam of collectBeams(delivered.events, now)) {
         if (
-          fog === undefined ||
+          fog === null ||
           isCellVisible(fog, mapWidth, beam.x0, beam.y0) ||
           isCellVisible(fog, mapWidth, beam.x1, beam.y1)
         ) {

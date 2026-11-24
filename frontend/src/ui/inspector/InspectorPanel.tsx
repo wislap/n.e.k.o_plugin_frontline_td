@@ -9,6 +9,7 @@ import { useSelectionStore } from '../../client/selection-store';
 import type { SimClient, SnapshotPair } from '../../client/sim-client';
 import { useSnapshotValue } from '../../client/use-snapshot';
 import { localName, type ContentDb, type ResolvedMap } from '../../content/index';
+import { readLayer } from '../../core/index';
 import type { EntityHandle, Inspection, Snapshot } from '../../core/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../../features/terrain/protocol';
 import { ActionButton, TacticalPanel } from '../kit/index';
@@ -40,7 +41,7 @@ function sameSnapshotSlice(a: SnapshotSlice, b: SnapshotSlice): boolean {
 }
 
 function inferMap(db: ContentDb, snapshot: Snapshot | null): ResolvedMap | null {
-  const heightLen = snapshot?.layers[TERRAIN_HEIGHT_LAYER_ID]?.length;
+  const heightLen = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID)?.length;
   if (heightLen !== undefined) {
     const matched = db.maps.list.find((m) => m.width * m.height === heightLen);
     if (matched !== undefined) return matched;

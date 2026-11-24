@@ -13,19 +13,18 @@ import { useCameraStore } from '../client/camera-store';
 import { cursorState } from '../client/cursor';
 import { useInspectorStore, type PinnableSubject } from '../client/inspector-store';
 import { useInteractionStore } from '../client/interaction-store';
-import { structuresChannel } from '../client/pick';
 import { pickDemolishableByRay, pickSubjectByRay } from '../client/pick-ray';
 import { submitRoadOrder } from '../client/road-order';
 import { useSelectionStore } from '../client/selection-store';
 import type { SimClient } from '../client/sim-client';
 import { submitMoveOrder } from '../client/squad-controls';
 import type { ContentDb } from '../content/index';
-import type { Snapshot } from '../core/index';
+import { readChannel, type Snapshot } from '../core/index';
 import {
   CancelCommand,
   PlaceCommand,
   RoadWorksChannel,
-  type RoadWorks,
+  StructuresChannel,
 } from '../features/construction/protocol';
 import { centeredFootprint } from '../features/construction/rules/index';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../features/logistics/protocol';
@@ -59,7 +58,7 @@ function ownSubjectForHandle(
   if (unit !== undefined && unit.faction === observer) {
     return { kind: 'own_unit', handle };
   }
-  const structures = structuresChannel(snapshot);
+  const structures = readChannel(snapshot, StructuresChannel);
   if (structures !== null) {
     for (let i = 0; i < structures.handles.length; i++) {
       if (structures.handles[i] === handle && (structures.faction[i] ?? 0) === observer) {
@@ -67,7 +66,7 @@ function ownSubjectForHandle(
       }
     }
   }
-  const roadWorks = (snapshot?.channels[RoadWorksChannel.id] as RoadWorks | undefined) ?? null;
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
   if (roadWorks !== null) {
     for (let i = 0; i < roadWorks.segments.handles.length; i++) {
       if (roadWorks.segments.handles[i] === handle) {
@@ -85,7 +84,7 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
 
   const roadNetwork = (): LogisticsNetwork | null => {
     const latest = client.snapshots().latest;
-    return (latest?.channels[LogisticsNetworkChannel.id] as LogisticsNetwork | undefined) ?? null;
+    return readChannel(latest, LogisticsNetworkChannel);
   };
 
   const roadLinks = (): LogisticsNetwork['links'] | { a: []; pathOffsets: []; pathCells: [] } => {
@@ -398,7 +397,7 @@ export function makeDispatch(env: DispatchEnv): (intent: Intent) => void {
           }
         }
         if (mode === 'build' || picked.size === 0) {
-          const structures = structuresChannel(latest);
+          const structures = readChannel(latest, StructuresChannel);
           if (structures !== null) {
             for (let i = 0; i < structures.handles.length; i++) {
               if ((structures.faction[i] ?? 0) !== observer) {
