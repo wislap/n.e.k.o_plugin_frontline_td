@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import { formatClock } from '../../../client/match-info';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { terrainY } from '../../../render/world';
 import { SquadsChannel } from '../protocol';
 import { arrowSpots, gatheringThreats, routedThreats } from './threat-info';
@@ -79,7 +80,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
   const labels = useRef(new Map<number, LabelEntry>());
   const lines = useRef(new Map<number, { line: THREE.Line; sig: string }>());
   const lineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
-  const dummyRef = useRef(new THREE.Object3D());
+  const writerRef = useRef(new InstanceWriter());
   const coneDirRef = useRef(new THREE.Vector3());
   const upRef = useRef(new THREE.Vector3(0, 1, 0));
   const quatRef = useRef(new THREE.Quaternion());
@@ -115,7 +116,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     if (group === null || markers === null || arrows === null) {
       return;
     }
-    const dummy = dummyRef.current;
+    const writer = writerRef.current;
     const coneGeometryDir = coneDirRef.current;
     const up = upRef.current;
     const quat = quatRef.current;
@@ -137,13 +138,8 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
       }
       seenLabels.add(squad.id);
       const gy = terrainY(heights, mapWidth, mapHeight, squad.order.x, squad.order.y);
-      dummy.position.set(squad.order.x, gy + 0.06, squad.order.y);
-      // The ring geometry lies in the XY plane and is rotated flat
-      // below, so local Y (not Z) carries the ground-plane scale.
-      dummy.scale.set(pulse, pulse, 1);
-      dummy.rotation.set(-Math.PI / 2, 0, 0);
-      dummy.updateMatrix();
-      markers.setMatrixAt(m, dummy.matrix);
+
+      writer.setFlat(markers, m, squad.order.x, gy + 0.06, squad.order.y, pulse, pulse);
       m += 1;
 
       let entry = labels.current.get(squad.id);
@@ -221,11 +217,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
         const gy = terrainY(heights, mapWidth, mapHeight, spot.x, spot.y);
         coneGeometryDir.set(spot.dx / len, 0, spot.dy / len);
         quat.setFromUnitVectors(up, coneGeometryDir);
-        dummy.position.set(spot.x, gy + 0.4, spot.y);
-        dummy.quaternion.copy(quat);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        arrows.setMatrixAt(a, dummy.matrix);
+        writer.setQuat(arrows, a, spot.x, gy + 0.4, spot.y, quat);
         a += 1;
       }
     }

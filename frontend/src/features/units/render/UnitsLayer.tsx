@@ -13,6 +13,7 @@ import { SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
 import { VISUAL } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
@@ -74,7 +75,7 @@ export function UnitsLayer({
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const energyPipRef = useRef<THREE.InstancedMesh>(null);
   const interp = useRef(new UnitInterpolator());
-  const dummyRef = useRef(new THREE.Object3D());
+  const writerRef = useRef(new InstanceWriter());
   const colorRef = useRef(new THREE.Color());
   const pipColorRef = useRef(new THREE.Color());
   const validHandlesRef = useRef(new Set<number>());
@@ -103,7 +104,7 @@ export function UnitsLayer({
     if (meshes.some((m) => m === null)) {
       return;
     }
-    const dummy = dummyRef.current;
+    const writer = writerRef.current;
     const color = colorRef.current;
     const pipColor = pipColorRef.current;
     const pair = client.snapshots();
@@ -197,11 +198,16 @@ export function UnitsLayer({
       // Robot geometry has its base at y=0 (unit space), so it sits on
       // the terrain; legacy primitives are centered and need the lift.
       const lift = 0;
-      dummy.position.set(x, groundY + lift, y);
-      dummy.scale.set(radius * 2 * visual.scale, visual.scale, radius * 2 * visual.scale);
-      dummy.rotation.set(0, 0, 0);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(slot, dummy.matrix);
+      writer.set(
+        mesh,
+        slot,
+        x,
+        groundY + lift,
+        y,
+        radius * 2 * visual.scale,
+        visual.scale,
+        radius * 2 * visual.scale,
+      );
       counts[SHAPE_INDEX[visual.shape]] = slot + 1;
 
       const faction = latest.faction[i] ?? 0;
@@ -214,11 +220,7 @@ export function UnitsLayer({
         color.multiplyScalar(EMPTY_ENERGY_DIM);
         dim = EMPTY_ENERGY_DIM;
         if (energyPip !== null && epips < capacity) {
-          dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
-          dummy.scale.set(1, 1, 1);
-          dummy.rotation.set(0, 0, 0);
-          dummy.updateMatrix();
-          energyPip.setMatrixAt(epips, dummy.matrix);
+          writer.set(energyPip, epips, x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
           pipColor.set(EMPTY_ENERGY_COLOR);
           energyPip.setColorAt(epips, pipColor);
           epips += 1;
@@ -227,11 +229,7 @@ export function UnitsLayer({
         color.lerp(LOW_ENERGY_TINT, 0.35);
         dim = 0.8;
         if (energyPip !== null && epips < capacity) {
-          dummy.position.set(x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
-          dummy.scale.set(1, 1, 1);
-          dummy.rotation.set(0, 0, 0);
-          dummy.updateMatrix();
-          energyPip.setMatrixAt(epips, dummy.matrix);
+          writer.set(energyPip, epips, x, groundY + UNIT_HEIGHT * visual.scale + 0.24, y);
           pipColor.set(LOW_ENERGY_COLOR);
           energyPip.setColorAt(epips, pipColor);
           epips += 1;
@@ -243,17 +241,10 @@ export function UnitsLayer({
         // In the tactical info view the group bracket carries selection;
         // per-unit rings would stack into unreadable ellipses.
         if (ring !== null && rings < capacity && !info2dOn) {
-          dummy.position.set(x, groundY + 0.055, y);
           // Rings sit at ~1.6x unit radius — small enough to stay
           // per-unit, large enough to clear the body silhouette.
-          // The ring geometry lies in the XY plane and is rotated flat
-          // below, so local Y (not Z) carries the ground-plane scale.
           const ringScale = radius * RING_SCALE_THEMED;
-          dummy.scale.set(ringScale, ringScale, 1);
-          // The ring geometry lies in the XY plane; rotate it flat.
-          dummy.rotation.set(-Math.PI / 2, 0, 0);
-          dummy.updateMatrix();
-          ring.setMatrixAt(rings, dummy.matrix);
+          writer.setFlat(ring, rings, x, groundY + 0.055, y, ringScale, ringScale);
           rings += 1;
         }
       }

@@ -6,6 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
+import { InstanceWriter } from './instance-writer';
 import { interpAlpha } from './interpolate';
 import { terrainY } from './world';
 import { renderNowMs } from '../client/capture-mode';
@@ -68,7 +69,7 @@ function writeHpBarInstances(
   mapWidth: number,
   mapHeight: number,
   cameraQuat: THREE.Quaternion,
-  dummy: THREE.Object3D,
+  writer: InstanceWriter,
   color: THREE.Color,
   offset: THREE.Vector3,
 ): void {
@@ -79,22 +80,25 @@ function writeHpBarInstances(
       continue;
     }
     const y = terrainY(heights, mapWidth, mapHeight, item.x, item.y) + item.top + BAR_OFFSET;
-    dummy.position.set(item.x, y, item.y);
-    dummy.quaternion.copy(cameraQuat);
     // Background: full-width dark bar.
-    dummy.scale.set(item.w, 1, 1);
-    dummy.updateMatrix();
-    bg.setMatrixAt(i, dummy.matrix);
+    writer.setQuat(bg, i, item.x, y, item.y, cameraQuat, item.w, 1, 1);
     // Foreground: width scaled by hp, left-aligned against the bg edge.
     const bp = Math.max(0, Math.min(10000, item.bp)) / 10000;
     const fw = item.w * bp;
     // Shift left in the bar's local X so the filled part hugs the edge.
     offset.set(-(item.w - fw) / 2, 0, 0.001);
     offset.applyQuaternion(cameraQuat);
-    dummy.position.set(item.x + offset.x, y + offset.y, item.y + offset.z);
-    dummy.scale.set(Math.max(fw, 0.001), 1, 1);
-    dummy.updateMatrix();
-    fg.setMatrixAt(i, dummy.matrix);
+    writer.setQuat(
+      fg,
+      i,
+      item.x + offset.x,
+      y + offset.y,
+      item.y + offset.z,
+      cameraQuat,
+      Math.max(fw, 0.001),
+      1,
+      1,
+    );
     color.setRGB(1 - bp, bp, 0.15);
     fg.setColorAt(i, color);
   }
@@ -125,7 +129,7 @@ export function HpBars({
   const [capacity, setCapacity] = useState(64);
   const bgRef = useRef<THREE.InstancedMesh>(null);
   const fgRef = useRef<THREE.InstancedMesh>(null);
-  const dummyRef = useRef(new THREE.Object3D());
+  const writerRef = useRef(new InstanceWriter());
   const colorRef = useRef(new THREE.Color());
   const offsetRef = useRef(new THREE.Vector3());
   const sinkRef = useRef(new PooledHpBarSink());
@@ -157,7 +161,7 @@ export function HpBars({
       mapWidth,
       mapHeight,
       camera.quaternion,
-      dummyRef.current,
+      writerRef.current,
       colorRef.current,
       offsetRef.current,
     );

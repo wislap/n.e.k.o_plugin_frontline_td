@@ -2,6 +2,7 @@
 // prop placement, low-poly geometries, the wind-swaying grass material,
 // per-theme prop palettes and the per-frame instanced-matrix writer.
 import * as THREE from 'three';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { renderNowMs } from '../../../client/capture-mode';
 import type { ContentDb } from '../../../content/index';
 import type { RenderVisual } from '../../../render/theme/index';
@@ -117,7 +118,7 @@ export function applyScatter(
   heights: ArrayLike<number>,
   mapWidth: number,
   mapHeight: number,
-  dummy: THREE.Object3D,
+  writer: InstanceWriter,
   scratchColor: THREE.Color,
   grassScale: number,
   meadowTint: MeadowTint | null,
@@ -153,11 +154,19 @@ export function applyScatter(
         continue;
       }
       const dim = state === 1 ? EXPLORED_DIM : 1;
-      dummy.position.set(p.x, terrainY(heights, mapWidth, mapHeight, p.x, p.z) + lift, p.z);
-      dummy.rotation.set(p.lean, p.rotY, 0);
-      dummy.scale.set(scale, scale, scale);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(count, dummy.matrix);
+      writer.setEuler(
+        mesh,
+        count,
+        p.x,
+        terrainY(heights, mapWidth, mapHeight, p.x, p.z) + lift,
+        p.z,
+        p.lean,
+        p.rotY,
+        0,
+        scale,
+        scale,
+        scale,
+      );
       const t = p.tint * dim;
       if (kind === 'flower') {
         const ci = Math.floor((p.rotY / (Math.PI * 2)) * FLOWER_COLORS.length);

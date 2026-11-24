@@ -16,6 +16,7 @@ import type { ContentDb } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { factionColorHex } from '../../units/render/index';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
 import {
@@ -105,7 +106,7 @@ export function StructuresLayer({
   const gpuRef = useRef<StructureGpuAssets | null>(null);
   const silCountsRef = useRef<Record<StructureSilhouette, number> | null>(null);
   const glyphCountsRef = useRef<Record<ActiveGlyph, number> | null>(null);
-  const dummyRef = useRef<THREE.Object3D | null>(null);
+  const writerRef = useRef<InstanceWriter | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
 
   useEffect(() => {
@@ -149,12 +150,12 @@ export function StructuresLayer({
 
     silCountsRef.current ??= makeSilhouetteCounts();
     glyphCountsRef.current ??= makeGlyphCounts();
-    dummyRef.current ??= new THREE.Object3D();
+    writerRef.current ??= new InstanceWriter();
     colorRef.current ??= new THREE.Color();
 
     const silCounts = silCountsRef.current;
     const glyphCounts = glyphCountsRef.current;
-    const dummy = dummyRef.current;
+    const writer = writerRef.current;
     const color = colorRef.current;
 
     const pair = client.snapshots();
@@ -213,11 +214,16 @@ export function StructuresLayer({
         const progress = (channel.progressBp[i] ?? 0) / 10000;
 
         if (state === STATE_BLUEPRINT) {
-          dummy.position.set(cx, groundY + (full * 0.5) / 2, cy);
-          dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(w * 0.9, full * 0.5, h * 0.9);
-          dummy.updateMatrix();
-          bpMesh.setMatrixAt(bpCount, dummy.matrix);
+          writer.set(
+            bpMesh,
+            bpCount,
+            cx,
+            groundY + (full * 0.5) / 2,
+            cy,
+            w * 0.9,
+            full * 0.5,
+            h * 0.9,
+          );
           color.set(factionColorHex(faction, localFaction));
           bpMesh.setColorAt(bpCount, color);
           bpCount += 1;
@@ -225,11 +231,16 @@ export function StructuresLayer({
         }
 
         if (state === STATE_WAITING) {
-          dummy.position.set(cx, groundY + (full * 0.5) / 2, cy);
-          dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(w * 0.9, full * 0.5, h * 0.9);
-          dummy.updateMatrix();
-          waitMesh.setMatrixAt(waitCount, dummy.matrix);
+          writer.set(
+            waitMesh,
+            waitCount,
+            cx,
+            groundY + (full * 0.5) / 2,
+            cy,
+            w * 0.9,
+            full * 0.5,
+            h * 0.9,
+          );
           color.set(factionColorHex(faction, localFaction));
           color.lerp(AMBER_COLOR, 0.55);
           waitMesh.setColorAt(waitCount, color);
@@ -248,11 +259,7 @@ export function StructuresLayer({
         const silMesh = silRefs.current[silhouette];
         if (silMesh !== undefined && silMesh !== null) {
           const slot = silCounts[silhouette];
-          dummy.position.set(cx, groundY, cy);
-          dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(w * 0.92, full * heightScale, h * 0.92);
-          dummy.updateMatrix();
-          silMesh.setMatrixAt(slot, dummy.matrix);
+          writer.set(silMesh, slot, cx, groundY, cy, w * 0.92, full * heightScale, h * 0.92);
           let dim = 1;
           if (state === STATE_RUIN) {
             color.set(RUIN_COLOR);
@@ -281,11 +288,16 @@ export function StructuresLayer({
         const padMesh = padRef.current;
         if (padMesh !== null && state !== STATE_RUIN) {
           const margin = theme.pad.margin;
-          dummy.position.set(cx, groundY - 0.04 + theme.pad.height / 2, cy);
-          dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(w + margin * 2, theme.pad.height, h + margin * 2);
-          dummy.updateMatrix();
-          padMesh.setMatrixAt(padCount, dummy.matrix);
+          writer.set(
+            padMesh,
+            padCount,
+            cx,
+            groundY - 0.04 + theme.pad.height / 2,
+            cy,
+            w + margin * 2,
+            theme.pad.height,
+            h + margin * 2,
+          );
           padCount += 1;
         }
 
@@ -297,11 +309,19 @@ export function StructuresLayer({
           (channel.hpBp[i] ?? 10000) < 9000 &&
           statusCount < capacity
         ) {
-          dummy.position.set(cx, groundY + full + 0.55, cy);
-          dummy.rotation.set(0, glyphYawRot, 0);
-          dummy.scale.set(0.22, 0.22, 0.22);
-          dummy.updateMatrix();
-          statusMesh.setMatrixAt(statusCount, dummy.matrix);
+          writer.setEuler(
+            statusMesh,
+            statusCount,
+            cx,
+            groundY + full + 0.55,
+            cy,
+            0,
+            glyphYawRot,
+            0,
+            0.22,
+            0.22,
+            0.22,
+          );
           statusCount += 1;
         }
 
@@ -311,11 +331,19 @@ export function StructuresLayer({
           if (gMesh !== undefined && gMesh !== null) {
             const gSlot = glyphCounts[glyph];
             const badgeSize = Math.max(0.42, Math.min(w, h) * 0.34);
-            dummy.position.set(cx, groundY + full + 0.06, cy);
-            dummy.rotation.set(0, glyphYawRot, 0);
-            dummy.scale.set(badgeSize, 1, badgeSize);
-            dummy.updateMatrix();
-            gMesh.setMatrixAt(gSlot, dummy.matrix);
+            writer.setEuler(
+              gMesh,
+              gSlot,
+              cx,
+              groundY + full + 0.06,
+              cy,
+              0,
+              glyphYawRot,
+              0,
+              badgeSize,
+              1,
+              badgeSize,
+            );
             color.set(resolveGlyphTint(faction, localFaction, isHostile));
             // HDR tint so roof glyphs feed bloom.
             color.multiplyScalar(theme.materials.emissiveBoost);
@@ -357,11 +385,16 @@ export function StructuresLayer({
         const x = salvage.x[i] ?? 0;
         const y = salvage.y[i] ?? 0;
         const groundY = terrainY(heights, mapWidth, mapHeight, x, y);
-        dummy.position.set(x, groundY + SALVAGE_SIZE / 2, y);
-        dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(SALVAGE_SIZE, SALVAGE_SIZE, SALVAGE_SIZE);
-        dummy.updateMatrix();
-        crates.setMatrixAt(i, dummy.matrix);
+        writer.set(
+          crates,
+          i,
+          x,
+          groundY + SALVAGE_SIZE / 2,
+          y,
+          SALVAGE_SIZE,
+          SALVAGE_SIZE,
+          SALVAGE_SIZE,
+        );
       }
       crates.count = salvage.handles.length;
     } else {

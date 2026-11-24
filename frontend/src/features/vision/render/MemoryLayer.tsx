@@ -9,6 +9,7 @@ import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
 import { structureKindHeight } from '../../construction/render/index';
 import { terrainY } from '../../../render/world';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt } from '../../../render/use-gpu-resource';
 import { VisionMemoryChannel } from '../protocol';
 import { readChannel } from '../../../core/index';
@@ -28,7 +29,7 @@ export interface MemoryLayerProps {
 export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: MemoryLayerProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const writer = useMemo(() => new InstanceWriter(), []);
 
   useFrame(() => {
     const mesh = meshRef.current;
@@ -54,10 +55,16 @@ export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: Memory
       const cx = (memory.x[i] ?? 0) + w / 2;
       const cy = (memory.y[i] ?? 0) + h / 2;
       const height = structureKindHeight(db, memory.kind[i] ?? 0);
-      dummy.position.set(cx, terrainY(heights, mapWidth, mapHeight, cx, cy) + height / 2, cy);
-      dummy.scale.set(w * 0.9, height, h * 0.9);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(count, dummy.matrix);
+      writer.set(
+        mesh,
+        count,
+        cx,
+        terrainY(heights, mapWidth, mapHeight, cx, cy) + height / 2,
+        cy,
+        w * 0.9,
+        height,
+        h * 0.9,
+      );
       count += 1;
     }
     mesh.count = count;

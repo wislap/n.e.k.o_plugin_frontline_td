@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
@@ -45,7 +46,7 @@ export interface ScatterLayerProps {
 export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const theme = VISUAL;
   const groupRef = useRef<THREE.Group>(null);
-  const dummyRef = useRef(new THREE.Object3D());
+  const writerRef = useRef(new InstanceWriter());
   const colorRef = useRef(new THREE.Color());
   const occupiedRef = useRef<Uint8Array | null>(null);
   const watchedRef = useRef<readonly unknown[]>([]);
@@ -195,7 +196,7 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       heights,
       grid.width,
       grid.height,
-      dummyRef.current,
+      writerRef.current,
       colorRef.current,
       useUiStore.getState().grassDensity,
       meadowTint,

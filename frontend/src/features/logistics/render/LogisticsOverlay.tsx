@@ -17,6 +17,7 @@ import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-m
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { VISUAL } from '../../../render/theme/index';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import {
@@ -173,7 +174,7 @@ function updateRings(
   width: number,
   height: number,
   heights: ArrayLike<number>,
-  scratchDummy: THREE.Object3D,
+  writer: InstanceWriter,
   focus: ReadonlySet<number> | null,
 ): void {
   let ringCount = 0;
@@ -195,11 +196,15 @@ function updateRings(
       }
       const cx = (structures.x[i] ?? 0) + kind.footprint.w / 2;
       const cy = (structures.y[i] ?? 0) + kind.footprint.h / 2;
-      scratchDummy.position.set(cx, terrainY(heights, width, height, cx, cy) + LIFT + 0.002, cy);
-      scratchDummy.rotation.set(-Math.PI / 2, 0, 0);
-      scratchDummy.scale.set(kind.node.service, kind.node.service, 1);
-      scratchDummy.updateMatrix();
-      rings.setMatrixAt(ringCount, scratchDummy.matrix);
+      writer.setFlat(
+        rings,
+        ringCount,
+        cx,
+        terrainY(heights, width, height, cx, cy) + LIFT + 0.002,
+        cy,
+        kind.node.service,
+        kind.node.service,
+      );
       ringCount += 1;
     }
   }
@@ -232,7 +237,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   const linkRef = useRef<THREE.LineSegments>(null);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const linkBufRef = useRef<LineBuffer | null>(null);
-  const dummyRef = useRef<THREE.Object3D | null>(null);
+  const writerRef = useRef<InstanceWriter | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
   const linkColorRef = useRef(new THREE.Color('#7fd4ff'));
   const ringDashMatRef = useRef<DashRingMaterial | null>(null);
@@ -290,7 +295,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       ringDash.uniforms.uColor.value.set(theme.markers.accent);
     }
     linkBufRef.current ??= createLineBuffer(MAX_LINK_VERTS, true);
-    dummyRef.current ??= new THREE.Object3D();
+    writerRef.current ??= new InstanceWriter();
     colorRef.current ??= new THREE.Color();
 
     const latest = client.snapshots().latest;
@@ -350,7 +355,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
         width,
         height,
         heights,
-        dummyRef.current,
+        writerRef.current,
         focusSet,
       );
     }

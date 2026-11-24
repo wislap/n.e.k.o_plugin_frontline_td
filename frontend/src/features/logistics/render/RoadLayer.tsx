@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { readLayer } from '../../../core/index';
@@ -60,7 +61,7 @@ export function RoadLayer({ client, map, heights }: RoadLayerProps) {
   const theme = VISUAL;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const writer = useMemo(() => new InstanceWriter(), []);
 
   const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link), [theme]);
   useGpuResource(glowMat);
@@ -81,14 +82,16 @@ export function RoadLayer({ client, map, heights }: RoadLayerProps) {
         if ((layer[y * width + x] ?? 0) < 1) {
           continue;
         }
-        dummy.position.set(
+        writer.set(
+          mesh,
+          count,
           x + 0.5,
           terrainY(heights, width, height, x + 0.5, y + 0.5) + LIFT,
           y + 0.5,
+          0.96,
+          1,
+          0.96,
         );
-        dummy.scale.set(0.96, 1, 0.96);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(count, dummy.matrix);
         count += 1;
       }
     }

@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
 import type { HpBarSink } from '../../../render/hp-bars';
+import { InstanceWriter } from '../../../render/instance-writer';
 import { terrainY } from '../../../render/world';
 import { RoadWorksChannel, type RoadWorks } from '../protocol';
 import { readChannel } from '../../../core/index';
@@ -33,7 +34,7 @@ function updateRoadWorksMeshes(
   width: number,
   height: number,
   heights: ArrayLike<number>,
-  dummy: THREE.Object3D,
+  writer: InstanceWriter,
 ): void {
   if (works === undefined) {
     cells.count = 0;
@@ -49,10 +50,7 @@ function updateRoadWorksMeshes(
       const cell = works.projects.cells[c] ?? 0;
       const x = (cell % width) + 0.5;
       const y = Math.floor(cell / width) + 0.5;
-      dummy.position.set(x, terrainY(heights, width, height, x, y) + LIFT, y);
-      dummy.scale.set(0.8, 1, 0.8);
-      dummy.updateMatrix();
-      cells.setMatrixAt(n, dummy.matrix);
+      writer.set(cells, n, x, terrainY(heights, width, height, x, y) + LIFT, y, 0.8, 1, 0.8);
       n += 1;
     }
   }
@@ -63,10 +61,7 @@ function updateRoadWorksMeshes(
     const x = works.segments.x[i] ?? 0;
     const y = works.segments.y[i] ?? 0;
     const h = 0.15 + ((works.segments.progressBp[i] ?? 0) / 10000) * 0.5;
-    dummy.position.set(x, terrainY(heights, width, height, x, y) + LIFT + h / 2, y);
-    dummy.scale.set(0.6, h, 0.6);
-    dummy.updateMatrix();
-    segs.setMatrixAt(m, dummy.matrix);
+    writer.set(segs, m, x, terrainY(heights, width, height, x, y) + LIFT + h / 2, y, 0.6, h, 0.6);
     m += 1;
   }
   segs.count = m;
@@ -76,7 +71,7 @@ function updateRoadWorksMeshes(
 export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
   const cellsRef = useRef<THREE.InstancedMesh>(null);
   const segsRef = useRef<THREE.InstancedMesh>(null);
-  const dummyRef = useRef(new THREE.Object3D());
+  const writerRef = useRef(new InstanceWriter());
 
   useFrame(() => {
     const cells = cellsRef.current;
@@ -86,7 +81,7 @@ export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
     }
     const works = readChannel(client.snapshots().latest, RoadWorksChannel) ?? undefined;
     const { width, height } = map.grid;
-    updateRoadWorksMeshes(cells, segs, works, width, height, heights, dummyRef.current);
+    updateRoadWorksMeshes(cells, segs, works, width, height, heights, writerRef.current);
   });
 
   return (
