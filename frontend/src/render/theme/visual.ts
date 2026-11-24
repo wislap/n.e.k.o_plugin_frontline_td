@@ -114,6 +114,9 @@ interface VisualGeometry {
 interface VisualPad {
   color: string;
   edge: string;
+  roughness: number;
+  metalness: number;
+  envMapIntensity: number;
   // Extra footprint margin on each side, in cells.
   margin: number;
   height: number;
@@ -146,23 +149,25 @@ export interface RenderVisual {
   pad: VisualPad;
 }
 
-const VISUAL: RenderVisual = {
+// 'clean' — the approved field look (b8bd104) exactly: 'dim' fog film,
+// strong distance haze, sunlit meadow, no grading.
+const CLEAN: RenderVisual = {
   accent: '#FFE600',
   exposure: 0.9,
   toneMapping: 'agx',
-  fogColor: '#181d18',
+  fogColor: '#3d453a',
   fogSoft: true,
-  // Fog sits past the map: at overview distance it only catches the
-  // skirt rim and the horizon, never the playfield itself.
-  hazeNear: 0.95,
-  hazeFar: 2.2,
-  splitTone: 0.5,
+  // Distance haze starts inside the playfield at overview distance —
+  // the far fog merges into the horizon (b8bd104 near/far).
+  hazeNear: 0.45,
+  hazeFar: 1.3,
+  splitTone: 0,
   info2d: true,
   lighting: {
     // Hemisphere is dimmed — most ambient comes from the PMREM sky.
     hemiSky: '#bcd8ee',
     hemiGround: '#5f7f4d',
-    hemiIntensity: 0.32,
+    hemiIntensity: 0.4,
     sunColor: '#fff0d0',
     sunIntensity: 2.1,
     sunDir: [-0.55, 0.6, -0.42],
@@ -196,7 +201,7 @@ const VISUAL: RenderVisual = {
     aoRadius: 0.55,
     bloomIntensity: 0.25,
     bloomThreshold: 0.9,
-    vignette: 0.2,
+    vignette: 0,
     noiseOpacity: 0,
     contrast: 1.06,
     saturation: 1.08,
@@ -205,9 +210,9 @@ const VISUAL: RenderVisual = {
     // Painted plates read as ~0.8 albedo off-white under AgX — below the
     // clip point so sun highlights keep tonal variation.
     unitBody: '#d8d9d1',
-    unitTrim: '#0f1113',
+    unitTrim: '#25282a',
     structureBody: '#d9dad2',
-    structureTrim: '#101214',
+    structureTrim: '#26292c',
     unitEmissive: 'faction',
     structureEmissive: '#ff9a2a',
     emissiveBoost: 1.2,
@@ -225,135 +230,82 @@ const VISUAL: RenderVisual = {
   background: {
     top: '#a9ccec',
     horizon: '#eef3ec',
-    // Platform and dome bottom carry the horizon haze colour: the skirt
-    // rim is fully haze-saturated (hazeFade ends before skirtCells), so a
-    // matching far ground keeps one continuous falloff — no colour step
-    // where the skirt geometry ends.
-    bottom: '#e4ecdf',
-    platform: '#e4ecdf',
+    bottom: '#a8b49a',
+    platform: '#92ad72',
     platformFadeStart: 0.5,
     platformFadeEnd: 1.05,
     haze: '#e4ecdf',
   },
   geometry: { bevel: 0.04 },
   pad: {
-    color: '#000000',
+    color: '#26292c',
     edge: '#ff9a2a',
+    roughness: 0.55,
+    metalness: 0.25,
+    envMapIntensity: 1,
     margin: 0.35,
     height: 0.12,
     emissiveBoost: 1.6,
   },
 };
 
-// --- Temporary debug axes (owner A/B; delete after palette selection) ---
-
-export const PALETTE_IDS = ['field', 'warm', 'mid'] as const;
-export type PaletteId = (typeof PALETTE_IDS)[number];
-
-// `warm` borrows diorama's golden-hour palette: yellow-green grass, cream
-// paint, warm earth, warm void — while keeping field's value range.
-const WARM: RenderVisual = {
-  ...VISUAL,
-  fogColor: '#1c1814',
+// 'mood' — the warm atmospheric alternative (509ab5f at mid/atmosphere
+// 0.5, baked): golden-hour sun, warm meadow ramp, split-tone grade and
+// vignette. Far handling (dim fog, skirt, haze, platform) stays shared
+// with clean — only the near-field palette/lighting/grade differ.
+const MOOD: RenderVisual = {
+  ...CLEAN,
+  splitTone: 0.5,
   lighting: {
-    ...VISUAL.lighting,
-    hemiSky: '#c8d8e8',
-    hemiGround: '#7a6f4d',
-    sunColor: '#ffe3b0',
-    rimColor: '#e8d8b8',
+    ...CLEAN.lighting,
+    hemiSky: '#b5d0ea',
+    hemiGround: '#6d774d',
+    hemiIntensity: 0.32,
+    sunColor: '#ffddaa',
+    sunDir: [-0.55, 0.51, -0.42],
+    rimColor: '#dcded4',
   },
   terrain: {
-    ...VISUAL.terrain,
-    rampLow: '#7d9a5c',
-    rampHigh: '#c4cc8a',
-    cliffColor: '#b9a98c',
-    dirt: '#ab9a78',
+    ...CLEAN.terrain,
+    rampLow: '#668b4d',
+    rampHigh: '#b0c67f',
+    cliffColor: '#b1a48a',
+    dirt: '#9c8f70',
   },
   materials: {
-    ...VISUAL.materials,
-    unitBody: '#ddd6c4',
-    structureBody: '#ded7c5',
-    structureEmissive: '#f0a860',
+    ...CLEAN.materials,
+    unitBody: '#dbd8cb',
+    unitTrim: '#0f1113',
+    structureBody: '#dcd9cc',
+    structureTrim: '#101214',
+    structureEmissive: '#f8a145',
   },
+  post: { ...CLEAN.post, vignette: 0.2 },
   background: {
-    ...VISUAL.background,
-    top: '#b8cfe8',
-    horizon: '#f0e6cf',
-    bottom: '#ece0c8',
-    platform: '#ece0c8',
-    haze: '#ece0c8',
+    ...CLEAN.background,
+    top: '#b1ceea',
+    horizon: '#efedde',
   },
-  pad: { ...VISUAL.pad, color: '#060504', edge: '#f0a860' },
+  pad: {
+    ...CLEAN.pad,
+    color: '#030302',
+    edge: '#f8a145',
+    roughness: 0.9,
+    metalness: 0,
+    envMapIntensity: 0,
+  },
 };
 
-function hexLerp(a: string, b: string, t: number): string {
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  const r = Math.round(((pa >> 16) & 255) + (((pb >> 16) & 255) - ((pa >> 16) & 255)) * t);
-  const g = Math.round(((pa >> 8) & 255) + (((pb >> 8) & 255) - ((pa >> 8) & 255)) * t);
-  const bl = Math.round((pa & 255) + ((pb & 255) - (pa & 255)) * t);
-  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
+// Temporary owner A/B (deleted after the pick): ?look=clean|mood,
+// default clean. Static per page load — no runtime axis.
+const LOOK_IDS = ['clean', 'mood'] as const;
+export type LookId = (typeof LOOK_IDS)[number];
+
+export function lookFromSearch(search: string): LookId {
+  const p = new URLSearchParams(search).get('look');
+  return (LOOK_IDS as readonly string[]).includes(p ?? '') ? (p as LookId) : 'clean';
 }
 
-// Resolves the effective visual for the two temporary debug axes:
-// palette picks the colour world (mid lerps field→warm 50/50) and
-// atmosphere (0..1) scales sun warmth/elevation, cool sky fill, horizon
-// haze and the split-tone grade — without veiling the scene.
-export function resolveVisual(palette: PaletteId, atmosphere: number): RenderVisual {
-  const a = Math.min(1, Math.max(0, atmosphere));
-  let v = VISUAL;
-  if (palette !== 'field') {
-    const t = palette === 'warm' ? 1 : 0.5;
-    const f = VISUAL;
-    const w = WARM;
-    const L = (x: string, y: string) => hexLerp(x, y, t);
-    v = {
-      ...f,
-      fogColor: L(f.fogColor, w.fogColor),
-      lighting: {
-        ...f.lighting,
-        hemiSky: L(f.lighting.hemiSky, w.lighting.hemiSky),
-        hemiGround: L(f.lighting.hemiGround, w.lighting.hemiGround),
-        sunColor: L(f.lighting.sunColor, w.lighting.sunColor),
-        rimColor: L(f.lighting.rimColor, w.lighting.rimColor),
-      },
-      terrain: {
-        ...f.terrain,
-        rampLow: L(f.terrain.rampLow, w.terrain.rampLow),
-        rampHigh: L(f.terrain.rampHigh, w.terrain.rampHigh),
-        cliffColor: L(f.terrain.cliffColor, w.terrain.cliffColor),
-        dirt: L(f.terrain.dirt ?? '#8d8368', w.terrain.dirt ?? '#8d8368'),
-      },
-      materials: {
-        ...f.materials,
-        unitBody: L(f.materials.unitBody, w.materials.unitBody),
-        structureBody: L(f.materials.structureBody, w.materials.structureBody),
-        structureEmissive: L(f.materials.structureEmissive, w.materials.structureEmissive),
-      },
-      background: {
-        ...f.background,
-        top: L(f.background.top, w.background.top),
-        horizon: L(f.background.horizon, w.background.horizon),
-        bottom: L(f.background.bottom, w.background.bottom),
-        platform: L(f.background.platform, w.background.platform),
-        haze: L(f.background.haze, w.background.haze),
-      },
-      pad: { ...f.pad, color: L(f.pad.color, w.pad.color), edge: L(f.pad.edge, w.pad.edge) },
-    };
-  }
-  return {
-    ...v,
-    lighting: {
-      ...v.lighting,
-      // Warmer, lower sun (longer soft shadows) with a cooler sky fill.
-      sunColor: hexLerp(v.lighting.sunColor, '#ffc078', a * 0.6),
-      sunDir: [v.lighting.sunDir[0], 0.6 - a * 0.18, v.lighting.sunDir[2]],
-      hemiSky: hexLerp(v.lighting.hemiSky, '#8fb8e8', a * 0.5),
-    },
-    // Haze lives only near the horizon: fog pulls in as atmosphere rises,
-    // but even at a=1 its near plane stays beyond the map edge.
-    hazeNear: v.hazeNear * (1 - a * 0.15),
-    hazeFar: v.hazeFar * (1 - a * 0.3),
-    splitTone: a,
-  };
+export function resolveLook(look: LookId): RenderVisual {
+  return look === 'mood' ? MOOD : CLEAN;
 }

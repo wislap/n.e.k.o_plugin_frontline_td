@@ -55,22 +55,22 @@ export function createRockGeometry(radius: number, seed: number): THREE.BufferGe
   return geo;
 }
 
-// Grass clump: eight thin tapered blades fanned around the origin,
-// ~0.14–0.25 cells tall (far below a robot). Vertex colors carry a
+// Grass clump: six thin tapered blades fanned around the origin,
+// ~0.2–0.34 cells tall (far below a robot). Vertex colors carry a
 // dark-root → light-tip gradient; wind sway displaces tips in the
 // material shader by instance world position.
 export function createGrassGeometry(): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
-  const BLADES = 8;
+  const BLADES = 6;
   for (let i = 0; i < BLADES; i++) {
     const a = (i / BLADES) * Math.PI * 2 + i * 0.73;
-    const lean = 0.14 + (i % 3) * 0.1;
-    const h = 0.14 + (i % 4) * 0.035;
-    const w = 0.015;
-    const dx = Math.cos(a) * 0.04;
-    const dz = Math.sin(a) * 0.04;
+    const lean = 0.16 + (i % 3) * 0.12;
+    const h = 0.2 + (i % 4) * 0.045;
+    const w = 0.022;
+    const dx = Math.cos(a) * 0.05;
+    const dz = Math.sin(a) * 0.05;
     const px = -Math.sin(a) * w;
     const pz = Math.cos(a) * w;
     const lx = Math.cos(a) * lean;
@@ -138,7 +138,7 @@ export function applyScatter(
       if (kind === 'grass' && p.rotY > grassScale * Math.PI * 2) {
         continue;
       }
-      let scale = p.scale;
+      const scale = p.scale;
       if (kind === 'grass' || kind === 'flower') {
         const ddx = p.x - camX;
         const ddz = p.z - camZ;
@@ -146,10 +146,6 @@ export function applyScatter(
         if (d2 > MEADOW_VIEW_DIST * MEADOW_VIEW_DIST) {
           continue;
         }
-        // Near-field blades shrink toward fine lawn scale so close-ups
-        // read as dense grass instead of tall single spikes.
-        const d = Math.sqrt(d2);
-        scale = p.scale * (0.55 + 0.45 * Math.min(d / 26, 1));
       }
       const state = vision?.[p.cell] ?? 2;
       if (state === 0) {

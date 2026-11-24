@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useRuntimeStore } from '../client/runtime-store';
 import type { SimClient } from '../client/sim-client';
 import { useUiStore } from '../client/ui-store';
-import { PALETTE_IDS, type PaletteId } from '../render/theme/visual';
 import { localName } from '../content/index';
 import { SPEED_STEPS } from '../protocol/index';
 import { ActionButton, TacticalPanel } from '../ui/kit/index';
@@ -20,10 +19,6 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const setGrassDensity = useUiStore((state) => state.setGrassDensity);
   const info2d = useUiStore((state) => state.info2d);
   const setInfo2d = useUiStore((state) => state.setInfo2d);
-  const palette = useUiStore((state) => state.palette);
-  const setPalette = useUiStore((state) => state.setPalette);
-  const atmosphere = useUiStore((state) => state.atmosphere);
-  const setAtmosphere = useUiStore((state) => state.setAtmosphere);
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
@@ -108,35 +103,6 @@ export function DebugPanel({ client }: { client: SimClient }) {
           {error}
         </div>
       )}
-
-      <div className={styles['row']}>
-        <span className={styles['label']}>{t('dev.palette')}</span>
-        <select
-          value={palette}
-          onChange={(e) => {
-            setPalette(e.target.value as PaletteId);
-          }}
-        >
-          {PALETTE_IDS.map((id) => (
-            <option key={id} value={id}>
-              {t(`dev.palette_${id}`)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className={styles['row']}>
-        <span className={styles['label']}>{t('dev.atmosphere')}</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={Math.round(atmosphere * 100)}
-          onChange={(e) => {
-            setAtmosphere(Number(e.target.value) / 100);
-          }}
-        />
-      </div>
 
       <div className={styles['row']}>
         <span className={styles['label']}>{t('dev.grass_density')}</span>

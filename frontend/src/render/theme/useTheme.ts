@@ -1,11 +1,11 @@
-// The game's single render visual (merged language). Kept as a hook so the
-// temporary debug-panel palette/atmosphere axes re-render consumers.
+// The game's render visual. The temporary ?look= A/B axis is static per
+// page load; kept as a hook so consumers re-render if a runtime axis
+// ever returns.
 import { useMemo } from 'react';
-import { useUiStore } from '../../client/ui-store';
-import { resolveVisual, type RenderVisual } from './visual';
+import { lookFromSearch, resolveLook, type RenderVisual } from './visual';
+
+const LOOK = lookFromSearch(typeof location === 'undefined' ? '' : location.search);
 
 export function useRenderTheme(): RenderVisual {
-  const palette = useUiStore((s) => s.palette);
-  const atmosphere = useUiStore((s) => s.atmosphere);
-  return useMemo(() => resolveVisual(palette, atmosphere), [palette, atmosphere]);
+  return useMemo(() => resolveLook(LOOK), []);
 }

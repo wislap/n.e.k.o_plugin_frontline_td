@@ -16,10 +16,6 @@ export interface ThemedTerrainParams {
   // Skirt mode: fade the surface toward the horizon haze color outside
   // the map rect (distance in cells past the border).
   hazeFade?: { color: string; start: number; end: number } | undefined;
-  // Out-of-map dim: darken the ground toward the fog-film color just past
-  // the border so the unexplored halo comes from surface shading — a
-  // conforming overlay film reads as stripes where skirt hills occlude it.
-  oobDim?: { color: string; start: number; end: number } | undefined;
 }
 
 // Shared mutable uniforms (module-scope, mutated per frame by callers):
@@ -36,7 +32,6 @@ export function createThemedTerrainMaterial(
   const t = theme.terrain;
   const uniforms: ThemedTerrainUniforms = { info2d: { value: 0 } };
   const haze = params.hazeFade;
-  const dim = params.oobDim;
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.95,
@@ -66,11 +61,6 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uHazeColor'] = { value: new THREE.Color(haze?.color ?? '#000000') };
     shader.uniforms['uHazeRange'] = {
       value: new THREE.Vector2(haze?.start ?? 0, Math.max(haze?.end ?? 1, 0.001)),
-    };
-    shader.uniforms['uDimOn'] = { value: dim === undefined ? 0 : 1 };
-    shader.uniforms['uDimColor'] = { value: new THREE.Color(dim?.color ?? '#000000') };
-    shader.uniforms['uDimRange'] = {
-      value: new THREE.Vector2(dim?.start ?? 0, Math.max(dim?.end ?? 1, 0.001)),
     };
     shader.uniforms['uHRange'] = {
       value: new THREE.Vector2(
@@ -117,9 +107,6 @@ export function createThemedTerrainMaterial(
         uniform float uHazeOn;
         uniform vec3 uHazeColor;
         uniform vec2 uHazeRange;
-        uniform float uDimOn;
-        uniform vec3 uDimColor;
-        uniform vec2 uDimRange;
         uniform vec2 uHRange;
         uniform vec2 uMapSize;
         varying vec3 vTerWorld;
@@ -174,51 +161,30 @@ export function createThemedTerrainMaterial(
           vec2 g = abs(fract(terP - 0.5) - 0.5) / gw;
           float gline = 1.0 - min(min(g.x, g.y), 1.0);
           diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
-          float dOut = terEdgeDist(terP, uMapSize);
-          float inBounds = 1.0 - smoothstep(0.0, 4.0, dOut);
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
           // Cliff edges: where the up-normal changes fast across pixels the
           // fragment sits in a top/bottom transition band; brighten the top
-          // rim slightly and darken the cliff base. Skirt cells are exempt —
-          // their roll-off would otherwise paint a cliff stripe at the rim.
+          // rim slightly and darken the cliff base.
           float slopeChange = fwidth(ny);
           float topRim = smoothstep(0.12, 0.45, slopeChange) * smoothstep(0.55, 0.92, ny);
           float baseBand = smoothstep(0.12, 0.45, slopeChange) * (1.0 - smoothstep(0.05, 0.55, ny));
-          float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
-          // The border seam between the terrain and the skirt reads as a
-          // normal jump; fade rim/cliff accents out over the outermost cells
-          // so nothing marks the map rectangle at overview zoom.
-          float rimGate = smoothstep(2.0, 5.5, dEdge) * inBounds;
-          diffuseColor.rgb *= 1.0 + (topRim * 0.07 - baseBand * 0.07) * rimGate;
-          // Cliff faces keep most of their surface color so long straight
-          // walls read as shaded terrain relief rather than a flat colored
-          // band that fakes a map edge at overview zoom.
-          float cliffM = mix(1.0, 0.78 + 0.22 * smoothstep(uCliffStart, uCliffEnd, ny), max(rimGate, 0.0));
-          diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, cliffM);
+          diffuseColor.rgb *= 1.0 + topRim * 0.12 - baseBand * 0.2;
+          diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, smoothstep(uCliffStart, uCliffEnd, ny));
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
+          float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
+          // Out-of-bounds skirt: blend into the horizon haze by distance
+          // outside the map rect.
+          if (uHazeOn > 0.5) {
+            float dOut = terEdgeDist(terP, uMapSize);
+            diffuseColor.rgb = mix(diffuseColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
+          }
         }`,
       )
       .replace(
         '#include <opaque_fragment>',
         `#include <opaque_fragment>
         {
-          // Out-of-bounds dim + horizon haze run post-lighting: applied to
-          // albedo they only tint the skirt, so sun/AO still modulate it
-          // and hill shading bands through the fog film as dirty contour
-          // stripes. Post-lighting the outskirts converge to flat falloff
-          // colours — smooth radial darkening, no shading bands.
-          float dOut2 = terEdgeDist(vTerWorld.xz, uMapSize);
-          if (uDimOn > 0.5) {
-            gl_FragColor.rgb = mix(
-              gl_FragColor.rgb,
-              uDimColor,
-              smoothstep(uDimRange.x, uDimRange.y, dOut2)
-            );
-          }
-          if (uHazeOn > 0.5) {
-            gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut2));
-          }
           // Tactical info view (弱化显示): sink the ground into a dark
           // slate grey-green so markers read as the bright layer on top.
           // Applied post-lighting so sun warmth, fill light and grading
