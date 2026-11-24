@@ -25,6 +25,7 @@ import {
 import { buildTerrainGeometry } from '../../terrain/render/index';
 import { LogisticsNetworkChannel, SERVICE_LAYER_ID, type LogisticsNetwork } from '../protocol';
 import { linkFlow } from './link-flow';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const ATTACH_MATERIAL = 'material';
 
@@ -287,7 +288,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
 
     const ringDash = ringDashMatRef.current;
     if (ringDash !== null) {
-      ringDash.uniforms.uTime.value = performance.now() / 1000;
+      ringDash.uniforms.uTime.value = renderNowMs() / 1000;
       ringDash.uniforms.uColor.value.set(theme.markers.accent);
     }
     linkBufRef.current ??= createLineBuffer(MAX_LINK_VERTS, true);
@@ -323,7 +324,7 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
       height,
       heights,
       colorRef.current,
-      performance.now() / 1000,
+      renderNowMs() / 1000,
       linkColorRef.current,
     );
     {

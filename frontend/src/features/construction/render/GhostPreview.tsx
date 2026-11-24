@@ -28,6 +28,7 @@ import {
 } from '../rules/index';
 import { createSilhouetteGeometries, disposeSilhouetteGeometries } from './structure-geometries';
 import { structureKindHeight } from './structure-gpu';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const ATTACH_MATERIAL = 'material';
 
@@ -138,7 +139,7 @@ export function GhostPreview({ client, db, map, heights, isHostile }: GhostPrevi
     ) {
       return;
     }
-    const timeSec = performance.now() / 1000;
+    const timeSec = renderNowMs() / 1000;
     holo.uniforms.uTime.value = timeSec;
     dash.uniforms.uTime.value = timeSec;
     if (dashService !== null) {

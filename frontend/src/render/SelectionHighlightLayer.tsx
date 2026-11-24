@@ -29,6 +29,7 @@ import {
 } from './selection-highlights';
 import { UnitInterpolator, type InterpUnit } from './unit-pos';
 import { terrainY } from './world';
+import { renderNowMs } from '../client/capture-mode';
 
 const INITIAL_CAPACITY_VERTICES = 1024;
 const RING_SEGMENTS = 48;
@@ -264,7 +265,7 @@ export function SelectionHighlightLayer({
     populateUnitFocusMap(
       unitInterpRef.current,
       pair,
-      performance.now(),
+      renderNowMs(),
       hovered,
       pinned,
       unitMapRef.current,

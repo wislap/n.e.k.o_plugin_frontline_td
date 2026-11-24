@@ -13,6 +13,7 @@ import { subscribeSnapshotClock } from '../../client/use-snapshot';
 import type { ContentDb, ResolvedMap } from '../../content/index';
 import { TacticalPanel } from '../kit/index';
 import styles from './Minimap.module.css';
+import { renderNowMs } from '../../client/capture-mode';
 import {
   createMinimapRenderCache,
   paintMinimapCanvas,
@@ -124,7 +125,7 @@ export function Minimap({
         viewportAspect,
         pixelRatio,
         moveMarker: sel.moveMarker,
-        nowMs: performance.now(),
+        nowMs: renderNowMs(),
       });
     };
 

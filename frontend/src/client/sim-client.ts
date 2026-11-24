@@ -1,8 +1,9 @@
 // Main-thread client for the sim worker (ADR 0004). Snapshots are kept
 // outside React/zustand for later interpolation; only stats and errors reach
 // the stores.
-import type { EntityHandle, Inspection, Snapshot } from '../core/index';
+import type { EntityHandle, Inspection, Snapshot, Tick } from '../core/index';
 import type { MainToWorker, MatchSetup, WorkerToMain } from '../protocol/index';
+import { getCapture } from './capture-mode';
 import { useRuntimeStore } from './runtime-store';
 
 export interface WorkerLike {
@@ -58,6 +59,10 @@ export function createSimClient(worker: WorkerLike): SimClient {
   let latest: Snapshot | null = null;
   let receivedAt = 0;
   let intervalMs = 0;
+  // Capture mode (?capture=): the first snapshot is pinned and the sim is
+  // paused at the next processed message; later snapshots/stats are dropped
+  // so the rendered tick cannot drift between screenshot runs.
+  let pinnedTick: Tick | null = null;
   let latestInspection: Inspection | null = null;
   let eventSeq = 0;
   const eventLog: ClientEvent[] = [];
@@ -79,6 +84,21 @@ export function createSimClient(worker: WorkerLike): SimClient {
   worker.addEventListener('message', (event) => {
     const message = event.data;
     if (message.kind === 'snapshot') {
+      if (getCapture() !== null) {
+        if (pinnedTick !== null) {
+          return;
+        }
+        const incoming = message.snapshot;
+        const layers = { ...(latest?.layers ?? {}), ...incoming.layers };
+        const completed: Snapshot = { ...incoming, layers };
+        latestInspection = message.inspection ?? null;
+        previous = completed;
+        latest = completed;
+        pinnedTick = completed.tick;
+        (globalThis as { __ftdCaptureTick?: number }).__ftdCaptureTick = pinnedTick;
+        worker.postMessage({ kind: 'set_speed', index: 0 });
+        return;
+      }
       const incoming = message.snapshot;
       const layers = { ...(latest?.layers ?? {}), ...incoming.layers };
       const completed: Snapshot = { ...incoming, layers };
@@ -98,7 +118,11 @@ export function createSimClient(worker: WorkerLike): SimClient {
       return;
     }
     if (message.kind === 'stats') {
-      useRuntimeStore.getState().setStats(message.stats);
+      const stats =
+        pinnedTick !== null
+          ? { ...message.stats, tick: pinnedTick, tickRate: 0, paused: true }
+          : message.stats;
+      useRuntimeStore.getState().setStats(stats);
       return;
     }
     report(message.message);
@@ -113,6 +137,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       latest = null;
       receivedAt = 0;
       intervalMs = 0;
+      pinnedTick = null;
       latestInspection = null;
       eventSeq = 0;
       eventLog.length = 0;

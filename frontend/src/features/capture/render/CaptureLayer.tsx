@@ -17,6 +17,7 @@ import { terrainY } from '../../../render/world';
 import { CapturePointsChannel } from '../protocol';
 import type { CapturePoints } from '../protocol';
 import { writeArcVertices, writeRingVertices } from '../../../render/rings';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const RING_COLOR = new THREE.Color('#8890a0');
 const CONTESTED_COLOR = new THREE.Color('#ffd24f');
@@ -65,7 +66,7 @@ export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLa
     const observer = latest?.observer ?? null;
     let cursor = 0;
     const color = tempColorRef.current;
-    const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 200);
+    const pulse = 0.7 + 0.3 * Math.sin(renderNowMs() / 200);
     if (points !== undefined) {
       for (let i = 0; i < points.handles.length && i < MAX_POINTS; i++) {
         if (cursor + 6 > positions.length) {

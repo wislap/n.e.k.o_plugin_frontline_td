@@ -8,6 +8,7 @@ import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { interpAlpha } from './interpolate';
 import { terrainY } from './world';
+import { renderNowMs } from '../client/capture-mode';
 
 export interface HpBarSink {
   reset(): void;
@@ -136,7 +137,7 @@ export function HpBars({
       return;
     }
     const pair = client.snapshots();
-    const alpha = interpAlpha(performance.now(), pair.receivedAt, pair.intervalMs);
+    const alpha = interpAlpha(renderNowMs(), pair.receivedAt, pair.intervalMs);
     const sink = sinkRef.current;
     sink.reset();
     collect(pair, alpha, sink);

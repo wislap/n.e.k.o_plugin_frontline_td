@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBoxStore } from '../client/box-store';
+import { isCaptureMode, renderNowMs } from '../client/capture-mode';
 import { useInteractionStore } from '../client/interaction-store';
 import { useIntentRouter, type IntentRouter } from '../client/intent';
 import type { SnapshotPair } from '../client/sim-client';
@@ -64,6 +65,19 @@ function unitHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void 
     }
     sink.push(units.x[i] ?? 0, units.y[i] ?? 0, UNIT_BAR_TOP, 0.9, bp);
   }
+}
+
+// Capture mode (?capture=): counts rendered frames so tooling/shots.ts
+// waits on a fixed frame count — SwiftShader renders only a few fps, so
+// a wall-clock wait catches partially-settled GPU state instead of the
+// converged scene.
+function CaptureProbe() {
+  const frames = useRef(0);
+  useFrame(() => {
+    frames.current += 1;
+    (globalThis as { __ftdFrames?: number }).__ftdFrames = frames.current;
+  });
+  return null;
 }
 
 // Inside <Canvas>: pointer events feed the app-level router; the router
@@ -170,7 +184,7 @@ function MoveMarker({
     if (ref.current === null || material.current === null || marker === null) {
       return;
     }
-    const age = performance.now() - marker.at;
+    const age = renderNowMs() - marker.at;
     const life = 900;
     material.current.opacity = Math.max(0, 1 - age / life);
     ref.current.visible = age < life;
@@ -345,13 +359,16 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
             />
           </>
         )}
-        <CameraRig
-          mapWidth={grid.width}
-          mapHeight={grid.height}
-          heights={heights}
-          panTracker={panTracker}
-        />
+        {(!isCaptureMode() || ready) && (
+          <CameraRig
+            mapWidth={grid.width}
+            mapHeight={grid.height}
+            heights={heights}
+            panTracker={panTracker}
+          />
+        )}
         <PostEffects />
+        {isCaptureMode() && <CaptureProbe />}
       </Canvas>
     </div>
   );

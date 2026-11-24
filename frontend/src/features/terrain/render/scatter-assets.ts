@@ -2,6 +2,7 @@
 // prop placement, low-poly geometries, the wind-swaying grass material,
 // per-theme prop palettes and the per-frame instanced-matrix writer.
 import * as THREE from 'three';
+import { renderNowMs } from '../../../client/capture-mode';
 import type { ContentDb } from '../../../content/index';
 import type { RenderVisual } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
@@ -304,7 +305,11 @@ export function createGrassMaterial(tint: string): THREE.MeshStandardMaterial {
     emissiveIntensity: 0.3,
   });
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms['uTime'] = { value: 0 };
+    // Seed with the render clock (not 0): recompiles create a fresh
+    // uniform object, and the per-frame ref may still point at the old
+    // one — starting at the live time keeps every compile on the same
+    // phase instead of jumping to a zeroed wind.
+    shader.uniforms['uTime'] = { value: renderNowMs() / 1000 };
     mat.userData['uTime'] = shader.uniforms['uTime'];
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nuniform float uTime;')

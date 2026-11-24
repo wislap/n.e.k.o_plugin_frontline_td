@@ -22,6 +22,7 @@ import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
 import { buildRobotGeometry } from './robot-geometry';
 import { createThemedUnitMaterial } from './themed-unit-material';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
@@ -161,7 +162,7 @@ export function UnitsLayer({
       }
     }
 
-    const alpha = interpAlpha(performance.now(), pair.receivedAt, pair.intervalMs);
+    const alpha = interpAlpha(renderNowMs(), pair.receivedAt, pair.intervalMs);
     const n = latest.handles.length;
     if (n > capacity) {
       setCapacity(capacity * 2);

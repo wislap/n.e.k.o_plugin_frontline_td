@@ -9,6 +9,7 @@ import { formatClock } from '../../../client/match-info';
 import { terrainY } from '../../../render/world';
 import { SquadsChannel, type SquadsSnapshot } from '../protocol';
 import { arrowSpots, gatheringThreats, routedThreats } from './threat-info';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const THREAT_COLOR = '#ff5a4a';
 const MARKER_CAPACITY = 16;
@@ -123,7 +124,7 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
     const tick = latest?.tick ?? 0;
     const gathers = gatheringThreats(squads, observer);
     const routed = routedThreats(squads, observer);
-    const pulse = 1 + 0.3 * Math.sin((performance.now() / 1000) * Math.PI * 2);
+    const pulse = 1 + 0.3 * Math.sin((renderNowMs() / 1000) * Math.PI * 2);
 
     // Gather markers + labels.
     const seenLabels = seenLabelsRef.current;

@@ -21,3 +21,4 @@ frontend/coverage/
 frontend/eval/reports/
 frontend/playwright-report/
 frontend/test-results/
+frontend/.shots/

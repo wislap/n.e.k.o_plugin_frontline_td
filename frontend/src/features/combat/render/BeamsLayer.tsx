@@ -15,6 +15,7 @@ import { terrainY } from '../../../render/world';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
 import { isCellVisible } from '../../vision/rules/index';
 import { BEAM_LIFE_MS, collectBeams, type Beam } from './beams';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const MAX_BEAMS = 256;
 const BEAM_COLOR = new THREE.Color('#ffd24f');
@@ -48,7 +49,7 @@ export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerP
     }
     bufRef.current ??= createLineBuffer(MAX_BEAMS * 2, true);
     const buf = bufRef.current;
-    const now = performance.now();
+    const now = renderNowMs();
     const delivered = client.eventsSince(eventCursor.current);
     eventCursor.current = delivered.cursor;
     const latest = client.snapshots().latest;

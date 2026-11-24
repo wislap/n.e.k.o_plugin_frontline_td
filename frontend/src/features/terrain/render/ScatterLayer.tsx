@@ -23,6 +23,7 @@ import {
 } from '../../construction/protocol';
 import { ROAD_LAYER_ID } from '../../logistics/protocol';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
+import { renderNowMs } from '../../../client/capture-mode';
 import {
   applyScatter,
   computeProps,
@@ -143,14 +144,15 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       watched[2] === roadworks &&
       watched[3] === road &&
       watched[4] === vision &&
-      watched[5] === camQ
+      watched[5] === camQ &&
+      watched[6] === heights
     ) {
       if (grassTimeRef.current !== null) {
-        grassTimeRef.current.value = performance.now() / 1000;
+        grassTimeRef.current.value = renderNowMs() / 1000;
       }
       return;
     }
-    watchedRef.current = [structures, salvage, roadworks, road, vision, camQ];
+    watchedRef.current = [structures, salvage, roadworks, road, vision, camQ, heights];
 
     const cells = grid.width * grid.height;
     const occupied = (occupiedRef.current ??= new Uint8Array(cells));
@@ -219,7 +221,7 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
       camCenter.y,
     );
     if (grassTimeRef.current !== null) {
-      grassTimeRef.current.value = performance.now() / 1000;
+      grassTimeRef.current.value = renderNowMs() / 1000;
     }
   });
 

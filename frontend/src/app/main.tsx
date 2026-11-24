@@ -3,6 +3,7 @@ import '../i18n';
 import '../ui/styles/tokens.css';
 import '../ui/styles/base.css';
 import { useCameraStore } from '../client/camera-store';
+import { getCapture } from '../client/capture-mode';
 import { makeIsHostile } from '../client/hostility';
 import { IntentContext } from '../client/intent';
 import { useInteractionStore } from '../client/interaction-store';
@@ -20,7 +21,8 @@ import { createIntentRouter } from './dispatch';
 
 const worker = new Worker(new URL('./sim-worker.ts', import.meta.url), { type: 'module' });
 const client = createSimClient(worker);
-const setup = defaultSetup(Date.now() >>> 0);
+const capture = getCapture();
+const setup = defaultSetup(capture?.seed ?? Date.now() >>> 0);
 client.start(setup);
 // Hostility for fog-aware client code (ghost previews, exclusion
 // circles) comes from the same relations the sim resolves — the restart
@@ -48,6 +50,25 @@ function centerOnStart(next: MatchSetup): void {
     );
 }
 centerOnStart(setup);
+
+// Capture presets apply before the first frame so the camera pose is
+// exact: CameraRig initialises its smoothed state and last-mode ref from
+// the store, so no transition ever runs.
+if (capture !== null) {
+  const cam = useCameraStore.getState();
+  if (capture.cameraMode === 'tactical') {
+    cam.setMode('tactical', false);
+  }
+  if (capture.center === 'map') {
+    cam.setCenter({ x: map.width / 2, y: map.height / 2 });
+  }
+  if (capture.zoom !== null) {
+    cam.setZoom(capture.zoom);
+  }
+  if (capture.interactionMode !== 'command') {
+    useInteractionStore.getState().setMode(capture.interactionMode);
+  }
+}
 
 const panTracker = createPanTracker();
 const router = createIntentRouter({ client, db });

@@ -95,6 +95,7 @@ npm run verify   # = verify:static && test && verify:build（提交前跑全量�
 npm run e2e      # 浏览器端到端（冒烟 + HUD/模式/小地图/防重叠，首次需 npx playwright install chromium）；不进 verify
 ```
 - 日常迭代用分段命令：`npm run verify:static`、`npm run test:unit`、`npx vitest --changed`。
+- 视觉改动必须附 `npm run shots` + `shots:diff <label> base` 的对比结果（基线在 `frontend/.shots/base`），证明渲染输出与上一提交逐像素一致。
 - 测试分两层：全对局/耗时 >~3 s 的测试命名 `*.scenario.test.ts`（`npm run test:scenario`），其余为 unit。
 - 本地 lint/format/typecheck 有缓存（`node_modules/.cache/`）；缓存不追踪跨文件类型变化，`rm -rf node_modules/.cache` 可复位，存疑以冷跑/CI 为准。
 - 黄金哈希（kernel determinism、`eval/match-smoke.scenario.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。

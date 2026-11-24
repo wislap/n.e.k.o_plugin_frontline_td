@@ -57,6 +57,7 @@ import {
   type StructureGpuAssets,
 } from './structure-gpu';
 import { disposeSilhouetteGeometries } from './structure-geometries';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const ATTACH_MATERIAL = 'material';
 
@@ -356,7 +357,7 @@ export function StructuresLayer({
     }
     commitMeshBuffers(bpMesh, bpCount);
     commitMeshBuffers(waitMesh, waitCount);
-    const pulse = 0.38 + 0.3 * (0.5 + 0.5 * Math.sin(performance.now() / 180));
+    const pulse = 0.38 + 0.3 * (0.5 + 0.5 * Math.sin(renderNowMs() / 180));
     setWaitingOpacity(waitMesh, pulse);
 
     if (salvage !== undefined) {

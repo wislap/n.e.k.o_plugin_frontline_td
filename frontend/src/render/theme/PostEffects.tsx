@@ -16,6 +16,7 @@ import {
 } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import type { WebGLRenderer } from 'three';
+import { isCaptureMode } from '../../client/capture-mode';
 import { useRenderTheme } from './useTheme';
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
@@ -57,7 +58,10 @@ export function PostEffects() {
   const gl = useThree((s) => s.gl);
   const theme = useRenderTheme();
   const { post } = theme;
-  const software = useMemo(() => isSoftwareRenderer(gl.getContext()), [gl]);
+  // Capture mode forces the full post chain on software rasterizers so
+  // screenshot diffs cover every pass (N8AO/bloom are skipped only on real
+  // software rendering).
+  const software = useMemo(() => !isCaptureMode() && isSoftwareRenderer(gl.getContext()), [gl]);
   const tm = useMemo(
     () => tmFromSearch(typeof location === 'undefined' ? '' : location.search),
     [],
