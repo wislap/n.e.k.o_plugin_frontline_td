@@ -17,7 +17,6 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: 2px 4px;
-  border-radius: 2px;
   background: rgba(5, 8, 15, 0.42);
 }
 
@@ -78,7 +77,7 @@
   flex-direction: column;
   gap: 1px;
   padding: 4px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   border: 1px solid rgba(255, 193, 77, 0.32);
   border-left: 2px solid var(--semantic-warn);
   background: var(--semantic-warn-dim);
@@ -133,10 +132,6 @@
   backdrop-filter: none;
 }
 
-.panel header {
-  display: none;
-}
-
 .rows {
   flex-direction: row;
   flex-wrap: nowrap;
@@ -175,7 +170,7 @@
 }
 
 .warnItem {
-  border-radius: 999px;
+  border-radius: var(--radius-btn);
   border: none;
   background: rgba(20, 24, 20, 0.72);
 }

@@ -69,7 +69,7 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   padding: 0 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-subtle);
   background: var(--surface-inset);
 }

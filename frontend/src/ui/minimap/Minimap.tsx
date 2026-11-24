@@ -11,7 +11,7 @@ import { submitMoveOrder } from '../../client/squad-controls';
 import { useUiStore } from '../../client/ui-store';
 import { subscribeSnapshotClock } from '../../client/use-snapshot';
 import type { ContentDb, ResolvedMap } from '../../content/index';
-import { ActionButton, TacticalPanel } from '../kit/index';
+import { TacticalPanel } from '../kit/index';
 import styles from './Minimap.module.css';
 import {
   createMinimapRenderCache,
@@ -63,10 +63,6 @@ export function Minimap({
   const router = useIntentRouter();
   const sectorX = useCameraStore((s) => Math.floor(s.center.x));
   const sectorY = useCameraStore((s) => Math.floor(s.center.y));
-
-  const toggle = (): void => {
-    useUiStore.getState().toggleMinimap();
-  };
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cacheRef = useRef<MinimapRenderCache | null>(null);
@@ -164,13 +160,8 @@ export function Minimap({
   }, [open, client, db, map, isHostile, backing.width, backing.height]);
 
   if (!open) {
-    return (
-      <div className={styles['collapsed']} data-testid="minimap-panel">
-        <ActionButton size="sm" onClick={toggle}>
-          {t('minimap.expand')}
-        </ActionButton>
-      </div>
-    );
+    // Collapse/expand lives on the right rail — nothing renders here.
+    return <div className={styles['collapsed']} data-testid="minimap-panel" />;
   }
 
   const handlePointerDown = (e: PointerEvent<HTMLCanvasElement>): void => {
@@ -267,21 +258,11 @@ export function Minimap({
 
   return (
     <div className={styles['wrapper']} data-testid="minimap-panel">
-      <TacticalPanel
-        tone="mode"
-        className={styles['panel']}
-        bodyClassName={styles['body']}
-        title={t('minimap.title')}
-        badge={t('minimap.sector', { x: sectorX, y: sectorY })}
-        headerActions={
-          <ActionButton size="sm" variant="ghost" onClick={toggle}>
-            {t('minimap.collapse')}
-          </ActionButton>
-        }
-      >
+      <TacticalPanel tone="mode" className={styles['panel']} bodyClassName={styles['body']}>
         <div
           className={styles['frame']}
           data-testid="minimap-frame"
+          data-sector={`${sectorX},${sectorY}`}
           style={{ aspectRatio: `${map.width} / ${map.height}` }}
         >
           <canvas

@@ -31,6 +31,7 @@
     "clock_tick": "T{{tick}}",
     "mode_switcher": "交互模式",
     "logistics_layer": "物流层",
+    "minimap_toggle": "雷达",
     "guide_title": "快捷键引导",
     "guide_collapse": "收起",
     "guide_expand": "快捷键 ›",
@@ -129,8 +130,6 @@
     "demolish_hint": "拆除 / 取消 (C / Del)：无选中时进入拆除工具，选中运转中建筑需二次确认"
   },
   "inspector": {
-    "preview": "预览",
-    "pinned": "已固定",
     "unpin": "取消固定 (Esc)",
     "activate_btn": "G 开工",
     "demolish_btn": "C 拆除",
@@ -268,7 +267,6 @@
     "energy_empty": "能量耗尽"
   },
   "stock": {
-    "title": "仓库",
     "per_sec": "/秒",
     "rate": "{{value}}/秒",
     "priorities": "优先级：{{order}}（点击交换）"
@@ -324,10 +322,6 @@
     "contested": "争夺中"
   },
   "minimap": {
-    "title": "战术雷达",
-    "sector": "{{x}},{{y}}",
-    "collapse": "收起",
-    "expand": "雷达 ▲",
     "aria_label": "战略小地图"
   }
 }

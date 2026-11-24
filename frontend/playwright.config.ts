@@ -8,6 +8,8 @@ export default defineConfig({
   // Cap concurrent headless SwiftShader WebGL + SimWorker browsers so
   // software rendering does not starve timers under multi-worker runs.
   workers: 2,
+  // Long mode-switch sequences approach 35s under software rendering.
+  timeout: 60_000,
   reporter: process.env['CI'] === undefined ? 'list' : [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',

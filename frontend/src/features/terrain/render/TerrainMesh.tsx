@@ -192,6 +192,14 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         hi = h;
       }
     }
+    // Out-of-bounds the meadow keeps going as a darker, desaturated
+    // continuation — the dim target sits halfway between the fog color and
+    // the low ramp so it reads as shaded land, never a black ring; horizon
+    // haze only engages near the skirt rim where the hills sink away.
+    const dimColor = new THREE.Color(theme.fogColor).lerp(
+      new THREE.Color(theme.terrain.rampLow),
+      0.55,
+    );
     return createThemedTerrainMaterial(theme, {
       heightMin: lo,
       heightMax: hi,
@@ -201,13 +209,17 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         theme.terrain.skirtCells > 0 && theme.background.haze !== ''
           ? {
               color: theme.background.haze,
-              start: theme.terrain.skirtCells * 0.15,
-              end: theme.terrain.skirtCells * 0.8,
+              start: theme.terrain.skirtCells * 0.6,
+              end: theme.terrain.skirtCells * 1.05,
             }
           : undefined,
       oobDim:
         theme.terrain.skirtCells > 0
-          ? { color: theme.fogColor, start: 0.5, end: theme.terrain.skirtCells * 0.4 }
+          ? {
+              color: `#${dimColor.getHexString()}`,
+              start: 2.0,
+              end: theme.terrain.skirtCells * 0.55,
+            }
           : undefined,
     });
   }, [theme, heights, width, height]);
@@ -240,11 +252,13 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         {...(themed !== null ? { material: themed.material } : {})}
       />
       {outskirtsGeometry !== null && (
+        // No receiveShadow: projected shadows band across the rolling
+        // skirt hills, and the dim/haze mixes flatten them into dirty
+        // stripes — normal-based shading alone keeps the relief soft.
         <mesh
           geometry={outskirtsGeometry}
           frustumCulled={false}
           raycast={NO_RAYCAST}
-          receiveShadow
           {...(themed !== null ? { material: themed.material } : {})}
         />
       )}

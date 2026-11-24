@@ -66,7 +66,7 @@ export function StockPanel({ client, db }: { client: SimClient; db: ContentDb })
   })).filter((entry) => entry.reason !== 'none' && entry.count > 0);
 
   return (
-    <TacticalPanel tone="neutral" compact title={t('stock.title')} className={styles['panel']}>
+    <TacticalPanel tone="neutral" compact className={styles['panel']}>
       <div className={styles['rows']}>
         {network.stock.map((milli, cargo) => {
           const id = db.cargos.byIndex(cargo)?.id ?? String(cargo);

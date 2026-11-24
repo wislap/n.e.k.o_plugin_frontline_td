@@ -53,10 +53,6 @@
   --space-3: 10px;
   --space-4: 14px;
 
-  --radius-panel: 3px;
-  --radius-btn: 3px;
-  --cut-size: 6px;
-
   /* Elevation & layering */
   --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -86,22 +82,23 @@
   --mode-accent-glow: rgba(61, 220, 151, 0.36);
 }
 
-/* Glass material tokens: frosted dark glass, hairline white frames,
-   high-contrast white type, signal-yellow primary accent. */
+/* Field look (the single unconditional skin): dark translucent cards on
+   a shared 10px radius, soft warm-white type, signal-yellow accent for
+   the current mode and primary actions. Capsule for text buttons,
+   true circles for icon-only buttons. */
 :root {
-  --surface-panel: rgba(14, 18, 22, 0.55);
-  --surface-elevated: rgba(18, 23, 28, 0.68);
-  --surface-ghost: rgba(16, 21, 26, 0.42);
-  --surface-inset: rgba(8, 11, 15, 0.55);
-  --backdrop-blur: blur(8px);
-  --border-subtle: rgba(255, 255, 255, 0.28);
-  --border-strong: rgba(255, 255, 255, 0.55);
-  --text-primary: #ffffff;
-  --text-secondary: #e4e8e0;
-  --text-muted: #aab2a4;
+  --surface-panel: rgba(20, 24, 27, 0.9);
+  --surface-elevated: rgba(26, 31, 35, 0.94);
+  --surface-ghost: rgba(22, 27, 31, 0.72);
+  --surface-inset: rgba(10, 13, 15, 0.8);
+  --border-subtle: rgba(230, 233, 226, 0.16);
+  --border-strong: rgba(230, 233, 226, 0.4);
+  --text-primary: #f0f1ea;
+  --text-secondary: #d6d9cf;
+  --text-muted: #9aa094;
   --mode-accent: #ffe600;
   --mode-accent-dim: rgba(255, 230, 0, 0.14);
   --mode-accent-glow: rgba(255, 230, 0, 0.32);
   --radius-panel: 10px;
-  --radius-btn: 8px;
+  --radius-btn: 999px;
 }

@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   padding: 1px 5px;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-subtle);
   background: var(--surface-inset);
   font-family: var(--font-mono);

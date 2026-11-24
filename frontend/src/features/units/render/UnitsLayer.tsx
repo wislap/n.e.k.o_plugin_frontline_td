@@ -255,12 +255,12 @@ export function UnitsLayer({
         // per-unit rings would stack into unreadable ellipses.
         if (ring !== null && rings < capacity && !info2dOn) {
           dummy.position.set(x, groundY + 0.055, y);
-          // Legacy rings are drawn at radius*1.5*2 (diameter scale);
           // Rings sit at ~1.6x unit radius — small enough to stay
-          // per-unit, large enough to clear the body silhouette so the
-          // ellipse reads as flat on the ground at low camera pitch.
+          // per-unit, large enough to clear the body silhouette.
+          // The ring geometry lies in the XY plane and is rotated flat
+          // below, so local Y (not Z) carries the ground-plane scale.
           const ringScale = radius * RING_SCALE_THEMED;
-          dummy.scale.set(ringScale, 1, ringScale);
+          dummy.scale.set(ringScale, ringScale, 1);
           // The ring geometry lies in the XY plane; rotate it flat.
           dummy.rotation.set(-Math.PI / 2, 0, 0);
           dummy.updateMatrix();

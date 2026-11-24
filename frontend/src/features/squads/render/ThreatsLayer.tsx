@@ -136,7 +136,9 @@ export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLa
       seenLabels.add(squad.id);
       const gy = terrainY(heights, mapWidth, mapHeight, squad.order.x, squad.order.y);
       dummy.position.set(squad.order.x, gy + 0.06, squad.order.y);
-      dummy.scale.set(pulse, 1, pulse);
+      // The ring geometry lies in the XY plane and is rotated flat
+      // below, so local Y (not Z) carries the ground-plane scale.
+      dummy.scale.set(pulse, pulse, 1);
       dummy.rotation.set(-Math.PI / 2, 0, 0);
       dummy.updateMatrix();
       markers.setMatrixAt(m, dummy.matrix);

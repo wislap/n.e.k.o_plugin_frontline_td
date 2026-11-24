@@ -1,25 +1,40 @@
+/* The hotbar floats — no framed panel, dark translucent tiles. */
 .panel {
   width: min(680px, 100%);
   max-width: 100%;
   pointer-events: auto;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
+/* The toolbar row floats above the tiles — the demolish toggle reads as
+   one of the dark rounded controls, clearly separated from the grid. */
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
   flex-wrap: wrap;
+  margin-bottom: var(--space-2);
 }
 
+.toolbar > button:last-child {
+  border-radius: var(--radius-btn);
+  border-color: rgba(238, 240, 232, 0.14);
+  background: rgba(18, 22, 20, 0.78);
+}
+
+/* One horizontal row: tiles scroll sideways instead of wrapping into a
+   second row that clips at the bottom edge. */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  display: flex;
   gap: var(--space-2);
   margin-top: var(--space-2);
-  max-height: 152px;
-  overflow-y: auto;
-  padding: 1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 6px;
 }
 
 .card {
@@ -28,10 +43,11 @@
   flex-direction: column;
   justify-content: space-between;
   gap: var(--space-1);
+  flex: 0 0 148px;
   padding: 6px 8px;
-  border-radius: var(--radius-btn);
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-elevated);
+  border-radius: var(--radius-panel);
+  border: none;
+  background: rgba(18, 22, 20, 0.78);
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
@@ -42,42 +58,21 @@
     box-shadow 140ms var(--ease-snap);
 }
 
-.card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 2px;
-  height: 100%;
-  background: transparent;
-  transition: background-color 140ms var(--ease-snap);
-}
-
 .card:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-hover);
+  background: rgba(30, 36, 32, 0.88);
   transform: translateY(-1px);
 }
 
 .cardActive {
-  border-color: var(--mode-accent);
-  background: var(--mode-accent-dim);
-  box-shadow:
-    0 0 12px var(--mode-accent-glow),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.cardActive::before {
-  background: var(--mode-accent);
+  border: 1px solid var(--mode-accent);
+  box-shadow: 0 0 14px var(--mode-accent-glow);
 }
 
 .thumb {
   width: 100%;
-  height: 48px;
+  height: 68px;
   object-fit: contain;
-  border-radius: var(--radius-btn);
-  background: var(--surface-inset);
-  border: 1px solid var(--border-grid);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .cardHeader {
@@ -99,7 +94,7 @@
 .footprint {
   flex-shrink: 0;
   padding: 0 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-subtle);
   background: var(--surface-inset);
   color: var(--text-muted);
@@ -129,105 +124,4 @@
 .time {
   flex-shrink: 0;
   color: var(--text-muted);
-}
-
-@media (max-width: 960px) {
-  .grid {
-    grid-template-columns: repeat(auto-fill, minmax(106px, 1fr));
-    max-height: 128px;
-  }
-}
-
-@media (max-height: 700px) {
-  .grid {
-    max-height: 116px;
-  }
-}
-
-/* field skin: the hotbar floats — no framed panel, dark translucent
-   rounded tiles with ≥64px thumbnails, name + cost underneath. */
-.panel {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-/* The toolbar row floats above the tiles — the demolish toggle reads as
-   one of the dark rounded controls, clearly separated from the grid. */
-.toolbar {
-  margin-bottom: var(--space-2);
-}
-
-.toolbar > button:last-child {
-  border-radius: 999px;
-  border-color: rgba(238, 240, 232, 0.14);
-  background: rgba(18, 22, 20, 0.78);
-}
-
-/* One horizontal row: tiles scroll sideways instead of wrapping into a
-   second row that clips at the bottom edge. */
-.grid {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 6px 6px;
-}
-
-.card {
-  flex: 0 0 148px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(18, 22, 20, 0.78);
-}
-
-/* Hairline corner ticks overshooting each tile corner (glass frames). */
-.card::before {
-  top: -5px;
-  bottom: -5px;
-  left: -1px;
-  right: -1px;
-  width: auto;
-  height: auto;
-  border-left: 1px solid rgba(255, 255, 255, 0.5);
-  border-right: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-.card::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: -5px;
-  right: -5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
-  pointer-events: none;
-}
-
-.card:hover {
-  background: rgba(30, 36, 32, 0.88);
-}
-
-.cardActive {
-  border: 1px solid var(--mode-accent);
-  box-shadow: 0 0 14px var(--mode-accent-glow);
-}
-
-.cardActive::before {
-  background: none;
-  border-left-color: var(--mode-accent);
-  border-right-color: var(--mode-accent);
-}
-
-.cardActive::after {
-  border-top-color: var(--mode-accent);
-  border-bottom-color: var(--mode-accent);
-}
-
-.thumb {
-  height: 68px;
-  border: none;
-  background: rgba(255, 255, 255, 0.05);
 }

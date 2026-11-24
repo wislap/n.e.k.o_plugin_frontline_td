@@ -31,11 +31,12 @@
     "clock_tick": "T{{tick}}",
     "mode_switcher": "Primary Mode",
     "logistics_layer": "Logistics",
-    "guide_title": "KEY GUIDE",
+    "minimap_toggle": "Radar",
+    "guide_title": "Key guide",
     "guide_collapse": "Hide",
     "guide_expand": "Keys ›",
-    "guide_mode_section": "MODE",
-    "guide_global_section": "GLOBAL",
+    "guide_mode_section": "Mode",
+    "guide_global_section": "Global",
     "camera": {
       "spectate": "Spectate",
       "tactical": "Tactical",
@@ -129,8 +130,6 @@
     "demolish_hint": "Demolish / Cancel (C / Del): toggles demolish tool if nothing is selected; operational buildings require confirmation"
   },
   "inspector": {
-    "preview": "Preview",
-    "pinned": "Pinned",
     "unpin": "Unpin (Esc)",
     "activate_btn": "G Activate",
     "demolish_btn": "C Demolish",
@@ -268,7 +267,6 @@
     "energy_empty": "out of energy"
   },
   "stock": {
-    "title": "Warehouse",
     "per_sec": "/s",
     "rate": "{{value}}/s",
     "priorities": "Priority: {{order}} (click to swap)"
@@ -324,10 +322,6 @@
     "contested": "contested"
   },
   "minimap": {
-    "title": "RADAR",
-    "sector": "{{x}},{{y}}",
-    "collapse": "Hide",
-    "expand": "Radar ▲",
     "aria_label": "Strategic minimap"
   }
 }

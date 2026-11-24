@@ -50,8 +50,6 @@
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   margin-bottom: 2px;
 }
 
@@ -69,7 +67,7 @@
 
 .error {
   padding: 4px 6px;
-  border-radius: 2px;
+  border-radius: var(--radius-panel);
   border: 1px solid rgba(255, 92, 92, 0.45);
   border-left: 2px solid var(--semantic-danger);
   background: var(--semantic-danger-dim);

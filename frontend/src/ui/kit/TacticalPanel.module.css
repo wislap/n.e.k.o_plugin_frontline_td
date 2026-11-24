@@ -1,3 +1,6 @@
+/* One card style for all contextual HUD content: dark translucent,
+   shared radius, one thin border. No title bars, stripes, corner cuts
+   or tick decorations — a label, when present, is a plain text line. */
 .panel {
   position: relative;
   display: flex;
@@ -11,73 +14,17 @@
   overflow: hidden;
 }
 
-.panel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--mode-accent);
-  box-shadow: 0 0 8px var(--mode-accent-glow);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-  background:
-    linear-gradient(var(--border-strong), var(--border-strong)) left 0 bottom 0 / var(--cut-size)
-      1px no-repeat,
-    linear-gradient(var(--border-strong), var(--border-strong)) left 0 bottom 0 / 1px
-      var(--cut-size) no-repeat,
-    linear-gradient(var(--border-strong), var(--border-strong)) right 0 bottom 0 / var(--cut-size)
-      1px no-repeat,
-    linear-gradient(var(--border-strong), var(--border-strong)) right 0 bottom 0 / 1px
-      var(--cut-size) no-repeat;
-}
-
-.tone-mode::before {
-  background: var(--mode-accent);
-  box-shadow: 0 0 8px var(--mode-accent-glow);
-}
-
-.tone-neutral::before {
-  background: var(--border-strong);
-  box-shadow: none;
-}
-
 .tone-preview {
   border-style: dashed;
-  border-color: var(--border-subtle);
   background: var(--surface-ghost);
-}
-
-.tone-preview::before {
-  background: var(--text-muted);
-  box-shadow: none;
 }
 
 .tone-danger {
   border-color: rgba(255, 92, 92, 0.45);
 }
 
-.tone-danger::before {
-  background: var(--semantic-danger);
-  box-shadow: 0 0 8px var(--semantic-danger-glow);
-}
-
 .tone-warn {
   border-color: rgba(255, 193, 77, 0.45);
-}
-
-.tone-warn::before {
-  background: var(--semantic-warn);
-  box-shadow: 0 0 8px rgba(255, 193, 77, 0.3);
 }
 
 .header {
@@ -85,17 +32,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 6px var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    var(--border-grid) 0 1px,
-    transparent 1px 6px
-  );
-}
-
-.compact .header {
-  padding: 4px var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
 }
 
 .headerLeft {
@@ -106,11 +43,9 @@
 }
 
 .title {
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: var(--text-sm);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -119,12 +54,10 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 1px 5px;
-  border-radius: 2px;
-  border: 1px solid var(--border-subtle);
+  padding: 1px 6px;
+  border-radius: var(--radius-btn);
   background: var(--surface-inset);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: 1.3;
   white-space: nowrap;
@@ -147,62 +80,8 @@
   padding: var(--space-2);
 }
 
-/* Glass material: frosted cards on a hairline white frame whose strokes
-   overshoot each corner as ticks; no accent stripes or hatched headers.
-   Compact panels become full pills (no ticks). */
-.panel {
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  overflow: visible;
-}
-
-.panel::before {
-  display: block;
-  content: '';
-  position: absolute;
-  left: -5px;
-  right: -5px;
-  top: -1px;
-  bottom: -1px;
-  height: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.55);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.55);
-  background: none;
-  box-shadow: none;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.panel::after {
-  display: block;
-  content: '';
-  position: absolute;
-  top: -5px;
-  bottom: -5px;
-  left: -1px;
-  right: -1px;
-  border-left: 1px solid rgba(255, 255, 255, 0.55);
-  border-right: 1px solid rgba(255, 255, 255, 0.55);
-  background: none;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.compact::before,
-.compact::after {
-  display: none;
-}
-
-.compact {
-  border-radius: 999px;
-}
-
-.header {
-  background-image: none;
-  border-bottom-color: rgba(238, 240, 232, 0.1);
-}
-
-/* field skin: the mode-switcher panel disappears — tabs float on the
-   world (white pill = current, white text = rest). */
+/* Low-intrusion slots: the mode-switcher panel disappears — tabs float
+   on the world (yellow pill = current, white text = rest). */
 :global([data-hud-slot='topLeft']) .panel {
   border: none;
   background: transparent;
@@ -210,15 +89,8 @@
   backdrop-filter: none;
 }
 
-/* The top-centre context hint (tone-mode) is a frosted-glass pill with
-   pure-white text — legible over the bright meadow and the dark info view. */
-:global([data-hud-slot='topCenter']) .tone-mode {
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: var(--surface-panel);
-  backdrop-filter: var(--backdrop-blur);
-  color: #ffffff;
-}
-
+/* The top-centre context hint is a dark card; text stays pure white with
+   a soft shadow so it reads over the bright meadow and the dark map. */
 :global([data-hud-slot='topCenter']) .tone-mode .body,
 :global([data-hud-slot='topCenter']) .tone-mode .body span {
   color: #ffffff;

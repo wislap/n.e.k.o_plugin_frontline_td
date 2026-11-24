@@ -32,7 +32,7 @@
 .modeSection {
   padding: var(--space-1) var(--space-2);
   border-left: 2px solid var(--mode-accent);
-  border-radius: 2px;
+  border-radius: var(--radius-panel);
   background: var(--mode-accent-dim);
 }
 
@@ -48,8 +48,6 @@
   color: var(--text-primary);
   font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .sectionTag {
@@ -63,8 +61,6 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   padding-bottom: 2px;
   border-bottom: 1px solid var(--border-subtle);
 }

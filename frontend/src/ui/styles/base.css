@@ -45,7 +45,7 @@ button {
 
 *::-webkit-scrollbar-thumb {
   background: rgba(148, 178, 214, 0.26);
-  border-radius: 2px;
+  border-radius: var(--radius-btn);
 }
 
 *::-webkit-scrollbar-thumb:hover {

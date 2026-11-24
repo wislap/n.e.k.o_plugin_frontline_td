@@ -123,16 +123,25 @@ function createSoftFogMaterial(theme: {
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
         float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
-        // The film converges to the haze colour as it dissolves at its outer
-        // rim, so its edge never reads as a dark ring over the hazed skirt.
-        float rim = smoothstep(uMargin * 0.35, uMargin * 0.9, oob);
-        vec3 col = mix(uColor, uHaze, max(hz * 0.65, rim));
+        // The film converges to the haze colour only while it dissolves at
+        // its outer rim — hazing earlier while still opaque paints a pale
+        // ring hugging the border that reads as a wall around the map.
+        float rim = smoothstep(uMargin * 0.5, uMargin * 0.95, oob);
+        // Distance haze only applies out of bounds: inside the map the film
+        // is a state overlay and must stay dark at any range — an opaque
+        // pale film over far unexplored land stands up as a cream wall at
+        // overview pitch. Past the border the film instead melts into the
+        // horizon (colour first, then alpha) so the terrain's own dim
+        // falloff carries the outskirts.
+        float oobF = smoothstep(0.0, 2.0, oob);
+        vec3 col = mix(uColor, uHaze, max(rim, hz * oobF));
         float alpha = a * mix(0.35, 0.85, unexplored);
         // Past the border nothing beneath the film needs to read: a
         // translucent film over lit skirt hills shows their shading as
         // dirty smears, so the film converges to near-opaque over the
         // same falloff band and the darkening stays smooth.
         alpha = mix(alpha, 0.92, smoothstep(1.0, 4.0, oob));
+        alpha *= 1.0 - hz * 0.7 * oobF;
         gl_FragColor = vec4(col, alpha);
       }
     `,

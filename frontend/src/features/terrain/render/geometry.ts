@@ -330,8 +330,11 @@ export function buildOutskirtsGeometry(
       const slope = edgeH(bx, by) - edgeH(bx - ux, by - uy);
       base += slope * d * Math.max(0, 1 - d / 4);
     }
-    const rim = 1 - Math.min(Math.max((d / s - 0.75) / 0.25, 0), 1);
-    const amp = Math.min(d * 0.45, 1.7);
+    // Hills must die out before the horizon haze converges (~0.6·s on):
+    // a fully-hazed ridge keeps a pale cream crest silhouette that reads
+    // as a wall ringing the map.
+    const rim = 1 - Math.min(Math.max((d / s - 0.45) / 0.3, 0), 1);
+    const amp = Math.min(d * 0.45, 1.4);
     // First ~3 cells hold the border height so the skirt meets the map
     // edge with no ledge, then rolling noise fades in.
     const hills =
@@ -341,7 +344,7 @@ export function buildOutskirtsGeometry(
       amp *
       rim *
       Math.min(Math.max((d - 1) / 2, 0), 1);
-    const sink = Math.min(Math.max((d / s - 0.82) / 0.18, 0), 1) * (base - SKIRT_SINK_Y + 0.5);
+    const sink = Math.min(Math.max((d / s - 0.7) / 0.22, 0), 1) * (base - SKIRT_SINK_Y + 0.5);
     // The outermost in-map ring is drawn by this skirt too (see the quad
     // test below) and must tuck just under the terrain surface so the two
     // meshes overlap without z-fighting: no sub-pixel crack can show sky.

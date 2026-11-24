@@ -130,6 +130,26 @@ export function IconCargo({ id, size = SIZE, className }: IconProps & { id: stri
   );
 }
 
+// Radar / minimap toggle.
+export function IconRadar({ size = SIZE, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" className={className} aria-hidden="true">
+      <rect
+        x="1.5"
+        y="2.5"
+        width="13"
+        height="11"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <circle cx="8" cy="8" r="1.6" fill="currentColor" />
+      <path d="M8 2.5v2M8 11.5v2M1.5 8h2M12.5 8h2" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 // Priority swap (two opposing arrows).
 export function IconSwap({ size = SIZE, className }: IconProps) {
   return (

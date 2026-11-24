@@ -17,7 +17,15 @@ import {
   requestDisplayMode,
   type DisplayState,
 } from '../host/display';
-import { IconCompass, IconFullscreen, IconKeycap, IconLink, IconLock, IconView } from './icons';
+import {
+  IconCompass,
+  IconFullscreen,
+  IconKeycap,
+  IconLink,
+  IconLock,
+  IconRadar,
+  IconView,
+} from './icons';
 import { cx, Kbd } from './kit/index';
 import styles from './RightRail.module.css';
 
@@ -32,6 +40,7 @@ export function RightRail({ onDisplayMessage }: { onDisplayMessage: (msg: string
   const cameraLocked = useCameraStore((s) => s.locked);
   const yawDeg = useCameraStore((s) => compassHeadingDeg(s.yaw));
   const logisticsOverlay = useUiStore((s) => s.logisticsOverlay);
+  const minimapOpen = useUiStore((s) => s.minimapOpen);
   const keymapOpen = useUiStore((s) => s.keymapHelpOpen);
   const [display, setDisplay] = useState<DisplayState>(() => displayState());
 
@@ -117,6 +126,21 @@ export function RightRail({ onDisplayMessage }: { onDisplayMessage: (msg: string
           }}
         >
           <IconFullscreen />
+        </button>
+      </div>
+      <div className={styles['item']}>
+        <span className={styles['lbl']}>{t('hud.minimap_toggle')}</span>
+        <button
+          type="button"
+          className={cx(styles['btn'], minimapOpen && styles['btnActive'])}
+          aria-pressed={minimapOpen}
+          aria-label={t('hud.minimap_toggle')}
+          title={t('hud.minimap_toggle')}
+          onClick={() => {
+            useUiStore.getState().toggleMinimap();
+          }}
+        >
+          <IconRadar />
         </button>
       </div>
       <div className={styles['item']}>

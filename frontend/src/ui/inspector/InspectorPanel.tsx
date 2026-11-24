@@ -169,9 +169,7 @@ export function InspectorPanel({
   const hasConfirm = confirmMatchesView(demolishConfirm, view, selected, isPinned);
   const isHostileSubject = view.kind === 'hostile_unit' || view.kind === 'hostile_structure';
   const tone = hasConfirm ? 'danger' : isHostileSubject ? 'warn' : isPinned ? 'mode' : 'preview';
-  const badge = isHostileSubject
-    ? t('inspector.hostile_tag')
-    : t(isPinned ? 'inspector.pinned' : 'inspector.preview');
+  const badge = isHostileSubject ? t('inspector.hostile_tag') : undefined;
   const actions: InspectorActionContext = {
     isPinned,
     canActivate: selected.size > 0,

@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const SDK_404 = '/plugin-ui-sdk/display.js';
 
@@ -39,13 +39,12 @@ async function bootAndWaitForTick(page: Page): Promise<void> {
     .toBeGreaterThan(0);
 }
 
-async function parseSectorBadge(minimapPanel: Locator): Promise<{ x: number; y: number }> {
-  const badge = minimapPanel.getByText(/^\d+,\d+$/);
-  await expect(badge).toBeVisible();
-  const text = (await badge.innerText()).trim();
-  const match = /^(\d+),(\d+)$/.exec(text);
+async function parseSectorBadge(page: Page): Promise<{ x: number; y: number }> {
+  const text =
+    (await page.locator('[data-testid="minimap-frame"]').getAttribute('data-sector')) ?? '';
+  const match = /^(\d+),(\d+)$/.exec(text.trim());
   if (match === null) {
-    throw new Error(`Unexpected sector badge text: ${text}`);
+    throw new Error(`Unexpected sector attribute: ${text}`);
   }
   return { x: Number(match[1]), y: Number(match[2]) };
 }
@@ -189,7 +188,7 @@ test('primary modes, auto-tactical camera, view lock, Tab toggle, and pause came
   await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
   await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
   await expect(topLeft.locator('[data-testid="minimap-panel"]')).toBeVisible();
-  await expect(topRight).toContainText('仓库');
+  await expect(topRight.locator('[data-cargo]').first()).toBeVisible();
   await expect(topRight).not.toContainText('运行遥测');
 
   // Space pause/resume never auto-switches camera (gauge pill top-center)
@@ -321,23 +320,21 @@ test('minimap sector jump on canvas click and collapse/expand toggle', async ({ 
   }
 
   await minimapCanvas.click({ position: { x: 14, y: 14 } });
-  const topLeftSector = await parseSectorBadge(minimapPanel);
+  const topLeftSector = await parseSectorBadge(page);
 
   await minimapCanvas.click({
     position: { x: Math.floor(box.width - 14), y: Math.floor(box.height - 14) },
   });
-  const bottomRightSector = await parseSectorBadge(minimapPanel);
+  const bottomRightSector = await parseSectorBadge(page);
 
   expect(bottomRightSector.x).toBeGreaterThan(topLeftSector.x);
   expect(bottomRightSector.y).toBeGreaterThan(topLeftSector.y);
 
-  // Collapse & expand
-  await minimapPanel.getByRole('button', { name: '收起' }).click();
+  // Collapse & expand via the right-rail radar toggle
+  const radarToggle = page.getByRole('button', { name: '雷达' });
+  await radarToggle.click();
   await expect(minimapCanvas).toBeHidden();
-  const expandBtn = minimapPanel.getByRole('button', { name: '雷达 ▲' });
-  await expect(expandBtn).toBeVisible();
-
-  await expandBtn.click();
+  await radarToggle.click();
   await expect(minimapCanvas).toBeVisible();
 
   expect(failures).toEqual([]);
@@ -361,7 +358,7 @@ for (const vp of HUD_VIEWPORTS) {
     const topRight = page.locator('[data-hud-slot="topRight"]');
     const topCenter = page.locator('[data-hud-slot="topCenter"]');
     const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
-    await expect(topRight).toContainText('仓库');
+    await expect(topRight.locator('[data-cargo]').first()).toBeVisible();
 
     // State 1: F1 default
     await page.keyboard.press('F1');

@@ -5,33 +5,16 @@
   min-width: 17px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 2px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-inset);
-  color: var(--text-secondary);
+  border-radius: var(--radius-btn);
+  border: none;
+  background: rgba(238, 240, 232, 0.9);
+  color: #2a2e26;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  box-shadow:
-    inset 0 -1px 0 rgba(0, 0, 0, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.active {
-  border-color: var(--mode-accent);
-  background: var(--mode-accent-dim);
-  color: var(--text-primary);
-}
-
-/* field skin: light keycap chips. */
-.kbd {
-  border: none;
-  border-radius: 4px;
-  background: rgba(238, 240, 232, 0.9);
-  color: #2a2e26;
   box-shadow: 0 1px 3px rgba(10, 14, 10, 0.35);
 }
 
@@ -39,11 +22,4 @@
   border: none;
   background: rgba(255, 230, 0, 0.92);
   color: #22251f;
-}
-
-/* field skin: dark chips on the white context-hint pills. */
-:global([data-hud-slot='topCenter']) .kbd {
-  background: #2a2e26;
-  color: #f0f1ea;
-  box-shadow: none;
 }
