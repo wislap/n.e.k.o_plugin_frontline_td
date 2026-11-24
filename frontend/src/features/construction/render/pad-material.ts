@@ -50,16 +50,18 @@ export function createPadMaterial(theme: RenderVisual): {
         uniform float uEmissiveBoost;
         uniform float uInfo2D;
         varying vec3 vPadLocal;
-        varying vec2 vPadScale;`,
+        varying vec2 vPadScale;
+        float padRimFactor(vec3 local, vec2 scale) {
+          float edgeDist = (0.5 - max(abs(local.x), abs(local.z))) * min(scale.x, scale.y);
+          float topFace = step(0.4, local.y);
+          return (1.0 - smoothstep(0.02, 0.09, edgeDist)) * topFace;
+        }`,
       )
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         {
-          // Distance to the slab rim in world units (top face only).
-          float edgeDist = (0.5 - max(abs(vPadLocal.x), abs(vPadLocal.z))) * min(vPadScale.x, vPadScale.y);
-          float topFace = step(0.4, vPadLocal.y);
-          float rim = (1.0 - smoothstep(0.02, 0.09, edgeDist)) * topFace;
+          float rim = padRimFactor(vPadLocal, vPadScale);
           diffuseColor.rgb = mix(diffuseColor.rgb, uEdge, rim * 0.85);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.6, uInfo2D);
         }`,
@@ -68,10 +70,7 @@ export function createPadMaterial(theme: RenderVisual): {
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         {
-          float edgeDist = (0.5 - max(abs(vPadLocal.x), abs(vPadLocal.z))) * min(vPadScale.x, vPadScale.y);
-          float topFace = step(0.4, vPadLocal.y);
-          float rim = (1.0 - smoothstep(0.02, 0.09, edgeDist)) * topFace;
-          totalEmissiveRadiance += uEdge * rim * uEmissiveBoost;
+          totalEmissiveRadiance += uEdge * padRimFactor(vPadLocal, vPadScale) * uEmissiveBoost;
         }`,
       );
   };

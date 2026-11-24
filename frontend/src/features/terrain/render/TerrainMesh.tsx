@@ -12,6 +12,7 @@ import { useUiStore } from '../../../client/ui-store';
 import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
+import { GLSL_GRID_LINE } from '../../../render/shaders';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
@@ -48,11 +49,10 @@ function createTerrainGridMaterial(): THREE.ShaderMaterial {
       uniform float uOpacity;
       varying vec2 vWorldXZ;
       varying float vUp;
+      ${GLSL_GRID_LINE}
       void main() {
-        vec2 cellCoord = abs(fract(vWorldXZ - 0.5) - 0.5) / max(fwidth(vWorldXZ), vec2(1e-4));
-        float cellLine = 1.0 - min(min(cellCoord.x, cellCoord.y), 1.0);
-        vec2 secCoord = abs(fract(vWorldXZ / 8.0 - 0.5) - 0.5) / max(fwidth(vWorldXZ / 8.0), vec2(1e-4));
-        float secLine = 1.0 - min(min(secCoord.x, secCoord.y), 1.0);
+        float cellLine = ftdGridLine(vWorldXZ);
+        float secLine = ftdGridLine(vWorldXZ / 8.0);
         float flatMask = smoothstep(0.35, 0.75, vUp);
         float alpha = clamp(max(cellLine * 0.65, secLine * 1.15) * flatMask * uOpacity, 0.0, 1.0);
         gl_FragColor = vec4(0.55, 0.78, 0.96, alpha);

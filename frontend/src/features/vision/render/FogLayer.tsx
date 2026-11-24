@@ -15,6 +15,7 @@ import { VISUAL } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
+import { glslFloat } from '../../../render/shaders';
 import { markBuilt } from '../../../render/use-gpu-resource';
 
 // Lift + polygonOffset keep the film a hair above the ground: at grazing
@@ -48,6 +49,22 @@ export interface FogLayerProps {
 // terrain reads through a translucent dark slate film — darkened and
 // desaturated — and the film drifts toward the sky haze with camera
 // distance so far fog merges into the horizon.
+// Fog film tuning (b8bd104 values): blur tap radius in texels, tap
+// weights, the alpha remap ranges, the camera-distance haze range/tint,
+// and the visible→unexplored alpha mix.
+const FOG_BLUR_TEXELS = 0.8;
+const FOG_CENTER_WEIGHT = 0.44;
+const FOG_NEIGHBOR_WEIGHT = 0.14;
+const FOG_REMAP_LO = 0.05;
+const FOG_REMAP_HI = 0.95;
+const FOG_UNEXPLORED_LO = 0.55;
+const FOG_UNEXPLORED_HI = 0.8;
+const FOG_HAZE_START = 35;
+const FOG_HAZE_END = 110;
+const FOG_HAZE_TINT = 0.65;
+const FOG_ALPHA_MIN = 0.35;
+const FOG_ALPHA_MAX = 0.6;
+
 function createSoftFogMaterial(theme: {
   fogColor: string;
   background: { haze: string };
@@ -92,17 +109,17 @@ function createSoftFogMaterial(theme: {
       varying float vDist;
       float fogA(vec2 uv) { return texture2D(uMap, uv).g; }
       void main() {
-        vec2 o = uTexel * 0.8;
-        float a = fogA(vUv) * 0.44
+        vec2 o = uTexel * ${FOG_BLUR_TEXELS};
+        float a = fogA(vUv) * ${FOG_CENTER_WEIGHT}
           + (fogA(vUv + vec2(o.x, 0.0)) + fogA(vUv - vec2(o.x, 0.0))
-           + fogA(vUv + vec2(0.0, o.y)) + fogA(vUv - vec2(0.0, o.y))) * 0.14;
-        a = smoothstep(0.05, 0.95, a);
+           + fogA(vUv + vec2(0.0, o.y)) + fogA(vUv - vec2(0.0, o.y))) * ${FOG_NEIGHBOR_WEIGHT};
+        a = smoothstep(${FOG_REMAP_LO}, ${FOG_REMAP_HI}, a);
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
-        float unexplored = smoothstep(0.55, 0.8, a);
-        float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
-        vec3 col = mix(uColor, uHaze, hz * 0.65);
-        float alpha = a * mix(0.35, 0.6, unexplored);
+        float unexplored = smoothstep(${FOG_UNEXPLORED_LO}, ${FOG_UNEXPLORED_HI}, a);
+        float hz = smoothstep(${glslFloat(FOG_HAZE_START)}, ${glslFloat(FOG_HAZE_END)}, vDist) * uHazeAmt;
+        vec3 col = mix(uColor, uHaze, hz * ${FOG_HAZE_TINT});
+        float alpha = a * mix(${FOG_ALPHA_MIN}, ${FOG_ALPHA_MAX}, unexplored);
         gl_FragColor = vec4(col, alpha);
       }
     `,

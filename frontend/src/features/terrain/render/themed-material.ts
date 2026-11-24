@@ -6,6 +6,7 @@
 // Optional haze-fade tint blends the out-of-bounds skirt into the
 // horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
+import { GLSL_GRID_LINE, GLSL_NOISE } from '../../../render/shaders';
 import type { RenderVisual } from '../../../render/theme/index';
 
 export interface ThemedTerrainParams {
@@ -111,19 +112,8 @@ export function createThemedTerrainMaterial(
         uniform vec2 uMapSize;
         varying vec3 vTerWorld;
         varying vec3 vTerNormal;
-        float terHash(vec2 p) {
-          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-        }
-        float terNoise(vec2 p) {
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          return mix(
-            mix(terHash(i), terHash(i + vec2(1.0, 0.0)), f.x),
-            mix(terHash(i + vec2(0.0, 1.0)), terHash(i + vec2(1.0, 1.0)), f.x),
-            f.y
-          );
-        }
+        ${GLSL_NOISE}
+        ${GLSL_GRID_LINE}
         float terEdgeDist(vec2 p, vec2 size) {
           vec2 a = min(p, vec2(0.0));
           vec2 b = max(p - size, vec2(0.0));
@@ -139,27 +129,25 @@ export function createThemedTerrainMaterial(
           float hNorm = clamp((vTerWorld.y - uHRange.x) / (uHRange.y - uHRange.x), 0.0, 1.0);
           vec3 ramp = mix(uRampLow, uRampHigh, hNorm);
           diffuseColor.rgb = mix(diffuseColor.rgb, ramp, uRampStrength);
-          float hn = fract(sin(dot(floor(terP), vec2(127.1, 311.7))) * 43758.5453);
+          float hn = ftdHash(floor(terP));
           diffuseColor.rgb *= 1.0 + (hn - 0.5) * uNoiseAmp;
           // Macro variation: continuous multi-octave value noise at
           // ~4-35 cell scales — large meadow patches with a slight hue
           // drift between the ramp ends, no per-cell tiling.
-          float macro = terNoise(terP / 34.0) * 0.4
-            + terNoise(terP / 17.0 + 13.7) * 0.3
-            + terNoise(terP / 8.5 + 41.3) * 0.2
-            + terNoise(terP / 4.2 + 71.9) * 0.1;
+          float macro = ftdValueNoise(terP / 34.0) * 0.4
+            + ftdValueNoise(terP / 17.0 + 13.7) * 0.3
+            + ftdValueNoise(terP / 8.5 + 41.3) * 0.2
+            + ftdValueNoise(terP / 4.2 + 71.9) * 0.1;
           diffuseColor.rgb *= 1.0 + (macro - 0.5) * 0.16;
           diffuseColor.rgb = mix(diffuseColor.rgb, mix(uRampLow, uRampHigh, macro), 0.16);
           if (uDirtOn > 0.5) {
             // Dirt/gravel patches: a second low-frequency field picks out
             // worn ground around ~10-cell blobs.
-            float dirtM = smoothstep(0.56, 0.72, terNoise(terP / 11.0 + 91.3))
-              * (0.75 + terNoise(terP / 3.0 + 17.7) * 0.5);
+            float dirtM = smoothstep(0.56, 0.72, ftdValueNoise(terP / 11.0 + 91.3))
+              * (0.75 + ftdValueNoise(terP / 3.0 + 17.7) * 0.5);
             diffuseColor.rgb = mix(diffuseColor.rgb, uDirtColor, dirtM * 0.65);
           }
-          vec2 gw = max(fwidth(terP), vec2(1e-4));
-          vec2 g = abs(fract(terP - 0.5) - 0.5) / gw;
-          float gline = 1.0 - min(min(g.x, g.y), 1.0);
+          float gline = ftdGridLine(terP);
           diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
           // Cliff edges: where the up-normal changes fast across pixels the
