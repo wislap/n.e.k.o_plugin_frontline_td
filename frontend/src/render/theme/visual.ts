@@ -1,12 +1,10 @@
 // The game's single visual look (merged language): stylized PBR daylight —
-// PMREM environment from the procedural sky, AgX tone mapping, soft shadows,
+// PMREM environment from the procedural sky, soft shadows,
 // lush grass + flowers, graphite foundation pads with emissive trim,
 // procedural seams/stripes/printed codes, glowing road tracks, dark 'dim'
 // fog film hazed toward the sky.
 // Pure data consumed by the render layer (lighting, terrain shader,
 // background, fog, post, materials, geometry). No registry, no ids.
-
-type ToneMappingId = 'none' | 'aces' | 'agx';
 
 interface VisualLighting {
   hemiSky: string;
@@ -124,8 +122,6 @@ interface VisualPad {
 
 export interface RenderVisual {
   accent: string;
-  exposure: number;
-  toneMapping: ToneMappingId;
   // Scales scene.environmentIntensity for the PMREM sky.
   envIntensity?: number | undefined;
   fogColor: string;
@@ -150,8 +146,6 @@ export interface RenderVisual {
 // distance haze, sunlit meadow, no grading.
 export const VISUAL: RenderVisual = {
   accent: '#FFE600',
-  exposure: 0.9,
-  toneMapping: 'agx',
   fogColor: '#3d453a',
   fogSoft: true,
   // Distance haze starts inside the playfield at overview distance —
@@ -243,4 +237,3 @@ export const VISUAL: RenderVisual = {
     emissiveBoost: 1.6,
   },
 };
-

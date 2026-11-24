@@ -1,5 +1,5 @@
 // Scene lighting + renderer setup: hemisphere fill, shadow-casting sun
-// fitted to the map bounds, rim light, AgX tone mapping, PMREM sky
+// fitted to the map bounds, rim light, PMREM sky
 // environment. GPU/state changes are applied in effects.
 import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -15,24 +15,14 @@ const SHADOW_MARGIN = 1.15;
 // lint treats hook-derived objects as immutable, so the writes happen inside
 // plain functions whose params are not tracked (same pattern as the fog
 // texture upload in FogLayer).
-function applyRendererSettings(
-  gl: THREE.WebGLRenderer,
-  exposure: number,
-  toneMapping: 'none' | 'aces' | 'agx',
-): () => void {
+function applyRendererSettings(gl: THREE.WebGLRenderer): () => void {
   const prev = {
-    tone: gl.toneMapping,
-    exposure: gl.toneMappingExposure,
     shadow: gl.shadowMap.enabled,
     shadowType: gl.shadowMap.type,
   };
-  gl.toneMapping = toneMapping === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
-  gl.toneMappingExposure = exposure;
   gl.shadowMap.enabled = true;
   gl.shadowMap.type = THREE.PCFShadowMap;
   return () => {
-    gl.toneMapping = prev.tone;
-    gl.toneMappingExposure = prev.exposure;
     gl.shadowMap.enabled = prev.shadow;
     gl.shadowMap.type = prev.shadowType;
   };
@@ -142,11 +132,11 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   const theme = useRenderTheme();
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
-  const { lighting, exposure } = theme;
+  const { lighting } = theme;
 
   useEffect(() => {
-    return applyRendererSettings(gl, exposure, theme.toneMapping);
-  }, [gl, exposure, theme.toneMapping]);
+    return applyRendererSettings(gl);
+  }, [gl]);
 
   // PMREM environment from the procedural sky: MeshStandardMaterials pick
   // up ambient/reflection light from scene.environment.
