@@ -19,12 +19,31 @@ function applyRendererSettings(gl: THREE.WebGLRenderer): () => void {
   const prev = {
     shadow: gl.shadowMap.enabled,
     shadowType: gl.shadowMap.type,
+    onShaderError: gl.debug.onShaderError,
   };
   gl.shadowMap.enabled = true;
   gl.shadowMap.type = THREE.PCFShadowMap;
+  // One-line shader failure marker: the e2e console listener turns any
+  // console.error into a test failure, so a broken program can never ship
+  // silently (three's default report is multi-line and buries the cause).
+  gl.debug.onShaderError = (
+    _ctx: WebGLRenderingContext,
+    program: WebGLProgram,
+    vertexShader: WebGLShader,
+    fragmentShader: WebGLShader,
+  ) => {
+    const firstLine = (log: string | null): string => (log ?? '').trim().split('\n')[0] ?? '';
+    const name = (program as unknown as { name?: string }).name ?? 'unnamed';
+    console.error(
+      `ShaderCompileError: ${name} | ${firstLine(_ctx.getProgramInfoLog(program))}` +
+        ` | vertex: ${firstLine(_ctx.getShaderInfoLog(vertexShader))}` +
+        ` | fragment: ${firstLine(_ctx.getShaderInfoLog(fragmentShader))}`,
+    );
+  };
   return () => {
     gl.shadowMap.enabled = prev.shadow;
     gl.shadowMap.type = prev.shadowType;
+    gl.debug.onShaderError = prev.onShaderError;
   };
 }
 
