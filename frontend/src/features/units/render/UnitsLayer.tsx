@@ -13,6 +13,7 @@ import { SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
 import { VISUAL } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from './colors';
 import { buildRobotGeometry } from './robot-geometry';
@@ -87,21 +88,13 @@ export function UnitsLayer({
     const base = buildRobotGeometry(theme.geometry.bevel);
     return [base, base.clone(), base.clone(), base.clone()];
   }, [theme]);
-  useEffect(() => {
-    return () => {
-      for (const g of robotGeos) {
-        g.dispose();
-      }
-    };
-  }, [robotGeos]);
+  useGpuResource(robotGeos);
   const unitMat = useMemo(() => createThemedUnitMaterial(theme), [theme]);
   const infoUniformRef = useRef<{ value: number } | null>(null);
   useEffect(() => {
     infoUniformRef.current = unitMat.uniforms.info2d;
-    return () => {
-      unitMat.material.dispose();
-    };
   }, [unitMat]);
+  useGpuResource(unitMat.material);
 
   useFrame(() => {
     const meshes = meshRefs.current;

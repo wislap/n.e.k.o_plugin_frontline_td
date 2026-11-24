@@ -14,6 +14,7 @@ import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { factionColorHex } from '../../units/render/index';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
@@ -93,21 +94,13 @@ export function StructuresLayer({
   );
 
   const themed = useMemo(() => createThemedStructureMaterial(theme), [theme]);
-  useEffect(() => {
-    return () => {
-      themed.material.dispose();
-      themed.codes?.dispose();
-    };
-  }, [themed]);
+  useGpuResource(themed.material);
+  useGpuResource(themed.codes);
 
   // Foundation pads (field): graphite slab + emissive edge under each
   // structure — what separates industry from nature.
   const pad = useMemo(() => createPadMaterial(theme), [theme]);
-  useEffect(() => {
-    return () => {
-      pad.material.dispose();
-    };
-  }, [pad]);
+  useGpuResource(pad.material);
 
   const gpuRef = useRef<StructureGpuAssets | null>(null);
   const silCountsRef = useRef<Record<StructureSilhouette, number> | null>(null);

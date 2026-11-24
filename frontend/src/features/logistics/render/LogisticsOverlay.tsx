@@ -17,6 +17,7 @@ import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-m
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import { VISUAL } from '../../../render/theme/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import {
   StructuresChannel,
@@ -252,16 +253,12 @@ export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayP
   }, []);
   useEffect(() => {
     ringDashMatRef.current = ringDashMat;
-    return () => {
-      ringDashMat.dispose();
-    };
   }, [ringDashMat]);
+  useGpuResource(ringDashMat);
   useEffect(() => {
     coverShaderRef.current = coverShader;
-    return () => {
-      coverShader.dispose();
-    };
   }, [coverShader]);
+  useGpuResource(coverShader);
 
   useFrame(() => {
     const coverMesh = coverMeshRef.current;

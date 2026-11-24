@@ -4,13 +4,15 @@
 // buffer is rebuilt only when the layer array identity changes.
 // Visual-languages: the `field` theme swaps the flat lambert fill for a
 // graphite track bed with a glowing edge trim (bloom feeds the road net).
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
+import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
+import { readLayer } from '../../../core/index';
 import { ROAD_LAYER_ID } from '../protocol';
 
 const LIFT = 0.03;
@@ -61,22 +63,17 @@ export function RoadLayer({ client, map, heights }: RoadLayerProps) {
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link), [theme]);
-  useEffect(() => {
-    return () => {
-      glowMat.dispose();
-    };
-  }, [glowMat]);
+  useGpuResource(glowMat);
 
   useFrame(() => {
     const mesh = meshRef.current;
     if (mesh === null) {
       return;
     }
-    const layer = client.snapshots().latest?.layers[ROAD_LAYER_ID];
-    if (layer === undefined || layer === builtFor.current) {
+    const layer = readLayer(client.snapshots().latest, ROAD_LAYER_ID);
+    if (layer === null || !markBuilt(builtFor, layer)) {
       return;
     }
-    builtFor.current = layer;
     const { width, height } = map.grid;
     let count = 0;
     for (let y = 0; y < height && count < CAP; y++) {

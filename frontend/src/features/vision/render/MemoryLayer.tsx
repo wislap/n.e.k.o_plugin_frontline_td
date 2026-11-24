@@ -9,6 +9,7 @@ import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb } from '../../../content/index';
 import { structureKindHeight } from '../../construction/render/index';
 import { terrainY } from '../../../render/world';
+import { markBuilt } from '../../../render/use-gpu-resource';
 import { VisionMemoryChannel } from '../protocol';
 import { readChannel } from '../../../core/index';
 
@@ -39,10 +40,9 @@ export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: Memory
       mesh.count = 0;
       return;
     }
-    if (memory.handles === builtFor.current) {
+    if (!markBuilt(builtFor, memory.handles)) {
       return;
     }
-    builtFor.current = memory.handles;
     let count = 0;
     for (let i = 0; i < memory.handles.length && count < CAP; i++) {
       const kind = db.structures.byIndex(memory.kind[i] ?? -1);

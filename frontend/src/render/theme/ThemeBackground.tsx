@@ -1,9 +1,10 @@
 // Background: a sky dome (vertical gradient) plus a far ground platform
 // fading out radially toward the map edge. GPU objects are memoized and
 // disposed on unmount (ADR 0050).
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { useGpuResource } from '../use-gpu-resource';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
@@ -111,19 +112,8 @@ export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; map
     return { geo, mat };
   }, [theme, mapWidth, mapHeight]);
 
-  useEffect(() => {
-    return () => {
-      dome.geo.dispose();
-      dome.mat.dispose();
-    };
-  }, [dome]);
-
-  useEffect(() => {
-    return () => {
-      platform.geo.dispose();
-      platform.mat.dispose();
-    };
-  }, [platform]);
+  useGpuResource(dome);
+  useGpuResource(platform);
 
   return (
     <group>

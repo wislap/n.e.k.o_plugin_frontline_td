@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
 import { RoadWorksChannel, SalvageChannel, StructuresChannel } from '../../construction/protocol';
@@ -79,23 +80,11 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
 
   useEffect(() => {
     grassTimeRef.current = (grassMat.userData['uTime'] as { value: number } | undefined) ?? null;
-    return () => {
-      grassMat.dispose();
-    };
   }, [grassMat]);
-  useEffect(() => {
-    return () => {
-      for (const mat of Object.values(propMats)) {
-        mat.dispose();
-      }
-    };
-  }, [propMats]);
-  useEffect(() => {
-    return () => {
-      grassGeo.dispose();
-      stoneGeo.dispose();
-    };
-  }, [grassGeo, stoneGeo]);
+  useGpuResource(grassMat);
+  useGpuResource(propMats);
+  useGpuResource(grassGeo);
+  useGpuResource(stoneGeo);
 
   const grid = map.grid;
 

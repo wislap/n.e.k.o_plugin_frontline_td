@@ -15,6 +15,7 @@ import { VISUAL } from '../../../render/theme/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry } from '../../terrain/render/index';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
+import { markBuilt } from '../../../render/use-gpu-resource';
 
 // Lift + polygonOffset keep the film a hair above the ground: at grazing
 // overview angles a tiny constant lift loses depth precision and the film
@@ -114,10 +115,8 @@ export function FogLayer({ client, map }: FogLayerProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const softMatRef = useRef<THREE.ShaderMaterial | null>(null);
   const built = useRef<{ geometry: THREE.BufferGeometry; texture: THREE.DataTexture } | null>(null);
-  const builtFor = useRef<{ map: ResolvedMap; layer: ArrayLike<number> | null }>({
-    map,
-    layer: null,
-  });
+  const builtForMap = useRef<ResolvedMap>(map);
+  const builtForLayer = useRef<ArrayLike<number> | null>(null);
 
   useEffect(() => {
     return () => {
@@ -134,7 +133,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
     if (mesh === null) {
       return;
     }
-    if (built.current === null || builtFor.current.map !== map) {
+    if (built.current === null || markBuilt(builtForMap, map)) {
       built.current?.geometry.dispose();
       built.current?.texture.dispose();
       const grid = map.grid;
@@ -185,7 +184,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
       texture.minFilter = THREE.LinearFilter;
       texture.needsUpdate = true;
       built.current = { geometry, texture };
-      builtFor.current.map = map;
+
       mesh.geometry = geometry;
       if (softMatRef.current === null) {
         softMatRef.current = createSoftFogMaterial(theme);
@@ -202,7 +201,7 @@ export function FogLayer({ client, map }: FogLayerProps) {
         uMap.value = texture;
       }
       mesh.material = mat;
-      builtFor.current.layer = null;
+      builtForLayer.current = null;
     }
     const soft = softMatRef.current;
     if (soft !== null) {
@@ -223,10 +222,9 @@ export function FogLayer({ client, map }: FogLayerProps) {
     }
     mesh.visible = true;
     const layer = readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
-    if (layer === undefined || layer === builtFor.current.layer) {
+    if (layer === undefined || !markBuilt(builtForLayer, layer)) {
       return;
     }
-    builtFor.current.layer = layer;
     uploadFog(built.current.texture, layer, map.grid.width * map.grid.height);
   });
 

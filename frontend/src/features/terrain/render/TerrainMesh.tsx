@@ -12,6 +12,7 @@ import { useUiStore } from '../../../client/ui-store';
 import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
 import { createThemedTerrainMaterial, type ThemedTerrainUniforms } from './themed-material';
@@ -157,17 +158,9 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     return geo;
   }, [heights, width, height, ramps, theme]);
 
-  useEffect(() => {
-    return () => {
-      geometry?.dispose();
-    };
-  }, [geometry]);
+  useGpuResource(geometry);
 
-  useEffect(() => {
-    return () => {
-      outskirtsGeometry?.dispose();
-    };
-  }, [outskirtsGeometry]);
+  useGpuResource(outskirtsGeometry);
 
   useEffect(() => {
     return () => {
@@ -209,11 +202,7 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
     });
   }, [theme, heights, width, height]);
 
-  useEffect(() => {
-    return () => {
-      themed?.material.dispose();
-    };
-  }, [themed]);
+  useGpuResource(themed?.material);
 
   useFrame((_state, delta) => {
     const gridMesh = gridMeshRef.current;
