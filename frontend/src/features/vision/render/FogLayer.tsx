@@ -63,9 +63,6 @@ function createSoftFogMaterial(theme: {
     uniforms: {
       uColor: { value: new THREE.Color(theme.fogColor) },
       uHaze: { value: new THREE.Color(theme.background.haze || theme.fogColor) },
-      // Distance haze is spectate-only: the tactical info view must stay
-      // a flat dark slate, so uHazeAmt is driven by camera mode per frame.
-      uHazeAmt: { value: 1 },
       uMap: { value: null },
       uTexel: { value: new THREE.Vector2(1, 1) },
       uMapSize: { value: new THREE.Vector2(1, 1) },
@@ -74,26 +71,22 @@ function createSoftFogMaterial(theme: {
     vertexShader: `
       varying vec2 vUv;
       varying vec3 vWorld;
-      varying float vDist;
       void main() {
         vUv = uv;
         vWorld = position;
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        vDist = distance(wp.xyz, cameraPosition);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
     fragmentShader: `
       uniform vec3 uColor;
       uniform vec3 uHaze;
-      uniform float uHazeAmt;
       uniform sampler2D uMap;
       uniform vec2 uTexel;
       uniform vec2 uMapSize;
       uniform float uMargin;
       varying vec2 vUv;
       varying vec3 vWorld;
-      varying float vDist;
       float fogA(vec2 uv) { return texture2D(uMap, uv).g; }
       void main() {
         // Cells beyond the map rect (UV clamps to border texels, so the
@@ -122,26 +115,20 @@ function createSoftFogMaterial(theme: {
         // 0 in visible cells, ramps through explored (~0.45 alpha) to
         // unexplored (~0.85); used to fade edge patterns near the boundary.
         float unexplored = smoothstep(0.55, 0.8, a);
-        float hz = smoothstep(35.0, 110.0, vDist) * uHazeAmt;
-        // The film converges to the haze colour only while it dissolves at
-        // its outer rim — hazing earlier while still opaque paints a pale
-        // ring hugging the border that reads as a wall around the map.
-        float rim = smoothstep(uMargin * 0.5, uMargin * 0.95, oob);
-        // Distance haze only applies out of bounds: inside the map the film
-        // is a state overlay and must stay dark at any range — an opaque
-        // pale film over far unexplored land stands up as a cream wall at
-        // overview pitch. Past the border the film instead melts into the
-        // horizon (colour first, then alpha) so the terrain's own dim
-        // falloff carries the outskirts.
-        float oobF = smoothstep(0.0, 2.0, oob);
-        vec3 col = mix(uColor, uHaze, max(rim, hz * oobF));
+        // The film must not bleed past the border: it stays dark while it
+        // holds the unexplored state and only blends toward the haze
+        // colour in the last sliver before alpha reaches zero. Hazing (or
+        // thinning) earlier leaves a pale translucent wash hugging the
+        // edge that reads as a cream wall at overview pitch — the terrain
+        // skirt's own dim + haze falloff carries the outskirts instead.
+        float rim = smoothstep(uMargin * 0.7, uMargin * 0.95, oob);
+        vec3 col = mix(uColor, uHaze, rim);
         float alpha = a * mix(0.35, 0.85, unexplored);
         // Past the border nothing beneath the film needs to read: a
         // translucent film over lit skirt hills shows their shading as
         // dirty smears, so the film converges to near-opaque over the
         // same falloff band and the darkening stays smooth.
         alpha = mix(alpha, 0.92, smoothstep(1.0, 4.0, oob));
-        alpha *= 1.0 - hz * 0.7 * oobF;
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -251,13 +238,8 @@ export function FogLayer({ client, map }: FogLayerProps) {
     const soft = softMatRef.current;
     if (soft !== null) {
       // Tactical info view keeps a neutral dark slate; only the 3D
-      // spectate camera uses the (possibly warm) film color and fades
-      // far fog into the sky haze.
+      // spectate camera uses the (possibly warm) film color.
       const tactical = useCameraStore.getState().mode === 'tactical';
-      const uHazeAmt = soft.uniforms['uHazeAmt'] as { value: number } | undefined;
-      if (uHazeAmt !== undefined) {
-        uHazeAmt.value = tactical ? 0 : 1;
-      }
       const uColor = soft.uniforms['uColor'] as { value: THREE.Color } | undefined;
       uColor?.value.set(tactical ? '#333c3a' : theme.fogColor);
     }

@@ -193,12 +193,14 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
       }
     }
     // Out-of-bounds the meadow keeps going as a darker, desaturated
-    // continuation — the dim target sits halfway between the fog color and
-    // the low ramp so it reads as shaded land, never a black ring; horizon
-    // haze only engages near the skirt rim where the hills sink away.
+    // continuation. The dim is post-lighting and converges within ~4 cells
+    // of the border: at far zoom the sun-lit skirt hills read as pale
+    // blobs and a cream wall against the dark fog film, so the outskirts
+    // must reach their dimmed tone quickly; horizon haze then takes over
+    // near the skirt rim where the hills sink away.
     const dimColor = new THREE.Color(theme.fogColor).lerp(
       new THREE.Color(theme.terrain.rampLow),
-      0.55,
+      0.45,
     );
     return createThemedTerrainMaterial(theme, {
       heightMin: lo,
@@ -217,8 +219,8 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
         theme.terrain.skirtCells > 0
           ? {
               color: `#${dimColor.getHexString()}`,
-              start: 2.0,
-              end: theme.terrain.skirtCells * 0.55,
+              start: 0.2,
+              end: 4.0,
             }
           : undefined,
     });

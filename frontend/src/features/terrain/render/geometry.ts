@@ -334,7 +334,7 @@ export function buildOutskirtsGeometry(
     // a fully-hazed ridge keeps a pale cream crest silhouette that reads
     // as a wall ringing the map.
     const rim = 1 - Math.min(Math.max((d / s - 0.45) / 0.3, 0), 1);
-    const amp = Math.min(d * 0.45, 1.4);
+    const amp = Math.min(d * 0.45, 1.15);
     // First ~3 cells hold the border height so the skirt meets the map
     // edge with no ledge, then rolling noise fades in.
     const hills =
@@ -355,7 +355,7 @@ export function buildOutskirtsGeometry(
   const nodeShade = (ix: number, iy: number, y: number): number => {
     const n = outskirtsNoise(ix * 0.7 + 3.1, iy * 0.7 + 9.7);
     const hMix = Math.min(Math.max(y * 0.35 + 0.55, 0), 1);
-    return (SKIRT_SHADE_LOW + (SKIRT_SHADE_HIGH - SKIRT_SHADE_LOW) * hMix) * (0.94 + n * 0.12);
+    return (SKIRT_SHADE_LOW + (SKIRT_SHADE_HIGH - SKIRT_SHADE_LOW) * hMix) * (0.96 + n * 0.08);
   };
 
   const emitNode = (ix: number, iy: number): number => {

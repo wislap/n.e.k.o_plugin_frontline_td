@@ -42,6 +42,7 @@
   justify-content: space-between;
   align-items: flex-end;
   max-width: min(340px, 32vw);
+  position: relative;
 }
 
 .slot {
@@ -82,8 +83,13 @@
   align-items: flex-start;
 }
 
+/* Anchored to the column's vertical centre so the right rail stays put
+   when the bottom-right inspector appears or resizes. */
 .middleRight {
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   align-items: flex-end;
 }
 

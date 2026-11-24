@@ -226,7 +226,7 @@ const VISUAL: RenderVisual = {
     top: '#a9ccec',
     horizon: '#eef3ec',
     bottom: '#a8b49a',
-    platform: '#92ad72',
+    platform: '#5f7a4a',
     platformFadeStart: 0.5,
     platformFadeEnd: 1.05,
     haze: '#e4ecdf',

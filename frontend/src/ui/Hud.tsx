@@ -184,6 +184,7 @@ export function Hud({
         <Minimap client={client} db={db} map={map} isHostile={isHostile ?? defaultIsHostile} />
       )}
       <ToastStack workerError={workerError} errorPrefix={t('dev.error')} items={toasts} />
+      {debugUi}
     </>
   );
 
@@ -252,12 +253,7 @@ export function Hud({
     </>
   );
 
-  const topRight = (
-    <>
-      <StockPanel client={client} db={db} />
-      {debugUi}
-    </>
-  );
+  const topRight = <StockPanel client={client} db={db} />;
 
   // Bottom-left: squad strip + selection count (mode info moved to the
   // top-left primary-mode pill).

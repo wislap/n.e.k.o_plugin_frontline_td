@@ -189,7 +189,7 @@ test('primary modes, auto-tactical camera, view lock, Tab toggle, and pause came
   await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
   await expect(topLeft.locator('[data-testid="minimap-panel"]')).toBeVisible();
   await expect(topRight.locator('[data-cargo]').first()).toBeVisible();
-  await expect(topRight).not.toContainText('运行遥测');
+  await expect(topLeft).not.toContainText('运行遥测');
 
   // Space pause/resume never auto-switches camera (gauge pill top-center)
   await page.keyboard.press('Space');
@@ -252,7 +252,6 @@ test('secondary tools, Esc and right-click exit hierarchy, K/? key guide rail, a
   const middleRight = page.locator('[data-hud-slot="middleRight"]');
   const topCenter = page.locator('[data-hud-slot="topCenter"]');
   const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
-  const topRight = page.locator('[data-hud-slot="topRight"]');
   const canvas = page.locator('canvas').first();
 
   // F2 + click Turret card -> place banner -> Esc exits tool, keeps F2 & KeyGuideRail
@@ -295,11 +294,12 @@ test('secondary tools, Esc and right-click exit hierarchy, K/? key guide rail, a
   await expect(middleLeft).not.toContainText('快捷键引导');
   await expect(middleRight.getByRole('button', { name: '快捷键 ›' })).toBeVisible();
 
-  // Backquote toggles DebugPanel in topRight
+  // Backquote toggles DebugPanel in topLeft (below the minimap)
+  const topLeft = page.locator('[data-hud-slot="topLeft"]');
   await page.keyboard.press('Backquote');
-  await expect(topRight).toContainText('运行遥测');
+  await expect(topLeft).toContainText('运行遥测');
   await page.keyboard.press('Backquote');
-  await expect(topRight).not.toContainText('运行遥测');
+  await expect(topLeft).not.toContainText('运行遥测');
 
   expect(failures).toEqual([]);
 });
@@ -358,12 +358,13 @@ for (const vp of HUD_VIEWPORTS) {
     const topRight = page.locator('[data-hud-slot="topRight"]');
     const topCenter = page.locator('[data-hud-slot="topCenter"]');
     const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
+    const topLeft = page.locator('[data-hud-slot="topLeft"]');
     await expect(topRight.locator('[data-cargo]').first()).toBeVisible();
 
     // State 1: F1 default
     await page.keyboard.press('F1');
     await expect(page.locator('[data-mode="command"]')).toBeVisible();
-    await expect(topRight).not.toContainText('运行遥测');
+    await expect(topLeft).not.toContainText('运行遥测');
     await assertHudBoundsAndNonOverlap(page, `${label} F1`);
 
     // State 2: F2 with Turret place banner active
@@ -378,12 +379,58 @@ for (const vp of HUD_VIEWPORTS) {
     await expect(page.locator('[data-mode="logistics"]')).toBeVisible();
     await expect(bottomCenter.getByRole('button', { name: /道路工具/ })).toBeVisible();
     await page.keyboard.press('Backquote');
-    await expect(topRight).toContainText('运行遥测');
+    await expect(topLeft).toContainText('运行遥测');
     await assertHudBoundsAndNonOverlap(page, `${label} F3+debug`);
 
     expect(failures).toEqual([]);
   });
 }
+
+test('right rail circles stay right-aligned and anchored when the inspector appears', async ({
+  page,
+}) => {
+  const failures = collectFailures(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await bootAndWaitForTick(page);
+
+  const slot = page.locator('[data-hud-slot="middleRight"]');
+  const buttons = slot.getByRole('button');
+  await expect(buttons.first()).toBeVisible();
+
+  // Every circle's right edge must sit on the same vertical line.
+  const rightEdges = await buttons.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().right),
+  );
+  expect(rightEdges.length).toBeGreaterThan(1);
+  const edge0 = rightEdges[0] ?? 0;
+  for (const edge of rightEdges) {
+    expect(Math.abs(edge - edge0)).toBeLessThanOrEqual(1);
+  }
+
+  const railBefore = await slot.boundingBox();
+  expect(railBefore).not.toBeNull();
+
+  // Box-select units -> the inspector card appears in bottomRight; the
+  // rail is viewport-anchored and must not move.
+  const size = page.viewportSize();
+  expect(size).not.toBeNull();
+  if (size === null) return;
+  await page.mouse.move(size.width * 0.35, size.height * 0.35);
+  await page.mouse.down();
+  await page.mouse.move(size.width * 0.65, size.height * 0.72, { steps: 8 });
+  await page.mouse.up();
+
+  const bottomRight = page.locator('[data-hud-slot="bottomRight"]');
+  await expect(bottomRight.locator('> *').first()).toBeVisible();
+
+  const railAfter = await slot.boundingBox();
+  expect(railAfter).not.toBeNull();
+  if (railAfter === null) return;
+  expect(Math.abs(railAfter.y - (railBefore?.y ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs(railAfter.x - (railBefore?.x ?? 0))).toBeLessThanOrEqual(1);
+
+  expect(failures).toEqual([]);
+});
 
 test('3D orbital rotation via Q/E and middle-drag updates compass and resets smoothly to North', async ({
   page,
