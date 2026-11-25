@@ -33,9 +33,12 @@ interface GpuPassTiming {
 
 export interface GpuProfilerSnapshot {
   readonly available: boolean;
-  // Rolling-average ms for the 'frame' span (0 when no complete frame).
+  // Sum of all rolling-average label times: the whole measured frame.
+  // Segments never overlap (nesting splits the parent), so this is the
+  // true per-frame GPU total.
   readonly totalMs: number;
-  // Rolling-average ms per non-frame label.
+  // Rolling-average ms per label. 'frame' is the un-instrumented
+  // remainder of the frame outside any wrapped pass.
   readonly labels: readonly GpuPassTiming[];
 }
 
@@ -211,11 +214,12 @@ export class GpuProfiler {
 
   snapshot(): GpuProfilerSnapshot {
     const labels: GpuPassTiming[] = [];
+    let totalMs = 0;
     for (const label of this.history.keys()) {
-      if (label !== GPU_FRAME_LABEL) {
-        labels.push({ label, ms: this.average(label) });
-      }
+      const ms = this.average(label);
+      labels.push({ label, ms });
+      totalMs += ms;
     }
-    return { available: this.available, totalMs: this.average(GPU_FRAME_LABEL), labels };
+    return { available: this.available, totalMs, labels };
   }
 }

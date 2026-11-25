@@ -22,9 +22,16 @@ export interface GpuInstrumentation {
 }
 
 // Label for a composer pass: the RenderPass is the scene draw itself;
-// other passes keep their constructor name (N8AOPostPass, EffectPass…).
+// Pass.name survives minification (EffectPass, CopyPass). N8AOPostPass
+// leaves the default 'Pass' name, so it is recognised by its API.
 function passLabel(pass: Pass): string {
-  return pass instanceof RenderPass ? 'scene' : pass.constructor.name || 'pass';
+  if (pass instanceof RenderPass) {
+    return 'scene';
+  }
+  if (typeof (pass as { setQualityMode?: unknown }).setQualityMode === 'function') {
+    return 'n8ao';
+  }
+  return pass.name !== '' && pass.name !== 'Pass' ? pass.name : pass.constructor.name || 'pass';
 }
 
 export function installGpuInstrumentation(
@@ -91,7 +98,7 @@ export function installGpuInstrumentation(
           }
           wrappedEffects.add(effect);
           const original: Effect['update'] = Reflect.get(effect, 'update');
-          const label = `fx:${effect.constructor.name || 'effect'}`;
+          const label = `fx:${effect.name !== '' ? effect.name : effect.constructor.name}`;
           const wrapped: Effect['update'] = function (this: Effect, ...args) {
             profiler.begin(label);
             try {

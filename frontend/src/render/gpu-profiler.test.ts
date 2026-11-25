@@ -98,7 +98,8 @@ describe('GpuProfiler', () => {
     const byLabel = Object.fromEntries(snap.labels.map((l) => [l.label, l.ms]));
     expect(byLabel['scene']).toBeCloseTo(0.04, 4);
     expect(byLabel['shadow']).toBeCloseTo(0.005, 4);
-    expect(snap.totalMs).toBeCloseTo(0.1, 4);
+    expect(byLabel['frame']).toBeCloseTo(0.1, 4); // un-instrumented remainder
+    expect(snap.totalMs).toBeCloseTo(0.145, 4);
   });
 
   it('waits for async results across later frames', () => {
@@ -115,7 +116,8 @@ describe('GpuProfiler', () => {
     frame(p, ['scene']); // this poll resolves frames 0-2's aged queries
     const snap = p.snapshot();
     expect(snap.labels.find((l) => l.label === 'scene')?.ms).toBeCloseTo(0.05, 4);
-    expect(snap.totalMs).toBeCloseTo(0.4, 4);
+    // Per-label averages over the committed frames: scene 0.05 + frame 0.4.
+    expect(snap.totalMs).toBeCloseTo(0.45, 4);
   });
 
   it('drops frames hit by GPU_DISJOINT', () => {
@@ -134,7 +136,7 @@ describe('GpuProfiler', () => {
     const snap = p.snapshot();
     // The disjoint frame's 'scene' never commits; only frame 1 counts.
     expect(snap.labels.find((l) => l.label === 'scene')?.ms).toBeCloseTo(0.02, 4);
-    expect(snap.totalMs).toBeCloseTo(0.2, 4);
+    expect(snap.totalMs).toBeCloseTo(0.22, 4); // scene 0.02 + frame 0.2
   });
 
   it('keeps a rolling average over complete frames', () => {
@@ -148,6 +150,6 @@ describe('GpuProfiler', () => {
     // Frames 0..3 committed (frame 4's own queries resolve next poll):
     // scene durations 0,10,20,30us → avg 15us = 0.015ms.
     expect(snap.labels.find((l) => l.label === 'scene')?.ms).toBeCloseTo(0.015, 4);
-    expect(snap.totalMs).toBeCloseTo(0.1, 4);
+    expect(snap.totalMs).toBeCloseTo(0.115, 4);
   });
 });

@@ -17,7 +17,7 @@ import {
 } from '@react-three/postprocessing';
 import { isCaptureMode } from '../../client/capture-mode';
 import { useUiStore } from '../../client/ui-store';
-import { effectComposerRef } from '../composer-ref';
+import { setEffectComposer } from '../composer-ref';
 import { VISUAL } from './visual';
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
@@ -38,12 +38,7 @@ export function PostEffects() {
   // Debug-panel render-cost toggles (all on by default).
   const cost = useUiStore((s) => s.renderCost);
   return (
-    <EffectComposer
-      multisampling={0}
-      ref={(composer) => {
-        effectComposerRef.current = composer;
-      }}
-    >
+    <EffectComposer multisampling={0} ref={setEffectComposer}>
       {software ? (
         <></>
       ) : (
