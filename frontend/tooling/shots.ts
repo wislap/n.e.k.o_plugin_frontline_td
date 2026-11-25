@@ -177,6 +177,9 @@ async function capture(label: string, presets: string[]): Promise<void> {
 
 interface DiffResult {
   mismatchPct: number;
+  // Max per-channel absolute delta (0–255) and its 99.9th percentile.
+  maxDelta: number;
+  p999Delta: number;
   diffPng: string;
 }
 
@@ -235,7 +238,7 @@ async function diffPair(page: Page, fileA: string, fileB: string): Promise<DiffR
       const ia = await decode(aB64);
       const ib = await decode(bB64);
       if (ia.width !== ib.width || ia.height !== ib.height) {
-        return { mismatchPct: 100, diffPng: '' };
+        return { mismatchPct: 100, maxDelta: 255, p999Delta: 255, diffPng: '' };
       }
       const out = w.document.createElement('canvas');
       out.width = ia.width;
@@ -247,12 +250,22 @@ async function diffPair(page: Page, fileA: string, fileB: string): Promise<DiffR
       const od = octx.createImageData(ia.width, ia.height);
       let mismatch = 0;
       const total = ia.width * ia.height;
+      // Per-channel |delta| histogram: reports the max delta and the
+      // 99.9th percentile, for judging 8-bit/16-bit buffer changes.
+      const histogram = new Uint32Array(256);
+      let maxDelta = 0;
       for (let i = 0; i < ia.data.length; i += 4) {
-        const same =
-          ia.data[i] === ib.data[i] &&
-          ia.data[i + 1] === ib.data[i + 1] &&
-          ia.data[i + 2] === ib.data[i + 2] &&
-          ia.data[i + 3] === ib.data[i + 3];
+        const dr = Math.abs((ia.data[i] ?? 0) - (ib.data[i] ?? 0));
+        const dg = Math.abs((ia.data[i + 1] ?? 0) - (ib.data[i + 1] ?? 0));
+        const db = Math.abs((ia.data[i + 2] ?? 0) - (ib.data[i + 2] ?? 0));
+        histogram[dr] = (histogram[dr] ?? 0) + 1;
+        histogram[dg] = (histogram[dg] ?? 0) + 1;
+        histogram[db] = (histogram[db] ?? 0) + 1;
+        const m = Math.max(dr, dg, db);
+        if (m > maxDelta) {
+          maxDelta = m;
+        }
+        const same = dr === 0 && dg === 0 && db === 0 && ia.data[i + 3] === ib.data[i + 3];
         if (!same) {
           mismatch += 1;
           od.data[i] = 255;
@@ -266,7 +279,23 @@ async function diffPair(page: Page, fileA: string, fileB: string): Promise<DiffR
         }
       }
       octx.putImageData(od, 0, 0);
-      return { mismatchPct: (mismatch / total) * 100, diffPng: out.toDataURL('image/png') };
+      const channels = total * 3;
+      // p99.9: smallest delta covering 99.9% of all channel values.
+      const limit = channels * 0.001;
+      let p999 = 0;
+      for (let v = 255, cum = 0; v >= 0; v -= 1) {
+        cum += histogram[v] ?? 0;
+        if (cum >= limit) {
+          p999 = v;
+          break;
+        }
+      }
+      return {
+        mismatchPct: (mismatch / total) * 100,
+        maxDelta,
+        p999Delta: p999,
+        diffPng: out.toDataURL('image/png'),
+      };
     },
     [a, b],
   );
@@ -300,7 +329,9 @@ async function diff(labelA: string, labelB: string): Promise<void> {
         const png = Buffer.from(r.diffPng.split(',')[1] ?? '', 'base64');
         writeFileSync(path.join(outDir, `${preset}.diff.png`), png);
       }
-      console.log(`${preset}: ${r.mismatchPct.toFixed(4)}% pixels differ`);
+      console.log(
+        `${preset}: ${r.mismatchPct.toFixed(4)}% pixels differ (max Δ${r.maxDelta}/255, p99.9 Δ${r.p999Delta}/255)`,
+      );
     }
   } finally {
     await browser.close();
