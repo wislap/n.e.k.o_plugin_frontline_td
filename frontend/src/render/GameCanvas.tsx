@@ -88,11 +88,7 @@ function CaptureProbe() {
 // store ~2x a second.
 const PERF_WINDOW_MS = 500;
 
-function publishPerfStats(
-  gl: THREE.WebGLRenderer,
-  frames: number,
-  ms: number,
-): void {
+function publishPerfStats(gl: THREE.WebGLRenderer, frames: number, ms: number): void {
   useUiStore.getState().setRenderStats({
     frameMs: ms / frames,
     drawCalls: gl.info.render.calls,

@@ -146,19 +146,10 @@ export function injectFog(material: THREE.Material, fog: FogUniforms): void {
     prev(shader, renderer);
     Object.assign(shader.uniforms, fog);
     shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>\n${GLSL_FOG_WORLD_DECL}`,
-      )
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>\n${GLSL_FOG_WORLD_VERT}`,
-      );
+      .replace('#include <common>', `#include <common>\n${GLSL_FOG_WORLD_DECL}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${GLSL_FOG_WORLD_VERT}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>\n${GLSL_FOG}\n${GLSL_FOG_WORLD_DECL}`,
-      )
+      .replace('#include <common>', `#include <common>\n${GLSL_FOG}\n${GLSL_FOG_WORLD_DECL}`)
       .replace(
         '#include <fog_fragment>',
         `#include <fog_fragment>\n gl_FragColor.rgb = ftdFogApply(gl_FragColor.rgb, vFtdFogWorld.xz, vFtdFogDist);`,

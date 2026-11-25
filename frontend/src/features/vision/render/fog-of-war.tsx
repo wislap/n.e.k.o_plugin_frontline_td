@@ -76,8 +76,7 @@ export function FogOfWar({ client, map, uniforms }: FogOfWarProps): null {
     if (latest === null) {
       return;
     }
-    const layer =
-      readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
+    const layer = readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
     if (layer === undefined) {
       return;
     }

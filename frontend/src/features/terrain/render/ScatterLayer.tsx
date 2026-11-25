@@ -80,10 +80,7 @@ export function ScatterLayer({ client, db, map, heights, fog }: ScatterLayerProp
   const palette = useMemo(() => propPalette(theme), [theme]);
   const grassGeo = useMemo(() => createGrassGeometry(), []);
   const stoneGeo = useMemo(() => createRockGeometry(0.13, 53), []);
-  const grassMat = useMemo(
-    () => createGrassMaterial(palette.grass, fog),
-    [palette.grass, fog],
-  );
+  const grassMat = useMemo(() => createGrassMaterial(palette.grass, fog), [palette.grass, fog]);
   const propMats = useMemo(() => createPropMaterials(palette, fog), [palette, fog]);
 
   useEffect(() => {

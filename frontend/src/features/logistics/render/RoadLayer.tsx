@@ -73,10 +73,7 @@ export function RoadLayer({ client, map, heights, fog }: RoadLayerProps) {
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const writer = useMemo(() => new InstanceWriter(), []);
 
-  const glowMat = useMemo(
-    () => createRoadGlowMaterial(theme.markers.link, fog),
-    [theme, fog],
-  );
+  const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link, fog), [theme, fog]);
   useGpuResource(glowMat);
 
   useFrame(() => {
