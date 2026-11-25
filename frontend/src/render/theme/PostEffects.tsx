@@ -48,8 +48,11 @@ export function PostEffects() {
               ref={(pass) => {
                 // denoiseIterations is not forwarded by the R3F wrapper;
                 // the pass's public configuration is the documented way to set it.
+                // n8ao ships no typings, so narrow it where we touch it.
                 if (pass !== null) {
-                  pass.configuration.denoiseIterations = 1;
+                  (
+                    pass as { configuration: { denoiseIterations: number } }
+                  ).configuration.denoiseIterations = 1;
                 }
               }}
               aoRadius={post.aoRadius}
