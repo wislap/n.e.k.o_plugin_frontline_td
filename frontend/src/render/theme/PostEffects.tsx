@@ -5,16 +5,16 @@
 // The look is calibrated without tone mapping: EffectComposer forces
 // gl.toneMapping = NoToneMapping, so any renderer-level tone-mapping
 // setting is dead — keep it that way.
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import {
   EffectComposer,
   Bloom,
   BrightnessContrast,
   HueSaturation,
-  N8AO,
   SMAA,
 } from '@react-three/postprocessing';
+import { N8AOPostPass } from 'n8ao';
 import { isCaptureMode } from '../../client/capture-mode';
 import { useUiStore } from '../../client/ui-store';
 import { setEffectComposer } from '../composer-ref';
@@ -26,6 +26,38 @@ function isSoftwareRenderer(gl: WebGLRenderingContext): boolean {
   const info = gl.getExtension('WEBGL_debug_renderer_info');
   const param = info?.['UNMASKED_RENDERER_WEBGL'] ?? gl.RENDERER;
   return SOFTWARE_RENDERER.test(String(gl.getParameter(param)));
+}
+
+// Ambient occlusion as a plain <primitive> pass instead of the <N8AO>
+// wrapper component: the wrapper registers its pass in the library's
+// groupPasses set, which makes EffectComposer append a trailing CopyPass
+// that only blits the finished frame to screen (~0.7 ms on iGPU).
+function AoPass({
+  aoRadius,
+  intensity,
+}: {
+  readonly aoRadius: number;
+  readonly intensity: number;
+}) {
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const pass = useMemo(() => {
+    const p = new N8AOPostPass(scene, camera);
+    const c = p.configuration;
+    c.aoRadius = aoRadius;
+    c.intensity = intensity;
+    c.halfRes = true;
+    c.depthAwareUpsampling = true;
+    c.denoiseIterations = 1;
+    p.setQualityMode('Medium');
+    return p;
+  }, [scene, camera, aoRadius, intensity]);
+  useEffect(() => {
+    return () => {
+      pass.dispose();
+    };
+  }, [pass]);
+  return <primitive object={pass} />;
 }
 
 export function PostEffects() {
@@ -43,27 +75,7 @@ export function PostEffects() {
         <></>
       ) : (
         <>
-          {cost.n8ao ? (
-            <N8AO
-              ref={(pass) => {
-                // denoiseIterations is not forwarded by the R3F wrapper;
-                // the pass's public configuration is the documented way to set it.
-                // n8ao ships no typings, so narrow it where we touch it.
-                if (pass !== null) {
-                  (
-                    pass as { configuration: { denoiseIterations: number } }
-                  ).configuration.denoiseIterations = 1;
-                }
-              }}
-              aoRadius={post.aoRadius}
-              intensity={post.aoIntensity}
-              quality="medium"
-              halfRes
-              depthAwareUpsampling
-            />
-          ) : (
-            <></>
-          )}
+          {cost.n8ao ? <AoPass aoRadius={post.aoRadius} intensity={post.aoIntensity} /> : <></>}
           {cost.bloom ? (
             <Bloom
               intensity={post.bloomIntensity}
