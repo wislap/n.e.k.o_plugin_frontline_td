@@ -86,7 +86,7 @@
   z-index: var(--z-tooltip);
   padding: 3px 7px;
   border-radius: var(--radius-btn);
-  border: 1px solid rgba(255, 193, 77, 0.55);
+  border: 1px solid var(--semantic-warn-55);
   background: var(--surface-elevated);
   backdrop-filter: var(--backdrop-blur);
   box-shadow: var(--shadow-panel);

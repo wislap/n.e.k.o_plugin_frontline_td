@@ -47,7 +47,7 @@
 }
 
 .primary:hover:not(:disabled) {
-  box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
+  box-shadow: 0 2px 10px var(--shadow-drop);
   transform: translateY(-1px);
 }
 
@@ -56,8 +56,8 @@
   background: var(--mode-accent-dim);
   color: var(--text-primary);
   box-shadow:
-    0 2px 10px rgba(10, 14, 10, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 2px 10px var(--shadow-drop),
+    inset 0 0 0 1px var(--glint-inset-strong);
 }
 
 .active:hover:not(:disabled) {

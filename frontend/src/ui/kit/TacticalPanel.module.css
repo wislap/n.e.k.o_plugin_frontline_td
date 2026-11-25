@@ -20,11 +20,11 @@
 }
 
 .tone-danger {
-  border-color: rgba(255, 92, 92, 0.45);
+  border-color: var(--semantic-danger-45);
 }
 
 .tone-warn {
-  border-color: rgba(255, 193, 77, 0.45);
+  border-color: var(--semantic-warn-45);
 }
 
 .header {
@@ -98,12 +98,12 @@
    ink; the gauge pill keeps its own dark instrument look. */
 :global([data-hud-slot='topCenter']) .tone-mode {
   border: none;
-  background: rgba(244, 246, 238, 0.94);
-  color: #23261f;
+  background: var(--surface-pill);
+  color: var(--ink-dark-2);
 }
 
 :global([data-hud-slot='topCenter']) .tone-mode .body,
 :global([data-hud-slot='topCenter']) .tone-mode .body span {
-  color: #23261f;
+  color: var(--ink-dark-2);
   text-shadow: none;
 }

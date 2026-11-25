@@ -14,13 +14,13 @@
 }
 
 .pos {
-  border-color: rgba(70, 224, 154, 0.38);
+  border-color: var(--semantic-ok-38);
   background: var(--semantic-ok-dim);
   color: var(--semantic-ok);
 }
 
 .neg {
-  border-color: rgba(255, 92, 92, 0.42);
+  border-color: var(--semantic-danger-42);
   background: var(--semantic-danger-dim);
   color: var(--semantic-danger);
 }

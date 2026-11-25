@@ -18,8 +18,8 @@
   justify-content: center;
   padding: var(--space-4);
   background:
-    radial-gradient(circle at 50% 35%, rgba(16, 26, 44, 0.55), rgba(7, 11, 19, 0.88)),
-    repeating-linear-gradient(0deg, rgba(148, 178, 214, 0.03) 0 1px, transparent 1px 28px);
+    radial-gradient(circle at 50% 35%, var(--endscreen-halo), var(--endscreen-veil)),
+    repeating-linear-gradient(0deg, var(--endscreen-scanline) 0 1px, transparent 1px 28px);
   backdrop-filter: blur(8px);
 }
 
@@ -57,12 +57,12 @@
 
 .outcome-victory .outcomeTitle {
   color: var(--semantic-ok);
-  text-shadow: 0 0 18px rgba(70, 224, 154, 0.4);
+  text-shadow: 0 0 18px var(--semantic-ok-40);
 }
 
 .outcome-victory .hero {
-  border-color: rgba(70, 224, 154, 0.4);
-  background: linear-gradient(180deg, rgba(70, 224, 154, 0.12), rgba(5, 8, 15, 0.72));
+  border-color: var(--semantic-ok-40);
+  background: linear-gradient(180deg, var(--semantic-ok-12), var(--endscreen-scrim));
 }
 
 .outcome-defeat .outcomeTitle {
@@ -71,18 +71,18 @@
 }
 
 .outcome-defeat .hero {
-  border-color: rgba(255, 92, 92, 0.42);
-  background: linear-gradient(180deg, rgba(255, 92, 92, 0.14), rgba(5, 8, 15, 0.72));
+  border-color: var(--semantic-danger-42);
+  background: linear-gradient(180deg, var(--semantic-danger-14), var(--endscreen-scrim));
 }
 
 .outcome-draw .outcomeTitle {
   color: var(--semantic-warn);
-  text-shadow: 0 0 18px rgba(255, 193, 77, 0.35);
+  text-shadow: 0 0 18px var(--semantic-warn-35);
 }
 
 .outcome-draw .hero {
-  border-color: rgba(255, 193, 77, 0.42);
-  background: linear-gradient(180deg, rgba(255, 193, 77, 0.12), rgba(5, 8, 15, 0.72));
+  border-color: var(--semantic-warn-42);
+  background: linear-gradient(180deg, var(--semantic-warn-12), var(--endscreen-scrim));
 }
 
 .duration {

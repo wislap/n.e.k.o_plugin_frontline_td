@@ -85,13 +85,13 @@
 }
 
 .tagWarn {
-  border-color: rgba(255, 193, 77, 0.45);
+  border-color: var(--semantic-warn-45);
   background: var(--semantic-warn-dim);
   color: var(--semantic-warn);
 }
 
 .tagDanger {
-  border-color: rgba(255, 92, 92, 0.45);
+  border-color: var(--semantic-danger-45);
   background: var(--semantic-danger-dim);
   color: var(--semantic-danger);
 }

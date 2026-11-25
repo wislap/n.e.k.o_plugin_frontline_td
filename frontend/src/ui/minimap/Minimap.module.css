@@ -24,7 +24,7 @@
   position: relative;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
-  background: #060a12;
+  background: var(--surface-minimap);
   overflow: hidden;
   cursor: crosshair;
 }

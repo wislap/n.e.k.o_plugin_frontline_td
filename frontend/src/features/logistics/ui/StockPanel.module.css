@@ -17,7 +17,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: 2px 4px;
-  background: rgba(5, 8, 15, 0.42);
+  background: var(--surface-stock-row);
 }
 
 .cargoIcon {
@@ -27,16 +27,16 @@
 
 /* Per-resource glyph colours (visual hierarchy by colour, not opacity). */
 .row[data-cargo='ore'] .cargoIcon {
-  color: #d9a45b;
+  color: var(--resource-ore);
 }
 .row[data-cargo='material'] .cargoIcon {
-  color: #9fb8cc;
+  color: var(--resource-material);
 }
 .row[data-cargo='energy'] .cargoIcon {
   color: var(--semantic-warn);
 }
 .row[data-cargo='ammo'] .cargoIcon {
-  color: #ff8a5c;
+  color: var(--resource-ammo);
 }
 
 .cargoName {
@@ -78,7 +78,7 @@
   gap: 1px;
   padding: 4px 6px;
   border-radius: var(--radius-btn);
-  border: 1px solid rgba(255, 193, 77, 0.32);
+  border: 1px solid var(--semantic-warn-32);
   border-left: 2px solid var(--semantic-warn);
   background: var(--semantic-warn-dim);
 }
@@ -149,12 +149,12 @@
   padding: 0;
   gap: 4px;
   background: transparent;
-  color: rgba(246, 248, 242, 0.95);
-  text-shadow: 0 1px 6px rgba(10, 14, 10, 0.7);
+  color: var(--ink-strong);
+  text-shadow: 0 1px 6px var(--shadow-glyph-strong);
 }
 
 .cargoIcon {
-  filter: drop-shadow(0 1px 3px rgba(10, 14, 10, 0.65));
+  filter: drop-shadow(0 1px 3px var(--shadow-glyph));
 }
 
 .cargoName {
@@ -162,7 +162,7 @@
 }
 
 .amount {
-  color: #ffffff;
+  color: var(--ink-white);
 }
 
 .warnings {
@@ -172,7 +172,7 @@
 .warnItem {
   border-radius: var(--radius-btn);
   border: none;
-  background: rgba(20, 24, 20, 0.72);
+  background: var(--surface-stock-warn);
 }
 
 .footer {
@@ -190,9 +190,9 @@
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(244, 246, 238, 0.94);
-  color: #23261f;
-  box-shadow: 0 2px 8px rgba(10, 14, 10, 0.4);
+  background: var(--surface-pill);
+  color: var(--ink-dark-2);
+  box-shadow: 0 2px 8px var(--shadow-drop);
 }
 
 .priorityLabel {

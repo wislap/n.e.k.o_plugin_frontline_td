@@ -30,7 +30,7 @@
 .pillActive {
   border-color: var(--mode-accent);
   background: var(--mode-accent-dim);
-  box-shadow: 0 2px 10px rgba(10, 14, 10, 0.4);
+  box-shadow: 0 2px 10px var(--shadow-drop);
 }
 
 .pillMain {
@@ -76,17 +76,17 @@
 
 .batteryOk {
   color: var(--semantic-ok);
-  border-color: rgba(70, 224, 154, 0.32);
+  border-color: var(--semantic-ok-32);
 }
 
 .batteryWarn {
   color: var(--semantic-warn);
-  border-color: rgba(255, 193, 77, 0.38);
+  border-color: var(--semantic-warn-38);
 }
 
 .batteryDanger {
   color: var(--semantic-danger);
-  border-color: rgba(255, 92, 92, 0.42);
+  border-color: var(--semantic-danger-42);
 }
 
 .pillControls {

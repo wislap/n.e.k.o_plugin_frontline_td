@@ -73,6 +73,68 @@
   --mode-accent: #ffe600;
   --mode-accent-dim: rgba(255, 230, 0, 0.14);
   --mode-accent-glow: rgba(255, 230, 0, 0.32);
+  --mode-accent-92: rgba(255, 230, 0, 0.92);
   --radius-panel: 10px;
   --radius-btn: 999px;
+
+  /* Field ink: warm off-white for text/icons on dark surfaces and light
+     pill fills, and the dark olive ink used on those pills. */
+  --ink-strong: rgba(246, 248, 242, 0.95);
+  --ink: rgba(246, 248, 242, 0.92);
+  --ink-veil: rgba(246, 248, 242, 0.14);
+  --ink-chip: rgba(238, 240, 232, 0.9);
+  --ink-border: rgba(238, 240, 232, 0.14);
+  --ink-white: #ffffff;
+  --ink-dark: #101310;
+  --ink-dark-1: #22251f;
+  --ink-dark-2: #23261f;
+  --ink-dark-3: #2a2e26;
+  --surface-pill: rgba(244, 246, 238, 0.94);
+  --surface-pill-strong: rgba(244, 246, 238, 0.96);
+
+  /* Drop shadows and inner glints */
+  --shadow-drop: rgba(10, 14, 10, 0.4);
+  --shadow-chip: rgba(10, 14, 10, 0.35);
+  --shadow-glyph: rgba(10, 14, 10, 0.65);
+  --shadow-glyph-strong: rgba(10, 14, 10, 0.7);
+  --glint-inset: rgba(255, 255, 255, 0.05);
+  --glint-inset-strong: rgba(255, 255, 255, 0.06);
+
+  /* Semantic alpha variants (washes, hairline borders, glows); the
+     numeric suffix is the alpha in percent. */
+  --semantic-ok-12: rgba(70, 224, 154, 0.12);
+  --semantic-ok-32: rgba(70, 224, 154, 0.32);
+  --semantic-ok-35: rgba(70, 224, 154, 0.35);
+  --semantic-ok-38: rgba(70, 224, 154, 0.38);
+  --semantic-ok-40: rgba(70, 224, 154, 0.4);
+  --semantic-warn-12: rgba(255, 193, 77, 0.12);
+  --semantic-warn-32: rgba(255, 193, 77, 0.32);
+  --semantic-warn-35: rgba(255, 193, 77, 0.35);
+  --semantic-warn-38: rgba(255, 193, 77, 0.38);
+  --semantic-warn-42: rgba(255, 193, 77, 0.42);
+  --semantic-warn-45: rgba(255, 193, 77, 0.45);
+  --semantic-warn-50: rgba(255, 193, 77, 0.5);
+  --semantic-warn-55: rgba(255, 193, 77, 0.55);
+  --semantic-warn-text: #ffe8b8;
+  --semantic-danger-14: rgba(255, 92, 92, 0.14);
+  --semantic-danger-42: rgba(255, 92, 92, 0.42);
+  --semantic-danger-45: rgba(255, 92, 92, 0.45);
+  --semantic-danger-55: rgba(255, 92, 92, 0.55);
+  --semantic-danger-text: #ffd4d4;
+
+  /* Component surfaces and one-off colours */
+  --resource-ore: #d9a45b;
+  --resource-material: #9fb8cc;
+  --resource-ammo: #ff8a5c;
+  --surface-minimap: #060a12;
+  --surface-stock-row: rgba(5, 8, 15, 0.42);
+  --surface-stock-warn: rgba(20, 24, 20, 0.72);
+  --surface-menu-card: rgba(18, 22, 20, 0.78);
+  --surface-menu-card-hover: rgba(30, 36, 32, 0.88);
+  --surface-toast-danger: rgba(44, 12, 18, 0.92);
+  --meterbar-track: rgba(7, 11, 19, 0.48);
+  --endscreen-veil: rgba(7, 11, 19, 0.88);
+  --endscreen-halo: rgba(16, 26, 44, 0.55);
+  --endscreen-scanline: rgba(148, 178, 214, 0.03);
+  --endscreen-scrim: rgba(5, 8, 15, 0.72);
 }

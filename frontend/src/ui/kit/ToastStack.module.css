@@ -41,7 +41,7 @@
 
 .workerAlert {
   border-color: var(--semantic-danger);
-  background: rgba(44, 12, 18, 0.92);
+  background: var(--surface-toast-danger);
   color: var(--text-primary);
   box-shadow:
     0 0 16px var(--semantic-danger-glow),
@@ -50,15 +50,15 @@
 }
 
 .tone-danger {
-  border-color: rgba(255, 92, 92, 0.55);
+  border-color: var(--semantic-danger-55);
   border-left: 3px solid var(--semantic-danger);
-  color: #ffd4d4;
+  color: var(--semantic-danger-text);
 }
 
 .tone-warn {
-  border-color: rgba(255, 193, 77, 0.5);
+  border-color: var(--semantic-warn-50);
   border-left: 3px solid var(--semantic-warn);
-  color: #ffe8b8;
+  color: var(--semantic-warn-text);
 }
 
 .tone-info {

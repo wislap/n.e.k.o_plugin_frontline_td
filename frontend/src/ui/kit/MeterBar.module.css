@@ -46,7 +46,7 @@
   background-image: repeating-linear-gradient(
     90deg,
     transparent 0 18px,
-    rgba(7, 11, 19, 0.48) 18px 20px
+    var(--meterbar-track) 18px 20px
   );
 }
 
@@ -65,12 +65,12 @@
 
 .tone-ok {
   background: var(--semantic-ok);
-  box-shadow: 0 0 8px rgba(70, 224, 154, 0.35);
+  box-shadow: 0 0 8px var(--semantic-ok-35);
 }
 
 .tone-warn {
   background: var(--semantic-warn);
-  box-shadow: 0 0 8px rgba(255, 193, 77, 0.35);
+  box-shadow: 0 0 8px var(--semantic-warn-35);
 }
 
 .tone-danger {

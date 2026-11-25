@@ -7,19 +7,19 @@
   padding: 0 4px;
   border-radius: var(--radius-btn);
   border: none;
-  background: rgba(238, 240, 232, 0.9);
-  color: #2a2e26;
+  background: var(--ink-chip);
+  color: var(--ink-dark-3);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(10, 14, 10, 0.35);
+  box-shadow: 0 1px 3px var(--shadow-chip);
 }
 
 .active {
   border: none;
-  background: rgba(255, 230, 0, 0.92);
-  color: #22251f;
+  background: var(--mode-accent-92);
+  color: var(--ink-dark-1);
 }
