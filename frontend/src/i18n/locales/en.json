@@ -33,6 +33,7 @@
     "gpu": "GPU passes",
     "gpu_total": "total",
     "gpu_unavailable": "timer query unavailable",
+    "scene_breakdown": "Scene breakdown",
     "scene_layers": "Scene layers",
     "renderer": "Renderer",
     "buffer": "Buffer size",

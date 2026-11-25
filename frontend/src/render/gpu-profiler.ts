@@ -29,6 +29,9 @@ export interface TimerQueryExt {
 interface GpuPassTiming {
   readonly label: string;
   readonly ms: number;
+  // Rolling-average number of segments (spans) per frame. For per-object
+  // instrumentation each span is one rendered object, i.e. a draw call.
+  readonly calls: number;
 }
 
 export interface GpuProfilerSnapshot {
@@ -68,6 +71,10 @@ export class GpuProfiler {
   private issued = new Map<number, number>();
   private collected = new Map<number, FrameCollect>();
   private history = new Map<string, number[]>();
+  private callHistory = new Map<string, number[]>();
+  // Segments opened per label per frame; committed alongside the timing
+  // sums so per-label draw-call counts can be read from the snapshot.
+  private frameCalls = new Map<number, Map<string, number>>();
   // Frame index each label was last committed on; labels not seen for
   // ~HISTORY_LEN frames drop out of the readout and the total.
   private lastSeen = new Map<string, number>();
@@ -95,6 +102,9 @@ export class GpuProfiler {
   private record(seg: OpenSegment): void {
     this.pending.push({ frame: this.frame, label: seg.label, query: seg.query });
     this.issued.set(this.frame, (this.issued.get(this.frame) ?? 0) + 1);
+    const calls = this.frameCalls.get(this.frame) ?? new Map<string, number>();
+    calls.set(seg.label, (calls.get(seg.label) ?? 0) + 1);
+    this.frameCalls.set(this.frame, calls);
   }
 
   // Opens a span. If another span is open the parent's segment is closed
@@ -164,6 +174,7 @@ export class GpuProfiler {
         this.pool.push(p.query);
         this.issued.delete(p.frame);
         this.collected.delete(p.frame);
+        this.frameCalls.delete(p.frame);
       }
       this.pending = [];
     }
@@ -203,6 +214,18 @@ export class GpuProfiler {
         this.history.set(label, hist);
         this.lastSeen.set(label, frame);
       }
+      const calls = this.frameCalls.get(frame);
+      if (calls !== undefined) {
+        for (const [label, n] of calls) {
+          const hist = this.callHistory.get(label) ?? [];
+          hist.push(n);
+          if (hist.length > HISTORY_LEN) {
+            hist.shift();
+          }
+          this.callHistory.set(label, hist);
+        }
+        this.frameCalls.delete(frame);
+      }
       this.issued.delete(frame);
       this.collected.delete(frame);
     }
@@ -210,6 +233,14 @@ export class GpuProfiler {
 
   private average(label: string): number {
     const hist = this.history.get(label);
+    if (hist === undefined || hist.length === 0) {
+      return 0;
+    }
+    return hist.reduce((a, b) => a + b, 0) / hist.length;
+  }
+
+  private averageCalls(label: string): number {
+    const hist = this.callHistory.get(label);
     if (hist === undefined || hist.length === 0) {
       return 0;
     }
@@ -225,7 +256,7 @@ export class GpuProfiler {
         continue; // stale row: the pass has not run recently
       }
       const ms = this.average(label);
-      labels.push({ label, ms });
+      labels.push({ label, ms, calls: this.averageCalls(label) });
       totalMs += ms;
     }
     return { available: this.available, totalMs, labels };

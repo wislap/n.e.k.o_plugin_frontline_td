@@ -4,7 +4,7 @@
 // takes over gl.info resets so the counters reflect a whole frame.
 // Install/uninstall is driven by the PerfProbe mount while the panel is
 // open; everything is restored on uninstall.
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import {
   EffectPass,
   RenderPass,
@@ -34,9 +34,56 @@ function passLabel(pass: Pass): string {
   return pass.name !== '' && pass.name !== 'Pass' ? pass.name : pass.constructor.name || 'pass';
 }
 
+// Objects that carry geometry into a draw call.
+function isDrawable(object: THREE.Object3D): boolean {
+  return (
+    object instanceof THREE.Mesh ||
+    object instanceof THREE.InstancedMesh ||
+    object instanceof THREE.Points ||
+    object instanceof THREE.Line
+  );
+}
+
+type MaterialLike = { readonly name?: string; readonly type?: string };
+
+// Per-object label suffix: material name if authored, else its type.
+export function materialLabel(material: MaterialLike | MaterialLike[] | null): string {
+  if (material === null) {
+    return 'none';
+  }
+  if (Array.isArray(material)) {
+    return 'multi';
+  }
+  const name = material.name ?? '';
+  if (name !== '') {
+    return name;
+  }
+  return material.type ?? 'material';
+}
+
+type LayerTaggedObject = {
+  parent: LayerTaggedObject | null;
+  userData: Record<string, unknown>;
+};
+
+// Walks ancestors for the sceneLayerId that GameCanvas stamps on each
+// registry layer's wrapper group; anything outside gets 'shell'.
+export function resolveSceneLayerId(object: LayerTaggedObject): string {
+  let node: LayerTaggedObject | null = object;
+  while (node !== null) {
+    const id = node.userData['sceneLayerId'];
+    if (typeof id === 'string') {
+      return id;
+    }
+    node = node.parent;
+  }
+  return 'shell';
+}
+
 export function installGpuInstrumentation(
   renderer: THREE.WebGLRenderer,
   getComposer: () => EffectComposer | null,
+  scene: THREE.Object3D,
 ): GpuInstrumentation {
   const profiler = GpuProfiler.fromContext(renderer.getContext() as WebGL2RenderingContext);
   const restores: Array<() => void> = [];
@@ -62,6 +109,55 @@ export function installGpuInstrumentation(
   restores.push(() => {
     shadowMap.render = shadowRender;
   });
+
+  // Per-object spans: every rendered Mesh/InstancedMesh/Points/Line is
+  // wrapped in onBeforeRender/onAfterRender. The layer id is resolved by
+  // ancestor walk once and cached. Note: WebGLShadowMap draws via
+  // renderBufferDirect without firing onBeforeRender, so shadow draws do
+  // not produce per-object labels — they stay inside the 'shadow' span.
+  const wrappedObjects = new WeakSet<THREE.Object3D>();
+  const layerIds = new WeakMap<THREE.Object3D, string>();
+  function wrapObject(object: THREE.Object3D): void {
+    wrappedObjects.add(object);
+    let layerId = layerIds.get(object);
+    if (layerId === undefined) {
+      layerId = resolveSceneLayerId(object);
+      layerIds.set(object, layerId);
+    }
+    const material = (object as { material?: MaterialLike | MaterialLike[] }).material ?? null;
+    const label = `${layerId}/${materialLabel(material)}`;
+    const originalBefore: THREE.Object3D['onBeforeRender'] = Reflect.get(object, 'onBeforeRender');
+    const originalAfter: THREE.Object3D['onAfterRender'] = Reflect.get(object, 'onAfterRender');
+    object.onBeforeRender = function (
+      this: THREE.Object3D,
+      ...args: Parameters<THREE.Object3D['onBeforeRender']>
+    ) {
+      profiler.begin(label);
+      originalBefore.apply(this, args);
+    };
+    object.onAfterRender = function (
+      this: THREE.Object3D,
+      ...args: Parameters<THREE.Object3D['onAfterRender']>
+    ) {
+      try {
+        originalAfter.apply(this, args);
+      } finally {
+        profiler.end();
+      }
+    };
+    restores.push(() => {
+      object.onBeforeRender = originalBefore;
+      object.onAfterRender = originalAfter;
+    });
+  }
+  function ensureObjectsWrapped(): void {
+    scene.traverse((object) => {
+      if (isDrawable(object) && !wrappedObjects.has(object)) {
+        wrapObject(object);
+      }
+    });
+  }
+  ensureObjectsWrapped();
 
   // Passes and effects can be recreated when the debug toggles rebuild
   // the composer children, so wrapping is re-checked every frame.
@@ -131,6 +227,7 @@ export function installGpuInstrumentation(
         return;
       }
       ensureWrapped();
+      ensureObjectsWrapped();
       profiler.endFrame();
     },
     uninstall() {

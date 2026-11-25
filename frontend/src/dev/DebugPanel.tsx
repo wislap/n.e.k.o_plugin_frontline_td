@@ -162,7 +162,7 @@ export function DebugPanel({
         ) : (
           <>
             {gpuStats.labels
-              .slice()
+              .filter((l) => !l.label.includes('/'))
               .sort((a, b) => b.ms - a.ms)
               .map((l) => (
                 <div
@@ -183,6 +183,32 @@ export function DebugPanel({
               <span className={styles['label']}>{t('dev.gpu_total')}</span>
               <span className={styles['value']}>{gpuStats.totalMs.toFixed(2)}</span>
             </div>
+          </>
+        )}
+      </div>
+
+      <div className={styles['section']}>
+        <div className={styles['sectionTitle']}>{t('dev.scene_breakdown')}</div>
+        {gpuStats !== null && gpuStats.available && (
+          <>
+            {gpuStats.labels
+              .filter((l) => l.label.includes('/'))
+              .sort((a, b) => b.ms - a.ms)
+              .slice(0, 15)
+              .map((l) => (
+                <div
+                  key={l.label}
+                  className={styles['row']}
+                  data-scene-label={l.label}
+                  data-scene-ms={l.ms.toFixed(2)}
+                  data-scene-calls={l.calls.toFixed(1)}
+                >
+                  <span className={styles['label']}>{l.label}</span>
+                  <span className={styles['value']}>
+                    {l.ms.toFixed(2)} ×{l.calls.toFixed(0)}
+                  </span>
+                </div>
+              ))}
           </>
         )}
       </div>

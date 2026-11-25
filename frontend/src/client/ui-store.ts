@@ -32,6 +32,9 @@ interface RenderStats {
 interface GpuPassTiming {
   label: string;
   ms: number;
+  // Rolling-average segments per frame: one per rendered object for
+  // per-object labels, i.e. a draw-call count.
+  calls: number;
 }
 interface GpuStats {
   available: boolean;

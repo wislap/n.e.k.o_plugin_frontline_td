@@ -94,17 +94,18 @@ function publishPerfStats(
       bufferHeight: buffer.y,
       dpr: gl.getPixelRatio(),
       totalMs: snap.totalMs,
-      labels: snap.labels.map((l) => ({ label: l.label, ms: l.ms })),
+      labels: snap.labels.map((l) => ({ label: l.label, ms: l.ms, calls: l.calls })),
     });
   }
 }
 
 function PerfProbe() {
   const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const acc = useRef({ frames: 0, ms: 0 });
   const instr = useRef<GpuInstrumentation | null>(null);
   useEffect(() => {
-    const installed = installGpuInstrumentation(gl, () => effectComposerRef.current);
+    const installed = installGpuInstrumentation(gl, () => effectComposerRef.current, scene);
     instr.current = installed;
     return () => {
       installed.uninstall();
@@ -112,7 +113,7 @@ function PerfProbe() {
       useUiStore.getState().setRenderStats(null);
       useUiStore.getState().setGpuStats(null);
     };
-  }, [gl]);
+  }, [gl, scene]);
   // Frame begin runs before every other subscriber; frame end runs after
   // the composer's render (priority 1), so 'frame' brackets all GPU work.
   useFrame(() => {
@@ -286,7 +287,11 @@ export function GameCanvas({
         {ready && (
           <>
             {layers.map((layer) => (
-              <group key={layer.id} visible={!hiddenLayers.has(layer.id)}>
+              <group
+                key={layer.id}
+                visible={!hiddenLayers.has(layer.id)}
+                userData={{ sceneLayerId: layer.id }}
+              >
                 <layer.Component ctx={ctx} />
               </group>
             ))}

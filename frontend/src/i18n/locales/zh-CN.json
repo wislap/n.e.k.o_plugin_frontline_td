@@ -33,6 +33,7 @@
     "gpu": "GPU 分段",
     "gpu_total": "总计",
     "gpu_unavailable": "timer query 不可用",
+    "scene_breakdown": "场景明细",
     "scene_layers": "场景层",
     "renderer": "渲染器",
     "buffer": "缓冲尺寸",
