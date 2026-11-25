@@ -45,6 +45,13 @@ export function PostEffects() {
         <>
           {cost.n8ao ? (
             <N8AO
+              ref={(pass) => {
+                // denoiseIterations is not forwarded by the R3F wrapper;
+                // the pass's public configuration is the documented way to set it.
+                if (pass !== null) {
+                  pass.configuration.denoiseIterations = 1;
+                }
+              }}
               aoRadius={post.aoRadius}
               intensity={post.aoIntensity}
               quality="medium"
