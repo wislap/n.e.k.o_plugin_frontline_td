@@ -23,6 +23,7 @@
 | [0044](../adr/0044-adr-implementation-field.md) | ADR 实现状态字段 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-18 |
 | [0046](../adr/0046-doc-consistency-conventions.md) | 文档一致性约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
 | [0061](../adr/0061-doc-abstraction-and-tuning-records.md) | 文档抽象层级与调参记录约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-22 |
+| [0062](../adr/0062-client-contribution-registry.md) | 客户端贡献点注册：场景层、HUD 面板、检视器与小地图由功能声明、app 装配 | 已采纳 | 未实现（四类贡献点的迁移与依赖规则均未开始） | wislap | 前端重构 P3 | 2026-11-24 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -209,3 +210,6 @@
 
 ### R2 全 3D 自由轨道镜头与三维交互（2026-11-21）
 - [0060 全 3D 自由轨道沙盘镜头、射线锚定操控与三维实体拾取](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)
+
+### 前端重构 P3（2026-11-24）
+- [0062 客户端贡献点注册：场景层、HUD 面板、检视器与小地图由功能声明、app 装配](../adr/0062-client-contribution-registry.md)

@@ -498,7 +498,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `FogLayer` | function |  |
+| `FogOfWar` | function |  |
 | `MemoryLayer` | function |  |
 
 ## src/features/vision/rules/index.ts
