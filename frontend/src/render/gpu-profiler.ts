@@ -68,6 +68,9 @@ export class GpuProfiler {
   private issued = new Map<number, number>();
   private collected = new Map<number, FrameCollect>();
   private history = new Map<string, number[]>();
+  // Frame index each label was last committed on; labels not seen for
+  // ~HISTORY_LEN frames drop out of the readout and the total.
+  private lastSeen = new Map<string, number>();
   private pool: object[] = [];
   private readonly gl: TimerQueryContext;
   private readonly ext: TimerQueryExt | null;
@@ -198,6 +201,7 @@ export class GpuProfiler {
           hist.shift();
         }
         this.history.set(label, hist);
+        this.lastSeen.set(label, frame);
       }
       this.issued.delete(frame);
       this.collected.delete(frame);
@@ -216,6 +220,10 @@ export class GpuProfiler {
     const labels: GpuPassTiming[] = [];
     let totalMs = 0;
     for (const label of this.history.keys()) {
+      const lastSeen = this.lastSeen.get(label);
+      if (lastSeen === undefined || this.frame - lastSeen > HISTORY_LEN) {
+        continue; // stale row: the pass has not run recently
+      }
       const ms = this.average(label);
       labels.push({ label, ms });
       totalMs += ms;
