@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SimClient } from '../client/sim-client';
-import { useUiStore } from '../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
-import { DebugPanel } from '../dev/DebugPanel';
 import type { PanTracker } from '../input/pan';
 import { EndScreen } from '../modes/assault/ui/EndScreen';
 import { GameCanvas } from '../render/GameCanvas';
+import { HUD_PANELS } from './hud-panels';
 import { SCENE_LAYERS } from './scene-layers';
 import { Hud } from '../ui/Hud';
 
@@ -27,7 +26,6 @@ export function App({
   isHostile: (observer: number, faction: number) => boolean;
 }) {
   const { t } = useTranslation();
-  const panelOpen = useUiStore((state) => state.debugPanelOpen);
 
   useEffect(() => {
     document.title = t('app.title');
@@ -49,7 +47,7 @@ export function App({
         map={map}
         isHostile={isHostile}
         modeUi={<EndScreen client={client} onRestart={onRestart} />}
-        debugUi={panelOpen ? <DebugPanel client={client} /> : null}
+        panels={HUD_PANELS}
       />
     </main>
   );

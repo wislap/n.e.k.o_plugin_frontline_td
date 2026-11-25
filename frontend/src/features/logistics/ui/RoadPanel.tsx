@@ -7,9 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { cursorState } from '../../../client/cursor';
 import { useIntentRouter } from '../../../client/intent';
 import { useInteractionStore } from '../../../client/interaction-store';
-import type { SimClient, SnapshotPair } from '../../../client/sim-client';
+import type { SnapshotPair } from '../../../client/sim-client';
+import type { HudPanelProps } from '../../../ui/hud-panels';
 import { useSnapshotValue } from '../../../client/use-snapshot';
-import { localName, type ContentDb } from '../../../content/index';
+import { localName } from '../../../content/index';
 import { TICKS_PER_SECOND, readChannel, readLayer } from '../../../core/index';
 import type { SerializableTypedArray } from '../../../core/index';
 import { ActionButton, TacticalPanel } from '../../../ui/kit/index';
@@ -39,7 +40,8 @@ function sameRoadSlice(a: RoadSnapshotSlice, b: RoadSnapshotSlice): boolean {
   );
 }
 
-export function RoadPanel({ client, db }: { client: SimClient; db: ContentDb }) {
+export function RoadPanel({ ctx }: HudPanelProps) {
+  const { client, db } = ctx;
   const { t } = useTranslation();
   const router = useIntentRouter();
   const mode = useInteractionStore((s) => s.mode);

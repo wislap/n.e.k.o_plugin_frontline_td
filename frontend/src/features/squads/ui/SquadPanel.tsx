@@ -9,7 +9,8 @@ import { useInspectorStore } from '../../../client/inspector-store';
 import { useIntentRouter } from '../../../client/intent';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { useSelectionStore } from '../../../client/selection-store';
-import type { SimClient, SnapshotPair } from '../../../client/sim-client';
+import type { SnapshotPair } from '../../../client/sim-client';
+import type { HudPanelProps } from '../../../ui/hud-panels';
 import { digitForTag } from '../../../client/squad-controls';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { ActionButton, Kbd, TacticalPanel, cx } from '../../../ui/kit/index';
@@ -59,7 +60,8 @@ function selectUntaggedSquad(squad: SquadView): void {
   }
 }
 
-export function SquadPanel({ client }: { client: SimClient }) {
+export function SquadPanel({ ctx }: HudPanelProps) {
+  const { client } = ctx;
   const { t } = useTranslation();
   const router = useIntentRouter();
   const mode = useInteractionStore((s) => s.mode);

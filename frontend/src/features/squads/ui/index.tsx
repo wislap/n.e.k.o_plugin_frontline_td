@@ -1,1 +1,1 @@
-export { SquadPanel } from './SquadPanel';
+export { squadsHudPanels } from './hud-panels';

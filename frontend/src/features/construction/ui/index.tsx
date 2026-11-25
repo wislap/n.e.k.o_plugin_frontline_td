@@ -1,1 +1,1 @@
-export { BuildMenu } from './BuildMenu';
+export { constructionHudPanels } from './hud-panels';

@@ -40,17 +40,3 @@ export const SCENE_ORDER = {
   overlay: 300,
   fog: 400,
 } as const;
-
-export function sortSceneLayers(defs: readonly SceneLayerDef[]): readonly SceneLayerDef[] {
-  const seen = new Set<string>();
-  for (const def of defs) {
-    if (seen.has(def.id)) {
-      throw new Error(`duplicate scene layer id: ${def.id}`);
-    }
-    seen.add(def.id);
-  }
-  return defs
-    .map((def, index) => ({ def, index }))
-    .sort((a, b) => a.def.order - b.def.order || a.index - b.index)
-    .map(({ def }) => def);
-}

@@ -211,7 +211,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `BuildMenu` | function |  |
+| `constructionHudPanels` | const |  |
 
 ## src/features/logistics/content.ts
 
@@ -290,10 +290,9 @@
 |---|---|---|
 | `extendRoadSelection` | function | Extends a clicked link into a route over the current snapshot, using smoothed link flow and stopping at warehouse or leaf nodes, then maps the selected link indices back to stable handle-pair keys. |
 | `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
+| `logisticsHudPanels` | const |  |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
-| `RoadPanel` | function |  |
 | `sameKey` | function |  |
-| `StockPanel` | function |  |
 
 ## src/features/movement/protocol.ts
 
@@ -381,7 +380,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `SquadPanel` | function |  |
+| `squadsHudPanels` | const |  |
 
 ## src/features/terrain/content.ts
 

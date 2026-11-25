@@ -6,8 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { useIntentRouter } from '../../../client/intent';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { VISUAL } from '../../../render/theme/index';
-import { localName, type ContentDb } from '../../../content/index';
+import { localName } from '../../../content/index';
 import { TICKS_PER_SECOND } from '../../../core/index';
+import type { HudPanelProps } from '../../../ui/hud-panels';
 import { ActionButton, SegmentedTabs, TacticalPanel, cx } from '../../../ui/kit/index';
 import { BUILD_CATEGORIES, type BuildCategory } from '../content';
 import { renderStructureThumbnails } from '../render/thumbnails';
@@ -20,7 +21,8 @@ function formatBuildSeconds(ticks: number): string {
   return Number.isInteger(sec) ? String(sec) : sec.toFixed(1);
 }
 
-export function BuildMenu({ db }: { db: ContentDb }) {
+export function BuildMenu({ ctx }: HudPanelProps) {
+  const { db } = ctx;
   const { t } = useTranslation();
   const router = useIntentRouter();
   const mode = useInteractionStore((s) => s.mode);

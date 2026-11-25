@@ -18,7 +18,8 @@
 - `content.ts`：结构基础字段、`BUILD_CATEGORIES`、轮廓/图标声明。
 - `render/`/`ui/`/`inspector`：`constructionSceneLayers`（ADR 0062
   场景层：Structures、结构 HP、RoadWorks、道路段 HP、Ghost、
-  Exclusion）、BuildMenu、工地检查器。导出全表见
+  Exclusion）、`constructionHudPanels`（ADR 0062 HUD 面板注册：
+  BuildMenu）、工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

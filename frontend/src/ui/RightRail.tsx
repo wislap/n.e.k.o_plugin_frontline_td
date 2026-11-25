@@ -28,12 +28,13 @@ import {
 } from './icons';
 import { cx, Kbd } from './kit/index';
 import styles from './RightRail.module.css';
+import { useToastStore } from './toast-store';
 
 const KBD_TAB = 'Tab';
 const KBD_L = 'L';
 const KBD_K = 'K';
 
-export function RightRail({ onDisplayMessage }: { onDisplayMessage: (msg: string) => void }) {
+export function RightRail() {
   const { t } = useTranslation();
   const router = useIntentRouter();
   const cameraMode = useCameraStore((s) => s.mode);
@@ -118,9 +119,9 @@ export function RightRail({ onDisplayMessage }: { onDisplayMessage: (msg: string
               display.mode === 'fullscreen' ? exitDisplayMode() : requestDisplayMode('fullscreen');
             void op.then((result) => {
               if (result.status !== 'applied' && result.status !== 'cancelled') {
-                onDisplayMessage(
-                  t(`hud.display.${result.status}`, { defaultValue: result.status }),
-                );
+                useToastStore
+                  .getState()
+                  .push('warn', t(`hud.display.${result.status}`, { defaultValue: result.status }));
               }
             });
           }}

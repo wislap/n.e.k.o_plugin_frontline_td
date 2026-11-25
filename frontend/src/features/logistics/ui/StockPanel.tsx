@@ -4,10 +4,11 @@
 // production priority toggle. Driven by useSnapshotValue.
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SimClient, SnapshotPair } from '../../../client/sim-client';
+import type { SnapshotPair } from '../../../client/sim-client';
+import type { HudPanelProps } from '../../../ui/hud-panels';
 import { createStockRateTracker } from '../../../client/stock-rate';
 import { useSnapshotValue } from '../../../client/use-snapshot';
-import { localName, type ContentDb } from '../../../content/index';
+import { localName } from '../../../content/index';
 import { IconCargo, IconSwap } from '../../../ui/icons';
 import { ActionButton, RateBadge, TacticalPanel } from '../../../ui/kit/index';
 import {
@@ -33,7 +34,8 @@ function sameStockSlice(a: StockSlice, b: StockSlice): boolean {
   return a.tick === b.tick && a.network === b.network;
 }
 
-export function StockPanel({ client, db }: { client: SimClient; db: ContentDb }) {
+export function StockPanel({ ctx }: HudPanelProps) {
+  const { client, db } = ctx;
   const { t } = useTranslation();
   const [tracker] = useState(() => createStockRateTracker());
 
