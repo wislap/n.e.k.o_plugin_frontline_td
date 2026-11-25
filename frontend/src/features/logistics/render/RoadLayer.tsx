@@ -14,22 +14,28 @@ import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { readLayer } from '../../../core/index';
+import { GLSL_FOG, type FogUniforms } from '../../../render/shaders';
 import { ROAD_LAYER_ID } from '../protocol';
 
 const LIFT = 0.03;
 const CAP = 65536;
 const ATTACH_MATERIAL = 'material';
 
-function createRoadGlowMaterial(edge: string): THREE.ShaderMaterial {
+function createRoadGlowMaterial(edge: string, fog: FogUniforms): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       uBed: { value: new THREE.Color('#24282b') },
       uEdge: { value: new THREE.Color(edge) },
+      ...fog,
     },
     vertexShader: `
       varying vec2 vUv;
+      varying vec3 vFtdFogWorld;
+      varying float vFtdFogDist;
       void main() {
         vUv = uv;
+        vFtdFogWorld = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
+        vFtdFogDist = distance(vFtdFogWorld, cameraPosition);
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }
     `,
@@ -37,6 +43,9 @@ function createRoadGlowMaterial(edge: string): THREE.ShaderMaterial {
       uniform vec3 uBed;
       uniform vec3 uEdge;
       varying vec2 vUv;
+      varying vec3 vFtdFogWorld;
+      varying float vFtdFogDist;
+      ${GLSL_FOG}
       void main() {
         // Thin emissive trim just inside the cell border + two darker
         // tread bands along the road axis.
@@ -45,7 +54,7 @@ function createRoadGlowMaterial(edge: string): THREE.ShaderMaterial {
         float tread = smoothstep(0.30, 0.34, abs(vUv.y - 0.5));
         vec3 col = uBed * mix(0.72, 1.0, tread);
         col = mix(col, uEdge * 1.6, edge);
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(ftdFogApply(col, vFtdFogWorld.xz, vFtdFogDist), 1.0);
       }
     `,
   });
@@ -55,15 +64,19 @@ export interface RoadLayerProps {
   client: SimClient;
   map: ResolvedMap;
   heights: ArrayLike<number>;
+  fog: FogUniforms;
 }
 
-export function RoadLayer({ client, map, heights }: RoadLayerProps) {
+export function RoadLayer({ client, map, heights, fog }: RoadLayerProps) {
   const theme = VISUAL;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const writer = useMemo(() => new InstanceWriter(), []);
 
-  const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link), [theme]);
+  const glowMat = useMemo(
+    () => createRoadGlowMaterial(theme.markers.link, fog),
+    [theme, fog],
+  );
   useGpuResource(glowMat);
 
   useFrame(() => {

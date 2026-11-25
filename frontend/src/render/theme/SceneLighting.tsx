@@ -14,7 +14,7 @@ const SHADOW_MARGIN = 1.15;
 // Renderer/scene mutations live in module-scope helpers: the react-compiler
 // lint treats hook-derived objects as immutable, so the writes happen inside
 // plain functions whose params are not tracked (same pattern as the fog
-// texture upload in FogLayer).
+// texture upload in FogOfWar).
 function applyRendererSettings(gl: THREE.WebGLRenderer): () => void {
   const prev = {
     shadow: gl.shadowMap.enabled,

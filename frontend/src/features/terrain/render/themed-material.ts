@@ -6,7 +6,7 @@
 // Optional haze-fade tint blends the out-of-bounds skirt into the
 // horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
-import { GLSL_GRID_LINE, GLSL_NOISE } from '../../../render/shaders';
+import { GLSL_FOG, GLSL_GRID_LINE, GLSL_NOISE, type FogUniforms } from '../../../render/shaders';
 import type { RenderVisual } from '../../../render/theme/index';
 
 export interface ThemedTerrainParams {
@@ -17,6 +17,9 @@ export interface ThemedTerrainParams {
   // Skirt mode: fade the surface toward the horizon haze color outside
   // the map rect (distance in cells past the border).
   hazeFade?: { color: string; start: number; end: number } | undefined;
+  // Fog-of-war uniforms (shared object; mixed post-encoding so the
+  // composite matches the removed film exactly).
+  fog: FogUniforms;
 }
 
 // Shared mutable uniforms (module-scope, mutated per frame by callers):
@@ -72,17 +75,20 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uMapSize'] = {
       value: new THREE.Vector2(params.mapWidth, params.mapHeight),
     };
+    Object.assign(shader.uniforms, params.fog);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
         varying vec3 vTerWorld;
-        varying vec3 vTerNormal;`,
+        varying vec3 vTerNormal;
+        varying float vFtdFogDist;`,
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         vTerWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vFtdFogDist = distance(vTerWorld, cameraPosition);
         vTerNormal = normalize(mat3(modelMatrix) * objectNormal);`,
       );
     shader.fragmentShader = shader.fragmentShader
@@ -112,6 +118,8 @@ export function createThemedTerrainMaterial(
         uniform vec2 uMapSize;
         varying vec3 vTerWorld;
         varying vec3 vTerNormal;
+        varying float vFtdFogDist;
+        ${GLSL_FOG}
         ${GLSL_NOISE}
         ${GLSL_GRID_LINE}
         float terEdgeDist(vec2 p, vec2 size) {
@@ -180,8 +188,15 @@ export function createThemedTerrainMaterial(
           float grey = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
           gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(grey) * uInfo2DTint, uInfo2D);
         }`,
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `#include <fog_fragment>
+        // Fog of war mixed after output encoding and scene fog, exactly
+        // as the removed film blended over the display-space result.
+        gl_FragColor.rgb = ftdFogApply(gl_FragColor.rgb, vTerWorld.xz, vFtdFogDist);`,
       );
   };
-  mat.customProgramCacheKey = () => 'themed-terrain';
+  mat.customProgramCacheKey = () => 'themed-terrain-fog';
   return { material: mat, uniforms };
 }

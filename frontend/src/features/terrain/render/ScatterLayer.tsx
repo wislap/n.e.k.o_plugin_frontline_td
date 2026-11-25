@@ -12,6 +12,7 @@ import type { SimClient } from '../../../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
+import type { FogUniforms } from '../../../render/shaders';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
@@ -41,9 +42,10 @@ export interface ScatterLayerProps {
   db: ContentDb;
   map: ResolvedMap;
   heights: ArrayLike<number>;
+  fog: FogUniforms;
 }
 
-export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
+export function ScatterLayer({ client, db, map, heights, fog }: ScatterLayerProps) {
   const theme = VISUAL;
   const groupRef = useRef<THREE.Group>(null);
   const writerRef = useRef(new InstanceWriter());
@@ -76,8 +78,11 @@ export function ScatterLayer({ client, db, map, heights }: ScatterLayerProps) {
   const palette = useMemo(() => propPalette(theme), [theme]);
   const grassGeo = useMemo(() => createGrassGeometry(), []);
   const stoneGeo = useMemo(() => createRockGeometry(0.13, 53), []);
-  const grassMat = useMemo(() => createGrassMaterial(palette.grass), [palette.grass]);
-  const propMats = useMemo(() => createPropMaterials(palette), [palette]);
+  const grassMat = useMemo(
+    () => createGrassMaterial(palette.grass, fog),
+    [palette.grass, fog],
+  );
+  const propMats = useMemo(() => createPropMaterials(palette, fog), [palette, fog]);
 
   useEffect(() => {
     grassTimeRef.current = (grassMat.userData['uTime'] as { value: number } | undefined) ?? null;

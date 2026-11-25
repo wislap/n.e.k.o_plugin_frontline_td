@@ -21,8 +21,9 @@
   废墟、蓝图不挂视野）。
 - `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
-- `render/`：`FogLayer`（单张贴合地形几何的网格 + RGBA
-  `DataTexture` 明暗覆盖，逐格上传，复用 terrain 的几何构造）、
+- `render/`：`FogOfWar`（无网格：把 vision.state 层逐格上传到 RGBA
+  `DataTexture` 绿色通道，并按相机模式驱动共享 `FogUniforms`；
+  地面材质经 `render/shaders.ts` 的 `ftdFogApply` 在编码后混合迷雾）、
   `MemoryLayer`（记忆结构暗框）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。

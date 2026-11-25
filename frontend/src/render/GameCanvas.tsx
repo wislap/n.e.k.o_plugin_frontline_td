@@ -29,11 +29,12 @@ import { TerrainMesh, ScatterLayer } from '../features/terrain/render/index';
 import { DenseUnitsChannel } from '../features/units/protocol';
 import { UnitsLayer } from '../features/units/render/index';
 import { ThreatsLayer } from '../features/squads/render/index';
-import { FogLayer, MemoryLayer } from '../features/vision/render/index';
+import { FogOfWar, MemoryLayer } from '../features/vision/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
 import { HpBars, type HpBarCollector, type HpBarSink } from './hp-bars';
+import { createFogUniforms } from './shaders';
 import { makeDispatch } from './input-dispatch';
 import { SelectionHighlightLayer } from './SelectionHighlightLayer';
 import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
@@ -237,6 +238,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   const grid = map.grid;
   const snapshot = ready ? client.snapshots().latest : null;
   const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? grid.heights;
+  const fogUniforms = useMemo(() => createFogUniforms(), []);
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
   const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
@@ -255,6 +257,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               height={grid.height}
               ramps={grid.ramps}
               surfaceColors={surfaceColors}
+              fog={fogUniforms}
             />
             <StructuresLayer
               client={client}
@@ -293,11 +296,11 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapHeight={grid.height}
               collect={structureHpItems}
             />
-            <RoadLayer client={client} map={map} heights={heights} />
-            <ScatterLayer client={client} db={db} map={map} heights={heights} />
+            <RoadLayer client={client} map={map} heights={heights} fog={fogUniforms} />
+            <ScatterLayer client={client} db={db} map={map} heights={heights} fog={fogUniforms} />
             <LogisticsOverlay client={client} db={db} map={map} heights={heights} />
             <RoadToolLayer client={client} map={map} heights={heights} />
-            <RoadWorksLayer client={client} map={map} heights={heights} />
+            <RoadWorksLayer client={client} map={map} heights={heights} fog={fogUniforms} />
             <HpBars
               client={client}
               heights={heights}
@@ -348,7 +351,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
               mapHeight={grid.height}
               isHostile={isHostile}
             />
-            <FogLayer client={client} map={map} />
+            <FogOfWar client={client} map={map} uniforms={fogUniforms} />
             <InputBridge
               client={client}
               db={db}

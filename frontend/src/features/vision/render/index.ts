@@ -1,2 +1,2 @@
-export { FogLayer } from './FogLayer';
+export { FogOfWar } from './fog-of-war';
 export { MemoryLayer } from './MemoryLayer';

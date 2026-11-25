@@ -12,7 +12,7 @@ import { useUiStore } from '../../../client/ui-store';
 import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
-import { GLSL_GRID_LINE } from '../../../render/shaders';
+import { GLSL_FOG, GLSL_GRID_LINE, type FogUniforms } from '../../../render/shaders';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
@@ -24,9 +24,10 @@ export interface TerrainMeshProps {
   height: number;
   ramps: ArrayLike<number>;
   surfaceColors: readonly string[];
+  fog: FogUniforms;
 }
 
-function createTerrainGridMaterial(): THREE.ShaderMaterial {
+function createTerrainGridMaterial(fog: FogUniforms): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -35,12 +36,17 @@ function createTerrainGridMaterial(): THREE.ShaderMaterial {
     polygonOffsetUnits: -1,
     uniforms: {
       uOpacity: { value: 0 },
+      ...fog,
     },
     vertexShader: `
       varying vec2 vWorldXZ;
+      varying vec3 vFtdFogWorld;
+      varying float vFtdFogDist;
       varying float vUp;
       void main() {
         vWorldXZ = position.xz;
+        vFtdFogWorld = position;
+        vFtdFogDist = distance(position, cameraPosition);
         vUp = normal.y;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
@@ -48,14 +54,18 @@ function createTerrainGridMaterial(): THREE.ShaderMaterial {
     fragmentShader: `
       uniform float uOpacity;
       varying vec2 vWorldXZ;
+      varying vec3 vFtdFogWorld;
+      varying float vFtdFogDist;
       varying float vUp;
+      ${GLSL_FOG}
       ${GLSL_GRID_LINE}
       void main() {
         float cellLine = ftdGridLine(vWorldXZ);
         float secLine = ftdGridLine(vWorldXZ / 8.0);
         float flatMask = smoothstep(0.35, 0.75, vUp);
         float alpha = clamp(max(cellLine * 0.65, secLine * 1.15) * flatMask * uOpacity, 0.0, 1.0);
-        gl_FragColor = vec4(0.55, 0.78, 0.96, alpha);
+        vec3 col = ftdFogApply(vec3(0.55, 0.78, 0.96), vFtdFogWorld.xz, vFtdFogDist);
+        gl_FragColor = vec4(col, alpha);
       }
     `,
   });
@@ -106,7 +116,14 @@ function updateInfoUniform(
 
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 
-export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: TerrainMeshProps) {
+export function TerrainMesh({
+  snapshot,
+  width,
+  height,
+  ramps,
+  surfaceColors,
+  fog,
+}: TerrainMeshProps) {
   const theme = VISUAL;
   const meshRef = useRef<THREE.Mesh>(null);
   const gridMeshRef = useRef<THREE.Mesh>(null);
@@ -199,15 +216,16 @@ export function TerrainMesh({ snapshot, width, height, ramps, surfaceColors }: T
               end: theme.terrain.skirtCells * 0.95,
             }
           : undefined,
+      fog,
     });
-  }, [theme, heights, width, height]);
+  }, [theme, heights, width, height, fog]);
 
   useGpuResource(themed?.material);
 
   useFrame((_state, delta) => {
     const gridMesh = gridMeshRef.current;
     if (gridMesh !== null) {
-      gridMatRef.current ??= createTerrainGridMaterial();
+      gridMatRef.current ??= createTerrainGridMaterial(fog);
       updateTerrainGrid(gridMesh, gridMatRef.current);
     }
     updateInfoUniform(themed?.uniforms ?? null, theme.info2d, delta);

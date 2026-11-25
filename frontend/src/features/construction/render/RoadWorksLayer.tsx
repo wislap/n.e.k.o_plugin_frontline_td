@@ -4,13 +4,15 @@
 // are pickable via client/pick.ts and cancel through the shared
 // selection.cancel → CancelCommand flow; damaged ones get HP bars via
 // the shared HpBars collector mounted in GameCanvas.
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SimClient, SnapshotPair } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
 import type { HpBarSink } from '../../../render/hp-bars';
 import { InstanceWriter } from '../../../render/instance-writer';
+import { injectFog, type FogUniforms } from '../../../render/shaders';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { RoadWorksChannel, type RoadWorks } from '../protocol';
 import { readChannel } from '../../../core/index';
@@ -20,11 +22,13 @@ const PLANNED_OPACITY = 0.22;
 const MARKER_COLOR = '#c9a35f';
 const LIFT = 0.05;
 const CAP = 2048;
+const ATTACH_MATERIAL = 'material';
 
 export interface RoadWorksLayerProps {
   client: SimClient;
   map: ResolvedMap;
   heights: ArrayLike<number>;
+  fog: FogUniforms;
 }
 
 function updateRoadWorksMeshes(
@@ -68,10 +72,26 @@ function updateRoadWorksMeshes(
   segs.instanceMatrix.needsUpdate = true;
 }
 
-export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
+export function RoadWorksLayer({ client, map, heights, fog }: RoadWorksLayerProps) {
   const cellsRef = useRef<THREE.InstancedMesh>(null);
   const segsRef = useRef<THREE.InstancedMesh>(null);
   const writerRef = useRef(new InstanceWriter());
+  const cellsMat = useMemo(() => {
+    const mat = new THREE.MeshBasicMaterial({
+      color: PLANNED_COLOR,
+      transparent: true,
+      opacity: PLANNED_OPACITY,
+    });
+    injectFog(mat, fog);
+    return mat;
+  }, [fog]);
+  const segsMat = useMemo(() => {
+    const mat = new THREE.MeshLambertMaterial({ color: MARKER_COLOR });
+    injectFog(mat, fog);
+    return mat;
+  }, [fog]);
+  useGpuResource(cellsMat);
+  useGpuResource(segsMat);
 
   useFrame(() => {
     const cells = cellsRef.current;
@@ -88,16 +108,11 @@ export function RoadWorksLayer({ client, map, heights }: RoadWorksLayerProps) {
     <>
       <instancedMesh ref={cellsRef} args={[undefined, undefined, CAP]} frustumCulled={false}>
         <planeGeometry args={[1, 1]} rotateX={-Math.PI / 2} />
-        <meshBasicMaterial
-          color={PLANNED_COLOR}
-          transparent
-          opacity={PLANNED_OPACITY}
-          wireframe={false}
-        />
+        <primitive object={cellsMat} attach={ATTACH_MATERIAL} />
       </instancedMesh>
       <instancedMesh ref={segsRef} args={[undefined, undefined, CAP]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshLambertMaterial color={MARKER_COLOR} />
+        <primitive object={segsMat} attach={ATTACH_MATERIAL} />
       </instancedMesh>
     </>
   );

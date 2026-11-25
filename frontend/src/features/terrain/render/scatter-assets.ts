@@ -3,6 +3,7 @@
 // per-theme prop palettes and the per-frame instanced-matrix writer.
 import * as THREE from 'three';
 import { InstanceWriter } from '../../../render/instance-writer';
+import { injectFog, type FogUniforms } from '../../../render/shaders';
 import { renderNowMs } from '../../../client/capture-mode';
 import type { ContentDb } from '../../../content/index';
 import type { RenderVisual } from '../../../render/theme/index';
@@ -27,7 +28,7 @@ const FLOWER_COLORS = ['#f4f2e8', '#ffd94d', '#e8ecf4', '#d7e8ff'] as const;
 // partway through the scan order.
 const MAX_MEADOW_PROPS = 64000;
 // Explored-but-not-visible cells dim props to roughly match the fog film;
-// unexplored cells hide them entirely (state 0/1/2 mirrors FogLayer).
+// unexplored cells hide them entirely (state 0/1/2 mirrors the fog texture).
 const EXPLORED_DIM = 0.45;
 // Meadow grass is culled by distance from the camera focus so dense
 // fields stay cheap; stones/clutter are sparse enough to keep everywhere.
@@ -300,7 +301,7 @@ export function propPalette(theme: RenderVisual): PropPalette {
 // Meadow grass material: vertex-colored tapered blades with a wind-sway
 // vertex displacement keyed on the instance's world offset; the uTime
 // uniform is fed per frame via material.userData.
-export function createGrassMaterial(tint: string): THREE.MeshStandardMaterial {
+export function createGrassMaterial(tint: string, fog: FogUniforms): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     // White base: the per-instance color carries the terrain-matched
     // tint and the vertex color carries the root→tip gradient.
@@ -333,7 +334,8 @@ export function createGrassMaterial(tint: string): THREE.MeshStandardMaterial {
         #endif`,
       );
   };
-  mat.customProgramCacheKey = () => 'meadow-grass';
+  injectFog(mat, fog);
+  mat.customProgramCacheKey = () => 'meadow-grass-fog';
   return mat;
 }
 
@@ -341,12 +343,14 @@ export function createGrassMaterial(tint: string): THREE.MeshStandardMaterial {
 // the map's values.
 export function createPropMaterials(
   palette: PropPalette,
+  fog: FogUniforms,
 ): Record<'stone' | 'flower', THREE.MeshStandardMaterial> {
   const mk = (color: string | undefined, roughness: number): THREE.MeshStandardMaterial => {
     const mat = new THREE.MeshStandardMaterial({ roughness });
     if (color !== undefined) {
       mat.color.set(color);
     }
+    injectFog(mat, fog);
     return mat;
   };
   return {
