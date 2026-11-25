@@ -48,7 +48,11 @@ function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
   });
 }
 
-function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
+function buildPlatformMaterial(
+  theme: RenderVisual,
+  mapWidth: number,
+  mapHeight: number,
+): THREE.ShaderMaterial {
   const bg = theme.background;
   return new THREE.ShaderMaterial({
     transparent: true,
@@ -59,6 +63,8 @@ function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
       uFadeEnd: { value: bg.platformFadeEnd },
       uCenter: { value: new THREE.Vector2(0, 0) },
       uRadius: { value: 1 },
+      uMapSize: { value: new THREE.Vector2(mapWidth, mapHeight) },
+      uSkirtCells: { value: theme.terrain.skirtCells },
     },
     vertexShader: `
       varying vec3 vWorld;
@@ -74,8 +80,19 @@ function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
       uniform float uFadeEnd;
       uniform vec2 uCenter;
       uniform float uRadius;
+      uniform vec2 uMapSize;
+      uniform float uSkirtCells;
       varying vec3 vWorld;
       void main() {
+        // The outskirts skirt mesh covers the whole ring within uSkirtCells
+        // of the map rect; the platform must not exist underneath it —
+        // noise dips in the skirt would otherwise expose unlit platform
+        // patches (same distOutside metric as buildOutskirtsGeometry).
+        float distOutside = max(max(-vWorld.x, vWorld.x - uMapSize.x),
+                                max(-vWorld.z, vWorld.z - uMapSize.y));
+        if (distOutside < uSkirtCells) {
+          discard;
+        }
         float d = length(vWorld.xz - uCenter) / uRadius;
         float alpha = 1.0 - smoothstep(uFadeStart, uFadeEnd, d);
         gl_FragColor = vec4(uColor, alpha);
@@ -104,7 +121,7 @@ export function ThemeBackground({ ctx }: SceneLayerProps) {
   const platform = useMemo(() => {
     const radius = DOME_RADIUS * 0.98;
     const geo = new THREE.PlaneGeometry(radius * 2, radius * 2);
-    const mat = buildPlatformMaterial(theme);
+    const mat = buildPlatformMaterial(theme, mapWidth, mapHeight);
     const uRadius = mat.uniforms['uRadius'] as { value: number } | undefined;
     const uCenter = mat.uniforms['uCenter'] as { value: THREE.Vector2 } | undefined;
     if (uRadius !== undefined) {

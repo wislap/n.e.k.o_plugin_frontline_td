@@ -4335,7 +4335,7 @@ vFtdFogDist = distance(vFtdFogWorld, cameraPosition);`;function lE(e,t){let n=e.
         col = mix(col, uHorizon, exp(-h * h * 5.0) * 0.42);
         gl_FragColor = vec4(col, 1.0);
       }
-    `})}function VD(e){let t=e.background;return new Gh({transparent:!0,depthWrite:!1,uniforms:{uColor:{value:new q(t.platform)},uFadeStart:{value:t.platformFadeStart},uFadeEnd:{value:t.platformFadeEnd},uCenter:{value:new W(0,0)},uRadius:{value:1}},vertexShader:`
+    `})}function VD(e,t,n){let r=e.background;return new Gh({transparent:!0,depthWrite:!1,uniforms:{uColor:{value:new q(r.platform)},uFadeStart:{value:r.platformFadeStart},uFadeEnd:{value:r.platformFadeEnd},uCenter:{value:new W(0,0)},uRadius:{value:1},uMapSize:{value:new W(t,n)},uSkirtCells:{value:e.terrain.skirtCells}},vertexShader:`
       varying vec3 vWorld;
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
@@ -4348,13 +4348,24 @@ vFtdFogDist = distance(vFtdFogWorld, cameraPosition);`;function lE(e,t){let n=e.
       uniform float uFadeEnd;
       uniform vec2 uCenter;
       uniform float uRadius;
+      uniform vec2 uMapSize;
+      uniform float uSkirtCells;
       varying vec3 vWorld;
       void main() {
+        // The outskirts skirt mesh covers the whole ring within uSkirtCells
+        // of the map rect; the platform must not exist underneath it —
+        // noise dips in the skirt would otherwise expose unlit platform
+        // patches (same distOutside metric as buildOutskirtsGeometry).
+        float distOutside = max(max(-vWorld.x, vWorld.x - uMapSize.x),
+                                max(-vWorld.z, vWorld.z - uMapSize.y));
+        if (distOutside < uSkirtCells) {
+          discard;
+        }
         float d = length(vWorld.xz - uCenter) / uRadius;
         float alpha = 1.0 - smoothstep(uFadeStart, uFadeEnd, d);
         gl_FragColor = vec4(uColor, alpha);
       }
-    `})}function HD({ctx:e}){let{width:t,height:n}=e.map.grid,r=DD,i=(0,R.useRef)(null);rw(({camera:e})=>{i.current?.position.copy(e.position)});let a=(0,R.useMemo)(()=>({geo:new Oh(zD,32,16),mat:BD(r)}),[r]),o=(0,R.useMemo)(()=>{let e=zD*.98,i=new wh(e*2,e*2),a=VD(r),o=a.uniforms.uRadius,s=a.uniforms.uCenter;return o!==void 0&&(o.value=e),s?.value.set(t/2,n/2),{geo:i,mat:a}},[r,t,n]);return LD(a),LD(o),(0,H.jsxs)(`group`,{children:[(0,H.jsx)(`mesh`,{ref:i,geometry:a.geo,material:a.mat,position:[t/2,0,n/2],renderOrder:-10,frustumCulled:!1}),(0,H.jsx)(`mesh`,{geometry:o.geo,material:o.mat,position:[t/2,-.4,n/2],rotation:[-Math.PI/2,0,0],renderOrder:-9,frustumCulled:!1})]})}var UD=(()=>{let e=new Float32Array([-1,-1,0,3,-1,0,-1,3,0]),t=new Float32Array([0,0,2,0,0,2]),n=new Z;return n.setAttribute(`position`,new Y(e,3)),n.setAttribute(`uv`,new Y(t,2)),n})(),WD=class e{static get fullscreenGeometry(){return UD}constructor(e=`Pass`,t=new yu,n=new d_){this.name=e,this.renderer=null,this.scene=t,this.camera=n,this.screen=null,this.rtt=!0,this.needsSwap=!0,this.needsDepthBlit=!1,this.needsDepthTexture=!1,this.enabled=!0}get renderToScreen(){return!this.rtt}set renderToScreen(e){if(this.rtt===e){let t=this.fullscreenMaterial;t!==null&&(t.needsUpdate=!0),this.rtt=!e}}set mainScene(e){}set mainCamera(e){}setRenderer(e){this.renderer=e}isEnabled(){return this.enabled}setEnabled(e){this.enabled=e}get fullscreenMaterial(){return this.screen===null?null:this.screen.material}set fullscreenMaterial(t){let n=this.screen;n===null?(n=new mf(e.fullscreenGeometry,t),n.frustumCulled=!1,this.scene===null&&(this.scene=new yu),this.scene.add(n),this.screen=n):n.material=t}getFullscreenMaterial(){return this.fullscreenMaterial}setFullscreenMaterial(e){this.fullscreenMaterial=e}getDepthTexture(){return null}setDepthTexture(e,t=Bs){}render(e,t,n,r,i){throw Error(`Render method not implemented!`)}setSize(e,t){}initialize(e,t,n){}dispose(){for(let t of Object.keys(this)){let n=this[t];(n instanceof jl||n instanceof Ad||n instanceof Ol||n instanceof e)&&this[t].dispose()}this.fullscreenMaterial!==null&&this.fullscreenMaterial.dispose()}},GD=class extends WD{constructor(){super(`ClearMaskPass`,null,null),this.needsSwap=!1}render(e,t,n,r,i){let a=e.state.buffers.stencil;a.setLocked(!1),a.setTest(!1)}},KD=`#ifdef COLOR_WRITE
+    `})}function HD({ctx:e}){let{width:t,height:n}=e.map.grid,r=DD,i=(0,R.useRef)(null);rw(({camera:e})=>{i.current?.position.copy(e.position)});let a=(0,R.useMemo)(()=>({geo:new Oh(zD,32,16),mat:BD(r)}),[r]),o=(0,R.useMemo)(()=>{let e=zD*.98,i=new wh(e*2,e*2),a=VD(r,t,n),o=a.uniforms.uRadius,s=a.uniforms.uCenter;return o!==void 0&&(o.value=e),s?.value.set(t/2,n/2),{geo:i,mat:a}},[r,t,n]);return LD(a),LD(o),(0,H.jsxs)(`group`,{children:[(0,H.jsx)(`mesh`,{ref:i,geometry:a.geo,material:a.mat,position:[t/2,0,n/2],renderOrder:-10,frustumCulled:!1}),(0,H.jsx)(`mesh`,{geometry:o.geo,material:o.mat,position:[t/2,-.4,n/2],rotation:[-Math.PI/2,0,0],renderOrder:-9,frustumCulled:!1})]})}var UD=(()=>{let e=new Float32Array([-1,-1,0,3,-1,0,-1,3,0]),t=new Float32Array([0,0,2,0,0,2]),n=new Z;return n.setAttribute(`position`,new Y(e,3)),n.setAttribute(`uv`,new Y(t,2)),n})(),WD=class e{static get fullscreenGeometry(){return UD}constructor(e=`Pass`,t=new yu,n=new d_){this.name=e,this.renderer=null,this.scene=t,this.camera=n,this.screen=null,this.rtt=!0,this.needsSwap=!0,this.needsDepthBlit=!1,this.needsDepthTexture=!1,this.enabled=!0}get renderToScreen(){return!this.rtt}set renderToScreen(e){if(this.rtt===e){let t=this.fullscreenMaterial;t!==null&&(t.needsUpdate=!0),this.rtt=!e}}set mainScene(e){}set mainCamera(e){}setRenderer(e){this.renderer=e}isEnabled(){return this.enabled}setEnabled(e){this.enabled=e}get fullscreenMaterial(){return this.screen===null?null:this.screen.material}set fullscreenMaterial(t){let n=this.screen;n===null?(n=new mf(e.fullscreenGeometry,t),n.frustumCulled=!1,this.scene===null&&(this.scene=new yu),this.scene.add(n),this.screen=n):n.material=t}getFullscreenMaterial(){return this.fullscreenMaterial}setFullscreenMaterial(e){this.fullscreenMaterial=e}getDepthTexture(){return null}setDepthTexture(e,t=Bs){}render(e,t,n,r,i){throw Error(`Render method not implemented!`)}setSize(e,t){}initialize(e,t,n){}dispose(){for(let t of Object.keys(this)){let n=this[t];(n instanceof jl||n instanceof Ad||n instanceof Ol||n instanceof e)&&this[t].dispose()}this.fullscreenMaterial!==null&&this.fullscreenMaterial.dispose()}},GD=class extends WD{constructor(){super(`ClearMaskPass`,null,null),this.needsSwap=!1}render(e,t,n,r,i){let a=e.state.buffers.stencil;a.setLocked(!1),a.setTest(!1)}},KD=`#ifdef COLOR_WRITE
 #include <common>
 #include <dithering_pars_fragment>
 #ifdef FRAMEBUFFER_PRECISION_HIGH
