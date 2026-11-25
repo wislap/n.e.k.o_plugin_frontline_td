@@ -44,7 +44,13 @@ export function PostEffects() {
       ) : (
         <>
           {cost.n8ao ? (
-            <N8AO aoRadius={post.aoRadius} intensity={post.aoIntensity} quality="medium" />
+            <N8AO
+              aoRadius={post.aoRadius}
+              intensity={post.aoIntensity}
+              quality="medium"
+              halfRes
+              depthAwareUpsampling
+            />
           ) : (
             <></>
           )}
