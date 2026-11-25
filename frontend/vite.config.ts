@@ -29,6 +29,10 @@ export default defineConfig({
         test: {
           name: 'scenario',
           environment: 'node',
+          // Headroom over the 5s default: scenario tests simulate full
+          // matches and slow down sharply when verify runs other CPU-heavy
+          // checks concurrently.
+          testTimeout: 15_000,
           include: [
             'src/**/*.scenario.test.{ts,tsx}',
             'tooling/**/*.scenario.test.ts',

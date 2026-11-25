@@ -13,7 +13,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { chromium, type Page } from '@playwright/test';
+import { chromium, type Browser, type Page } from '@playwright/test';
+import { chromiumGlArgs } from './browser-gl.ts';
 
 const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
 const SHOTS_ROOT = path.join(FRONTEND_ROOT, '.shots');
@@ -22,15 +23,23 @@ const BASE_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
 const WIDTH = 1920;
 const HEIGHT = 1080;
 const READY_TIMEOUT_MS = 120_000;
-const SETTLE_MS = 1_000;
 // Wait for a fixed number of rendered frames after the snapshot pin:
-// SwiftShader renders only a few fps, and waiting for a frame count both
-// converges temporal effects (N8AO accumulation) and makes the captured
-// state identical between runs regardless of host speed.
+// the frame count both converges temporal effects (N8AO accumulation)
+// and makes the captured state identical between runs regardless of
+// host speed or renderer (SwiftShader vs GPU).
 const SETTLE_FRAMES = 60;
 
 // Keep in sync with src/client/capture-mode.ts PRESETS.
 const PRESETS = ['open', 'near', 'far', 'build', 'tactical'] as const;
+
+async function isServerUp(): Promise<boolean> {
+  try {
+    const res = await fetch(BASE_URL);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 function startPreview(): ChildProcess {
   const proc = spawn(
@@ -41,19 +50,21 @@ function startPreview(): ChildProcess {
   return proc;
 }
 
-async function waitForServer(): Promise<void> {
+// Reuse a preview already listening on the shots port when it is the
+// same build; spawn (and own the lifetime of) one only when needed.
+async function ensurePreview(): Promise<ChildProcess | null> {
+  if (await isServerUp()) {
+    return null;
+  }
+  const proc = startPreview();
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(BASE_URL);
-      if (res.ok) {
-        return;
-      }
-    } catch {
-      // not up yet
+    if (await isServerUp()) {
+      return proc;
     }
     await new Promise((r) => setTimeout(r, 250));
   }
+  proc.kill();
   throw new Error(`preview server at ${BASE_URL} did not start`);
 }
 
@@ -72,36 +83,96 @@ async function waitForCaptureReady(page: Page): Promise<number> {
     SETTLE_FRAMES,
     { timeout: READY_TIMEOUT_MS },
   );
-  await page.waitForTimeout(SETTLE_MS);
   return tick;
 }
 
-async function capture(label: string): Promise<void> {
+async function capturePreset(browser: Browser, preset: string, outDir: string): Promise<number> {
+  const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } });
+  try {
+    await page.goto(`${BASE_URL}/?capture=${preset}`);
+    const tick = await waitForCaptureReady(page);
+    await page.screenshot({ path: path.join(outDir, `${preset}.png`) });
+    console.log(`${preset}: captured (pinned tick ${tick})`);
+    return tick;
+  } finally {
+    await page.close();
+  }
+}
+
+// Minimal browser-side shapes (tooling tsconfig has no DOM lib).
+interface BrowserGl {
+  RENDERER: number;
+  getExtension(name: string): { UNMASKED_RENDERER_WEBGL: number } | null;
+  getParameter(param: number): unknown;
+}
+interface GlBrowserGlobal {
+  document: { createElement(tag: string): { getContext(kind: string): BrowserGl | null } };
+}
+
+// Record which renderer produced the shots: GPU baselines cannot be
+// diffed against SwiftShader captures (different rasterizer).
+async function logRenderer(browser: Browser): Promise<void> {
+  const page = await browser.newPage();
+  try {
+    const renderer = await page.evaluate(() => {
+      const w = globalThis as unknown as GlBrowserGlobal;
+      const gl = w.document.createElement('canvas').getContext('webgl2');
+      if (gl === null) {
+        return 'no webgl2';
+      }
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const param = ext?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER;
+      return String(gl.getParameter(param));
+    });
+    console.log(`renderer: ${renderer}`);
+  } finally {
+    await page.close();
+  }
+}
+
+function parsePresetFilter(args: string[]): string[] {
+  const idx = args.indexOf('--preset');
+  if (idx === -1) {
+    return [...PRESETS];
+  }
+  const value = args[idx + 1];
+  if (value === undefined) {
+    throw new Error('--preset requires a comma-separated list');
+  }
+  const chosen = value.split(',').map((s) => s.trim());
+  for (const p of chosen) {
+    if (!(PRESETS as readonly string[]).includes(p)) {
+      throw new Error(`unknown preset '${p}' (known: ${PRESETS.join(', ')})`);
+    }
+  }
+  return chosen;
+}
+
+async function capture(label: string, presets: string[]): Promise<void> {
   const outDir = path.join(SHOTS_ROOT, label);
   mkdirSync(outDir, { recursive: true });
-  const server = startPreview();
+  const spawned = await ensurePreview();
   const meta: Record<string, number> = {};
   try {
-    await waitForServer();
-    const browser = await chromium.launch();
+    const browser = await chromium.launch({ args: chromiumGlArgs() });
     try {
-      for (const preset of PRESETS) {
-        const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } });
-        await page.goto(`${BASE_URL}/?capture=${preset}`);
-        const tick = await waitForCaptureReady(page);
+      await logRenderer(browser);
+      const ticks = await Promise.all(
+        presets.map((preset) =>
+          capturePreset(browser, preset, outDir).then((t) => [preset, t] as const),
+        ),
+      );
+      for (const [preset, tick] of ticks) {
         meta[preset] = tick;
-        await page.screenshot({ path: path.join(outDir, `${preset}.png`) });
-        await page.close();
-        console.log(`${preset}: captured (pinned tick ${tick})`);
       }
     } finally {
       await browser.close();
     }
   } finally {
-    server.kill();
+    spawned?.kill();
   }
   writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
-  console.log(`shots: wrote ${PRESETS.length} presets to ${outDir}`);
+  console.log(`shots: wrote ${presets.length} presets to ${outDir}`);
 }
 
 interface DiffResult {
@@ -209,7 +280,7 @@ async function diff(labelA: string, labelB: string): Promise<void> {
   }
   const outDir = path.join(SHOTS_ROOT, `diff-${labelA}-vs-${labelB}`);
   mkdirSync(outDir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: chromiumGlArgs() });
   let worst = 0;
   try {
     const page = await browser.newPage();
@@ -242,11 +313,11 @@ async function diff(labelA: string, labelB: string): Promise<void> {
 }
 
 const [command, ...args] = process.argv.slice(2);
-if (command === 'capture' && args.length === 1) {
-  await capture(args[0] ?? '');
+if (command === 'capture' && args.length >= 1) {
+  await capture(args[0] ?? '', parsePresetFilter(args.slice(1)));
 } else if (command === 'diff' && args.length === 2) {
   await diff(args[0] ?? '', args[1] ?? '');
 } else {
-  console.error('usage: shots.ts capture <label> | shots.ts diff <a> <b>');
+  console.error('usage: shots.ts capture <label> [--preset a,b] | shots.ts diff <a> <b>');
   process.exit(2);
 }

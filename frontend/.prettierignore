@@ -5,5 +5,6 @@ package-lock.json
 *.md
 ../docs/
 eval/reports/
+.shots/
 playwright-report/
 test-results/
