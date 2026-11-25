@@ -88,7 +88,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `CaptureLayer` | function |  |
+| `captureSceneLayers` | const |  |
 
 ## src/features/capture/sim/index.ts
 
@@ -120,7 +120,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `BeamsLayer` | function |  |
+| `combatSceneLayers` | const |  |
 
 ## src/features/combat/sim/index.ts
 
@@ -179,12 +179,8 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `ExclusionLayer` | function |  |
-| `GhostPreview` | function |  |
-| `roadWorksHpItems` | function | HP-bar collector for road segments (only damaged ones render). |
-| `RoadWorksLayer` | function |  |
+| `constructionSceneLayers` | const |  |
 | `structureKindHeight` | function | Greybox height from content (`visual.height`, required per kind); unknown indices fall back to a unit-height box. |
-| `StructuresLayer` | function |  |
 
 ## src/features/construction/rules/index.ts
 
@@ -265,9 +261,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `LogisticsOverlay` | function |  |
-| `RoadLayer` | function |  |
-| `RoadToolLayer` | function |  |
+| `logisticsSceneLayers` | const |  |
 
 ## src/features/logistics/sim/index.ts
 
@@ -375,7 +369,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `bannerThreat` | function | Banner summary while any gather is visible: biggest gathering squad's member count and the soonest launch. |
-| `ThreatsLayer` | function |  |
+| `squadsSceneLayers` | const |  |
 
 ## src/features/squads/sim/index.ts
 
@@ -415,8 +409,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `buildTerrainGeometry` | function |  |
-| `ScatterLayer` | function |  |
-| `TerrainMesh` | function |  |
+| `terrainSceneLayers` | const |  |
 
 ## src/features/terrain/rules/index.ts
 
@@ -463,7 +456,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `factionColorHex` | function |  |
-| `UnitsLayer` | function |  |
+| `unitsSceneLayers` | const |  |
 
 ## src/features/units/sim/index.ts
 
@@ -497,8 +490,7 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `FogOfWar` | function |  |
-| `MemoryLayer` | function |  |
+| `visionSceneLayers` | const |  |
 
 ## src/features/vision/rules/index.ts
 

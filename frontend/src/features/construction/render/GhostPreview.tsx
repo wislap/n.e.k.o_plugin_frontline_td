@@ -10,11 +10,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { cursorState } from '../../../client/cursor';
 import { useInteractionStore } from '../../../client/interaction-store';
-import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { createHoloMaterial, type HoloMaterial } from '../../../render/holo-material';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { terrainY } from '../../../render/world';
 import type { StructureSilhouette } from '../content';
@@ -66,16 +65,8 @@ function bindSilhouetteGeometry(
   }
 }
 
-export interface GhostPreviewProps {
-  client: SimClient;
-  db: ContentDb;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-  // Hostility from the match relations (observer, faction) → bool.
-  isHostile: (observer: number, faction: number) => boolean;
-}
-
-export function GhostPreview({ client, db, map, heights, isHostile }: GhostPreviewProps) {
+export function GhostPreview({ ctx }: SceneLayerProps) {
+  const { client, db, map, heights, isHostile } = ctx;
   const theme = VISUAL;
   const boxRef = useRef<THREE.Mesh>(null);
   const holoMat = useMemo(

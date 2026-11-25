@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
+import type { SceneLayerProps } from '../../../render/scene';
 import {
   commitLineBuffer,
   createLineBuffer,
@@ -25,14 +25,9 @@ const SEGMENTS = 48;
 const MAX_POINTS = 64;
 const LIFT = 0.06;
 
-export interface CaptureLayerProps {
-  client: SimClient;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-}
-
-export function CaptureLayer({ client, heights, mapWidth, mapHeight }: CaptureLayerProps) {
+export function CaptureLayer({ ctx }: SceneLayerProps) {
+  const { client, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   // Mutable GPU-side state lives behind a ref: created lazily inside
   // useFrame, attached to the object imperatively, disposed on unmount.
   const bufRef = useRef<LineBuffer | null>(null);

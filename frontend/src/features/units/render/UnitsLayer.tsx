@@ -5,12 +5,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
 import { pruneSelected, useSelectionStore } from '../../../client/selection-store';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
 import { SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
+import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { UnitInterpolator } from '../../../render/unit-pos';
 import { InstanceWriter } from '../../../render/instance-writer';
@@ -26,7 +26,6 @@ const ATTACH_MATERIAL = 'material';
 const SELECTED_BRIGHTEN = 1.7;
 const UNIT_HEIGHT = 0.6;
 const RING_SCALE_THEMED = 1.15;
-const DEFAULT_LOW_ENERGY_BP = 2500;
 const EMPTY_ENERGY_DIM = 0.42;
 const EMPTY_ENERGY_COLOR = '#ff5c5c';
 const LOW_ENERGY_COLOR = '#ffc14d';
@@ -42,32 +41,14 @@ const SHAPE_INDEX: Readonly<Record<UnitShape, number>> = {
 };
 const SHAPE_KEYS = ['cylinder', 'box', 'cone', 'sphere'] as const;
 
-interface UnitVisual {
-  shape: UnitShape;
-  scale: number;
-}
-
-export interface UnitsLayerProps {
-  client: SimClient;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-  // Unit radius by content index (kind), from the content db.
-  radii: readonly number[];
-  // Render visual by content index (kind), from the content db.
-  visuals: readonly UnitVisual[];
-  lowThresholdBp?: number | undefined;
-}
-
-export function UnitsLayer({
-  client,
-  heights,
-  mapWidth,
-  mapHeight,
-  radii,
-  visuals,
-  lowThresholdBp = DEFAULT_LOW_ENERGY_BP,
-}: UnitsLayerProps) {
+export function UnitsLayer({ ctx }: SceneLayerProps) {
+  const { client, db, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
+  // Unit radius/render visual by content index (kind), from the db —
+  // what GameCanvas used to precompute and pass as props.
+  const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
+  const visuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
+  const lowThresholdBp = db.logistics.lowThresholdBp;
   const [capacity, setCapacity] = useState(256);
   const theme = VISUAL;
   const meshRefs = useRef<(THREE.InstancedMesh | null)[]>([]);

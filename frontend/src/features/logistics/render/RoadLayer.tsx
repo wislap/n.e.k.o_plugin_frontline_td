@@ -7,13 +7,12 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
-import type { ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { readLayer } from '../../../core/index';
+import type { SceneLayerProps } from '../../../render/scene';
 import { GLSL_FOG, type FogUniforms } from '../../../render/shaders';
 import { ROAD_LAYER_ID } from '../protocol';
 
@@ -60,14 +59,8 @@ function createRoadGlowMaterial(edge: string, fog: FogUniforms): THREE.ShaderMat
   });
 }
 
-export interface RoadLayerProps {
-  client: SimClient;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-  fog: FogUniforms;
-}
-
-export function RoadLayer({ client, map, heights, fog }: RoadLayerProps) {
+export function RoadLayer({ ctx }: SceneLayerProps) {
+  const { client, map, heights, fog } = ctx;
   const theme = VISUAL;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);

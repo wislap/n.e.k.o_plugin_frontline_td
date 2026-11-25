@@ -8,7 +8,6 @@ import * as THREE from 'three';
 import { useInspectorStore } from '../../../client/inspector-store';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { useSelectionStore } from '../../../client/selection-store';
-import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { readChannel, readLayer } from '../../../core/index';
@@ -16,6 +15,7 @@ import type { Snapshot } from '../../../core/index';
 import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-material';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { useGpuResource } from '../../../render/use-gpu-resource';
@@ -212,14 +212,8 @@ function updateRings(
   rings.instanceMatrix.needsUpdate = true;
 }
 
-export interface LogisticsOverlayProps {
-  client: SimClient;
-  db: ContentDb;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-}
-
-export function LogisticsOverlay({ client, db, map, heights }: LogisticsOverlayProps) {
+export function LogisticsOverlay({ ctx }: SceneLayerProps) {
+  const { client, db, map, heights } = ctx;
   const theme = VISUAL;
   const toggled = useUiStore((s) => s.logisticsOverlay);
   const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');

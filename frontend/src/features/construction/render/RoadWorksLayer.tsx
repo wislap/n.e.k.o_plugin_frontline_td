@@ -7,11 +7,12 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient, SnapshotPair } from '../../../client/sim-client';
-import type { ResolvedMap } from '../../../content/index';
+import type { SnapshotPair } from '../../../client/sim-client';
 import type { HpBarSink } from '../../../render/hp-bars';
+import { HpBars } from '../../../render/hp-bars';
 import { InstanceWriter } from '../../../render/instance-writer';
-import { injectFog, type FogUniforms } from '../../../render/shaders';
+import type { SceneLayerProps } from '../../../render/scene';
+import { injectFog } from '../../../render/shaders';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
 import { RoadWorksChannel, type RoadWorks } from '../protocol';
@@ -23,13 +24,6 @@ const MARKER_COLOR = '#c9a35f';
 const LIFT = 0.05;
 const CAP = 2048;
 const ATTACH_MATERIAL = 'material';
-
-export interface RoadWorksLayerProps {
-  client: SimClient;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-  fog: FogUniforms;
-}
 
 function updateRoadWorksMeshes(
   cells: THREE.InstancedMesh,
@@ -72,7 +66,8 @@ function updateRoadWorksMeshes(
   segs.instanceMatrix.needsUpdate = true;
 }
 
-export function RoadWorksLayer({ client, map, heights, fog }: RoadWorksLayerProps) {
+export function RoadWorksLayer({ ctx }: SceneLayerProps) {
+  const { client, map, heights, fog } = ctx;
   const cellsRef = useRef<THREE.InstancedMesh>(null);
   const segsRef = useRef<THREE.InstancedMesh>(null);
   const writerRef = useRef(new InstanceWriter());
@@ -119,7 +114,7 @@ export function RoadWorksLayer({ client, map, heights, fog }: RoadWorksLayerProp
 }
 
 // HP-bar collector for road segments (only damaged ones render).
-export function roadWorksHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
+function roadWorksHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
   const works = readChannel(pair.latest, RoadWorksChannel) ?? undefined;
   if (works === undefined) {
     return;
@@ -131,4 +126,18 @@ export function roadWorksHpItems(pair: SnapshotPair, _alpha: number, sink: HpBar
     }
     sink.push(works.segments.x[i] ?? 0, works.segments.y[i] ?? 0, 0.8, 0.7, bp);
   }
+}
+
+// Damaged-road-segment bars: feature-owned wrapper over the shared
+// HpBars sink (moved out of GameCanvas in ADR 0062 step 1).
+export function RoadWorksHpBars({ ctx }: SceneLayerProps) {
+  return (
+    <HpBars
+      client={ctx.client}
+      heights={ctx.heights}
+      mapWidth={ctx.map.grid.width}
+      mapHeight={ctx.map.grid.height}
+      collect={roadWorksHpItems}
+    />
+  );
 }

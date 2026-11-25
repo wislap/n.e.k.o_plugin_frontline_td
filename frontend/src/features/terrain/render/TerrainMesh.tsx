@@ -13,19 +13,10 @@ import { VISUAL } from '../../../render/theme/index';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 import { readLayer } from '../../../core/index';
 import { GLSL_FOG, GLSL_GRID_LINE, type FogUniforms } from '../../../render/shaders';
+import type { SceneLayerProps } from '../../../render/scene';
 import { useGpuResource } from '../../../render/use-gpu-resource';
-import type { Snapshot } from '../../../core/index';
 import { buildOutskirtsGeometry, buildTerrainGeometry, parseHexColor } from './geometry';
 import { createThemedTerrainMaterial, type ThemedTerrainUniforms } from './themed-material';
-
-export interface TerrainMeshProps {
-  snapshot: Snapshot | null;
-  width: number;
-  height: number;
-  ramps: ArrayLike<number>;
-  surfaceColors: readonly string[];
-  fog: FogUniforms;
-}
 
 function createTerrainGridMaterial(fog: FogUniforms): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -116,18 +107,19 @@ function updateInfoUniform(
 
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 
-export function TerrainMesh({
-  snapshot,
-  width,
-  height,
-  ramps,
-  surfaceColors,
-  fog,
-}: TerrainMeshProps) {
+export function TerrainMesh({ ctx }: SceneLayerProps) {
+  const { db, map, fog } = ctx;
+  const { width, height, ramps } = map.grid;
   const theme = VISUAL;
   const meshRef = useRef<THREE.Mesh>(null);
   const gridMeshRef = useRef<THREE.Mesh>(null);
   const gridMatRef = useRef<THREE.ShaderMaterial | null>(null);
+  // Same read GameCanvas used to do and pass as a prop: this layer only
+  // mounts after the ready gate, so the latest snapshot is populated.
+  // Re-render semantics are unchanged (the component still re-renders
+  // whenever GameCanvas does).
+  const snapshot = ctx.client.snapshots().latest;
+  const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID);
   const surfaces = readLayer(snapshot, TERRAIN_SURFACE_LAYER_ID);
 

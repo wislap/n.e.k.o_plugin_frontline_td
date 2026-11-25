@@ -5,9 +5,8 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb } from '../../../content/index';
 import { structureKindHeight } from '../../construction/render/index';
+import type { SceneLayerProps } from '../../../render/scene';
 import { terrainY } from '../../../render/world';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt } from '../../../render/use-gpu-resource';
@@ -18,15 +17,9 @@ const MEMORY_COLOR = '#5a6478';
 const MEMORY_OPACITY = 0.35;
 const CAP = 4096;
 
-export interface MemoryLayerProps {
-  client: SimClient;
-  db: ContentDb;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-}
-
-export function MemoryLayer({ client, db, heights, mapWidth, mapHeight }: MemoryLayerProps) {
+export function MemoryLayer({ ctx }: SceneLayerProps) {
+  const { client, db, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const writer = useMemo(() => new InstanceWriter(), []);

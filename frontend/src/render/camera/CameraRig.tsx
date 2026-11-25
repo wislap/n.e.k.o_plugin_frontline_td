@@ -7,6 +7,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
 import type { PanTracker } from '../../input/pan';
+import type { SceneLayerProps } from '../scene';
 import {
   SPECTATE_FOV_DEG,
   TRANSITION_MS,
@@ -74,17 +75,9 @@ interface SmoothedState {
   orthoHeight: number;
 }
 
-export function CameraRig({
-  mapWidth,
-  mapHeight,
-  heights,
-  panTracker,
-}: {
-  mapWidth: number;
-  mapHeight: number;
-  heights: ArrayLike<number>;
-  panTracker: PanTracker;
-}) {
+export function CameraRig({ ctx, panTracker }: SceneLayerProps & { panTracker: PanTracker }) {
+  const { heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const set = useThree((s) => s.set);
   const size = useThree((s) => s.size);
 

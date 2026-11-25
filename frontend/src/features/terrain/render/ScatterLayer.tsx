@@ -8,11 +8,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb, ResolvedMap } from '../../../content/index';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
-import type { FogUniforms } from '../../../render/shaders';
+import type { SceneLayerProps } from '../../../render/scene';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
@@ -37,15 +35,8 @@ import { readChannel, readLayer } from '../../../core/index';
 const ATTACH_MATERIAL = 'material';
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
 
-export interface ScatterLayerProps {
-  client: SimClient;
-  db: ContentDb;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-  fog: FogUniforms;
-}
-
-export function ScatterLayer({ client, db, map, heights, fog }: ScatterLayerProps) {
+export function ScatterLayer({ ctx }: SceneLayerProps) {
+  const { client, db, map, heights, fog } = ctx;
   const theme = VISUAL;
   // Debug-panel render-cost toggle for the meadow grass mesh.
   const showGrass = useUiStore((s) => s.renderCost.scatter);

@@ -18,6 +18,8 @@
 - `content.ts`：结构的 `capture` 档案 schema（半径、占领 tick 数、
   重建工期）。导出全表见 [exports.md](../../../../docs/generated/exports.md)
   与 [contracts.md](../../../../docs/generated/contracts.md)。
+- `render/`：`captureSceneLayers`（CaptureLayer：占领点半径环，
+  ADR 0062 场景层注册）。
 
 ## 拥有的组件
 - `Capture { owner, progress, done, kind, x, y, leader, contested }`

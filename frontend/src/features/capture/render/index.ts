@@ -1,1 +1,1 @@
-export { CaptureLayer } from './CaptureLayer';
+export { captureSceneLayers } from './scene-layers';

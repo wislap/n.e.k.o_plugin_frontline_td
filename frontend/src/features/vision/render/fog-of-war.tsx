@@ -10,9 +10,9 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../../client/camera-store';
-import type { SimClient } from '../../../client/sim-client';
 import type { ResolvedMap } from '../../../content/index';
 import { readLayer } from '../../../core/index';
+import type { SceneLayerProps } from '../../../render/scene';
 import type { FogUniforms } from '../../../render/shaders';
 import { VISUAL } from '../../../render/theme/index';
 import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
@@ -50,13 +50,8 @@ function syncFogUniforms(
   uniforms.uFtdFogHazeAmt.value = tactical ? 0 : 1;
 }
 
-export interface FogOfWarProps {
-  client: SimClient;
-  map: ResolvedMap;
-  uniforms: FogUniforms;
-}
-
-export function FogOfWar({ client, map, uniforms }: FogOfWarProps): null {
+export function FogOfWar({ ctx }: SceneLayerProps): null {
+  const { client, map, fog: uniforms } = ctx;
   const texture = useMemo(() => {
     const { width, height } = map.grid;
     const tex = new THREE.DataTexture(new Uint8Array(width * height * 4), width, height);

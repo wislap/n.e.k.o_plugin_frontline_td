@@ -4,9 +4,9 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
 import { formatClock } from '../../../client/match-info';
 import { InstanceWriter } from '../../../render/instance-writer';
+import type { SceneLayerProps } from '../../../render/scene';
 import { terrainY } from '../../../render/world';
 import { SquadsChannel } from '../protocol';
 import { arrowSpots, gatheringThreats, routedThreats } from './threat-info';
@@ -66,14 +66,9 @@ function getLineMaterial(ref: {
   return ref.current;
 }
 
-export interface ThreatsLayerProps {
-  client: SimClient;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-}
-
-export function ThreatsLayer({ client, heights, mapWidth, mapHeight }: ThreatsLayerProps) {
+export function ThreatsLayer({ ctx }: SceneLayerProps) {
+  const { client, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const groupRef = useRef<THREE.Group>(null);
   const markerRef = useRef<THREE.InstancedMesh>(null);
   const arrowRef = useRef<THREE.InstancedMesh>(null);

@@ -12,7 +12,8 @@
   `SquadsLaunched`，快照通道 `SquadsChannel`（己方全量，敌方公开
   视图：集结点、launchTick、目标与存储路径）。
 - `sim/index.ts`：`createSquadsModule(deps)`。
-- `render/`：`ThreatsLayer`（敌方小队预警，卸载时释放 GPU 资源）；
+- `render/`：`squadsSceneLayers`（ThreatsLayer：敌方小队预警，
+  卸载时释放 GPU 资源；ADR 0062 场景层注册）；
   `ui/`：`SquadPanel`（仅指挥模式）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。

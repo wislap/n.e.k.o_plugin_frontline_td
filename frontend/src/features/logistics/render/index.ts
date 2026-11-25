@@ -1,3 +1,1 @@
-export { LogisticsOverlay } from './LogisticsOverlay';
-export { RoadLayer } from './RoadLayer';
-export { RoadToolLayer } from './RoadToolLayer';
+export { logisticsSceneLayers } from './scene-layers';

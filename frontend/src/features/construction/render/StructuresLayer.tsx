@@ -10,9 +10,8 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { effectiveSpectatePitchDeg } from '../../../client/camera-math';
 import { useCameraStore } from '../../../client/camera-store';
-import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
-import type { ContentDb } from '../../../content/index';
+import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';
@@ -62,23 +61,9 @@ import { readChannel } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 
-export interface StructuresLayerProps {
-  client: SimClient;
-  db: ContentDb;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-  isHostile?: ((observer: number, faction: number) => boolean) | undefined;
-}
-
-export function StructuresLayer({
-  client,
-  db,
-  heights,
-  mapWidth,
-  mapHeight,
-  isHostile,
-}: StructuresLayerProps) {
+export function StructuresLayer({ ctx }: SceneLayerProps) {
+  const { client, db, heights, isHostile } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const [capacity, setCapacity] = useState(64);
   const theme = VISUAL;
   const silRefs = useRef<Partial<Record<StructureSilhouette, THREE.InstancedMesh | null>>>({});

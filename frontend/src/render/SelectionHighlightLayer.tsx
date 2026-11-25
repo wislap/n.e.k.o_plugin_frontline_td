@@ -11,9 +11,9 @@ import {
 } from '../client/inspector-store';
 import { useInteractionStore } from '../client/interaction-store';
 import { useSelectionStore } from '../client/selection-store';
-import type { SimClient, SnapshotPair } from '../client/sim-client';
-import type { ContentDb } from '../content/index';
+import type { SnapshotPair } from '../client/sim-client';
 import { interpAlpha } from './interpolate';
+import type { SceneLayerProps } from './scene';
 import {
   commitLineBuffer,
   createLineBuffer,
@@ -53,15 +53,6 @@ const CIRCLE_COLORS: Readonly<Record<HighlightCircle['kind'], string>> = {
   service: '#7fd4ff',
   connect: '#7be8b8',
 };
-
-interface SelectionHighlightLayerProps {
-  client: SimClient;
-  db: ContentDb;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-  isHostile: (observer: number, faction: number) => boolean;
-}
 
 function isUnitSubject(
   subject: HoverSubject | PinnableSubject | null,
@@ -220,14 +211,9 @@ function writeHighlights(
   segs.visible = vertexCount > 0;
 }
 
-export function SelectionHighlightLayer({
-  client,
-  db,
-  heights,
-  mapWidth,
-  mapHeight,
-  isHostile,
-}: SelectionHighlightLayerProps) {
+export function SelectionHighlightLayer({ ctx }: SceneLayerProps) {
+  const { client, db, heights, isHostile } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const theme = VISUAL;
   const segsRef = useRef<THREE.LineSegments>(null);
   const bufRef = useRef<LineBuffer | null>(null);

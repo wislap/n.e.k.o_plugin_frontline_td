@@ -6,6 +6,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
 import { useUiStore } from '../../client/ui-store';
+import type { SceneLayerProps } from '../scene';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
@@ -148,7 +149,8 @@ function applySceneBackground(scene: THREE.Scene, haze: string, extent: number):
   };
 }
 
-export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHeight: number }) {
+export function SceneLighting({ ctx }: SceneLayerProps) {
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const theme = VISUAL;
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);

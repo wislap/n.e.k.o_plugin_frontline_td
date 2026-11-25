@@ -1,6 +1,8 @@
 // Game canvas (M2 C2 + M3 D): an R3F <Canvas> filling the viewport
 // behind the HUD, plus the input bridge that registers the
 // canvas-dependent half of the app intent router (render/input-dispatch.ts).
+// Feature scene layers come in via the `layers` prop (ADR 0062) — the
+// shell owns only lighting, background, camera, selection, input and post.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -8,66 +10,33 @@ import { useBoxStore } from '../client/box-store';
 import { isCaptureMode, renderNowMs } from '../client/capture-mode';
 import { useInteractionStore } from '../client/interaction-store';
 import { useIntentRouter, type IntentRouter } from '../client/intent';
-import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import { useUiStore } from '../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
-import { BeamsLayer } from '../features/combat/render/index';
-import { CaptureLayer } from '../features/capture/render/index';
-import {
-  ExclusionLayer,
-  GhostPreview,
-  RoadWorksLayer,
-  roadWorksHpItems,
-  StructuresLayer,
-  structureKindHeight,
-} from '../features/construction/render/index';
-import { StructuresChannel } from '../features/construction/protocol';
-import { LogisticsOverlay, RoadLayer, RoadToolLayer } from '../features/logistics/render/index';
 import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
-import { TerrainMesh, ScatterLayer } from '../features/terrain/render/index';
-import { DenseUnitsChannel } from '../features/units/protocol';
-import { UnitsLayer } from '../features/units/render/index';
-import { ThreatsLayer } from '../features/squads/render/index';
-import { FogOfWar, MemoryLayer } from '../features/vision/render/index';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
-import { HpBars, type HpBarCollector, type HpBarSink } from './hp-bars';
+import type { SceneContext, SceneLayerDef } from './scene';
 import { createFogUniforms } from './shaders';
 import { makeDispatch } from './input-dispatch';
 import { SelectionHighlightLayer } from './SelectionHighlightLayer';
 import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
 import { terrainY } from './world';
-import { readChannel, readLayer } from '../core/index';
+import { readLayer } from '../core/index';
 
 const BACKGROUND = '#0b1020';
 const MARKER_COLOR = '#ffe08a';
-const UNIT_BAR_TOP = 0.8;
 
 export interface GameCanvasProps {
   client: SimClient;
   db: ContentDb;
   map: ResolvedMap;
+  layers: readonly SceneLayerDef[];
   panTracker: PanTracker;
   // Hostility from the match relations (observer, faction) → bool.
   isHostile: (observer: number, faction: number) => boolean;
-}
-
-// Damaged-unit bars from the dense units channel.
-function unitHpItems(pair: SnapshotPair, _alpha: number, sink: HpBarSink): void {
-  const units = readChannel(pair.latest, DenseUnitsChannel) ?? undefined;
-  if (units === undefined) {
-    return;
-  }
-  for (let i = 0; i < units.handles.length; i++) {
-    const bp = units.hpBp[i] ?? 10000;
-    if (bp >= 10000) {
-      continue;
-    }
-    sink.push(units.x[i] ?? 0, units.y[i] ?? 0, UNIT_BAR_TOP, 0.9, bp);
-  }
 }
 
 // Capture mode (?capture=): counts rendered frames so tooling/shots.ts
@@ -120,24 +89,18 @@ function PerfProbe() {
 // forwards canvas-dependent intents back into the handler registered
 // here (ray casts need the live camera). Register/unregister on mount.
 function InputBridge({
-  client,
-  db,
-  mapWidth,
-  mapHeight,
-  heights,
+  ctx,
   router,
 }: {
-  client: SimClient;
-  db: ContentDb;
-  mapWidth: number;
-  mapHeight: number;
-  heights: ArrayLike<number>;
+  ctx: SceneContext;
   // Prop-drilled: React context does not cross the <Canvas> boundary.
   router: IntentRouter;
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
+  const { client, db, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   useEffect(() => {
     const el = gl.domElement;
     const dispatch = makeDispatch({
@@ -174,43 +137,10 @@ function InputBridge({
   return null;
 }
 
-// Damaged-structure bars from the structures channel.
-function makeStructureHpItems(db: ContentDb): HpBarCollector {
-  return (pair: SnapshotPair, _alpha: number, sink: HpBarSink): void => {
-    const channel = readChannel(pair.latest, StructuresChannel) ?? undefined;
-    if (channel === undefined) {
-      return;
-    }
-    for (let i = 0; i < channel.handles.length; i++) {
-      const bp = channel.hpBp[i] ?? 10000;
-      if (bp >= 10000) {
-        continue;
-      }
-      const kind = db.structures.byIndex(channel.kind[i] ?? 0);
-      if (kind === undefined) {
-        continue;
-      }
-      sink.push(
-        (channel.x[i] ?? 0) + kind.footprint.w / 2,
-        (channel.y[i] ?? 0) + kind.footprint.h / 2,
-        structureKindHeight(db, channel.kind[i] ?? 0),
-        Math.max(kind.footprint.w, kind.footprint.h),
-        bp,
-      );
-    }
-  };
-}
-
 // Short-lived ring at the last move-command target.
-function MoveMarker({
-  heights,
-  mapWidth,
-  mapHeight,
-}: {
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-}) {
+function MoveMarker({ ctx }: { ctx: SceneContext }) {
+  const { heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const marker = useSelectionStore((s) => s.moveMarker);
   const ref = useRef<THREE.Mesh>(null);
   const material = useRef<THREE.MeshBasicMaterial>(null);
@@ -248,7 +178,7 @@ function MoveMarker({
   );
 }
 
-export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanvasProps) {
+export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: GameCanvasProps) {
   const router = useIntentRouter();
   // Wait for the first snapshot (terrain layers + observer) before
   // mounting the scene content.
@@ -276,10 +206,10 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
   const panelOpen = useUiStore((s) => s.debugPanelOpen);
   const perfProbe = import.meta.env.DEV && panelOpen;
-  const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
-  const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
-  const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
-  const structureHpItems = useMemo(() => makeStructureHpItems(db), [db]);
+  const ctx = useMemo<SceneContext>(
+    () => ({ client, db, map, heights, isHostile, fog: fogUniforms }),
+    [client, db, map, heights, isHostile, fogUniforms],
+  );
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
@@ -288,130 +218,20 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
         style={{ background: BACKGROUND }}
         {...(dprCap > 0 ? { dpr: Math.min(window.devicePixelRatio, dprCap) } : {})}
       >
-        <SceneLighting mapWidth={grid.width} mapHeight={grid.height} />
+        <SceneLighting ctx={ctx} />
         {perfProbe && <PerfProbe />}
-        {ready && <ThemeBackground mapWidth={grid.width} mapHeight={grid.height} />}
+        {ready && <ThemeBackground ctx={ctx} />}
         {ready && (
           <>
-            <TerrainMesh
-              snapshot={snapshot}
-              width={grid.width}
-              height={grid.height}
-              ramps={grid.ramps}
-              surfaceColors={surfaceColors}
-              fog={fogUniforms}
-            />
-            <StructuresLayer
-              client={client}
-              db={db}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              isHostile={isHostile}
-            />
-            <UnitsLayer
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              radii={radii}
-              visuals={unitVisuals}
-              lowThresholdBp={db.logistics.lowThresholdBp}
-            />
-            <ThreatsLayer
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-            />
-            <HpBars
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              collect={unitHpItems}
-            />
-            <HpBars
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              collect={structureHpItems}
-            />
-            <RoadLayer client={client} map={map} heights={heights} fog={fogUniforms} />
-            <ScatterLayer client={client} db={db} map={map} heights={heights} fog={fogUniforms} />
-            <LogisticsOverlay client={client} db={db} map={map} heights={heights} />
-            <RoadToolLayer client={client} map={map} heights={heights} />
-            <RoadWorksLayer client={client} map={map} heights={heights} fog={fogUniforms} />
-            <HpBars
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              collect={roadWorksHpItems}
-            />
-            <GhostPreview
-              client={client}
-              db={db}
-              map={map}
-              heights={heights}
-              isHostile={isHostile}
-            />
-            <ExclusionLayer
-              client={client}
-              db={db}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              isHostile={isHostile}
-            />
-            <MemoryLayer
-              client={client}
-              db={db}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-            />
-            <CaptureLayer
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-            />
-            <BeamsLayer
-              client={client}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-            />
-            <MoveMarker heights={heights} mapWidth={grid.width} mapHeight={grid.height} />
-            <SelectionHighlightLayer
-              client={client}
-              db={db}
-              heights={heights}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              isHostile={isHostile}
-            />
-            <FogOfWar client={client} map={map} uniforms={fogUniforms} />
-            <InputBridge
-              client={client}
-              db={db}
-              mapWidth={grid.width}
-              mapHeight={grid.height}
-              heights={heights}
-              router={router}
-            />
+            {layers.map((layer) => (
+              <layer.Component key={layer.id} ctx={ctx} />
+            ))}
+            <MoveMarker ctx={ctx} />
+            <SelectionHighlightLayer ctx={ctx} />
+            <InputBridge ctx={ctx} router={router} />
           </>
         )}
-        {(!isCaptureMode() || ready) && (
-          <CameraRig
-            mapWidth={grid.width}
-            mapHeight={grid.height}
-            heights={heights}
-            panTracker={panTracker}
-          />
-        )}
+        {(!isCaptureMode() || ready) && <CameraRig ctx={ctx} panTracker={panTracker} />}
         <PostEffects />
         {isCaptureMode() && <CaptureProbe />}
       </Canvas>

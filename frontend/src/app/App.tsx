@@ -7,6 +7,7 @@ import { DebugPanel } from '../dev/DebugPanel';
 import type { PanTracker } from '../input/pan';
 import { EndScreen } from '../modes/assault/ui/EndScreen';
 import { GameCanvas } from '../render/GameCanvas';
+import { SCENE_LAYERS } from './scene-layers';
 import { Hud } from '../ui/Hud';
 
 export function App({
@@ -34,7 +35,14 @@ export function App({
 
   return (
     <main>
-      <GameCanvas client={client} db={db} map={map} panTracker={panTracker} isHostile={isHostile} />
+      <GameCanvas
+        client={client}
+        db={db}
+        map={map}
+        layers={SCENE_LAYERS}
+        panTracker={panTracker}
+        isHostile={isHostile}
+      />
       <Hud
         client={client}
         db={db}

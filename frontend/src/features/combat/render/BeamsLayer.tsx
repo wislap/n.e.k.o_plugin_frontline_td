@@ -4,7 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { SimClient } from '../../../client/sim-client';
+import type { SceneLayerProps } from '../../../render/scene';
 import {
   commitLineBuffer,
   createLineBuffer,
@@ -22,14 +22,9 @@ const MAX_BEAMS = 256;
 const BEAM_COLOR = new THREE.Color('#ffd24f');
 const BEAM_LIFT = 0.6;
 
-export interface BeamsLayerProps {
-  client: SimClient;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-}
-
-export function BeamsLayer({ client, heights, mapWidth, mapHeight }: BeamsLayerProps) {
+export function BeamsLayer({ ctx }: SceneLayerProps) {
+  const { client, heights } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   // Mutable GPU-side state lives behind a ref: created lazily inside
   // useFrame, attached to the object imperatively, disposed on unmount.
   const bufRef = useRef<LineBuffer | null>(null);

@@ -14,8 +14,8 @@
 - `protocol.ts`：`SpawnIntent`/`UnitsSpawned`——生产等模块经意图
   出怪，负载自带 faction/kind/x/y/source（出口位置由调用方算，
   非本模块内建）。
-- `render/`：`UnitsLayer`（shape 实例网格、电量指示）、
-  `factionColorHex`。导出全表见
+- `render/`：`unitsSceneLayers`（UnitsLayer + 单位 HP 条，
+  ADR 0062 场景层注册）、`factionColorHex`。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

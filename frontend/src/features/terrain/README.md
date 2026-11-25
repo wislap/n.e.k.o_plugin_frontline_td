@@ -17,8 +17,8 @@
 - `rules/index.ts`：`heightStepPassable`、`spiralOffsets`、净空分档
   规则（`CLEARANCE_*`、`clearanceTierForRadius`、anchor 工具；纯
   规则，客户端共享）。
-- `render/`：`TerrainMesh`/`buildTerrainGeometry`（vision 的
-  `FogLayer` 复用同一几何）。导出全表见
+- `render/`：`terrainSceneLayers`（TerrainMesh + ScatterLayer，
+  ADR 0062 场景层注册）与 `buildTerrainGeometry`。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

@@ -1,3 +1,2 @@
-export { TerrainMesh } from './TerrainMesh';
-export { ScatterLayer } from './ScatterLayer';
 export { buildTerrainGeometry } from './geometry';
+export { terrainSceneLayers } from './scene-layers';

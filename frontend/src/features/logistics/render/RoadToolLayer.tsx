@@ -6,10 +6,9 @@ import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useInteractionStore } from '../../../client/interaction-store';
-import type { SimClient } from '../../../client/sim-client';
 import { useUiStore } from '../../../client/ui-store';
-import type { ResolvedMap } from '../../../content/index';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import type { SceneLayerProps } from '../../../render/scene';
 import { terrainY } from '../../../render/world';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
 import { linkIndices } from '../ui/road-select';
@@ -60,13 +59,8 @@ function fillLines(
   return v;
 }
 
-export interface RoadToolLayerProps {
-  client: SimClient;
-  map: ResolvedMap;
-  heights: ArrayLike<number>;
-}
-
-export function RoadToolLayer({ client, map, heights }: RoadToolLayerProps) {
+export function RoadToolLayer({ ctx }: SceneLayerProps) {
+  const { client, map, heights } = ctx;
   const selRef = useRef<THREE.LineSegments>(null);
   const hovRef = useRef<THREE.LineSegments>(null);
   const intRef = useRef<THREE.LineSegments>(null);

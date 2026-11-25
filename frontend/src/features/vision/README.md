@@ -21,7 +21,8 @@
   废墟、蓝图不挂视野）。
 - `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
-- `render/`：`FogOfWar`（无网格：把 vision.state 层逐格上传到 RGBA
+- `render/`：`visionSceneLayers`（ADR 0062 场景层：FogOfWar——
+  无网格：把 vision.state 层逐格上传到 RGBA
   `DataTexture` 绿色通道，并按相机模式驱动共享 `FogUniforms`；
   地面材质经 `render/shaders.ts` 的 `ftdFogApply` 在编码后混合迷雾）、
   `MemoryLayer`（记忆结构暗框）。导出全表见

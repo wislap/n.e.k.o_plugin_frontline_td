@@ -1,1 +1,1 @@
-export { BeamsLayer } from './BeamsLayer';
+export { combatSceneLayers } from './scene-layers';

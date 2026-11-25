@@ -16,8 +16,9 @@
   `makePlacementView`（幽灵预览与 eval 机器人共用）、拆除退款与
   取消选区分类等纯规则。
 - `content.ts`：结构基础字段、`BUILD_CATEGORIES`、轮廓/图标声明。
-- `render/`/`ui/`/`inspector`：StructuresLayer、GhostPreview、
-  ExclusionLayer、RoadWorksLayer、BuildMenu、工地检查器。导出全表见
+- `render/`/`ui/`/`inspector`：`constructionSceneLayers`（ADR 0062
+  场景层：Structures、结构 HP、RoadWorks、道路段 HP、Ghost、
+  Exclusion）、BuildMenu、工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

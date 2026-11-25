@@ -6,8 +6,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useInteractionStore } from '../../../client/interaction-store';
-import type { SimClient } from '../../../client/sim-client';
-import type { ContentDb } from '../../../content/index';
+import type { SceneLayerProps } from '../../../render/scene';
 import {
   commitLineBuffer,
   createLineBuffer,
@@ -41,24 +40,9 @@ function ensureExclusionBuffer(
   return buf;
 }
 
-export interface ExclusionLayerProps {
-  client: SimClient;
-  db: ContentDb;
-  heights: ArrayLike<number>;
-  mapWidth: number;
-  mapHeight: number;
-  // Hostility from the match relations (observer, faction) → bool.
-  isHostile: (observer: number, faction: number) => boolean;
-}
-
-export function ExclusionLayer({
-  client,
-  db,
-  heights,
-  mapWidth,
-  mapHeight,
-  isHostile,
-}: ExclusionLayerProps) {
+export function ExclusionLayer({ ctx }: SceneLayerProps) {
+  const { client, db, heights, isHostile } = ctx;
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const bufRef = useRef<LineBuffer | null>(null);
   const segsRef = useRef<THREE.LineSegments>(null);
 

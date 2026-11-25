@@ -12,8 +12,8 @@
   `CombatDied` 事件（`all` 可见）、检查器契约类型。
 - `content.ts`：`weaponSchema`（range/damage/cooldown/`cost`，
   loader 换成索引与 milli/tick）。
-- `render/`：`BeamsLayer`（弹道瞬时线，经事件游标消费
-  `combat.shot`）。
+- `render/`：`combatSceneLayers`（BeamsLayer：弹道瞬时线，
+  经事件游标消费 `combat.shot`；ADR 0062 场景层注册）。
 - 部件工厂 `unitParts`/`structureParts`/`roadSegmentParts`（Health
   满血、Targetable、Weapon）经 `app/` 注入。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与

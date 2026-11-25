@@ -4,6 +4,7 @@
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import type { SceneLayerProps } from '../scene';
 import { useGpuResource } from '../use-gpu-resource';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
@@ -83,7 +84,8 @@ function buildPlatformMaterial(theme: RenderVisual): THREE.ShaderMaterial {
   });
 }
 
-export function ThemeBackground({ mapWidth, mapHeight }: { mapWidth: number; mapHeight: number }) {
+export function ThemeBackground({ ctx }: SceneLayerProps) {
+  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const theme = VISUAL;
   const domeRef = useRef<THREE.Mesh>(null);
   // Skybox-style: the dome follows the camera so its far limb can never
