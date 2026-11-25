@@ -5,6 +5,7 @@ import { captureSceneLayers } from '../features/capture/render/index';
 import { combatSceneLayers } from '../features/combat/render/index';
 import { constructionSceneLayers } from '../features/construction/render/index';
 import { logisticsSceneLayers } from '../features/logistics/render/index';
+import { selectionSceneLayers } from '../features/selection/render/index';
 import { squadsSceneLayers } from '../features/squads/render/index';
 import { terrainSceneLayers } from '../features/terrain/render/index';
 import { unitsSceneLayers } from '../features/units/render/index';
@@ -20,4 +21,5 @@ export const SCENE_LAYERS = sortContributions([
   ...visionSceneLayers,
   ...captureSceneLayers,
   ...combatSceneLayers,
+  ...selectionSceneLayers,
 ]);

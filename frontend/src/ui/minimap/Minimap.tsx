@@ -7,7 +7,6 @@ import { useIntentRouter } from '../../client/intent';
 import { canvasToMap } from '../../client/minimap-model';
 import { useSelectionStore } from '../../client/selection-store';
 import type { SimClient } from '../../client/sim-client';
-import { submitMoveOrder } from '../../client/squad-controls';
 import { useUiStore } from '../../client/ui-store';
 import { subscribeSnapshotClock } from '../../client/use-snapshot';
 import type { ContentDb, ResolvedMap } from '../../content/index';
@@ -56,6 +55,7 @@ export function Minimap({
   isHostile,
   rasters,
   marks,
+  onMoveOrder,
 }: {
   client: SimClient;
   db: ContentDb;
@@ -63,6 +63,9 @@ export function Minimap({
   isHostile: (observer: number, faction: number) => boolean;
   rasters: readonly MinimapRasterDef[];
   marks: readonly MinimapMarkDef[];
+  // Move-order submission lives in features/squads; the shell supplies
+  // it (ADR 0062). Guard = Ctrl/Meta held during the right-click.
+  onMoveOrder?: ((x: number, y: number, guard: boolean) => void) | undefined;
 }) {
   const { t } = useTranslation();
   const open = useUiStore((s) => s.minimapOpen);
@@ -228,14 +231,7 @@ export function Minimap({
         );
         const selected = useSelectionStore.getState().selected;
         if (pt !== null && selected.size > 0) {
-          submitMoveOrder(
-            client,
-            client.snapshots().latest,
-            [...selected],
-            Math.floor(pt.x),
-            Math.floor(pt.y),
-            e.ctrlKey || e.metaKey,
-          );
+          onMoveOrder?.(Math.floor(pt.x), Math.floor(pt.y), e.ctrlKey || e.metaKey);
           useSelectionStore.getState().markMoveTarget(pt.x, pt.y, performance.now());
         }
       }

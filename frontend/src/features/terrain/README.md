@@ -21,7 +21,8 @@
   ADR 0062 场景层注册）与 `buildTerrainGeometry`。
 - `ui/`：`terrainInspectorSubjects`（ADR 0062 检视器主题注册：
   cell / cell_unexplored 地形格检视）、`terrainMinimapRasters`
-  （ADR 0062 小地图栅格贡献：基础地形着色）。导出全表见
+  （ADR 0062 小地图栅格贡献：基础地形着色）；`render/` 另导出
+  `readTerrainHeights`（GameCanvas 经 app 注入的高度读取）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

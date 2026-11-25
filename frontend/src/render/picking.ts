@@ -15,6 +15,139 @@ export interface Ray {
   dir: Vec3;
 }
 
+// Generic ray math shared by the feature pick helpers (ADR 0062 step
+// 4b): channel-agnostic, moved verbatim from client/pick-ray.ts.
+export function normalizeRay(ray: Ray): Ray | null {
+  const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
+  if (len <= 0) {
+    return null;
+  }
+  return {
+    origin: ray.origin,
+    dir: { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len },
+  };
+}
+
+export function surfaceHeightAt(
+  heights: ArrayLike<number>,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  heightStep: number,
+): number {
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  if (cx < 0 || cy < 0 || cx >= width || cy >= height) {
+    return 0;
+  }
+  return (heights[cy * width + cx] ?? 0) * heightStep;
+}
+
+export function rayAabbHitT(
+  ray: Ray,
+  minX: number,
+  minY: number,
+  minZ: number,
+  maxX: number,
+  maxY: number,
+  maxZ: number,
+): number | null {
+  let tMin = 0;
+  let tMax = Number.POSITIVE_INFINITY;
+  const axes: readonly [number, number, number, number][] = [
+    [ray.origin.x, ray.dir.x, minX, maxX],
+    [ray.origin.y, ray.dir.y, minY, maxY],
+    [ray.origin.z, ray.dir.z, minZ, maxZ],
+  ];
+  for (const [o, d, bMin, bMax] of axes) {
+    if (Math.abs(d) < 1e-9) {
+      if (o < bMin || o > bMax) {
+        return null;
+      }
+      continue;
+    }
+    const inv = 1 / d;
+    const t0 = (bMin - o) * inv;
+    const t1 = (bMax - o) * inv;
+    tMin = Math.max(tMin, Math.min(t0, t1));
+    tMax = Math.min(tMax, Math.max(t0, t1));
+    if (tMax < tMin) {
+      return null;
+    }
+  }
+  return tMin;
+}
+
+export function rayCylinderHitT(
+  ray: Ray,
+  cx: number,
+  baseY: number,
+  topY: number,
+  cz: number,
+  radius: number,
+): number | null {
+  let tYMin = Number.NEGATIVE_INFINITY;
+  let tYMax = Number.POSITIVE_INFINITY;
+  if (Math.abs(ray.dir.y) < 1e-9) {
+    if (ray.origin.y < baseY || ray.origin.y > topY) {
+      return null;
+    }
+  } else {
+    const ty0 = (baseY - ray.origin.y) / ray.dir.y;
+    const ty1 = (topY - ray.origin.y) / ray.dir.y;
+    tYMin = Math.min(ty0, ty1);
+    tYMax = Math.max(ty0, ty1);
+  }
+
+  const dx = ray.origin.x - cx;
+  const dz = ray.origin.z - cz;
+  const a = ray.dir.x * ray.dir.x + ray.dir.z * ray.dir.z;
+  const c = dx * dx + dz * dz - radius * radius;
+  if (a < 1e-10) {
+    if (c > 0) {
+      return null;
+    }
+    const enter = Math.max(0, tYMin);
+    return tYMax < enter ? null : enter;
+  }
+
+  const b = 2 * (dx * ray.dir.x + dz * ray.dir.z);
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) {
+    return null;
+  }
+  const sqrtD = Math.sqrt(disc);
+  const tCyl0 = (-b - sqrtD) / (2 * a);
+  const tCyl1 = (-b + sqrtD) / (2 * a);
+  const enter = Math.max(0, tCyl0, tYMin);
+  const exit = Math.min(tCyl1, tYMax);
+  return exit < enter ? null : enter;
+}
+
+export function groundMaxT(
+  ray: Ray,
+  groundHit: { x: number; y: number } | null,
+  heights: ArrayLike<number>,
+  mapDims: { width: number; height: number },
+  heightStep: number,
+): number {
+  if (groundHit === null) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const gy = surfaceHeightAt(
+    heights,
+    mapDims.width,
+    mapDims.height,
+    groundHit.x,
+    groundHit.y,
+    heightStep,
+  );
+  return (
+    Math.hypot(groundHit.x - ray.origin.x, gy - ray.origin.y, groundHit.y - ray.origin.z) + 0.35
+  );
+}
+
 const MARCH_STEP = 0.25;
 const BISECT_ITERATIONS = 6;
 

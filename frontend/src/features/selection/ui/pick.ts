@@ -1,81 +1,55 @@
-// Entity and subject picking from snapshot channels (ADR 0048):
+// Entity and subject picking from snapshot channels (ADR 0048/0062):
 // `pickSubjectAt` resolves any hover/click target (own/hostile unit,
 // ruin, own/hostile structure, road segment, salvage, fog memory, or
-// terrain cell); `pickDemolishableAt` resolves cancellable own structures
-// or road segments; `pickAt` remains for own-entity compatibility.
-import { readChannel, type Snapshot } from '../core/index';
-import type { ContentDb } from '../content/index';
+// terrain cell); `pickAt` remains for own-entity compatibility. The
+// candidate finders live with construction's demolishable picking.
+import { readChannel, type Snapshot } from '../../../core/index';
+import type { ContentDb } from '../../../content/index';
 import {
   RoadWorksChannel,
   SalvageChannel,
   STATE_RUIN,
   StructuresChannel,
-  type ConstructionStructures,
-  type RoadWorks,
-} from '../features/construction/protocol';
-import { classifyCancelSelection } from '../features/construction/rules/index';
-import { VisionMemoryChannel } from '../features/vision/protocol';
-import type { HoverSubject } from './inspector-store';
+} from '../../construction/protocol';
+import { findOwnStructureAt } from '../../construction/ui/index';
+import { VisionMemoryChannel } from '../../vision/protocol';
+import type { HoverSubject, PinnableSubject } from '../../../client/inspector-store';
 
 export interface PickResult {
   ownHandle: number | null;
   subject: HoverSubject | null;
 }
 
-export interface DemolishPick {
-  handle: number;
-  refunds: { cargo: number; milli: number }[];
-}
-
-function findOwnStructureAt(
-  db: ContentDb,
-  structures: ConstructionStructures | null,
+// The pin subject for a selected own handle: unit when the interpolated
+// unit map contains it, else the own structure or road segment carrying
+// the handle (verbatim from the old canvas dispatch).
+export function ownSubjectForHandle(
+  snapshot: Snapshot | null,
   observer: number,
-  x: number,
-  y: number,
-): number | null {
-  if (structures === null) {
-    return null;
+  units: ReadonlyMap<number, { x: number; y: number; faction: number }>,
+  handle: number,
+): PinnableSubject {
+  const unit = units.get(handle);
+  if (unit !== undefined && unit.faction === observer) {
+    return { kind: 'own_unit', handle };
   }
-  for (let i = 0; i < structures.handles.length; i++) {
-    if ((structures.faction[i] ?? 0) !== observer) {
-      continue;
-    }
-    const kind = db.structures.byIndex(structures.kind[i] ?? 0);
-    const sx = structures.x[i] ?? 0;
-    const sy = structures.y[i] ?? 0;
-    if (
-      kind !== undefined &&
-      x >= sx &&
-      x < sx + kind.footprint.w &&
-      y >= sy &&
-      y < sy + kind.footprint.h
-    ) {
-      return structures.handles[i] ?? null;
+  const structures = readChannel(snapshot, StructuresChannel);
+  if (structures !== null) {
+    for (let i = 0; i < structures.handles.length; i++) {
+      if (structures.handles[i] === handle && (structures.faction[i] ?? 0) === observer) {
+        return { kind: 'own_structure', handle };
+      }
     }
   }
-  return null;
-}
-
-function findNearestRoadSegment(
-  roadWorks: RoadWorks | null,
-  x: number,
-  y: number,
-  radius: number,
-): number | null {
-  if (roadWorks === null) {
-    return null;
-  }
-  let best: number | null = null;
-  let bestDist = Infinity;
-  for (let i = 0; i < roadWorks.segments.handles.length; i++) {
-    const d = Math.hypot((roadWorks.segments.x[i] ?? 0) - x, (roadWorks.segments.y[i] ?? 0) - y);
-    if (d <= radius && d < bestDist) {
-      bestDist = d;
-      best = roadWorks.segments.handles[i] ?? null;
+  const roadWorks = readChannel(snapshot, RoadWorksChannel);
+  if (roadWorks !== null) {
+    for (let i = 0; i < roadWorks.segments.handles.length; i++) {
+      if (roadWorks.segments.handles[i] === handle) {
+        return { kind: 'road_segment', handle };
+      }
     }
   }
-  return best;
+  return { kind: 'own_unit', handle };
 }
 
 // Click selection (own entities only): nearest own unit inside `radius`
@@ -288,29 +262,4 @@ export function pickSubjectAt(
     ownHandle: null,
     subject: { kind: 'cell', x: Math.floor(x), y: Math.floor(y) },
   };
-}
-
-// Picks a cancellable/demolishable own structure (by footprint) or road
-// segment (within radius) at (x, y), returning its handle and refunds.
-export function pickDemolishableAt(
-  db: ContentDb,
-  snapshot: Snapshot | null,
-  observer: number,
-  x: number,
-  y: number,
-  radius = 0.6,
-): DemolishPick | null {
-  const structures = readChannel(snapshot, StructuresChannel);
-  const roadWorks = readChannel(snapshot, RoadWorksChannel);
-  const candidate =
-    findOwnStructureAt(db, structures, observer, x, y) ??
-    findNearestRoadSegment(roadWorks, x, y, radius);
-  if (candidate === null) {
-    return null;
-  }
-  const result = classifyCancelSelection(db, structures, roadWorks, observer, [candidate]);
-  if (result.cancellable.length === 0) {
-    return null;
-  }
-  return { handle: candidate, refunds: result.refunds };
 }

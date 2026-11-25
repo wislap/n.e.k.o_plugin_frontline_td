@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { toFactionId, toTick, type Snapshot } from '../core/index';
-import { MoveCommand } from '../features/movement/protocol';
-import { SquadsChannel, SquadsOrder, type SquadView } from '../features/squads/protocol';
-import type { SimClient } from './sim-client';
+import { toFactionId, toTick, type Snapshot } from '../../../core/index';
+import { MoveCommand } from '../../movement/protocol';
+import { SquadsChannel, SquadsOrder, type SquadView } from '../protocol';
+import type { SimClient } from '../../../client/sim-client';
 import {
   digitForTag,
   digitPress,

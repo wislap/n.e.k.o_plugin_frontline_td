@@ -2,12 +2,12 @@
 // implementation used by the instanced renderer and by selection. The
 // interpolator caches the previous-position handle map and rebuilds it
 // only when a new latest snapshot arrives.
-import { readChannel } from '../core/index';
-import type { Snapshot } from '../core/index';
-import type { SnapshotPair } from '../client/sim-client';
-import type { DenseUnits } from '../features/units/protocol';
-import { DenseUnitsChannel } from '../features/units/protocol';
-import { interpAlpha, lerp } from './interpolate';
+import { readChannel } from '../../../core/index';
+import type { Snapshot } from '../../../core/index';
+import type { SnapshotPair } from '../../../client/sim-client';
+import type { DenseUnits } from '../protocol';
+import { DenseUnitsChannel } from '../protocol';
+import { interpAlpha, lerp } from '../../../render/interpolate';
 
 export interface InterpUnit {
   x: number;

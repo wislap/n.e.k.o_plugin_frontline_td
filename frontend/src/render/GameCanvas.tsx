@@ -14,17 +14,17 @@ import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import { useUiStore } from '../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
-import { TERRAIN_HEIGHT_LAYER_ID } from '../features/terrain/protocol';
+import type { Snapshot } from '../core/index';
+import type { Intent } from '../input/intents';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
+import type { CanvasIntentHandlerDef } from './canvas-input';
 import type { SceneContext, SceneLayerDef } from './scene';
 import { createFogUniforms } from './shaders';
 import { makeDispatch } from './input-dispatch';
-import { SelectionHighlightLayer } from './SelectionHighlightLayer';
 import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
 import { terrainY } from './world';
-import { readLayer } from '../core/index';
 
 const BACKGROUND = '#0b1020';
 const MARKER_COLOR = '#ffe08a';
@@ -34,6 +34,9 @@ export interface GameCanvasProps {
   db: ContentDb;
   map: ResolvedMap;
   layers: readonly SceneLayerDef[];
+  canvasIntents: ReadonlyMap<Intent['kind'], CanvasIntentHandlerDef>;
+  // Terrain height layer reader — supplied by features/terrain (ADR 0062).
+  readHeights: (snapshot: Snapshot | null) => ArrayLike<number> | null;
   panTracker: PanTracker;
   // Hostility from the match relations (observer, faction) → bool.
   isHostile: (observer: number, faction: number) => boolean;
@@ -91,28 +94,31 @@ function PerfProbe() {
 function InputBridge({
   ctx,
   router,
+  canvasIntents,
 }: {
   ctx: SceneContext;
   // Prop-drilled: React context does not cross the <Canvas> boundary.
   router: IntentRouter;
+  canvasIntents: ReadonlyMap<Intent['kind'], CanvasIntentHandlerDef>;
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const { client, db, heights } = ctx;
-  const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   useEffect(() => {
     const el = gl.domElement;
-    const dispatch = makeDispatch({
-      client,
-      db,
-      mapWidth,
-      mapHeight,
-      heights,
-      camera,
-      size,
-      rect: () => el.getBoundingClientRect(),
-    });
+    const dispatch = makeDispatch(
+      {
+        client,
+        db,
+        map: ctx.map,
+        heights,
+        camera,
+        size,
+        rect: () => el.getBoundingClientRect(),
+      },
+      canvasIntents,
+    );
     router.setCanvasHandler(dispatch);
     const uninstall = installPointer(
       el,
@@ -132,7 +138,7 @@ function InputBridge({
       uninstall();
       router.setCanvasHandler(null);
     };
-  }, [gl, camera, size, client, db, heights, mapWidth, mapHeight, router]);
+  }, [gl, camera, size, client, db, heights, ctx.map, canvasIntents, router]);
 
   return null;
 }
@@ -178,7 +184,16 @@ function MoveMarker({ ctx }: { ctx: SceneContext }) {
   );
 }
 
-export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: GameCanvasProps) {
+export function GameCanvas({
+  client,
+  db,
+  map,
+  layers,
+  canvasIntents,
+  readHeights,
+  panTracker,
+  isHostile,
+}: GameCanvasProps) {
   const router = useIntentRouter();
   // Wait for the first snapshot (terrain layers + observer) before
   // mounting the scene content.
@@ -189,7 +204,7 @@ export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: G
     }
     const id = setInterval(() => {
       const latest = client.snapshots().latest;
-      if (latest !== null && latest.layers[TERRAIN_HEIGHT_LAYER_ID] !== undefined) {
+      if (latest !== null && readHeights(latest) !== null) {
         setReady(true);
         clearInterval(id);
       }
@@ -197,11 +212,11 @@ export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: G
     return () => {
       clearInterval(id);
     };
-  }, [client, ready]);
+  }, [client, ready, readHeights]);
 
   const grid = map.grid;
   const snapshot = ready ? client.snapshots().latest : null;
-  const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? grid.heights;
+  const heights = readHeights(snapshot) ?? grid.heights;
   const fogUniforms = useMemo(() => createFogUniforms(), []);
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
   const panelOpen = useUiStore((s) => s.debugPanelOpen);
@@ -227,8 +242,7 @@ export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: G
               <layer.Component key={layer.id} ctx={ctx} />
             ))}
             <MoveMarker ctx={ctx} />
-            <SelectionHighlightLayer ctx={ctx} />
-            <InputBridge ctx={ctx} router={router} />
+            <InputBridge ctx={ctx} router={router} canvasIntents={canvasIntents} />
           </>
         )}
         {(!isCaptureMode() || ready) && <CameraRig ctx={ctx} panTracker={panTracker} />}

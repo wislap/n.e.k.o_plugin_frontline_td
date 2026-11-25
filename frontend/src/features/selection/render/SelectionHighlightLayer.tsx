@@ -8,28 +8,28 @@ import {
   useInspectorStore,
   type HoverSubject,
   type PinnableSubject,
-} from '../client/inspector-store';
-import { useInteractionStore } from '../client/interaction-store';
-import { useSelectionStore } from '../client/selection-store';
-import type { SnapshotPair } from '../client/sim-client';
-import { interpAlpha } from './interpolate';
-import type { SceneLayerProps } from './scene';
+} from '../../../client/inspector-store';
+import { useInteractionStore } from '../../../client/interaction-store';
+import { useSelectionStore } from '../../../client/selection-store';
+import type { SnapshotPair } from '../../../client/sim-client';
+import { interpAlpha } from '../../../render/interpolate';
+import type { SceneLayerProps } from '../../../render/scene';
 import {
   commitLineBuffer,
   createLineBuffer,
   ensureLineCapacity,
   type LineBuffer,
-} from './line-buffer';
-import { writeRingVertices } from './rings';
-import { VISUAL } from './theme/index';
+} from '../../../render/line-buffer';
+import { writeRingVertices } from '../../../render/rings';
+import { VISUAL } from '../../../render/theme/index';
 import {
   collectSelectionHighlights,
   type HighlightBracket,
   type HighlightCircle,
 } from './selection-highlights';
-import { UnitInterpolator, type InterpUnit } from './unit-pos';
-import { terrainY } from './world';
-import { renderNowMs } from '../client/capture-mode';
+import { UnitInterpolator, type InterpUnit } from '../../units/render/index';
+import { terrainY } from '../../../render/world';
+import { renderNowMs } from '../../../client/capture-mode';
 
 const INITIAL_CAPACITY_VERTICES = 1024;
 const RING_SEGMENTS = 48;

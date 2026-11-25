@@ -19,8 +19,6 @@ describe('interaction store', () => {
     expect(state.ghost).toBeNull();
     expect(state.demolishConfirm).toBeNull();
     expect(state.demolishHover).toBeNull();
-    expect(state.roadSel).toEqual([]);
-    expect(state.roadHover).toBe(-1);
   });
 
   it('enters place tool, clears ghost only when structure kind changes, and exits tool cleanly', () => {
@@ -61,22 +59,10 @@ describe('interaction store', () => {
     expect(useInteractionStore.getState().tool).toEqual({ kind: 'road' });
     expect(useInteractionStore.getState().demolishHover).toBeNull();
 
-    store.toggleRoadLink({ a: 2, b: 5 });
-    store.toggleRoadLink({ a: 1, b: 3 });
-    expect(useInteractionStore.getState().roadSel).toEqual([
-      { a: 1, b: 3 },
-      { a: 2, b: 5 },
-    ]);
-    store.toggleRoadLink({ a: 1, b: 3 });
-    expect(useInteractionStore.getState().roadSel).toEqual([{ a: 2, b: 5 }]);
-
-    store.setRoadHover(3);
     store.setMode('command');
     const after = useInteractionStore.getState();
     expect(after.mode).toBe('command');
     expect(after.tool).toEqual({ kind: 'none' });
-    expect(after.roadSel).toEqual([]);
-    expect(after.roadHover).toBe(-1);
   });
 
   it('arms and clears demolish confirmation with normalized targetKey', () => {

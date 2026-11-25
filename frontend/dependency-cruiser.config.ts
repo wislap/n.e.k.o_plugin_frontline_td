@@ -102,6 +102,16 @@ const config: IConfiguration = {
       },
     },
     {
+      name: 'shell-not-to-features',
+      severity: 'error',
+      comment:
+        'R10: the client shell (render/, ui/, client/, input/) must not import' +
+        ' features/* — type-only imports and tests included; feature wiring' +
+        ' happens in src/app (ADR 0062).',
+      from: { path: '^src/(render|ui|client|input)/' },
+      to: { path: '^src/features/' },
+    },
+    {
       name: 'not-to-app',
       severity: 'error',
       comment: 'R8: only src/app may import src/app; app assembles everything.',

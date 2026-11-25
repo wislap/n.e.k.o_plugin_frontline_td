@@ -1,11 +1,12 @@
 // HUD panel assembly (ADR 0062): app is the only place shell and
 // feature panel lists are combined. groupHudPanels reproduces the
 // pre-registry in-slot DOM order.
+import { useSelectionStore } from '../client/selection-store';
 import { useUiStore } from '../client/ui-store';
 import { DebugPanel } from '../dev/DebugPanel';
 import { constructionHudPanels } from '../features/construction/ui/index';
 import { logisticsHudPanels } from '../features/logistics/ui/index';
-import { squadsHudPanels } from '../features/squads/ui/index';
+import { squadsHudPanels, submitMoveOrder } from '../features/squads/ui/index';
 import { groupHudPanels, type HudPanelProps } from '../ui/hud-panels';
 import { createInspectorPanel } from '../ui/inspector/index';
 import { createMinimapPanel } from '../ui/minimap/index';
@@ -32,7 +33,20 @@ export const HUD_PANELS = groupHudPanels([
     id: 'shell.minimap',
     slot: 'topLeft',
     order: 20,
-    Component: createMinimapPanel({ rasters: MINIMAP_RASTERS, marks: MINIMAP_MARKS }),
+    Component: createMinimapPanel({
+      rasters: MINIMAP_RASTERS,
+      marks: MINIMAP_MARKS,
+      onMoveOrder: (ctx, x, y, guard) => {
+        submitMoveOrder(
+          ctx.client,
+          ctx.client.snapshots().latest,
+          [...useSelectionStore.getState().selected],
+          x,
+          y,
+          guard,
+        );
+      },
+    }),
   },
   {
     id: 'shell.inspector',

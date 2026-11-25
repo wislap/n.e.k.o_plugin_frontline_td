@@ -1,9 +1,9 @@
 // Client interaction mode and tool state (ADR 0048): primary mode
 // (command | build | logistics) plus mutually exclusive secondary tools
-// (place | demolish | road), ghost placement code, two-step demolish
-// confirmation, and road-link selection.
+// (place | demolish | road), ghost placement code, and two-step demolish
+// confirmation. Road-link selection lives in features/logistics'
+// road-tool store (ADR 0062).
 import { create } from 'zustand';
-import type { RoadLinkKey } from '../features/logistics/protocol';
 import { useSelectionStore } from './selection-store';
 
 export type PrimaryMode = 'command' | 'build' | 'logistics';
@@ -43,8 +43,6 @@ export interface InteractionState {
   ghost: GhostState | null;
   demolishConfirm: DemolishConfirmState | null;
   demolishHover: DemolishHoverState | null;
-  roadSel: RoadLinkKey[];
-  roadHover: number;
   setMode(mode: PrimaryMode): void;
   enterPlace(structureKindId: string): void;
   enterDemolish(): void;
@@ -54,9 +52,6 @@ export interface InteractionState {
   clearDemolishConfirm(): void;
   setGhost(ghost: GhostState | null): void;
   setDemolishHover(hover: DemolishHoverState | null): void;
-  setRoadSel(links: RoadLinkKey[]): void;
-  toggleRoadLink(key: RoadLinkKey): void;
-  setRoadHover(index: number): void;
   reset(): void;
 }
 
@@ -66,25 +61,18 @@ const INITIAL_STATE = {
   ghost: null as GhostState | null,
   demolishConfirm: null as DemolishConfirmState | null,
   demolishHover: null as DemolishHoverState | null,
-  roadSel: [] as RoadLinkKey[],
-  roadHover: -1,
 };
 
-// Tool-transient fields cleared whenever the active tool changes; fresh
-// object each call so no mutable roadSel array is shared between states.
+// Tool-transient fields cleared whenever the active tool changes.
 function toolTransientClear(): {
   ghost: GhostState | null;
   demolishConfirm: DemolishConfirmState | null;
   demolishHover: DemolishHoverState | null;
-  roadSel: RoadLinkKey[];
-  roadHover: number;
 } {
   return {
     ghost: null,
     demolishConfirm: null,
     demolishHover: null,
-    roadSel: [],
-    roadHover: -1,
   };
 }
 
@@ -167,22 +155,12 @@ export const useInteractionStore = create<InteractionState>((set) => {
     setDemolishHover: (demolishHover) => {
       set({ demolishHover });
     },
-    setRoadSel: (roadSel) => {
-      set({ roadSel });
-    },
-    toggleRoadLink: (key) => {
-      set((s) => ({
-        roadSel: s.roadSel.some((k) => k.a === key.a && k.b === key.b)
-          ? s.roadSel.filter((k) => !(k.a === key.a && k.b === key.b))
-          : [...s.roadSel, key].sort((x, y) => x.a - y.a || x.b - y.b),
-      }));
-    },
-    setRoadHover: (index) => {
-      set((s) => (s.roadHover === index ? s : { roadHover: index }));
-    },
     reset: () => {
       clearConfirmTimer();
-      set({ ...INITIAL_STATE });
+      // Fresh tool object so tool-change subscribers (the logistics
+      // road-tool store, ADR 0062) see the reset even when the tool was
+      // already 'none'.
+      set({ ...INITIAL_STATE, tool: { kind: 'none' } });
     },
   };
 });

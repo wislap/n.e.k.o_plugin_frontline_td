@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { SimClient } from '../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import type { PanTracker } from '../input/pan';
+import { readTerrainHeights } from '../features/terrain/render/index';
 import { EndScreen } from '../modes/assault/ui/EndScreen';
 import { GameCanvas } from '../render/GameCanvas';
+import { CANVAS_INTENTS } from './canvas-intents';
 import { HUD_PANELS } from './hud-panels';
 import { SCENE_LAYERS } from './scene-layers';
 import { Hud } from '../ui/Hud';
@@ -38,6 +40,8 @@ export function App({
         db={db}
         map={map}
         layers={SCENE_LAYERS}
+        canvasIntents={CANVAS_INTENTS}
+        readHeights={readTerrainHeights}
         panTracker={panTracker}
         isHostile={isHostile}
       />

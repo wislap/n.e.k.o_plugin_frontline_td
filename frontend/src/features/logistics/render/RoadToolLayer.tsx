@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useRoadToolStore } from '../ui/road-tool-store';
 import { useUiStore } from '../../../client/ui-store';
 import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
 import type { SceneLayerProps } from '../../../render/scene';
@@ -109,6 +110,7 @@ export function RoadToolLayer({ ctx }: SceneLayerProps) {
     // Store reads happen per frame via getState — the visuals are
     // imperative, so subscribing would only add React re-renders.
     const interaction = useInteractionStore.getState();
+    const roadTool = useRoadToolStore.getState();
     const roadMode = interaction.tool.kind === 'road';
     const overlayOn =
       useUiStore.getState().logisticsOverlay ||
@@ -119,10 +121,10 @@ export function RoadToolLayer({ ctx }: SceneLayerProps) {
     draw(
       sel,
       bufs.sel,
-      network === undefined ? [] : linkIndices(network, interaction.roadSel),
+      network === undefined ? [] : linkIndices(network, roadTool.roadSel),
       roadMode,
     );
-    draw(hov, bufs.hov, interaction.roadHover >= 0 ? [interaction.roadHover] : [], roadMode);
+    draw(hov, bufs.hov, roadTool.roadHover >= 0 ? [roadTool.roadHover] : [], roadMode);
     const intercepted = interceptedRef.current;
     intercepted.length = 0;
     if (network !== undefined) {

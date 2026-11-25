@@ -50,8 +50,6 @@ describe('resetClientState', () => {
     expect(interaction.ghost).toBeNull();
     expect(interaction.demolishConfirm).toBeNull();
     expect(interaction.demolishHover).toBeNull();
-    expect(interaction.roadSel).toEqual([]);
-    expect(interaction.roadHover).toBe(-1);
     expect(useBoxStore.getState().box).toBeNull();
     const ui = useUiStore.getState();
     expect(ui.debugPanelOpen).toBe(false);

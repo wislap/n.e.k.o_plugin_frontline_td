@@ -18,7 +18,9 @@
   ADR 0062 场景层注册）、`factionColorHex`。
 - `ui/`：`unitsInspectorSubjects`（ADR 0062 检视器主题注册：
   own_unit / hostile_unit / multi_own）、`unitsMinimapMarks`
-  （ADR 0062 小地图标记贡献：单位色块与选中描边）。导出全表见
+  （ADR 0062 小地图标记贡献：单位色块与选中描边）；`render/` 另导出
+  `interpolatedUnits` / `UnitInterpolator` 插值器（selection 拾取复用）。
+  导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

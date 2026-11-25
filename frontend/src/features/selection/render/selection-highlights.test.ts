@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { makeIsHostile } from '../client/hostility';
-import { loadContent } from '../content/index';
-import { toFactionId, toTick, type Snapshot } from '../core/index';
+import { makeIsHostile } from '../../../client/hostility';
+import { loadContent } from '../../../content/index';
+import { toFactionId, toTick, type Snapshot } from '../../../core/index';
 import {
   RoadWorksChannel,
   SalvageChannel,
@@ -11,13 +11,13 @@ import {
   type ConstructionSalvage,
   type ConstructionStructures,
   type RoadWorks,
-} from '../features/construction/protocol';
-import { DenseUnitsChannel, type DenseUnits } from '../features/units/protocol';
+} from '../../construction/protocol';
+import { DenseUnitsChannel, type DenseUnits } from '../../units/protocol';
 import {
   VISION_STATE_LAYER_ID,
   VisionMemoryChannel,
   type VisionMemory,
-} from '../features/vision/protocol';
+} from '../../vision/protocol';
 import { collectSelectionHighlights, type SelectionHighlightInput } from './selection-highlights';
 
 const db = loadContent();

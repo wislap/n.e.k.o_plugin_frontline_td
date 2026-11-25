@@ -12,7 +12,7 @@ import { SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { interpAlpha } from '../../../render/interpolate';
 import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
-import { UnitInterpolator } from '../../../render/unit-pos';
+import { UnitInterpolator } from './unit-pos';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { terrainY } from '../../../render/world';

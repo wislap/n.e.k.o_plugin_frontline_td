@@ -7,16 +7,16 @@ import { useInspectorStore } from '../client/inspector-store';
 import { targetKeyForHandles, useInteractionStore } from '../client/interaction-store';
 import type { IntentDispatch, IntentRouter } from '../client/intent';
 import { nextSpeedIndex } from '../client/match-info';
-import { submitRoadOrder } from '../client/road-order';
 import { useRuntimeStore } from '../client/runtime-store';
 import { useSelectionStore } from '../client/selection-store';
 import type { SimClient } from '../client/sim-client';
+import { submitRoadOrder } from '../features/logistics/ui/index';
 import {
   digitPress,
   playerSquadTag,
   squadForDigit,
   type DigitPress,
-} from '../client/squad-controls';
+} from '../features/squads/ui/index';
 import { useUiStore } from '../client/ui-store';
 import type { ContentDb } from '../content/index';
 import { readChannel } from '../core/index';

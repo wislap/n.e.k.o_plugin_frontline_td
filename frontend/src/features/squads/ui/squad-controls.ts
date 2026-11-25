@@ -2,11 +2,11 @@
 // command routing, and double-press detection. Digit→squad bindings live
 // only in the squads channel tags (`player:<digit>`), so they rebuild
 // themselves after any load or restart — no separate persistence.
-import { readChannel } from '../core/index';
-import type { Snapshot } from '../core/index';
-import { MoveCommand } from '../features/movement/protocol';
-import { SquadsChannel, SquadsOrder, type SquadView } from '../features/squads/protocol';
-import type { SimClient } from './sim-client';
+import { readChannel } from '../../../core/index';
+import type { Snapshot } from '../../../core/index';
+import { MoveCommand } from '../../movement/protocol';
+import { SquadsChannel, SquadsOrder, type SquadView } from '../protocol';
+import type { SimClient } from '../../../client/sim-client';
 
 const PLAYER_SQUAD_PREFIX = 'player:';
 const DOUBLE_PRESS_MS = 400;

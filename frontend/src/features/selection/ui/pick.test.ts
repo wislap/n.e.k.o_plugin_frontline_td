@@ -1,27 +1,24 @@
 // Selection and subject picking priority (ADR 0048).
 import { describe, expect, it } from 'vitest';
-import { toFactionId, toTick, type Snapshot } from '../core/index';
-import { loadContent } from '../content/index';
+import { toFactionId, toTick, type Snapshot } from '../../../core/index';
+import { loadContent } from '../../../content/index';
 import {
   RoadWorksChannel,
   SalvageChannel,
-  STATE_BLUEPRINT,
-  STATE_DEMOLISHING,
   STATE_OPERATIONAL,
   STATE_RUIN,
   StructuresChannel,
   type ConstructionSalvage,
   type ConstructionStructures,
   type RoadWorks,
-} from '../features/construction/protocol';
-import { VisionMemoryChannel, type VisionMemory } from '../features/vision/protocol';
-import { pickAt, pickDemolishableAt, pickSubjectAt } from './pick';
-import { pickDemolishableByRay, pickSubjectByRay } from './pick-ray';
+} from '../../construction/protocol';
+import { VisionMemoryChannel, type VisionMemory } from '../../vision/protocol';
+import { pickAt, pickSubjectAt } from './pick';
+import { pickSubjectByRay } from './pick-ray';
 
 const db = loadContent();
 const DEPOT = db.structures.byId('frontline_td:supply_depot');
-const MAIN_BASE = db.structures.byId('frontline_td:main_base');
-if (DEPOT === undefined || MAIN_BASE === undefined) {
+if (DEPOT === undefined) {
   throw new Error('structures missing');
 }
 const OBSERVER = 1;
@@ -236,87 +233,6 @@ describe('pickSubjectAt', () => {
   });
 });
 
-describe('pickDemolishableAt', () => {
-  it('returns handle and refunds for cancellable own structures and road segments', () => {
-    const structures: ConstructionStructures = {
-      handles: Float64Array.from([100, 101, 102, 103]),
-      kind: Uint16Array.from([DEPOT.index, MAIN_BASE.index, DEPOT.index, DEPOT.index]),
-      x: Uint16Array.from([10, 20, 30, 40]),
-      y: Uint16Array.from([10, 10, 10, 10]),
-      faction: Uint16Array.from([OBSERVER, OBSERVER, OBSERVER, 2]),
-      state: Uint8Array.from([
-        STATE_OPERATIONAL,
-        STATE_OPERATIONAL,
-        STATE_BLUEPRINT,
-        STATE_OPERATIONAL,
-      ]),
-      progressBp: Uint16Array.from([10000, 10000, 0, 10000]),
-      hpBp: Uint16Array.from([10000, 10000, 10000, 10000]),
-    };
-    const roadWorks: RoadWorks = {
-      segments: {
-        handles: Float64Array.from([201]),
-        x: Float32Array.from([50]),
-        y: Float32Array.from([50]),
-        progressBp: Uint16Array.from([2000]),
-        hpBp: Uint16Array.from([10000]),
-      },
-      projects: {
-        offsets: Uint32Array.from([0]),
-        cells: Uint32Array.from([]),
-        built: Uint16Array.from([]),
-        level: Uint8Array.from([]),
-      },
-    };
-    const snap = snapshot({
-      [StructuresChannel.id]: structures,
-      [RoadWorksChannel.id]: roadWorks,
-    });
-
-    const depotPick = pickDemolishableAt(db, snap, OBSERVER, 10.5, 10.5);
-    expect(depotPick).not.toBeNull();
-    expect(depotPick?.handle).toBe(100);
-    expect(depotPick?.refunds.length).toBeGreaterThan(0);
-
-    // Non-buildable main_base is not demolishable.
-    expect(pickDemolishableAt(db, snap, OBSERVER, 20.5, 10.5)).toBeNull();
-    // Own blueprint is cancellable with empty refunds.
-    expect(pickDemolishableAt(db, snap, OBSERVER, 30.5, 10.5)).toEqual({
-      handle: 102,
-      refunds: [],
-    });
-    // Enemy structure is ignored.
-    expect(pickDemolishableAt(db, snap, OBSERVER, 40.5, 10.5)).toBeNull();
-    // Road segment within radius is cancellable.
-    expect(pickDemolishableAt(db, snap, OBSERVER, 50.2, 50.2)).toEqual({
-      handle: 201,
-      refunds: [],
-    });
-  });
-
-  it('returns null for already-demolishing structures', () => {
-    const demolishing: ConstructionStructures = {
-      handles: Float64Array.from([100]),
-      kind: Uint16Array.from([DEPOT.index]),
-      x: Uint16Array.from([10]),
-      y: Uint16Array.from([10]),
-      faction: Uint16Array.from([OBSERVER]),
-      state: Uint8Array.from([STATE_DEMOLISHING]),
-      progressBp: Uint16Array.from([5000]),
-      hpBp: Uint16Array.from([10000]),
-    };
-    expect(
-      pickDemolishableAt(
-        db,
-        snapshot({ [StructuresChannel.id]: demolishing }),
-        OBSERVER,
-        10.5,
-        10.5,
-      ),
-    ).toBeNull();
-  });
-});
-
 describe('3D ray-volume picking', () => {
   it('picks elevated units and tall structures from shallow-pitch rays even when groundBehind misses', () => {
     const heights = new Uint8Array(MAP_DIMS.width * MAP_DIMS.height);
@@ -342,18 +258,6 @@ describe('3D ray-volume picking', () => {
       ownHandle: 100,
       subject: { kind: 'own_structure', handle: 100 },
     });
-
-    const demolishable = pickDemolishableByRay(
-      db,
-      MAP_DIMS,
-      heights,
-      0.5,
-      ray,
-      { x: 11, y: 9.68 },
-      snap,
-      OBSERVER,
-    );
-    expect(demolishable?.handle).toBe(100);
 
     // Same ray clipped by a closer cliff groundHit in front (z = 13) ignores the depot behind it.
     const occluded = pickSubjectByRay(

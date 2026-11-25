@@ -225,9 +225,12 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `constructionCanvasIntents` | const |  |
 | `constructionHudPanels` | const |  |
 | `constructionInspectorSubjects` | const |  |
 | `constructionMinimapMarks` | const |  |
+| `findOwnStructureAt` | function | Own structure whose footprint contains (x, y) — also used by selection's pickAt through the ui index. |
+| `pickDemolishableByRay` | function |  |
 
 ## src/features/logistics/content.ts
 
@@ -304,13 +307,13 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `extendRoadSelection` | function | Extends a clicked link into a route over the current snapshot, using smoothed link flow and stopping at warehouse or leaf nodes, then maps the selected link indices back to stable handle-pair keys. |
-| `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
+| `logisticsCanvasIntents` | const |  |
 | `logisticsHudPanels` | const |  |
 | `logisticsMinimapRasters` | const |  |
 | `LogisticsSection` | function |  |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
-| `sameKey` | function |  |
+| `submitRoadOrder` | function |  |
+| `useRoadToolStore` | const |  |
 
 ## src/features/movement/protocol.ts
 
@@ -372,6 +375,18 @@
 |---|---|---|
 | `ProductionSection` | function |  |
 
+## src/features/selection/render/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `selectionSceneLayers` | const |  |
+
+## src/features/selection/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `selectionCanvasIntents` | const |  |
+
 ## src/features/squads/protocol.ts
 
 | 名称 | 种类 | 说明 |
@@ -404,8 +419,14 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
+| `digitPress` | function | 'select' on a first/different-digit press; 'center' when the same digit is pressed again within `windowMs`. |
+| `DigitPress` | interface |  |
+| `playerSquadTag` | function |  |
+| `squadForDigit` | function | The observer's squad bound to a digit; undefined when none is bound. |
+| `squadsCanvasIntents` | const |  |
 | `squadsHudPanels` | const |  |
 | `squadsMinimapMarks` | const |  |
+| `submitMoveOrder` | function |  |
 
 ## src/features/terrain/content.ts
 
@@ -433,6 +454,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `buildTerrainGeometry` | function |  |
+| `readTerrainHeights` | function |  |
 | `terrainSceneLayers` | const |  |
 
 ## src/features/terrain/rules/index.ts
@@ -487,6 +509,9 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `factionColorHex` | function |  |
+| `interpolatedUnits` | function | One-shot map of handle → interpolated position/faction (box and click selection paths). |
+| `InterpUnit` | interface |  |
+| `UnitInterpolator` | class | Stateful per-frame interpolator: call update() with the newest pair, then interpolated() for each row of the latest channel. |
 | `unitsSceneLayers` | const |  |
 
 ## src/features/units/sim/index.ts

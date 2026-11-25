@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { cursorState } from '../../../client/cursor';
 import { useIntentRouter } from '../../../client/intent';
 import { useInteractionStore } from '../../../client/interaction-store';
+import { useRoadToolStore } from './road-tool-store';
 import type { SnapshotPair } from '../../../client/sim-client';
 import type { HudPanelProps } from '../../../ui/hud-panels';
 import { useSnapshotValue } from '../../../client/use-snapshot';
@@ -46,8 +47,8 @@ export function RoadPanel({ ctx }: HudPanelProps) {
   const router = useIntentRouter();
   const mode = useInteractionStore((s) => s.mode);
   const tool = useInteractionStore((s) => s.tool);
-  const selected = useInteractionStore((s) => s.roadSel);
-  const hovered = useInteractionStore((s) => s.roadHover);
+  const selected = useRoadToolStore((s) => s.roadSel);
+  const hovered = useRoadToolStore((s) => s.roadHover);
   const roadMode = tool.kind === 'road';
 
   const levelIndex = lowestBuildableRoadLevel(db.logistics.roadLevels);

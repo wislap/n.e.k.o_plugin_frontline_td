@@ -11,7 +11,7 @@ import { useInteractionStore } from '../../../client/interaction-store';
 import { useSelectionStore } from '../../../client/selection-store';
 import type { SnapshotPair } from '../../../client/sim-client';
 import type { HudPanelProps } from '../../../ui/hud-panels';
-import { digitForTag } from '../../../client/squad-controls';
+import { digitForTag } from './squad-controls';
 import { useSnapshotValue } from '../../../client/use-snapshot';
 import { ActionButton, Kbd, TacticalPanel, cx } from '../../../ui/kit/index';
 import { DenseUnitsChannel, type DenseUnits } from '../../units/protocol';

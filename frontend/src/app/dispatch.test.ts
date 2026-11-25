@@ -21,6 +21,7 @@ import {
   UpgradeLinksCommand,
 } from '../features/construction/protocol';
 import { LogisticsNetworkChannel } from '../features/logistics/protocol';
+import { useRoadToolStore } from '../features/logistics/ui/index';
 import { SquadsChannel, SquadsCreate } from '../features/squads/protocol';
 import type { Intent } from '../input/intents';
 import { createIntentRouter } from './dispatch';
@@ -395,7 +396,7 @@ describe('intent router', () => {
     const client = fakeClient(latest);
     const router = createIntentRouter({ client, db });
     useInteractionStore.getState().enterRoad();
-    useInteractionStore.getState().setRoadSel([{ a: 10, b: 20 }]);
+    useRoadToolStore.getState().setRoadSel([{ a: 10, b: 20 }]);
     router.dispatch({ kind: 'road.confirm' });
     expect(client.submitted).toHaveLength(1);
     const command = client.submitted[0];
@@ -404,7 +405,7 @@ describe('intent router', () => {
     expect(payload.level).toBe(1);
     expect(payload.links).toEqual([{ a: 10, b: 20 }]);
     // Selection cleared; stays in road tool.
-    expect(useInteractionStore.getState().roadSel).toEqual([]);
+    expect(useRoadToolStore.getState().roadSel).toEqual([]);
     expect(useInteractionStore.getState().tool).toEqual({ kind: 'road' });
   });
 

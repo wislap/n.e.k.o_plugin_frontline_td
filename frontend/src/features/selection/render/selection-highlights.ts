@@ -1,11 +1,11 @@
 // Selection, hover, pin, demolish, and range-circle overlay collection
 // (F4): pure snapshot-to-highlight geometry data, kept separate from R3F/DOM
 // so Node tests can verify fog-safety and circle radii directly.
-import type { HoverSubject, PinnableSubject } from '../client/inspector-store';
-import type { SecondaryTool } from '../client/interaction-store';
-import type { ContentDb } from '../content/index';
-import { readChannel, readLayer } from '../core/index';
-import type { Snapshot } from '../core/index';
+import type { HoverSubject, PinnableSubject } from '../../../client/inspector-store';
+import type { SecondaryTool } from '../../../client/interaction-store';
+import type { ContentDb } from '../../../content/index';
+import { readChannel, readLayer } from '../../../core/index';
+import type { Snapshot } from '../../../core/index';
 import {
   RoadWorksChannel,
   SalvageChannel,
@@ -14,13 +14,13 @@ import {
   type ConstructionSalvage,
   type ConstructionStructures,
   type RoadWorks,
-} from '../features/construction/protocol';
-import { DenseUnitsChannel } from '../features/units/protocol';
+} from '../../construction/protocol';
+import { DenseUnitsChannel } from '../../units/protocol';
 import {
   VISION_STATE_LAYER_ID,
   VisionMemoryChannel,
   type VisionMemory,
-} from '../features/vision/protocol';
+} from '../../vision/protocol';
 
 const UNIT_BOX_SIZE = 0.9;
 const ROAD_BOX_SIZE = 0.9;
