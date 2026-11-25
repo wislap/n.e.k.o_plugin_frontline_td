@@ -14,7 +14,6 @@ import { COMMAND_REJECTED } from '../core/index';
 import { GaugePill } from './GaugePill';
 import styles from './HudShell.module.css';
 import type { HudPanelDef, HudPanelProps } from './hud-panels';
-import { InspectorPanel } from './inspector/InspectorPanel';
 import { KeyGuideRail } from './KeyGuideRail';
 import { Minimap } from './minimap/Minimap';
 import { RightRail } from './RightRail';
@@ -204,10 +203,6 @@ function RightRailPanel() {
   return <RightRail />;
 }
 
-function InspectorHudPanel({ ctx }: HudPanelProps) {
-  return <InspectorPanel client={ctx.client} db={ctx.db} map={ctx.map} isHostile={ctx.isHostile} />;
-}
-
 export const SHELL_HUD_PANELS: readonly HudPanelDef[] = [
   { id: 'shell.modeTabs', slot: 'topLeft', order: 10, Component: ModeTabs },
   { id: 'shell.minimap', slot: 'topLeft', order: 20, Component: MinimapPanel },
@@ -218,5 +213,4 @@ export const SHELL_HUD_PANELS: readonly HudPanelDef[] = [
   { id: 'shell.selectionBadge', slot: 'bottomLeft', order: 20, Component: SelectionBadgePanel },
   { id: 'shell.keyGuideRail', slot: 'middleLeft', order: 10, Component: KeyGuidePanel },
   { id: 'shell.rightRail', slot: 'middleRight', order: 10, Component: RightRailPanel },
-  { id: 'shell.inspector', slot: 'bottomRight', order: 10, Component: InspectorHudPanel },
 ];

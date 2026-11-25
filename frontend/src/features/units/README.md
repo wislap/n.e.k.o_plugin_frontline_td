@@ -15,7 +15,9 @@
   出怪，负载自带 faction/kind/x/y/source（出口位置由调用方算，
   非本模块内建）。
 - `render/`：`unitsSceneLayers`（UnitsLayer + 单位 HP 条，
-  ADR 0062 场景层注册）、`factionColorHex`。导出全表见
+  ADR 0062 场景层注册）、`factionColorHex`。
+- `ui/`：`unitsInspectorSubjects`（ADR 0062 检视器主题注册：
+  own_unit / hostile_unit / multi_own）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

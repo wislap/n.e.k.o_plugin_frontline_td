@@ -9,6 +9,8 @@
   （为带 `producer` 配方的结构注入 `Producer`）。
 - `protocol.ts`：检查器 ID 与 `PRODUCTION_STATES`/
   `ProductionInspection` 契约类型。
+- `ui/`：`ProductionSection`（ADR 0062：检视器生产小节，
+  construction 的 own_structure 视图经 ui/index 引用）。
 - `content.ts`：`producerSchema`（`inputs`/`outputs` + `time` 秒；
   可选 `unitOutput` 单位产出表（按 `cycle` 轮换，完工在内容出口
   发 `units.spawn`）与 `ramp` 阶梯周期表）。无输入配方不消耗货物

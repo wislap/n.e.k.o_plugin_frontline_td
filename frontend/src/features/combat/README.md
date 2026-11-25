@@ -14,6 +14,8 @@
   loader 换成索引与 milli/tick）。
 - `render/`：`combatSceneLayers`（BeamsLayer：弹道瞬时线，
   经事件游标消费 `combat.shot`；ADR 0062 场景层注册）。
+- `ui/`：`CombatSection`（ADR 0062：检视器共享战斗小节，
+  血量/装填/弹药）。
 - 部件工厂 `unitParts`/`structureParts`/`roadSegmentParts`（Health
   满血、Targetable、Weapon）经 `app/` 注入。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与

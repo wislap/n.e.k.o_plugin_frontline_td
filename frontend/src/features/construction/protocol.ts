@@ -145,6 +145,10 @@ export const CONSTRUCTION_INSPECTOR_ID = 'frontline_td:construction';
 // String state names corresponding to StructuresChannel row states.
 export type ConstructionStateName = (typeof STATE_NAMES)[number];
 
+export function structureStateName(code: number): ConstructionStateName {
+  return STATE_NAMES[code] ?? 'operational';
+}
+
 // Delivered vs required cargo amounts for a single construction site slot.
 export type ConstructionSiteSlot = {
   cargo: number;

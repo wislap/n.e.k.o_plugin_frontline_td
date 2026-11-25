@@ -20,6 +20,8 @@
   与 [contracts.md](../../../../docs/generated/contracts.md)。
 - `render/`：`captureSceneLayers`（CaptureLayer：占领点半径环，
   ADR 0062 场景层注册）。
+- `ui/`：`captureInspectorSubjects`（ADR 0062 检视器主题注册：
+  ruin，联合 CapturePointsChannel）。
 
 ## 拥有的组件
 - `Capture { owner, progress, done, kind, x, y, leader, contested }`

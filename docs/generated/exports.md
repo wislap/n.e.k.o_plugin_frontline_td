@@ -97,6 +97,12 @@
 | `captureRuinParts` | function | Injected into construction as a ruin part factory (wired in app): every ruin carries Capture; kind/x/y mirror the Structure fields so the module needs no construction import. |
 | `createCaptureModule` | function |  |
 
+## src/features/capture/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `captureInspectorSubjects` | const |  |
+
 ## src/features/combat/content.ts
 
 | 名称 | 种类 | 说明 |
@@ -133,6 +139,12 @@
 | `roadSegmentParts` | function | Road-segment parts (E1): flat segment hp and a 0.5-cell hit radius. |
 | `structureParts` | function |  |
 | `unitParts` | function |  |
+
+## src/features/combat/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `CombatSection` | function |  |
 
 ## src/features/construction/content.ts
 
@@ -173,6 +185,7 @@
 | `STATE_SITE` | const |  |
 | `STATE_WAITING` | const |  |
 | `StructuresChannel` | channel def |  |
+| `structureStateName` | function |  |
 | `UpgradeLinksCommand` | command def | construction.upgrade_links: order road projects on links between own nodes (a/b are node entity handles); level is a roadLevels index. |
 
 ## src/features/construction/render/index.ts
@@ -212,6 +225,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `constructionHudPanels` | const |  |
+| `constructionInspectorSubjects` | const |  |
 
 ## src/features/logistics/content.ts
 
@@ -291,6 +305,7 @@
 | `extendRoadSelection` | function | Extends a clicked link into a route over the current snapshot, using smoothed link flow and stopping at warehouse or leaf nodes, then maps the selected link indices back to stable handle-pair keys. |
 | `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
 | `logisticsHudPanels` | const |  |
+| `LogisticsSection` | function |  |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
 | `sameKey` | function |  |
 
@@ -347,6 +362,12 @@
 |---|---|---|
 | `createProductionModule` | function |  |
 | `structureParts` | function |  |
+
+## src/features/production/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `ProductionSection` | function |  |
 
 ## src/features/squads/protocol.ts
 
@@ -434,6 +455,12 @@
 | `createTerrainModule` | function |  |
 | `TerrainApi` | interface |  |
 
+## src/features/terrain/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `terrainInspectorSubjects` | const |  |
+
 ## src/features/units/content.ts
 
 | 名称 | 种类 | 说明 |
@@ -467,6 +494,12 @@
 | `FactionStart` | interface |  |
 | `StartUnit` | interface |  |
 | `UnitKind` | component def |  |
+
+## src/features/units/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `unitsInspectorSubjects` | const |  |
 
 ## src/features/vision/content.ts
 
@@ -508,6 +541,12 @@
 | `structureVisionParts` | function | Injected into construction's structureParts (wired in app/). |
 | `unitVisionParts` | function | Injected into units' unitParts (wired in app/). |
 | `VisionLayer` | layer def |  |
+
+## src/features/vision/ui/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `visionInspectorSubjects` | const |  |
 
 ## src/kernel/index.ts
 

@@ -21,6 +21,8 @@
   废墟、蓝图不挂视野）。
 - `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
+- `ui/`：`visionInspectorSubjects`（ADR 0062 检视器主题注册：
+  memory 迷雾记忆幽灵）。
 - `render/`：`visionSceneLayers`（ADR 0062 场景层：FogOfWar——
   无网格：把 vision.state 层逐格上传到 RGBA
   `DataTexture` 绿色通道，并按相机模式驱动共享 `FogUniforms`；
