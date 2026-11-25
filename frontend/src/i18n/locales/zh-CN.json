@@ -18,7 +18,18 @@
     "pause": "暂停",
     "resume": "继续",
     "grass_density": "草密度",
-    "info2d": "2D 信息视图"
+    "info2d": "2D 信息视图",
+    "frame_ms": "帧耗时 ms",
+    "draw_calls": "Draw calls",
+    "triangles": "三角形数",
+    "render_cost": "渲染开销",
+    "fx_n8ao": "N8AO",
+    "fx_bloom": "Bloom",
+    "fx_smaa": "SMAA",
+    "fx_shadows": "阴影",
+    "fx_scatter": "草地散布",
+    "dpr_cap": "DPR 上限",
+    "dpr_native": "原生"
   },
   "hud": {
     "paused": "已暂停",

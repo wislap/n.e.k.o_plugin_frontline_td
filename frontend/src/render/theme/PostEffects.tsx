@@ -16,6 +16,7 @@ import {
   SMAA,
 } from '@react-three/postprocessing';
 import { isCaptureMode } from '../../client/capture-mode';
+import { useUiStore } from '../../client/ui-store';
 import { VISUAL } from './visual';
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
@@ -33,24 +34,34 @@ export function PostEffects() {
   // screenshot diffs cover every pass (N8AO/bloom are skipped only on real
   // software rendering).
   const software = useMemo(() => !isCaptureMode() && isSoftwareRenderer(gl.getContext()), [gl]);
+  // Debug-panel render-cost toggles (all on by default).
+  const cost = useUiStore((s) => s.renderCost);
   return (
     <EffectComposer multisampling={0}>
       {software ? (
         <></>
       ) : (
         <>
-          <N8AO aoRadius={post.aoRadius} intensity={post.aoIntensity} quality="medium" />
-          <Bloom
-            intensity={post.bloomIntensity}
-            luminanceThreshold={post.bloomThreshold}
-            luminanceSmoothing={0.15}
-            mipmapBlur
-          />
+          {cost.n8ao ? (
+            <N8AO aoRadius={post.aoRadius} intensity={post.aoIntensity} quality="medium" />
+          ) : (
+            <></>
+          )}
+          {cost.bloom ? (
+            <Bloom
+              intensity={post.bloomIntensity}
+              luminanceThreshold={post.bloomThreshold}
+              luminanceSmoothing={0.15}
+              mipmapBlur
+            />
+          ) : (
+            <></>
+          )}
         </>
       )}
       <BrightnessContrast contrast={post.contrast - 1} />
       <HueSaturation saturation={post.saturation - 1} />
-      <SMAA />
+      {cost.smaa ? <SMAA /> : <></>}
     </EffectComposer>
   );
 }

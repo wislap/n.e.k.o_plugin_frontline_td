@@ -11,6 +11,7 @@ import { useIntentRouter, type IntentRouter } from '../client/intent';
 import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
+import { useUiStore } from '../client/ui-store';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import { BeamsLayer } from '../features/combat/render/index';
 import { CaptureLayer } from '../features/capture/render/index';
@@ -78,6 +79,38 @@ function CaptureProbe() {
   useFrame(() => {
     frames.current += 1;
     (globalThis as { __ftdFrames?: number }).__ftdFrames = frames.current;
+  });
+  return null;
+}
+
+// Render-cost readout for the dev DebugPanel: rolling frame time plus
+// the previous rendered frame's gl.info counters, published to the UI
+// store ~2x a second.
+const PERF_WINDOW_MS = 500;
+
+function publishPerfStats(
+  gl: THREE.WebGLRenderer,
+  frames: number,
+  ms: number,
+): void {
+  useUiStore.getState().setRenderStats({
+    frameMs: ms / frames,
+    drawCalls: gl.info.render.calls,
+    triangles: gl.info.render.triangles,
+  });
+}
+
+function PerfProbe() {
+  const acc = useRef({ frames: 0, ms: 0 });
+  useFrame((state, delta) => {
+    const a = acc.current;
+    a.frames += 1;
+    a.ms += delta * 1000;
+    if (a.ms >= PERF_WINDOW_MS) {
+      publishPerfStats(state.gl, a.frames, a.ms);
+      a.frames = 0;
+      a.ms = 0;
+    }
   });
   return null;
 }
@@ -239,6 +272,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   const snapshot = ready ? client.snapshots().latest : null;
   const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? grid.heights;
   const fogUniforms = useMemo(() => createFogUniforms(), []);
+  const dprCap = useUiStore((s) => s.renderCost.dprCap);
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
   const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
@@ -246,8 +280,13 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
-      <Canvas frameloop="always" style={{ background: BACKGROUND }}>
+      <Canvas
+        frameloop="always"
+        style={{ background: BACKGROUND }}
+        {...(dprCap > 0 ? { dpr: Math.min(window.devicePixelRatio, dprCap) } : {})}
+      >
         <SceneLighting mapWidth={grid.width} mapHeight={grid.height} />
+        <PerfProbe />
         {ready && <ThemeBackground mapWidth={grid.width} mapHeight={grid.height} />}
         {ready && (
           <>

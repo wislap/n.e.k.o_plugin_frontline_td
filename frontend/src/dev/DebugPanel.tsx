@@ -11,6 +11,14 @@ import { SPEED_STEPS } from '../protocol/index';
 import { ActionButton, TacticalPanel } from '../ui/kit/index';
 import styles from './DebugPanel.module.css';
 
+const COST_TOGGLES = [
+  ['n8ao', 'dev.fx_n8ao'],
+  ['bloom', 'dev.fx_bloom'],
+  ['smaa', 'dev.fx_smaa'],
+  ['shadows', 'dev.fx_shadows'],
+  ['scatter', 'dev.fx_scatter'],
+] as const;
+
 export function DebugPanel({ client }: { client: SimClient }) {
   const { t } = useTranslation();
   const stats = useRuntimeStore((state) => state.stats);
@@ -19,6 +27,9 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const setGrassDensity = useUiStore((state) => state.setGrassDensity);
   const info2d = useUiStore((state) => state.info2d);
   const setInfo2d = useUiStore((state) => state.setInfo2d);
+  const renderCost = useUiStore((state) => state.renderCost);
+  const setRenderCost = useUiStore((state) => state.setRenderCost);
+  const renderStats = useUiStore((state) => state.renderStats);
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
@@ -80,6 +91,47 @@ export function DebugPanel({ client }: { client: SimClient }) {
         <div className={styles['row']}>
           <span className={styles['label']}>{t('dev.fps')}</span>
           <span className={styles['value']}>{fps}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.frame_ms')}</span>
+          <span className={styles['value']}>{(renderStats?.frameMs ?? 0).toFixed(2)}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.draw_calls')}</span>
+          <span className={styles['value']}>{renderStats?.drawCalls ?? 0}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.triangles')}</span>
+          <span className={styles['value']}>{renderStats?.triangles ?? 0}</span>
+        </div>
+      </div>
+
+      <div className={styles['section']}>
+        <div className={styles['sectionTitle']}>{t('dev.render_cost')}</div>
+        {COST_TOGGLES.map(([key, label]) => (
+          <div key={key} className={styles['row']}>
+            <span className={styles['label']}>{t(label)}</span>
+            <input
+              type="checkbox"
+              checked={renderCost[key]}
+              onChange={(e) => {
+                setRenderCost({ [key]: e.target.checked });
+              }}
+            />
+          </div>
+        ))}
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.dpr_cap')}</span>
+          <select
+            value={renderCost.dprCap}
+            onChange={(e) => {
+              setRenderCost({ dprCap: Number(e.target.value) });
+            }}
+          >
+            <option value={0}>{t('dev.dpr_native')}</option>
+            <option value={1.5}>1.5</option>
+            <option value={1}>1.0</option>
+          </select>
         </div>
       </div>
 

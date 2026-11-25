@@ -5,6 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useCameraStore } from '../../client/camera-store';
+import { useUiStore } from '../../client/ui-store';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
@@ -152,6 +153,8 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const { lighting } = theme;
+  // Debug-panel render-cost toggle: drops the sun's shadow pass.
+  const shadows = useUiStore((s) => s.renderCost.shadows);
 
   useEffect(() => {
     return applyRendererSettings(gl);
@@ -199,7 +202,7 @@ export function SceneLighting({ mapWidth, mapHeight }: { mapWidth: number; mapHe
         position={sunPos}
         intensity={lighting.sunIntensity}
         color={lighting.sunColor}
-        castShadow={lighting.shadow}
+        castShadow={lighting.shadow && shadows}
         target={target}
         shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
         shadow-bias={-0.0004}

@@ -18,7 +18,18 @@
     "pause": "Pause",
     "resume": "Resume",
     "grass_density": "Grass density",
-    "info2d": "Info 2D view"
+    "info2d": "Info 2D view",
+    "frame_ms": "Frame ms",
+    "draw_calls": "Draw calls",
+    "triangles": "Triangles",
+    "render_cost": "Render cost",
+    "fx_n8ao": "N8AO",
+    "fx_bloom": "Bloom",
+    "fx_smaa": "SMAA",
+    "fx_shadows": "Shadows",
+    "fx_scatter": "Grass scatter",
+    "dpr_cap": "DPR cap",
+    "dpr_native": "Native"
   },
   "hud": {
     "paused": "Paused",

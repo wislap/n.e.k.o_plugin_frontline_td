@@ -47,6 +47,8 @@ export interface ScatterLayerProps {
 
 export function ScatterLayer({ client, db, map, heights, fog }: ScatterLayerProps) {
   const theme = VISUAL;
+  // Debug-panel render-cost toggle for the meadow grass mesh.
+  const showGrass = useUiStore((s) => s.renderCost.scatter);
   const groupRef = useRef<THREE.Group>(null);
   const writerRef = useRef(new InstanceWriter());
   const colorRef = useRef(new THREE.Color());
@@ -224,6 +226,7 @@ export function ScatterLayer({ client, db, map, heights, fog }: ScatterLayerProp
             raycast={NO_RAYCAST}
             args={[undefined, undefined, cap('grass')]}
             frustumCulled={false}
+            visible={showGrass}
             geometry={grassGeo}
           >
             <primitive object={grassMat} attach={ATTACH_MATERIAL} />
