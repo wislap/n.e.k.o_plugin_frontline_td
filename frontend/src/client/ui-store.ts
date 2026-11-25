@@ -3,7 +3,7 @@ import { create } from 'zustand';
 
 // Debug-panel "Render cost" toggles: production defaults are all on so
 // the owner can measure each pass's cost on their GPU without a rebuild.
-export interface RenderCostToggles {
+interface RenderCostToggles {
   n8ao: boolean;
   bloom: boolean;
   smaa: boolean;
@@ -15,7 +15,7 @@ export interface RenderCostToggles {
 
 // Rolling renderer readout fed by the Canvas-side perf probe (calls/
 // triangles are the previous rendered frame's gl.info values).
-export interface RenderStats {
+interface RenderStats {
   frameMs: number;
   drawCalls: number;
   triangles: number;

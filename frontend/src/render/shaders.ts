@@ -21,7 +21,7 @@ float ftdValueNoise(vec2 p) {
 `;
 
 /** Formats a TS tuning constant as a GLSL float literal (`35` → `35.0`). */
-export function glslFloat(n: number): string {
+function glslFloat(n: number): string {
   return Number.isInteger(n) ? `${n}.0` : String(n);
 }
 
@@ -118,7 +118,7 @@ vec3 ftdFogApply(vec3 color, vec2 worldXZ, float vDist) {
 `;
 
 /** `varying vec3 vFtdFogWorld` / `varying float vFtdFogDist` for consumers. */
-export const GLSL_FOG_WORLD_DECL = 'varying vec3 vFtdFogWorld;\nvarying float vFtdFogDist;';
+const GLSL_FOG_WORLD_DECL = 'varying vec3 vFtdFogWorld;\nvarying float vFtdFogDist;';
 
 /**
  * World-position assignment for three's `transformed` (instancing-aware).
@@ -126,7 +126,7 @@ export const GLSL_FOG_WORLD_DECL = 'varying vec3 vFtdFogWorld;\nvarying float vF
  * removed film evaluated it the same way, so vertex-granularity
  * reproduces the haze falloff exactly.
  */
-export const GLSL_FOG_WORLD_VERT = /* glsl */ `
+const GLSL_FOG_WORLD_VERT = /* glsl */ `
 vec4 ftdFogWp = vec4(transformed, 1.0);
 #ifdef USE_INSTANCING
   ftdFogWp = instanceMatrix * ftdFogWp;
