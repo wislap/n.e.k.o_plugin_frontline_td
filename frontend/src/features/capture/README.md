@@ -21,7 +21,8 @@
 - `render/`：`captureSceneLayers`（CaptureLayer：占领点半径环，
   ADR 0062 场景层注册）。
 - `ui/`：`captureInspectorSubjects`（ADR 0062 检视器主题注册：
-  ruin，联合 CapturePointsChannel）。
+  ruin，联合 CapturePointsChannel）、`captureMinimapMarks`
+  （ADR 0062 小地图标记贡献：废墟争夺轮廓与己方领跑环）。
 
 ## 拥有的组件
 - `Capture { owner, progress, done, kind, x, y, leader, contested }`

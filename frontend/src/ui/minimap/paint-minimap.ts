@@ -1,34 +1,26 @@
 // Imperative 2D Canvas renderer for the tactical minimap. Maintains an
-// offscreen terrain+fog+road cache so per-frame camera pans/selections only
-// blit the cached bitmap and redraw dynamic overlays.
+// offscreen terrain image recomposited from the contributed raster
+// passes (ADR 0062 step 4a) so per-frame camera pans/selections only
+// blit the cached bitmap and redraw contributed marks, ping and frustum.
 import {
-  buildBaseTerrainRgb,
   clipPolygonToRect,
-  collectMinimapEntities,
-  compositeMinimapTerrainRgba,
   computeMinimapFrustumQuad,
   mapToCanvas,
 } from '../../client/minimap-model';
 import type { ContentDb, ResolvedMap } from '../../content/index';
-import { readLayer } from '../../core/index';
 import type { Snapshot } from '../../core/index';
-import { ROAD_LAYER_ID } from '../../features/logistics/protocol';
-import { VISION_STATE_LAYER_ID } from '../../features/vision/protocol';
+import type { MinimapMark, MinimapMarkDef, MinimapRasterDef } from './contributions';
 
 const MOVE_MARKER_MS = 900;
 
 export interface MinimapRenderCache {
   db: ContentDb;
   map: ResolvedMap;
-  baseRgb: Uint8Array;
-  baseRgbBuiltWithoutSnapshot: boolean;
   rgbaBuffer: Uint8ClampedArray;
   offCanvas: HTMLCanvasElement | null;
   offCtx: CanvasRenderingContext2D | null;
   imageData: ImageData | null;
-  lastVisionLayer: ArrayLike<number> | null | undefined;
-  lastRoadLayer: ArrayLike<number> | undefined;
-  lastHasSnapshot: boolean;
+  rasterKeys: readonly (readonly unknown[])[] | null;
 }
 
 export interface PaintMinimapParams {
@@ -45,6 +37,8 @@ export interface PaintMinimapParams {
   pixelRatio?: number;
   moveMarker: { x: number; y: number; at: number } | null;
   nowMs: number;
+  rasters: readonly MinimapRasterDef[];
+  marks: readonly MinimapMarkDef[];
 }
 
 function initOffscreenSurface(cache: MinimapRenderCache): void {
@@ -70,77 +64,35 @@ export function createMinimapRenderCache(db: ContentDb, map: ResolvedMap): Minim
   const cache: MinimapRenderCache = {
     db,
     map,
-    baseRgb: buildBaseTerrainRgb(db, map),
-    baseRgbBuiltWithoutSnapshot: true,
     rgbaBuffer: new Uint8ClampedArray(cellCount * 4),
     offCanvas: null,
     offCtx: null,
     imageData: null,
-    lastVisionLayer: undefined,
-    lastRoadLayer: undefined,
-    lastHasSnapshot: false,
+    rasterKeys: null,
   };
   initOffscreenSurface(cache);
   return cache;
 }
 
-function memoryColor(disposition: 'own' | 'hostile' | 'ally' | 'neutral'): string {
-  switch (disposition) {
-    case 'own':
-      return '#4d7ea8';
-    case 'hostile':
-      return '#8a5058';
-    case 'ally':
-      return '#468a73';
-    case 'neutral':
-      return '#5b7390';
-  }
+function sameKeys(a: readonly unknown[] | undefined, b: readonly unknown[]): boolean {
+  return a !== undefined && a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-function structureColor(disposition: 'own' | 'hostile' | 'ally' | 'ruin', isCore: boolean): string {
-  switch (disposition) {
-    case 'own':
-      return isCore ? '#9be2ff' : '#5cc8ff';
-    case 'hostile':
-      return '#ff5c5c';
-    case 'ally':
-      return '#46e09a';
-    case 'ruin':
-      return '#c8a24a';
-  }
-}
-
-function unitColor(disposition: 'own' | 'hostile' | 'ally'): string {
-  switch (disposition) {
-    case 'hostile':
-      return '#ff6b6b';
-    case 'own':
-      return '#6ee7ff';
-    case 'ally':
-      return '#46e09a';
-  }
-}
-
-function syncTerrainLayer(cache: MinimapRenderCache, snapshot: Snapshot | null): void {
-  const visionLayer = readLayer(snapshot, `${VISION_STATE_LAYER_ID}#${snapshot?.observer ?? 0}`);
-  const roadLayer = readLayer(snapshot, ROAD_LAYER_ID) ?? undefined;
-  const hasSnapshot = snapshot !== null;
-
-  if (
-    hasSnapshot === cache.lastHasSnapshot &&
-    visionLayer === cache.lastVisionLayer &&
-    roadLayer === cache.lastRoadLayer
-  ) {
+function syncTerrainLayer(
+  cache: MinimapRenderCache,
+  snapshot: Snapshot | null,
+  rasters: readonly MinimapRasterDef[],
+): void {
+  const keys = rasters.map((r) => r.keys(snapshot));
+  const prev = cache.rasterKeys;
+  if (prev !== null && keys.every((k, i) => sameKeys(prev[i], k))) {
     return;
   }
 
-  if (cache.baseRgbBuiltWithoutSnapshot && snapshot !== null) {
-    cache.baseRgb = buildBaseTerrainRgb(cache.db, cache.map, snapshot);
-    cache.baseRgbBuiltWithoutSnapshot = false;
+  const input = { db: cache.db, map: cache.map, snapshot };
+  for (const raster of rasters) {
+    raster.apply(cache.rgbaBuffer, input);
   }
-
-  const cellCount = cache.map.width * cache.map.height;
-  compositeMinimapTerrainRgba(cache.baseRgb, cellCount, visionLayer, roadLayer, cache.rgbaBuffer);
 
   initOffscreenSurface(cache);
   if (cache.imageData !== null && cache.offCtx !== null) {
@@ -148,9 +100,110 @@ function syncTerrainLayer(cache: MinimapRenderCache, snapshot: Snapshot | null):
     cache.offCtx.putImageData(cache.imageData, 0, 0);
   }
 
-  cache.lastHasSnapshot = hasSnapshot;
-  cache.lastVisionLayer = visionLayer;
-  cache.lastRoadLayer = roadLayer;
+  cache.rasterKeys = keys;
+}
+
+function paintMark(
+  ctx: CanvasRenderingContext2D,
+  mark: MinimapMark,
+  width: number,
+  height: number,
+  mapW: number,
+  mapH: number,
+): void {
+  switch (mark.kind) {
+    case 'rect': {
+      const p0 = mapToCanvas(mark.x, mark.y, width, height, mapW, mapH);
+      const p1 = mapToCanvas(mark.x + mark.w, mark.y + mark.h, width, height, mapW, mapH);
+      const rw = Math.max(2, p1.x - p0.x);
+      const rh = Math.max(2, p1.y - p0.y);
+      if (mark.alpha !== undefined) {
+        ctx.globalAlpha = mark.alpha;
+      }
+      if (mark.fill !== undefined) {
+        ctx.fillStyle = mark.fill;
+        ctx.fillRect(p0.x, p0.y, rw, rh);
+      }
+      if (mark.stroke !== undefined) {
+        const grow = mark.grow ?? 0;
+        ctx.strokeStyle = mark.stroke;
+        ctx.lineWidth = mark.lineWidth ?? 1;
+        ctx.strokeRect(
+          p0.x - grow,
+          p0.y - grow,
+          Math.max(2, rw + 2 * grow),
+          Math.max(2, rh + 2 * grow),
+        );
+      }
+      break;
+    }
+    case 'ring': {
+      const p0 = mapToCanvas(mark.x, mark.y, width, height, mapW, mapH);
+      const p1 = mapToCanvas(mark.x + mark.w, mark.y + mark.h, width, height, mapW, mapH);
+      const rw = Math.max(2, p1.x - p0.x);
+      const rh = Math.max(2, p1.y - p0.y);
+      const r = Math.max(rw, rh) / 2 + mark.padPx;
+      ctx.strokeStyle = mark.color;
+      ctx.lineWidth = mark.lineWidth;
+      ctx.beginPath();
+      ctx.arc(p0.x + rw / 2, p0.y + rh / 2, r, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case 'path': {
+      if (mark.points.length < 4) {
+        break;
+      }
+      ctx.setLineDash(mark.dash !== undefined ? [...mark.dash] : []);
+      ctx.strokeStyle = mark.color;
+      ctx.lineWidth = mark.lineWidth;
+      ctx.beginPath();
+      const start = mapToCanvas(
+        mark.points[0] ?? 0,
+        mark.points[1] ?? 0,
+        width,
+        height,
+        mapW,
+        mapH,
+      );
+      ctx.moveTo(start.x, start.y);
+      for (let i = 2; i + 1 < mark.points.length; i += 2) {
+        const pt = mapToCanvas(
+          mark.points[i] ?? 0,
+          mark.points[i + 1] ?? 0,
+          width,
+          height,
+          mapW,
+          mapH,
+        );
+        ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      break;
+    }
+    case 'diamond': {
+      const pt = mapToCanvas(mark.x, mark.y, width, height, mapW, mapH);
+      const radius = mark.radiusPx;
+      ctx.strokeStyle = mark.color;
+      ctx.lineWidth = mark.lineWidth;
+      ctx.beginPath();
+      ctx.moveTo(pt.x, pt.y - radius);
+      ctx.lineTo(pt.x + radius, pt.y);
+      ctx.lineTo(pt.x, pt.y + radius);
+      ctx.lineTo(pt.x - radius, pt.y);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case 'dot': {
+      const pt = mapToCanvas(mark.x, mark.y, width, height, mapW, mapH);
+      const s = mark.sizePx;
+      ctx.fillStyle = mark.color;
+      ctx.fillRect(pt.x - s / 2, pt.y - s / 2, s, s);
+      break;
+    }
+  }
 }
 
 export function paintMinimapCanvas(
@@ -175,7 +228,7 @@ export function paintMinimapCanvas(
     return;
   }
 
-  syncTerrainLayer(cache, params.snapshot);
+  syncTerrainLayer(cache, params.snapshot, params.rasters);
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -201,144 +254,25 @@ export function paintMinimapCanvas(
   }
   ctx.stroke();
 
-  // 2. Collect tactical entities.
-  const entities = collectMinimapEntities(
-    params.db,
-    params.snapshot,
-    params.isHostile,
-    params.selected,
-  );
-
-  // 3. Threat routes and gather markers.
-  if (entities.threats.length > 0) {
-    ctx.save();
-    ctx.strokeStyle = '#ff5c5c';
-    ctx.lineWidth = 1.25;
-    for (const threat of entities.threats) {
-      if (threat.route.length >= 4) {
-        ctx.setLineDash([4, 3]);
-        ctx.beginPath();
-        const start = mapToCanvas(
-          threat.route[0] ?? 0,
-          threat.route[1] ?? 0,
-          width,
-          height,
-          mapW,
-          mapH,
-        );
-        ctx.moveTo(start.x, start.y);
-        for (let i = 2; i + 1 < threat.route.length; i += 2) {
-          const pt = mapToCanvas(
-            threat.route[i] ?? 0,
-            threat.route[i + 1] ?? 0,
-            width,
-            height,
-            mapW,
-            mapH,
-          );
-          ctx.lineTo(pt.x, pt.y);
-        }
-        ctx.stroke();
-      }
-      if (threat.kind === 'gather') {
-        const gp = mapToCanvas(threat.gatherX, threat.gatherY, width, height, mapW, mapH);
-        const pulse = 0.5 + 0.5 * Math.sin(params.nowMs * 0.008);
-        const radius = 3 + pulse * 2;
-        ctx.setLineDash([]);
-        ctx.strokeStyle = pulse > 0.5 ? '#ff5c5c' : '#ffc14d';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(gp.x, gp.y - radius);
-        ctx.lineTo(gp.x + radius, gp.y);
-        ctx.lineTo(gp.x, gp.y + radius);
-        ctx.lineTo(gp.x - radius, gp.y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.strokeStyle = '#ff5c5c';
-        ctx.lineWidth = 1.25;
-      }
-    }
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-
-  // 4. Fog-memory ghosts.
-  if (entities.memories.length > 0) {
-    ctx.save();
-    ctx.globalAlpha = 0.65;
-    for (const mem of entities.memories) {
-      const p0 = mapToCanvas(mem.x, mem.y, width, height, mapW, mapH);
-      const p1 = mapToCanvas(mem.x + mem.w, mem.y + mem.h, width, height, mapW, mapH);
-      const rw = Math.max(2, p1.x - p0.x);
-      const rh = Math.max(2, p1.y - p0.y);
-      ctx.fillStyle = memoryColor(mem.disposition);
-      ctx.fillRect(p0.x, p0.y, rw, rh);
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
-  // 5. Structures & ruins.
-  for (const st of entities.structures) {
-    const p0 = mapToCanvas(st.x, st.y, width, height, mapW, mapH);
-    const p1 = mapToCanvas(st.x + st.w, st.y + st.h, width, height, mapW, mapH);
-    const rw = Math.max(2, p1.x - p0.x);
-    const rh = Math.max(2, p1.y - p0.y);
-    const color = structureColor(st.disposition, st.isCore);
-
-    if (st.isBlueprint) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(p0.x + 0.5, p0.y + 0.5, Math.max(2, rw - 1), Math.max(2, rh - 1));
-    } else {
-      ctx.fillStyle = color;
-      ctx.fillRect(p0.x, p0.y, rw, rh);
-      if (st.isCore && st.disposition === 'own') {
-        ctx.strokeStyle = '#eef8ff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(p0.x - 0.5, p0.y - 0.5, rw + 1, rh + 1);
-      }
-    }
-
-    if (st.disposition === 'ruin') {
-      if (st.contested) {
-        ctx.strokeStyle = '#ffc14d';
-        ctx.lineWidth = 1.25;
-        ctx.strokeRect(p0.x - 1, p0.y - 1, rw + 2, rh + 2);
-      } else if (st.captureLeaderDisposition === 'own') {
-        const cx = p0.x + rw / 2;
-        const cy = p0.y + rh / 2;
-        const r = Math.max(rw, rh) / 2 + 2;
-        ctx.strokeStyle = '#5cc8ff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+  // 2. Contributed marks, in contributor order.
+  const markInput = {
+    db: params.db,
+    map: cache.map,
+    snapshot: params.snapshot,
+    isHostile: params.isHostile,
+    selected: params.selected,
+    nowMs: params.nowMs,
+  };
+  ctx.save();
+  for (const def of params.marks) {
+    for (const mark of def.collect(markInput)) {
+      paintMark(ctx, mark, width, height, mapW, mapH);
+      ctx.globalAlpha = 1;
     }
   }
+  ctx.restore();
 
-  // 6. Live units (unselected first, selected on top with halo).
-  for (const unit of entities.units) {
-    if (unit.selected) {
-      continue;
-    }
-    const pt = mapToCanvas(unit.x, unit.y, width, height, mapW, mapH);
-    ctx.fillStyle = unitColor(unit.disposition);
-    ctx.fillRect(pt.x - 1.25, pt.y - 1.25, 2.5, 2.5);
-  }
-  for (const unit of entities.units) {
-    if (!unit.selected) {
-      continue;
-    }
-    const pt = mapToCanvas(unit.x, unit.y, width, height, mapW, mapH);
-    ctx.fillStyle = '#6ee7ff';
-    ctx.fillRect(pt.x - 2.5, pt.y - 2.5, 5, 5);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(pt.x - 1.5, pt.y - 1.5, 3, 3);
-  }
-
-  // 7. Move order ping.
+  // 3. Move order ping.
   if (params.moveMarker !== null) {
     const age = params.nowMs - params.moveMarker.at;
     if (age >= 0 && age < MOVE_MARKER_MS) {
@@ -355,7 +289,7 @@ export function paintMinimapCanvas(
     }
   }
 
-  // 8. Camera viewport frustum (rotated trapezoid in 3D, rotated rect in 2D).
+  // 4. Camera viewport frustum (rotated trapezoid in 3D, rotated rect in 2D).
   const quad = computeMinimapFrustumQuad(
     params.cameraMode,
     params.cameraCenter,

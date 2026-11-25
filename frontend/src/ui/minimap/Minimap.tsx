@@ -14,6 +14,7 @@ import type { ContentDb, ResolvedMap } from '../../content/index';
 import { TacticalPanel } from '../kit/index';
 import styles from './Minimap.module.css';
 import { renderNowMs } from '../../client/capture-mode';
+import type { MinimapMarkDef, MinimapRasterDef } from './contributions';
 import {
   createMinimapRenderCache,
   paintMinimapCanvas,
@@ -53,11 +54,15 @@ export function Minimap({
   db,
   map,
   isHostile,
+  rasters,
+  marks,
 }: {
   client: SimClient;
   db: ContentDb;
   map: ResolvedMap;
   isHostile: (observer: number, faction: number) => boolean;
+  rasters: readonly MinimapRasterDef[];
+  marks: readonly MinimapMarkDef[];
 }) {
   const { t } = useTranslation();
   const open = useUiStore((s) => s.minimapOpen);
@@ -126,6 +131,8 @@ export function Minimap({
         pixelRatio,
         moveMarker: sel.moveMarker,
         nowMs: renderNowMs(),
+        rasters,
+        marks,
       });
     };
 
@@ -158,7 +165,7 @@ export function Minimap({
       window.removeEventListener('resize', scheduleDraw);
       resizeObserver?.disconnect();
     };
-  }, [open, client, db, map, isHostile, backing.width, backing.height]);
+  }, [open, client, db, map, isHostile, rasters, marks, backing.width, backing.height]);
 
   if (!open) {
     // Collapse/expand lives on the right rail — nothing renders here.

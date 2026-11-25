@@ -102,6 +102,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `captureInspectorSubjects` | const |  |
+| `captureMinimapMarks` | const |  |
 
 ## src/features/combat/content.ts
 
@@ -226,6 +227,7 @@
 |---|---|---|
 | `constructionHudPanels` | const |  |
 | `constructionInspectorSubjects` | const |  |
+| `constructionMinimapMarks` | const |  |
 
 ## src/features/logistics/content.ts
 
@@ -305,6 +307,7 @@
 | `extendRoadSelection` | function | Extends a clicked link into a route over the current snapshot, using smoothed link flow and stopping at warehouse or leaf nodes, then maps the selected link indices back to stable handle-pair keys. |
 | `linkKey` | function | Node-handle pair of link `index` (smaller handle first), or null when either endpoint handle is unset. |
 | `logisticsHudPanels` | const |  |
+| `logisticsMinimapRasters` | const |  |
 | `LogisticsSection` | function |  |
 | `nearestLink` | function | Nearest link whose polyline is within maxDist cells of (x, y); ties resolve by link index. |
 | `sameKey` | function |  |
@@ -402,6 +405,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `squadsHudPanels` | const |  |
+| `squadsMinimapMarks` | const |  |
 
 ## src/features/terrain/content.ts
 
@@ -460,6 +464,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `terrainInspectorSubjects` | const |  |
+| `terrainMinimapRasters` | const |  |
 
 ## src/features/units/content.ts
 
@@ -500,6 +505,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `unitsInspectorSubjects` | const |  |
+| `unitsMinimapMarks` | const |  |
 
 ## src/features/vision/content.ts
 
@@ -547,6 +553,8 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `visionInspectorSubjects` | const |  |
+| `visionMinimapMarks` | const |  |
+| `visionMinimapRasters` | const |  |
 
 ## src/kernel/index.ts
 

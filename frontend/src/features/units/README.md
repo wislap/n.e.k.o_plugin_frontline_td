@@ -17,7 +17,8 @@
 - `render/`：`unitsSceneLayers`（UnitsLayer + 单位 HP 条，
   ADR 0062 场景层注册）、`factionColorHex`。
 - `ui/`：`unitsInspectorSubjects`（ADR 0062 检视器主题注册：
-  own_unit / hostile_unit / multi_own）。导出全表见
+  own_unit / hostile_unit / multi_own）、`unitsMinimapMarks`
+  （ADR 0062 小地图标记贡献：单位色块与选中描边）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

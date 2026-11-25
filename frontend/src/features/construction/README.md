@@ -19,7 +19,8 @@
 - `render/`/`ui/`/`inspector`：`constructionSceneLayers`（ADR 0062
   场景层：Structures、结构 HP、RoadWorks、道路段 HP、Ghost、
   Exclusion）、`constructionHudPanels`（ADR 0062 HUD 面板注册：
-  BuildMenu）、工地检查器。导出全表见
+  BuildMenu）、`constructionMinimapMarks`（ADR 0062 小地图标记贡献：
+  结构/蓝图轮廓）、工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

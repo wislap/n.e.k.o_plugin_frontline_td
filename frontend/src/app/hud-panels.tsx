@@ -8,8 +8,10 @@ import { logisticsHudPanels } from '../features/logistics/ui/index';
 import { squadsHudPanels } from '../features/squads/ui/index';
 import { groupHudPanels, type HudPanelProps } from '../ui/hud-panels';
 import { createInspectorPanel } from '../ui/inspector/index';
+import { createMinimapPanel } from '../ui/minimap/index';
 import { SHELL_HUD_PANELS } from '../ui/shell-panels';
 import { INSPECTOR_SUBJECTS } from './inspector-subjects';
+import { MINIMAP_MARKS, MINIMAP_RASTERS } from './minimap-contributions';
 
 // Dev debug panel: registered like every other panel; it reads the
 // store flag itself and renders nothing while closed.
@@ -26,6 +28,12 @@ export const HUD_PANELS = groupHudPanels([
   ...constructionHudPanels,
   ...logisticsHudPanels,
   ...squadsHudPanels,
+  {
+    id: 'shell.minimap',
+    slot: 'topLeft',
+    order: 20,
+    Component: createMinimapPanel({ rasters: MINIMAP_RASTERS, marks: MINIMAP_MARKS }),
+  },
   {
     id: 'shell.inspector',
     slot: 'bottomRight',

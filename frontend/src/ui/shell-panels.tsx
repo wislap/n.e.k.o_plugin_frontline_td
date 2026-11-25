@@ -15,7 +15,6 @@ import { GaugePill } from './GaugePill';
 import styles from './HudShell.module.css';
 import type { HudPanelDef, HudPanelProps } from './hud-panels';
 import { KeyGuideRail } from './KeyGuideRail';
-import { Minimap } from './minimap/Minimap';
 import { RightRail } from './RightRail';
 import { ActionButton, SegmentedTabs, TacticalPanel, ToastStack } from './kit/index';
 import { useToastStore } from './toast-store';
@@ -49,13 +48,6 @@ function ModeTabs() {
       />
     </TacticalPanel>
   );
-}
-
-function MinimapPanel({ ctx }: HudPanelProps) {
-  if (ctx.map === null) {
-    return null;
-  }
-  return <Minimap client={ctx.client} db={ctx.db} map={ctx.map} isHostile={ctx.isHostile} />;
 }
 
 // Polls the client event log on the shared 100 ms clock and turns
@@ -205,7 +197,6 @@ function RightRailPanel() {
 
 export const SHELL_HUD_PANELS: readonly HudPanelDef[] = [
   { id: 'shell.modeTabs', slot: 'topLeft', order: 10, Component: ModeTabs },
-  { id: 'shell.minimap', slot: 'topLeft', order: 20, Component: MinimapPanel },
   { id: 'shell.toasts', slot: 'topLeft', order: 30, Component: ToastsPanel },
   { id: 'shell.gauge', slot: 'topCenter', order: 10, Component: GaugePanel },
   { id: 'shell.toolBanner', slot: 'topCenter', order: 30, Component: ToolBannerPanel },

@@ -15,7 +15,8 @@
 - `render/`：`squadsSceneLayers`（ThreatsLayer：敌方小队预警，
   卸载时释放 GPU 资源；ADR 0062 场景层注册）；
   `ui/`：`squadsHudPanels`（ADR 0062 HUD 面板注册：SquadPanel 仅指挥
-  模式、ThreatBanner 敌方小队预警横幅）。导出全表见
+  模式、ThreatBanner 敌方小队预警横幅）、`squadsMinimapMarks`
+  （ADR 0062 小地图标记贡献：敌方小队威胁路径与脉冲菱形）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

@@ -2,3 +2,4 @@
 export { extendRoadSelection, linkKey, nearestLink, sameKey } from './road-select';
 export { logisticsHudPanels } from './hud-panels';
 export { LogisticsSection } from './LogisticsSection';
+export { logisticsMinimapRasters } from './minimap';
