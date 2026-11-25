@@ -29,7 +29,19 @@
     "fx_shadows": "阴影",
     "fx_scatter": "草地散布",
     "dpr_cap": "DPR 上限",
-    "dpr_native": "原生"
+    "dpr_native": "原生",
+    "gpu": "GPU 分段",
+    "gpu_total": "总计",
+    "gpu_unavailable": "timer query 不可用",
+    "scene_layers": "场景层",
+    "renderer": "渲染器",
+    "buffer": "缓冲尺寸",
+    "dpr": "DPR",
+    "lines": "线段数",
+    "points": "点数",
+    "programs": "着色程序",
+    "geometries": "几何体",
+    "textures": "纹理"
   },
   "hud": {
     "paused": "已暂停",

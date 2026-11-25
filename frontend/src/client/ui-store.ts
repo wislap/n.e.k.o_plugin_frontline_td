@@ -13,12 +13,34 @@ interface RenderCostToggles {
   dprCap: number;
 }
 
-// Rolling renderer readout fed by the Canvas-side perf probe (calls/
-// triangles are the previous rendered frame's gl.info values).
+// Rolling renderer readout fed by the Canvas-side perf probe. While the
+// debug panel is open gl.info.autoReset is off and the counters reflect
+// one whole rendered frame.
 interface RenderStats {
   frameMs: number;
   drawCalls: number;
   triangles: number;
+  lines: number;
+  points: number;
+  programs: number;
+  geometries: number;
+  textures: number;
+}
+
+// GPU timer readout (EXT_disjoint_timer_query_webgl2) plus static
+// context info, published by the dev GPU instrumentation.
+interface GpuPassTiming {
+  label: string;
+  ms: number;
+}
+interface GpuStats {
+  available: boolean;
+  renderer: string;
+  bufferWidth: number;
+  bufferHeight: number;
+  dpr: number;
+  totalMs: number;
+  labels: GpuPassTiming[];
 }
 
 export interface UiState {
@@ -35,6 +57,9 @@ export interface UiState {
   // Debug panel "Render cost" group (dev only).
   renderCost: RenderCostToggles;
   renderStats: RenderStats | null;
+  gpuStats: GpuStats | null;
+  // Debug panel scene-layer visibility toggles (empty = all visible).
+  hiddenSceneLayers: ReadonlySet<string>;
   toggleDebugPanel(): void;
   toggleLogisticsOverlay(): void;
   toggleKeymapHelp(): void;
@@ -43,6 +68,8 @@ export interface UiState {
   setInfo2d: (on: boolean) => void;
   setRenderCost: (patch: Partial<RenderCostToggles>) => void;
   setRenderStats: (stats: RenderStats | null) => void;
+  setGpuStats: (stats: GpuStats | null) => void;
+  setSceneLayerHidden: (id: string, hidden: boolean) => void;
   reset(): void;
 }
 
@@ -57,6 +84,8 @@ export const useUiStore = create<UiState>((set) => ({
   minimapOpen: true,
   renderCost: { n8ao: true, bloom: true, smaa: true, shadows: true, scatter: true, dprCap: 0 },
   renderStats: null,
+  gpuStats: null,
+  hiddenSceneLayers: new Set<string>(),
   toggleDebugPanel: () => {
     set((state) => ({ debugPanelOpen: !state.debugPanelOpen }));
   },
@@ -80,6 +109,20 @@ export const useUiStore = create<UiState>((set) => ({
   },
   setRenderStats: (renderStats) => {
     set({ renderStats });
+  },
+  setGpuStats: (gpuStats) => {
+    set({ gpuStats });
+  },
+  setSceneLayerHidden: (id, hidden) => {
+    set((state) => {
+      const next = new Set(state.hiddenSceneLayers);
+      if (hidden) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return { hiddenSceneLayers: next };
+    });
   },
   reset: () => {
     set({

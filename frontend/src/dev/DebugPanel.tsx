@@ -19,7 +19,15 @@ const COST_TOGGLES = [
   ['scatter', 'dev.fx_scatter'],
 ] as const;
 
-export function DebugPanel({ client }: { client: SimClient }) {
+export function DebugPanel({
+  client,
+  sceneLayerIds,
+}: {
+  client: SimClient;
+  // Assembled SCENE_LAYERS ids, passed in by app so dev/ stays
+  // feature-free.
+  sceneLayerIds: readonly string[];
+}) {
   const { t } = useTranslation();
   const stats = useRuntimeStore((state) => state.stats);
   const error = useRuntimeStore((state) => state.error);
@@ -30,6 +38,9 @@ export function DebugPanel({ client }: { client: SimClient }) {
   const renderCost = useUiStore((state) => state.renderCost);
   const setRenderCost = useUiStore((state) => state.setRenderCost);
   const renderStats = useUiStore((state) => state.renderStats);
+  const gpuStats = useUiStore((state) => state.gpuStats);
+  const hiddenSceneLayers = useUiStore((state) => state.hiddenSceneLayers);
+  const setSceneLayerHidden = useUiStore((state) => state.setSceneLayerHidden);
   const [fps, setFps] = useState(0);
 
   useEffect(() => {
@@ -104,6 +115,93 @@ export function DebugPanel({ client }: { client: SimClient }) {
           <span className={styles['label']}>{t('dev.triangles')}</span>
           <span className={styles['value']}>{renderStats?.triangles ?? 0}</span>
         </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.lines')}</span>
+          <span className={styles['value']}>{renderStats?.lines ?? 0}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.points')}</span>
+          <span className={styles['value']}>{renderStats?.points ?? 0}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.programs')}</span>
+          <span className={styles['value']}>{renderStats?.programs ?? 0}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.geometries')}</span>
+          <span className={styles['value']}>{renderStats?.geometries ?? 0}</span>
+        </div>
+        <div className={styles['row']}>
+          <span className={styles['label']}>{t('dev.textures')}</span>
+          <span className={styles['value']}>{renderStats?.textures ?? 0}</span>
+        </div>
+      </div>
+
+      <div className={styles['section']}>
+        <div className={styles['sectionTitle']}>{t('dev.gpu')}</div>
+        {gpuStats !== null && (
+          <>
+            <div className={styles['row']}>
+              <span className={styles['label']}>{t('dev.renderer')}</span>
+              <span className={styles['value']}>{gpuStats.renderer}</span>
+            </div>
+            <div className={styles['row']}>
+              <span className={styles['label']}>{t('dev.buffer')}</span>
+              <span className={styles['value']}>
+                {gpuStats.bufferWidth}×{gpuStats.bufferHeight}
+              </span>
+            </div>
+            <div className={styles['row']}>
+              <span className={styles['label']}>{t('dev.dpr')}</span>
+              <span className={styles['value']}>{gpuStats.dpr}</span>
+            </div>
+          </>
+        )}
+        {gpuStats === null || !gpuStats.available ? (
+          <div className={styles['empty']}>{t('dev.gpu_unavailable')}</div>
+        ) : (
+          <>
+            {gpuStats.labels
+              .slice()
+              .sort((a, b) => b.ms - a.ms)
+              .map((l) => (
+                <div
+                  key={l.label}
+                  className={styles['row']}
+                  data-gpu-label={l.label}
+                  data-gpu-ms={l.ms.toFixed(2)}
+                >
+                  <span className={styles['label']}>{l.label}</span>
+                  <span className={styles['value']}>{l.ms.toFixed(2)}</span>
+                </div>
+              ))}
+            <div
+              className={styles['row']}
+              data-gpu-label="total"
+              data-gpu-ms={gpuStats.totalMs.toFixed(2)}
+            >
+              <span className={styles['label']}>{t('dev.gpu_total')}</span>
+              <span className={styles['value']}>{gpuStats.totalMs.toFixed(2)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className={styles['section']}>
+        <div className={styles['sectionTitle']}>{t('dev.scene_layers')}</div>
+        {sceneLayerIds.map((id) => (
+          <div key={id} className={styles['row']}>
+            <span className={styles['label']}>{id}</span>
+            <input
+              type="checkbox"
+              data-scene-layer={id}
+              checked={!hiddenSceneLayers.has(id)}
+              onChange={(e) => {
+                setSceneLayerHidden(id, !e.target.checked);
+              }}
+            />
+          </div>
+        ))}
       </div>
 
       <div className={styles['section']}>
@@ -113,6 +211,7 @@ export function DebugPanel({ client }: { client: SimClient }) {
             <span className={styles['label']}>{t(label)}</span>
             <input
               type="checkbox"
+              data-cost={key}
               checked={renderCost[key]}
               onChange={(e) => {
                 setRenderCost({ [key]: e.target.checked });

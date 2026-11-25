@@ -20,6 +20,8 @@ import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
 import type { CanvasIntentHandlerDef } from './canvas-input';
+import { effectComposerRef } from './composer-ref';
+import { installGpuInstrumentation, type GpuInstrumentation } from './gpu-instrument';
 import type { SceneContext, SceneLayerDef } from './scene';
 import { createFogUniforms } from './shaders';
 import { makeDispatch } from './input-dispatch';
@@ -57,34 +59,78 @@ function CaptureProbe() {
 
 // Render-cost readout for the dev DebugPanel: rolling frame time plus
 // the previous rendered frame's gl.info counters, published to the UI
-// store ~2x a second.
+// store ~2x a second. While mounted it also installs the GPU pass
+// instrumentation (render/gpu-instrument.ts): info.autoReset is off, so
+// the counters below cover exactly one rendered frame.
 const PERF_WINDOW_MS = 500;
 
-function publishPerfStats(gl: THREE.WebGLRenderer, frames: number, ms: number): void {
+function publishPerfStats(
+  gl: THREE.WebGLRenderer,
+  instr: GpuInstrumentation | null,
+  frames: number,
+  ms: number,
+): void {
+  const info = gl.info;
   useUiStore.getState().setRenderStats({
     frameMs: ms / frames,
-    drawCalls: gl.info.render.calls,
-    triangles: gl.info.render.triangles,
+    drawCalls: info.render.calls,
+    triangles: info.render.triangles,
+    lines: info.render.lines,
+    points: info.render.points,
+    programs: info.programs?.length ?? 0,
+    geometries: info.memory.geometries,
+    textures: info.memory.textures,
   });
+  if (instr !== null) {
+    const ctx = gl.getContext();
+    const dbg = ctx.getExtension('WEBGL_debug_renderer_info');
+    const rendererName = String(ctx.getParameter(dbg?.UNMASKED_RENDERER_WEBGL ?? ctx.RENDERER));
+    const buffer = gl.getDrawingBufferSize(new THREE.Vector2());
+    const snap = instr.profiler.snapshot();
+    useUiStore.getState().setGpuStats({
+      available: snap.available,
+      renderer: rendererName,
+      bufferWidth: buffer.x,
+      bufferHeight: buffer.y,
+      dpr: gl.getPixelRatio(),
+      totalMs: snap.totalMs,
+      labels: snap.labels.map((l) => ({ label: l.label, ms: l.ms })),
+    });
+  }
 }
 
 function PerfProbe() {
+  const gl = useThree((s) => s.gl);
   const acc = useRef({ frames: 0, ms: 0 });
+  const instr = useRef<GpuInstrumentation | null>(null);
   useEffect(() => {
+    const installed = installGpuInstrumentation(gl, () => effectComposerRef.current);
+    instr.current = installed;
     return () => {
+      installed.uninstall();
+      instr.current = null;
       useUiStore.getState().setRenderStats(null);
+      useUiStore.getState().setGpuStats(null);
     };
-  }, []);
+  }, [gl]);
+  // Frame begin runs before every other subscriber; frame end runs after
+  // the composer's render (priority 1), so 'frame' brackets all GPU work.
+  useFrame(() => {
+    instr.current?.beginFrame();
+  }, -1000);
   useFrame((state, delta) => {
     const a = acc.current;
     a.frames += 1;
     a.ms += delta * 1000;
     if (a.ms >= PERF_WINDOW_MS) {
-      publishPerfStats(state.gl, a.frames, a.ms);
+      publishPerfStats(state.gl, instr.current, a.frames, a.ms);
       a.frames = 0;
       a.ms = 0;
     }
   });
+  useFrame(() => {
+    instr.current?.endFrame();
+  }, 1000);
   return null;
 }
 
@@ -219,6 +265,7 @@ export function GameCanvas({
   const heights = readHeights(snapshot) ?? grid.heights;
   const fogUniforms = useMemo(() => createFogUniforms(), []);
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
+  const hiddenLayers = useUiStore((s) => s.hiddenSceneLayers);
   const panelOpen = useUiStore((s) => s.debugPanelOpen);
   const perfProbe = panelOpen;
   const ctx = useMemo<SceneContext>(
@@ -239,7 +286,9 @@ export function GameCanvas({
         {ready && (
           <>
             {layers.map((layer) => (
-              <layer.Component key={layer.id} ctx={ctx} />
+              <group key={layer.id} visible={!hiddenLayers.has(layer.id)}>
+                <layer.Component ctx={ctx} />
+              </group>
             ))}
             <MoveMarker ctx={ctx} />
             <InputBridge ctx={ctx} router={router} canvasIntents={canvasIntents} />

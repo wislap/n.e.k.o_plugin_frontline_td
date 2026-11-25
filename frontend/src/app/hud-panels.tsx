@@ -13,6 +13,9 @@ import { createMinimapPanel } from '../ui/minimap/index';
 import { SHELL_HUD_PANELS } from '../ui/shell-panels';
 import { INSPECTOR_SUBJECTS } from './inspector-subjects';
 import { MINIMAP_MARKS, MINIMAP_RASTERS } from './minimap-contributions';
+import { SCENE_LAYERS } from './scene-layers';
+
+const SCENE_LAYER_IDS = SCENE_LAYERS.map((l) => l.id);
 
 // Dev debug panel: registered like every other panel; it reads the
 // store flag itself and renders nothing while closed.
@@ -21,7 +24,7 @@ function DebugHudPanel({ ctx }: HudPanelProps) {
   if (!open) {
     return null;
   }
-  return <DebugPanel client={ctx.client} />;
+  return <DebugPanel client={ctx.client} sceneLayerIds={SCENE_LAYER_IDS} />;
 }
 
 export const HUD_PANELS = groupHudPanels([

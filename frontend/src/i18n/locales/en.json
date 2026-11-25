@@ -29,7 +29,19 @@
     "fx_shadows": "Shadows",
     "fx_scatter": "Grass scatter",
     "dpr_cap": "DPR cap",
-    "dpr_native": "Native"
+    "dpr_native": "Native",
+    "gpu": "GPU passes",
+    "gpu_total": "total",
+    "gpu_unavailable": "timer query unavailable",
+    "scene_layers": "Scene layers",
+    "renderer": "Renderer",
+    "buffer": "Buffer size",
+    "dpr": "DPR",
+    "lines": "Lines",
+    "points": "Points",
+    "programs": "Programs",
+    "geometries": "Geometries",
+    "textures": "Textures"
   },
   "hud": {
     "paused": "Paused",
