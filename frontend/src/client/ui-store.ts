@@ -42,7 +42,7 @@ export interface UiState {
   setGrassDensity: (density: number) => void;
   setInfo2d: (on: boolean) => void;
   setRenderCost: (patch: Partial<RenderCostToggles>) => void;
-  setRenderStats: (stats: RenderStats) => void;
+  setRenderStats: (stats: RenderStats | null) => void;
   reset(): void;
 }
 

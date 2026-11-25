@@ -102,6 +102,11 @@ function publishPerfStats(
 
 function PerfProbe() {
   const acc = useRef({ frames: 0, ms: 0 });
+  useEffect(() => {
+    return () => {
+      useUiStore.getState().setRenderStats(null);
+    };
+  }, []);
   useFrame((state, delta) => {
     const a = acc.current;
     a.frames += 1;
@@ -273,6 +278,8 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
   const heights = readLayer(snapshot, TERRAIN_HEIGHT_LAYER_ID) ?? grid.heights;
   const fogUniforms = useMemo(() => createFogUniforms(), []);
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
+  const panelOpen = useUiStore((s) => s.debugPanelOpen);
+  const perfProbe = import.meta.env.DEV && panelOpen;
   const surfaceColors = useMemo(() => db.surfaces.list.map((s) => s.color), [db]);
   const radii = useMemo(() => db.units.list.map((u) => u.radius), [db]);
   const unitVisuals = useMemo(() => db.units.list.map((u) => u.visual), [db]);
@@ -286,7 +293,7 @@ export function GameCanvas({ client, db, map, panTracker, isHostile }: GameCanva
         {...(dprCap > 0 ? { dpr: Math.min(window.devicePixelRatio, dprCap) } : {})}
       >
         <SceneLighting mapWidth={grid.width} mapHeight={grid.height} />
-        <PerfProbe />
+        {perfProbe && <PerfProbe />}
         {ready && <ThemeBackground mapWidth={grid.width} mapHeight={grid.height} />}
         {ready && (
           <>
