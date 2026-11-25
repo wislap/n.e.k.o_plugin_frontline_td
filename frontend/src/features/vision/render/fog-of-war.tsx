@@ -68,6 +68,7 @@ export function FogOfWar({ client, map, uniforms }: FogOfWarProps): null {
   }, [map]);
   useGpuResource(texture);
   const builtForLayer = useRef<ArrayLike<number> | null>(null);
+  const builtForTexture = useRef<THREE.DataTexture | null>(null);
 
   useFrame(() => {
     syncFogUniforms(uniforms, texture, map);
@@ -77,7 +78,14 @@ export function FogOfWar({ client, map, uniforms }: FogOfWarProps): null {
     }
     const layer =
       readLayer(latest, `${VISION_STATE_LAYER_ID}#${latest.observer}`) ?? undefined;
-    if (layer === undefined || !markBuilt(builtForLayer, layer)) {
+    if (layer === undefined) {
+      return;
+    }
+    // Key on both identities: a recreated texture (map change) must be
+    // filled even when the layer array itself did not change.
+    const freshLayer = markBuilt(builtForLayer, layer);
+    const freshTexture = markBuilt(builtForTexture, texture);
+    if (!freshLayer && !freshTexture) {
       return;
     }
     uploadFog(texture, layer, map.grid.width * map.grid.height);
