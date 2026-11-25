@@ -205,7 +205,7 @@ export function GameCanvas({ client, db, map, layers, panTracker, isHostile }: G
   const fogUniforms = useMemo(() => createFogUniforms(), []);
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
   const panelOpen = useUiStore((s) => s.debugPanelOpen);
-  const perfProbe = import.meta.env.DEV && panelOpen;
+  const perfProbe = panelOpen;
   const ctx = useMemo<SceneContext>(
     () => ({ client, db, map, heights, isHostile, fog: fogUniforms }),
     [client, db, map, heights, isHostile, fogUniforms],
