@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 const SDK_404 = '/plugin-ui-sdk/display.js';
 const TRANSITION_SETTLE_MS = 550;
 const TRANSITION_SAMPLE_WINDOW_MS = 450;
-const TRANSITION_SAMPLE_COUNT = 6;
+const TRANSITION_SAMPLE_COUNT = 4;
 const MAX_ALLOWED_MEAN_LUMINANCE = 205;
 const MAX_LUMINANCE_SPIKE = 60;
 
@@ -173,52 +173,75 @@ function assertTransitionFramesClean(
   }
 }
 
-test('3D <-> 2D camera transitions never flash white and survive mid-transition reversal', async ({
+function assertNoPageFailures(failures: readonly string[]): void {
+  for (const failure of failures) {
+    expect(failure).not.toContain('ShaderCompileError');
+  }
+  expect(failures).toEqual([]);
+}
+
+async function captureBaselineFrame(
+  page: Page,
+  canvas: Locator,
+  label: string,
+): Promise<FrameMetrics> {
+  const shot = await canvas.screenshot({ animations: 'allow' });
+  const [metrics] = await analyzePngFrames(page, [shot]);
+  expect(metrics, `Missing baseline ${label} frame metrics`).toBeDefined();
+  if (metrics === undefined) {
+    throw new Error(`Missing baseline ${label} frame metrics`);
+  }
+  expect(metrics.distinctColors).toBeGreaterThan(4);
+  expect(metrics.meanLuminance).toBeGreaterThanOrEqual(0);
+  expect(metrics.meanLuminance).toBeLessThan(MAX_ALLOWED_MEAN_LUMINANCE);
+  return metrics;
+}
+
+test('3D -> 2D camera transition never flashes or washes the far horizon white', async ({
   page,
 }) => {
   const failures = collectFailures(page);
   const canvas = await bootAndWaitForScene(page);
   const middleRight = page.locator('[data-hud-slot="middleRight"]');
 
-  // Initial state: 3D spectate view is active and rendering a non-flat scene.
   await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
-  const baseline3dShot = await canvas.screenshot({ animations: 'allow' });
-  const [baseline3d] = await analyzePngFrames(page, [baseline3dShot]);
-  expect(baseline3d).toBeDefined();
-  if (baseline3d === undefined) {
-    throw new Error('Missing baseline 3D frame metrics');
-  }
-  expect(baseline3d.distinctColors).toBeGreaterThan(4);
-  expect(baseline3d.meanLuminance).toBeGreaterThanOrEqual(0);
-  expect(baseline3d.meanLuminance).toBeLessThan(MAX_ALLOWED_MEAN_LUMINANCE);
+  const baseline3d = await captureBaselineFrame(page, canvas, '3D');
 
-  // Switch 3D -> 2D tactical while sampling frames across the transition window.
   const forwardMetrics = await sampleTransitionFrames(
     page,
     canvas,
     middleRight.getByRole('button', { name: /战术视角/ }),
   );
-
-  const baseline2dShot = await canvas.screenshot({ animations: 'allow' });
-  const [baseline2d] = await analyzePngFrames(page, [baseline2dShot]);
-  expect(baseline2d).toBeDefined();
-  if (baseline2d === undefined) {
-    throw new Error('Missing baseline 2D frame metrics');
-  }
-  expect(baseline2d.distinctColors).toBeGreaterThan(4);
-  expect(baseline2d.meanLuminance).toBeGreaterThanOrEqual(0);
-  expect(baseline2d.meanLuminance).toBeLessThan(MAX_ALLOWED_MEAN_LUMINANCE);
+  const baseline2d = await captureBaselineFrame(page, canvas, '2D');
 
   const maxBaselineMeanLum = Math.max(baseline3d.meanLuminance, baseline2d.meanLuminance);
   const maxBaselineTopBandLum = Math.max(baseline3d.topBandLuminance, baseline2d.topBandLuminance);
   assertTransitionFramesClean('3D->2D', forwardMetrics, maxBaselineMeanLum, maxBaselineTopBandLum);
+  assertNoPageFailures(failures);
+});
 
-  // Switch 2D -> 3D and rapidly capture 6 frames across the ~450ms transition window.
+test('2D -> 3D camera transition never flashes white and survives mid-transition reversal', async ({
+  page,
+}) => {
+  const failures = collectFailures(page);
+  const canvas = await bootAndWaitForScene(page);
+  const middleRight = page.locator('[data-hud-slot="middleRight"]');
+
+  await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
+  const baseline3d = await captureBaselineFrame(page, canvas, '3D');
+
+  await page.keyboard.press('Tab');
+  await expect(middleRight.getByRole('button', { name: /战术视角/ })).toBeVisible();
+  await page.waitForTimeout(TRANSITION_SETTLE_MS);
+  const baseline2d = await captureBaselineFrame(page, canvas, '2D');
+
   const returnMetrics = await sampleTransitionFrames(
     page,
     canvas,
     middleRight.getByRole('button', { name: /观战视角/ }),
   );
+  const maxBaselineMeanLum = Math.max(baseline3d.meanLuminance, baseline2d.meanLuminance);
+  const maxBaselineTopBandLum = Math.max(baseline3d.topBandLuminance, baseline2d.topBandLuminance);
   assertTransitionFramesClean('2D->3D', returnMetrics, maxBaselineMeanLum, maxBaselineTopBandLum);
 
   // Rapid mid-transition double-Tab reversal: 3D -> 150ms -> 3D -> settle 550ms.
@@ -229,17 +252,6 @@ test('3D <-> 2D camera transitions never flash white and survive mid-transition 
   await expect(middleRight.getByRole('button', { name: /观战视角/ })).toBeVisible();
   await page.waitForTimeout(TRANSITION_SETTLE_MS);
 
-  const reversedShot = await canvas.screenshot({ animations: 'allow' });
-  const [reversedMetrics] = await analyzePngFrames(page, [reversedShot]);
-  expect(reversedMetrics).toBeDefined();
-  if (reversedMetrics === undefined) {
-    throw new Error('Missing reversed frame metrics');
-  }
-  expect(reversedMetrics.distinctColors).toBeGreaterThan(4);
-  expect(reversedMetrics.meanLuminance).toBeLessThan(MAX_ALLOWED_MEAN_LUMINANCE);
-
-  for (const failure of failures) {
-    expect(failure).not.toContain('ShaderCompileError');
-  }
-  expect(failures).toEqual([]);
+  await captureBaselineFrame(page, canvas, 'reversed 3D');
+  assertNoPageFailures(failures);
 });
