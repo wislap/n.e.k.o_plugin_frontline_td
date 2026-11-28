@@ -83,9 +83,9 @@ const { subscribeSnapshotClock, useSnapshotValue } = await import('./use-snapsho
 
 function makeClient(initialTick: number): {
   client: SimClient;
-  setTick: (tick: number) => void;
+  setTick: (tick: number | null) => void;
+  listenerCount: () => number;
 } {
-  let tick = initialTick;
   const makeSnap = (t: number): Snapshot => ({
     tick: toTick(t),
     observer: toFactionId(1),
@@ -96,13 +96,19 @@ function makeClient(initialTick: number): {
   });
   let pair: SnapshotPair = {
     previous: null,
-    latest: makeSnap(tick),
+    latest: makeSnap(initialTick),
     receivedAt: 0,
     intervalMs: 0,
   };
+  const listeners = new Set<() => void>();
   const client: SimClient = {
     start: () => undefined,
-    restart: () => undefined,
+    restart: () => {
+      pair = { previous: null, latest: null, receivedAt: 0, intervalMs: 0 };
+      for (const fn of [...listeners]) {
+        fn();
+      }
+    },
     submit: () => undefined,
     setSpeedIndex: () => undefined,
     togglePause: () => undefined,
@@ -110,17 +116,29 @@ function makeClient(initialTick: number): {
     inspect: () => undefined,
     inspection: () => null,
     eventsSince: () => ({ events: [], cursor: 0 }),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
   };
   return {
     client,
-    setTick: (nextTick: number) => {
-      tick = nextTick;
-      pair = {
-        previous: pair.latest,
-        latest: makeSnap(tick),
-        receivedAt: 100,
-        intervalMs: 50,
-      };
+    listenerCount: () => listeners.size,
+    setTick: (nextTick: number | null) => {
+      pair =
+        nextTick === null
+          ? { previous: null, latest: null, receivedAt: 0, intervalMs: 0 }
+          : {
+              previous: pair.latest,
+              latest: makeSnap(nextTick),
+              receivedAt: 100,
+              intervalMs: 50,
+            };
+      for (const fn of [...listeners]) {
+        fn();
+      }
     },
   };
 }
@@ -135,11 +153,28 @@ describe('subscribeSnapshotClock', () => {
     vi.restoreAllMocks();
   });
 
-  it('shares one setInterval per (client, intervalMs) and clears it when last listener unsubscribes', () => {
-    const setSpy = vi.spyOn(globalThis, 'setInterval');
-    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
-    const { client } = makeClient(1);
-    const { client: otherClient } = makeClient(1);
+  it('registers zero timers and fires zero callbacks when idle or paused', () => {
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const { client, listenerCount } = makeClient(1);
+    const listener = vi.fn();
+
+    const unsub = subscribeSnapshotClock(client, 100, listener);
+    expect(listenerCount()).toBe(1);
+    vi.advanceTimersByTime(5000);
+    expect(listener).not.toHaveBeenCalled();
+    expect(intervalSpy).not.toHaveBeenCalled();
+    expect(timeoutSpy).not.toHaveBeenCalled();
+
+    unsub();
+    expect(listenerCount()).toBe(0);
+  });
+
+  it('fires leading edge immediately at t=0, coalesces bursts into one trailing timer, and cleans up', () => {
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+    const { client, setTick, listenerCount } = makeClient(1);
+    const { client: otherClient, setTick: setOtherTick } = makeClient(1);
 
     const a = vi.fn();
     const b = vi.fn();
@@ -148,26 +183,101 @@ describe('subscribeSnapshotClock', () => {
     const unsubA = subscribeSnapshotClock(client, 100, a);
     const unsubB = subscribeSnapshotClock(client, 100, b);
     const unsubC = subscribeSnapshotClock(otherClient, 100, c);
-    expect(setSpy).toHaveBeenCalledTimes(2);
+    expect(listenerCount()).toBe(1);
 
-    vi.advanceTimersByTime(100);
+    // Leading edge at t=0 fires immediately without scheduling a timer.
+    setTick(2);
     expect(a).toHaveBeenCalledTimes(1);
     expect(b).toHaveBeenCalledTimes(1);
-    expect(c).toHaveBeenCalledTimes(1);
+    expect(c).toHaveBeenCalledTimes(0);
+    expect(timeoutSpy).toHaveBeenCalledTimes(0);
 
-    unsubA();
-    expect(clearSpy).toHaveBeenCalledTimes(0);
-    vi.advanceTimersByTime(100);
+    // Rapid burst within window schedules a single trailing setTimeout.
+    vi.advanceTimersByTime(20);
+    setTick(3);
+    vi.advanceTimersByTime(20);
+    setTick(4);
     expect(a).toHaveBeenCalledTimes(1);
+    expect(timeoutSpy).toHaveBeenCalledTimes(1);
+
+    // Trailing timer flushes once at the end of the 100 ms window.
+    vi.advanceTimersByTime(60);
+    expect(a).toHaveBeenCalledTimes(2);
     expect(b).toHaveBeenCalledTimes(2);
 
-    // Idempotent unsubscribe + stops timer when last listener leaves.
+    // Other client is independent.
+    setOtherTick(2);
+    expect(c).toHaveBeenCalledTimes(1);
+
+    // Unsubscribing one listener leaves bucket and client subscription active.
+    unsubA();
+    expect(listenerCount()).toBe(1);
+    vi.advanceTimersByTime(100);
+    setTick(5);
+    expect(a).toHaveBeenCalledTimes(2);
+    expect(b).toHaveBeenCalledTimes(3);
+
+    // Schedule a pending trailing timer, then unsubscribe last listener -> cancels timer & client sub.
+    vi.advanceTimersByTime(10);
+    setTick(6);
     unsubB();
     unsubB();
     expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(listenerCount()).toBe(0);
+
+    vi.advanceTimersByTime(200);
+    expect(b).toHaveBeenCalledTimes(3);
 
     unsubC();
-    expect(clearSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips a sibling listener unsubscribed during leading or trailing flush in the same wave', () => {
+    const { client, setTick } = makeClient(1);
+    const calls: string[] = [];
+
+    // Leading edge: A unsubscribes B before B runs in the same wave.
+    let unsubB: () => void = () => undefined;
+    const unsubA = subscribeSnapshotClock(client, 100, () => {
+      calls.push('A');
+      unsubB();
+    });
+    unsubB = subscribeSnapshotClock(client, 100, () => {
+      calls.push('B');
+    });
+
+    setTick(2);
+    expect(calls).toEqual(['A']);
+
+    unsubA();
+    vi.advanceTimersByTime(100);
+    calls.length = 0;
+
+    // Trailing flush: trigger leading edge first, then schedule trailing flush
+    // where C unsubscribes D before D runs.
+    let unsubD: () => void = () => undefined;
+    let shouldDropD = false;
+    const unsubC = subscribeSnapshotClock(client, 100, () => {
+      calls.push('C');
+      if (shouldDropD) {
+        unsubD();
+      }
+    });
+    unsubD = subscribeSnapshotClock(client, 100, () => {
+      calls.push('D');
+    });
+
+    // Leading edge at t=0 of this cycle runs both C and D.
+    setTick(3);
+    expect(calls).toEqual(['C', 'D']);
+
+    // Burst inside the 100 ms window schedules a trailing timer.
+    shouldDropD = true;
+    vi.advanceTimersByTime(20);
+    setTick(4);
+    vi.advanceTimersByTime(80);
+    expect(calls).toEqual(['C', 'D', 'C']);
+
+    unsubC();
   });
 });
 
@@ -218,6 +328,11 @@ describe('useSnapshotValue', () => {
     vi.advanceTimersByTime(100);
     expect(renders).toBe(2);
     expect(lastValue).toEqual({ bucket: 1 });
+
+    // Restart clears latest to null -> triggers re-render.
+    clientA.restart({} as Parameters<typeof clientA.restart>[0]);
+    expect(renders).toBe(3);
+    expect(lastValue).toEqual({ bucket: 0 });
 
     // Switching client re-syncs immediately during render.
     activeClient = clientB;

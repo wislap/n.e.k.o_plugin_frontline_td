@@ -88,6 +88,100 @@ describe('pointer modes and secondary tools', () => {
     expect(intents).toEqual([{ kind: 'cursor.move', x: 9, y: 7 }]);
   });
 
+  it('emits cursor.leave on pointerleave when idle and defers mid-drag pointerleave until pointerup', () => {
+    const { target, intents } = makePointer(() => ({ mode: 'command', tool: 'none' }));
+    target.fire('pointerleave', {});
+    expect(intents).toEqual([{ kind: 'cursor.leave' }]);
+
+    target.fire('pointerdown', {
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointerleave', {});
+    // Suppressed while dragging.
+    expect(intents).toEqual([{ kind: 'cursor.leave' }]);
+
+    target.fire('pointerup', { button: 0, clientX: 0, clientY: 0, shiftKey: false });
+    expect(intents).toEqual([
+      { kind: 'cursor.leave' },
+      { kind: 'select.click', x: 0, y: 0, additive: false },
+      { kind: 'cursor.leave' },
+    ]);
+
+    target.fire('pointerleave', {});
+    expect(intents).toEqual([
+      { kind: 'cursor.leave' },
+      { kind: 'select.click', x: 0, y: 0, additive: false },
+      { kind: 'cursor.leave' },
+      { kind: 'cursor.leave' },
+    ]);
+  });
+
+  it('defers cursor.leave across middle-button drag release and suppresses if pointermove/enter returns', () => {
+    const { target, intents } = makePointer(() => ({ mode: 'build', tool: 'place' }));
+
+    // pointerdown -> pointerleave -> pointerup emits deferred cursor.leave.
+    target.fire('pointerdown', {
+      button: 1,
+      clientX: 10,
+      clientY: 10,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointerleave', {});
+    expect(intents).toEqual([]);
+    target.fire('pointerup', { button: 1, clientX: -50, clientY: -50, shiftKey: false });
+    expect(intents).toEqual([{ kind: 'cursor.leave' }]);
+
+    // pointerdown -> pointerleave -> pointermove -> pointerup does NOT emit cursor.leave.
+    intents.length = 0;
+    target.fire('pointerdown', {
+      button: 1,
+      clientX: 10,
+      clientY: 10,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointerleave', {});
+    target.fire('pointermove', { clientX: 20, clientY: 20, shiftKey: false });
+    target.fire('pointerup', { button: 1, clientX: 20, clientY: 20, shiftKey: false });
+    expect(intents).toEqual([{ kind: 'camera.orbit_px', dx: 10, dy: 10 }]);
+
+    // pointerdown -> pointerleave -> pointerenter -> pointerup does NOT emit cursor.leave.
+    intents.length = 0;
+    target.fire('pointerdown', {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointerleave', {});
+    target.fire('pointerenter', {});
+    target.fire('pointerup', { button: 0, clientX: 10, clientY: 10, shiftKey: false });
+    expect(intents).toEqual([{ kind: 'build.place', x: 10, y: 10, blueprint: false }]);
+  });
+
+  it('emits deferred cursor.leave when pointercancel or lostpointercapture aborts after pointerleave', () => {
+    const { target, intents } = makePointer(() => ({ mode: 'command', tool: 'none' }));
+    target.fire('pointerdown', {
+      button: 0,
+      clientX: 5,
+      clientY: 5,
+      shiftKey: false,
+      preventDefault() {},
+    });
+    target.fire('pointerleave', {});
+    expect(intents).toEqual([]);
+    target.fire('lostpointercapture', {});
+    expect(intents).toEqual([{ kind: 'cursor.leave' }]);
+    target.fire('pointerup', { button: 0, clientX: 5, clientY: 5, shiftKey: false });
+    expect(intents).toEqual([{ kind: 'cursor.leave' }]);
+  });
+
   it('routes left click to build.place and right click to tool.exit in place tool', () => {
     const { intents, press } = makePointer(() => ({ mode: 'build', tool: 'place' }));
     press(0, 30, 40);

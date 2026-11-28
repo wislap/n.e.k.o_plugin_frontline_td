@@ -20,7 +20,7 @@ interface DemolishConfirmState {
   expiresAt: number;
 }
 
-interface GhostState {
+export interface GhostState {
   x: number;
   y: number;
   code: string;

@@ -50,8 +50,8 @@ function ModeTabs() {
   );
 }
 
-// Polls the client event log on the shared 100 ms clock and turns
-// COMMAND_REJECTED events into danger toasts.
+// Polls the client event log on the coalesced 100 ms snapshot clock and
+// turns COMMAND_REJECTED events into danger toasts.
 function ToastsPanel({ ctx }: HudPanelProps) {
   const { t } = useTranslation();
   const workerError = useRuntimeStore((s) => s.error);
@@ -59,8 +59,14 @@ function ToastsPanel({ ctx }: HudPanelProps) {
 
   useEffect(() => {
     let cursor = 0;
-    return subscribeSnapshotClock(ctx.client, 100, () => {
-      const delivered = ctx.client.eventsSince(cursor);
+    const unsubRestart = ctx.client.subscribe(() => {
+      if (ctx.client.snapshots().latest === null) {
+        cursor = 0;
+      }
+    });
+    const drain = (): void => {
+      const first = ctx.client.eventsSince(cursor);
+      const delivered = first.cursor < cursor ? ctx.client.eventsSince(0) : first;
       cursor = delivered.cursor;
       for (const event of delivered.events) {
         if (event.type === COMMAND_REJECTED.type) {
@@ -73,7 +79,13 @@ function ToastsPanel({ ctx }: HudPanelProps) {
           );
         }
       }
-    });
+    };
+    drain();
+    const unsubClock = subscribeSnapshotClock(ctx.client, 100, drain);
+    return () => {
+      unsubClock();
+      unsubRestart();
+    };
   }, [ctx.client, t]);
 
   return <ToastStack workerError={workerError} errorPrefix={t('dev.error')} items={items} />;

@@ -8,20 +8,19 @@ import { canvasToMap } from '../../client/minimap-model';
 import { useSelectionStore } from '../../client/selection-store';
 import type { SimClient } from '../../client/sim-client';
 import { useUiStore } from '../../client/ui-store';
-import { subscribeSnapshotClock } from '../../client/use-snapshot';
 import type { ContentDb, ResolvedMap } from '../../content/index';
 import { TacticalPanel } from '../kit/index';
 import styles from './Minimap.module.css';
-import { renderNowMs } from '../../client/capture-mode';
+import { isCaptureMode, renderNowMs } from '../../client/capture-mode';
 import type { MinimapMarkDef, MinimapRasterDef } from './contributions';
 import {
   createMinimapRenderCache,
+  isMinimapAnimating,
   paintMinimapCanvas,
   type MinimapRenderCache,
 } from './paint-minimap';
 
 const DEFAULT_CSS_WIDTH = 196;
-const SNAPSHOT_POLL_MS = 100;
 const WHEEL_ZOOM_STEP = 0.12;
 
 function computeBackingSize(mapW: number, mapH: number): { width: number; height: number } {
@@ -118,10 +117,12 @@ export function Minimap({
       }
       const cam = useCameraStore.getState();
       const sel = useSelectionStore.getState();
+      const snapshot = client.snapshots().latest;
+      const nowMs = renderNowMs();
       const viewportAspect =
         window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 16 / 9;
       paintMinimapCanvas(canvas, cache, {
-        snapshot: client.snapshots().latest,
+        snapshot,
         db,
         isHostile,
         selected: sel.selected,
@@ -133,10 +134,22 @@ export function Minimap({
         viewportAspect,
         pixelRatio,
         moveMarker: sel.moveMarker,
-        nowMs: renderNowMs(),
+        nowMs,
         rasters,
         marks,
       });
+      if (
+        isMinimapAnimating({
+          moveMarker: sel.moveMarker,
+          nowMs,
+          snapshot,
+          isHostile,
+          marks,
+          captureMode: isCaptureMode(),
+        })
+      ) {
+        scheduleDraw();
+      }
     };
 
     const scheduleDraw = (): void => {
@@ -147,7 +160,7 @@ export function Minimap({
     };
 
     scheduleDraw();
-    const unsubClock = subscribeSnapshotClock(client, SNAPSHOT_POLL_MS, scheduleDraw);
+    const unsubClient = client.subscribe(scheduleDraw);
     const unsubCamera = useCameraStore.subscribe(scheduleDraw);
     const unsubSelection = useSelectionStore.subscribe(scheduleDraw);
     window.addEventListener('resize', scheduleDraw);
@@ -162,7 +175,7 @@ export function Minimap({
       if (rafId !== 0) {
         cancelAnimationFrame(rafId);
       }
-      unsubClock();
+      unsubClient();
       unsubCamera();
       unsubSelection();
       window.removeEventListener('resize', scheduleDraw);
@@ -232,7 +245,7 @@ export function Minimap({
         const selected = useSelectionStore.getState().selected;
         if (pt !== null && selected.size > 0) {
           onMoveOrder?.(Math.floor(pt.x), Math.floor(pt.y), e.ctrlKey || e.metaKey);
-          useSelectionStore.getState().markMoveTarget(pt.x, pt.y, performance.now());
+          useSelectionStore.getState().markMoveTarget(pt.x, pt.y, renderNowMs());
         }
       }
     }

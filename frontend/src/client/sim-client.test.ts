@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { toFactionId, toTick } from '../core/index';
 import type { Snapshot } from '../core/index';
 import type { RuntimeStats, WorkerToMain } from '../protocol/index';
+import type { CaptureSpec } from './capture-mode';
 import { useRuntimeStore } from './runtime-store';
-import { createSimClient } from './sim-client';
 import type { WorkerLike } from './sim-client';
+
+let captureSpec: CaptureSpec | null = null;
+vi.mock('./capture-mode', () => ({
+  getCapture: () => captureSpec,
+}));
+
+const { createSimClient } = await import('./sim-client');
 
 function snapshot(tick: number, layers: Snapshot['layers']): Snapshot {
   return {
@@ -116,5 +123,103 @@ describe('createSimClient', () => {
     worker.emit({ kind: 'snapshot', snapshot: snap(3, [ev(4)]) });
     const next = client.eventsSince(cursor);
     expect(next.events.map((e) => (e.payload as { n: number }).n)).toEqual([4]);
+  });
+});
+
+describe('createSimClient.subscribe', () => {
+  afterEach(() => {
+    captureSpec = null;
+    delete (globalThis as { __ftdCaptureTick?: number }).__ftdCaptureTick;
+  });
+
+  it('notifies subscribers after snapshot state updates, not on stats or error', () => {
+    const worker = fakeWorker();
+    const client = createSimClient(worker);
+    const seenTicks: (number | null)[] = [];
+    const unsub = client.subscribe(() => {
+      seenTicks.push(client.snapshots().latest?.tick ?? null);
+    });
+
+    worker.emit({ kind: 'stats', stats: stats(1) });
+    worker.emit({ kind: 'error', message: 'oops' });
+    expect(seenTicks).toEqual([]);
+
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(10, {}) });
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(11, {}) });
+    expect(seenTicks).toEqual([10, 11]);
+
+    unsub();
+    unsub();
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(12, {}) });
+    expect(seenTicks).toEqual([10, 11]);
+  });
+
+  it('notifies only on capture-mode first pin and clears state before restart notify', () => {
+    captureSpec = {
+      preset: 'open',
+      seed: 1,
+      cameraMode: 'spectate',
+      interactionMode: 'command',
+      center: 'start',
+      zoom: null,
+    };
+    const worker = fakeWorker();
+    const client = createSimClient(worker);
+    const seen: (number | null)[] = [];
+    client.subscribe(() => {
+      seen.push(client.snapshots().latest?.tick ?? null);
+    });
+
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(5, {}) });
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(6, {}) });
+    expect(seen).toEqual([5]);
+
+    client.restart({ mapId: 'frontline_td:valley', seed: 2 } as Parameters<
+      typeof client.restart
+    >[0]);
+    expect(seen).toEqual([5, null]);
+  });
+
+  it('handles unsubscribe during notification without skipping remaining listeners', () => {
+    const worker = fakeWorker();
+    const client = createSimClient(worker);
+    const calls: string[] = [];
+    let unsubA: () => void = () => undefined;
+    unsubA = client.subscribe(() => {
+      calls.push('A');
+      unsubA();
+    });
+    client.subscribe(() => {
+      calls.push('B');
+    });
+
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(1, {}) });
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(2, {}) });
+    expect(calls).toEqual(['A', 'B', 'B']);
+  });
+
+  it('does not invoke a sibling listener unsubscribed earlier in the same notification wave', () => {
+    const worker = fakeWorker();
+    const client = createSimClient(worker);
+    const calls: string[] = [];
+    let unsubB: () => void = () => undefined;
+    client.subscribe(() => {
+      calls.push('A');
+      unsubB();
+    });
+    unsubB = client.subscribe(() => {
+      calls.push('B');
+    });
+    client.subscribe(() => {
+      calls.push('C');
+    });
+
+    worker.emit({ kind: 'snapshot', snapshot: snapshot(1, {}) });
+    expect(calls).toEqual(['A', 'C']);
+
+    client.restart({ mapId: 'frontline_td:valley', seed: 1 } as Parameters<
+      typeof client.restart
+    >[0]);
+    expect(calls).toEqual(['A', 'C', 'A', 'C']);
   });
 });

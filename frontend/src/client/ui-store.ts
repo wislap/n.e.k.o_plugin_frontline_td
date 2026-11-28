@@ -61,6 +61,9 @@ export interface UiState {
   renderCost: RenderCostToggles;
   renderStats: RenderStats | null;
   gpuStats: GpuStats | null;
+  // Debug panel per-object GPU breakdown toggle (opt-in: avoids
+  // per-frame scene traversal + hundreds of timer queries by default).
+  gpuPerObject: boolean;
   // Debug panel scene-layer visibility toggles (empty = all visible).
   hiddenSceneLayers: ReadonlySet<string>;
   toggleDebugPanel(): void;
@@ -72,6 +75,7 @@ export interface UiState {
   setRenderCost: (patch: Partial<RenderCostToggles>) => void;
   setRenderStats: (stats: RenderStats | null) => void;
   setGpuStats: (stats: GpuStats | null) => void;
+  setGpuPerObject: (on: boolean) => void;
   setSceneLayerHidden: (id: string, hidden: boolean) => void;
   reset(): void;
 }
@@ -88,6 +92,7 @@ export const useUiStore = create<UiState>((set) => ({
   renderCost: { n8ao: true, bloom: true, smaa: true, shadows: true, scatter: true, dprCap: 0 },
   renderStats: null,
   gpuStats: null,
+  gpuPerObject: false,
   hiddenSceneLayers: new Set<string>(),
   toggleDebugPanel: () => {
     set((state) => ({ debugPanelOpen: !state.debugPanelOpen }));
@@ -116,6 +121,9 @@ export const useUiStore = create<UiState>((set) => ({
   setGpuStats: (gpuStats) => {
     set({ gpuStats });
   },
+  setGpuPerObject: (gpuPerObject) => {
+    set({ gpuPerObject });
+  },
   setSceneLayerHidden: (id, hidden) => {
     set((state) => {
       const next = new Set(state.hiddenSceneLayers);
@@ -130,6 +138,7 @@ export const useUiStore = create<UiState>((set) => ({
   reset: () => {
     set({
       debugPanelOpen: false,
+      gpuPerObject: false,
       logisticsOverlay: false,
       keymapHelpOpen: false,
       minimapOpen: true,

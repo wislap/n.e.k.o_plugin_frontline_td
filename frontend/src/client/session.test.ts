@@ -25,10 +25,12 @@ describe('resetClientState', () => {
     useInteractionStore.getState().armDemolishConfirm([1, 2], 500);
     useBoxStore.getState().setBox({ x0: 0, y0: 0, x1: 9, y1: 9 });
     useUiStore.getState().toggleDebugPanel();
+    useUiStore.getState().setGpuPerObject(true);
     useUiStore.getState().toggleLogisticsOverlay();
     useUiStore.getState().toggleKeymapHelp();
     useUiStore.getState().toggleMinimap();
     expect(useUiStore.getState().debugPanelOpen).toBe(true);
+    expect(useUiStore.getState().gpuPerObject).toBe(true);
     expect(useUiStore.getState().keymapHelpOpen).toBe(true);
     expect(useUiStore.getState().minimapOpen).toBe(false);
     useCameraStore.getState().setCenter({ x: 40, y: 40 });
@@ -53,6 +55,7 @@ describe('resetClientState', () => {
     expect(useBoxStore.getState().box).toBeNull();
     const ui = useUiStore.getState();
     expect(ui.debugPanelOpen).toBe(false);
+    expect(ui.gpuPerObject).toBe(false);
     expect(ui.logisticsOverlay).toBe(false);
     expect(ui.keymapHelpOpen).toBe(false);
     expect(ui.minimapOpen).toBe(true);

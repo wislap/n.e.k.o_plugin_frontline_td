@@ -1,12 +1,16 @@
-// Shared snapshot polling clock and React selector hook (ADR 0004,
-// ADR 0048): panels share a single setInterval per (SimClient, intervalMs)
-// and avoid re-rendering when the derived slice satisfies isEqual.
+// Shared event-driven snapshot coalescer and React selector hook
+// (ADR 0004, ADR 0048): panels share a leading+trailing coalescer per
+// (SimClient, intervalMs) backed by SimClient.subscribe — zero timers
+// and zero callbacks while paused — and avoid re-rendering when the
+// derived slice satisfies isEqual.
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import type { SimClient, SnapshotPair } from './sim-client';
 
 interface ClockBucket {
   listeners: Set<() => void>;
-  id: ReturnType<typeof setInterval>;
+  unsubClient: () => void;
+  lastFiredAt: number;
+  timerId: ReturnType<typeof setTimeout> | null;
 }
 
 const clocks = new WeakMap<SimClient, Map<number, ClockBucket>>();
@@ -24,12 +28,39 @@ export function subscribeSnapshotClock(
   let bucket = byInterval.get(intervalMs);
   if (bucket === undefined) {
     const listeners = new Set<() => void>();
-    const id = setInterval(() => {
+    const activeBucket: ClockBucket = {
+      listeners,
+      unsubClient: () => undefined,
+      lastFiredAt: -Infinity,
+      timerId: null,
+    };
+    const fire = (): void => {
+      activeBucket.lastFiredAt = performance.now();
       for (const fn of [...listeners]) {
-        fn();
+        if (listeners.has(fn)) {
+          fn();
+        }
       }
-    }, intervalMs);
-    bucket = { listeners, id };
+    };
+    const onClientChange = (): void => {
+      const now = performance.now();
+      const elapsed = now - activeBucket.lastFiredAt;
+      if (elapsed >= intervalMs) {
+        if (activeBucket.timerId !== null) {
+          clearTimeout(activeBucket.timerId);
+          activeBucket.timerId = null;
+        }
+        fire();
+      } else if (activeBucket.timerId === null) {
+        const waitMs = Math.max(0, intervalMs - elapsed);
+        activeBucket.timerId = setTimeout(() => {
+          activeBucket.timerId = null;
+          fire();
+        }, waitMs);
+      }
+    };
+    activeBucket.unsubClient = client.subscribe(onClientChange);
+    bucket = activeBucket;
     byInterval.set(intervalMs, bucket);
   }
   bucket.listeners.add(listener);
@@ -41,7 +72,11 @@ export function subscribeSnapshotClock(
     active = false;
     bucket.listeners.delete(listener);
     if (bucket.listeners.size === 0) {
-      clearInterval(bucket.id);
+      if (bucket.timerId !== null) {
+        clearTimeout(bucket.timerId);
+        bucket.timerId = null;
+      }
+      bucket.unsubClient();
       byInterval.delete(intervalMs);
       if (byInterval.size === 0) {
         clocks.delete(client);

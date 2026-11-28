@@ -86,14 +86,28 @@ export function installPointer(
   let boxing = false;
   let panning = false;
   let orbiting = false;
+  let leftWhileDown = false;
 
   const currentContext = (): PointerContext =>
     options.getContext?.() ?? { mode: 'command', tool: 'none' };
+
+  const resetDrag = (): void => {
+    downButton = -1;
+    boxing = false;
+    panning = false;
+    orbiting = false;
+    onBox(null);
+    if (leftWhileDown) {
+      leftWhileDown = false;
+      dispatch({ kind: 'cursor.leave' });
+    }
+  };
 
   const down = (event: PointerEventLike): void => {
     if (downButton !== -1) {
       return;
     }
+    leftWhileDown = false;
     const pos = getPos(event);
     downButton = event.button;
     downX = pos.x;
@@ -118,7 +132,12 @@ export function installPointer(
     }
   };
 
+  const enter = (): void => {
+    leftWhileDown = false;
+  };
+
   const move = (event: PointerEventLike): void => {
+    leftWhileDown = false;
     const pos = getPos(event);
     if (downButton === -1) {
       dispatch({ kind: 'cursor.move', x: pos.x, y: pos.y });
@@ -157,11 +176,7 @@ export function installPointer(
       return;
     }
     if (orbiting || panning) {
-      downButton = -1;
-      boxing = false;
-      panning = false;
-      orbiting = false;
-      onBox(null);
+      resetDrag();
       return;
     }
     const pos = getPos(event);
@@ -199,22 +214,14 @@ export function installPointer(
         guard: event.ctrlKey === true || event.metaKey === true,
       });
     }
-    downButton = -1;
-    boxing = false;
-    panning = false;
-    orbiting = false;
-    onBox(null);
+    resetDrag();
   };
 
   // Aborts an in-flight drag without emitting select.box — pointer
   // cancel/lost capture (touch pre-empted, capture released early) and
   // window blur all land here.
   const cancel = (): void => {
-    downButton = -1;
-    boxing = false;
-    panning = false;
-    orbiting = false;
-    onBox(null);
+    resetDrag();
   };
 
   const wheel = (event: WheelEventLike): void => {
@@ -227,12 +234,22 @@ export function installPointer(
     event.preventDefault();
   };
 
+  const leave = (): void => {
+    if (downButton === -1) {
+      dispatch({ kind: 'cursor.leave' });
+    } else {
+      leftWhileDown = true;
+    }
+  };
+
   const downListener = down as unknown as EventListener;
+  const enterListener = enter as EventListener;
   const moveListener = move as unknown as EventListener;
   const upListener = up as unknown as EventListener;
   const wheelListener = wheel as unknown as EventListener;
   const contextListener = context;
   const cancelListener = cancel as EventListener;
+  const leaveListener = leave as EventListener;
 
   const blurTarget =
     options.blurTarget !== undefined
@@ -242,19 +259,23 @@ export function installPointer(
         : (window as unknown as PointerTarget);
 
   target.addEventListener('pointerdown', downListener);
+  target.addEventListener('pointerenter', enterListener);
   target.addEventListener('pointermove', moveListener);
   target.addEventListener('pointerup', upListener);
   target.addEventListener('pointercancel', cancelListener);
   target.addEventListener('lostpointercapture', cancelListener);
+  target.addEventListener('pointerleave', leaveListener);
   target.addEventListener('wheel', wheelListener, { passive: false });
   target.addEventListener('contextmenu', contextListener);
   blurTarget?.addEventListener('blur', cancelListener);
   return () => {
     target.removeEventListener('pointerdown', downListener);
+    target.removeEventListener('pointerenter', enterListener);
     target.removeEventListener('pointermove', moveListener);
     target.removeEventListener('pointerup', upListener);
     target.removeEventListener('pointercancel', cancelListener);
     target.removeEventListener('lostpointercapture', cancelListener);
+    target.removeEventListener('pointerleave', leaveListener);
     target.removeEventListener('wheel', wheelListener);
     target.removeEventListener('contextmenu', contextListener);
     blurTarget?.removeEventListener('blur', cancelListener);

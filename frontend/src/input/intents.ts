@@ -39,6 +39,7 @@ export type Intent =
   | { kind: 'road.click'; x: number; y: number; additive: boolean }
   // Cursor rest position in screen pixels (hover inspection & build ghost).
   | { kind: 'cursor.move'; x: number; y: number }
+  | { kind: 'cursor.leave' }
   | { kind: 'select.click'; x: number; y: number; additive: boolean }
   | { kind: 'select.box'; x0: number; y0: number; x1: number; y1: number; additive: boolean }
   | { kind: 'command.move_to'; x: number; y: number; guard: boolean };

@@ -40,6 +40,9 @@ export interface SimClient {
   // the whole retained log). Each consumer keeps its own cursor, so
   // multiple readers can't steal events from each other.
   eventsSince(cursor: number): { events: ClientEvent[]; cursor: number };
+  // Notifies listeners after state updates on snapshot arrivals (normal
+  // and capture-mode first-pin) and restart().
+  subscribe(listener: () => void): () => void;
 }
 
 interface ClientEvent {
@@ -66,6 +69,14 @@ export function createSimClient(worker: WorkerLike): SimClient {
   let latestInspection: Inspection | null = null;
   let eventSeq = 0;
   const eventLog: ClientEvent[] = [];
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const fn of [...listeners]) {
+      if (listeners.has(fn)) {
+        fn();
+      }
+    }
+  };
 
   // Reported on the console too: the runtime store is UI-optional but
   // a worker crash must never pass silently.
@@ -97,6 +108,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
         pinnedTick = completed.tick;
         (globalThis as { __ftdCaptureTick?: number }).__ftdCaptureTick = pinnedTick;
         worker.postMessage({ kind: 'set_speed', index: 0 });
+        notify();
         return;
       }
       const incoming = message.snapshot;
@@ -115,6 +127,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       const now = performance.now();
       intervalMs = receivedAt === 0 ? 0 : now - receivedAt;
       receivedAt = now;
+      notify();
       return;
     }
     if (message.kind === 'stats') {
@@ -142,6 +155,7 @@ export function createSimClient(worker: WorkerLike): SimClient {
       eventSeq = 0;
       eventLog.length = 0;
       worker.postMessage({ kind: 'restart', setup });
+      notify();
     },
     submit(command: { type: string; payload: unknown }): void {
       worker.postMessage({ kind: 'command', command });
@@ -165,6 +179,17 @@ export function createSimClient(worker: WorkerLike): SimClient {
       const first = eventLog.findIndex((e) => e.seq > cursor);
       const events = first === -1 ? [] : eventLog.slice(first);
       return { events, cursor: eventSeq };
+    },
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      let active = true;
+      return () => {
+        if (!active) {
+          return;
+        }
+        active = false;
+        listeners.delete(listener);
+      };
     },
   };
 }
