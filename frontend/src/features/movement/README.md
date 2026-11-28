@@ -40,9 +40,11 @@
 - 热路径零堆分配；遵守纯度区规则（无随机、时间与超越函数）。
 
 ## 对应设计
-- [architecture.md §6.8](../../../../docs/design/architecture.md)
+- [architecture.md §6.8](../../../../docs/design/architecture.md#68-地形模型)
   （流场与移动结算）。
 - [ADR 0010](../../../../docs/adr/0010-terrain-model-sector-flowfields.md)、
+  [ADR 0013](../../../../docs/adr/0013-modifier-pipeline.md)、
+  [ADR 0047](../../../../docs/adr/0047-component-ownership-manifest.md)、
   [ADR 0052](../../../../docs/adr/0052-terrain-clearance-tiers-and-smooth-flow-gradients.md)、
   [ADR 0053](../../../../docs/adr/0053-damped-asymmetric-avoidance-arrival-hysteresis-and-wall-margins.md)、
   [ADR 0056](../../../../docs/adr/0056-watershed-proof-corridor-chains-command-snap-and-rear-yielding.md)、

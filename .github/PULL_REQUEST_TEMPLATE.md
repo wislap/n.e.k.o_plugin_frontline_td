@@ -37,6 +37,7 @@
 
 - [ ] `npm run verify` 已通过
 - [ ] `npm run e2e` 已通过
+- [ ] 改动涉及渲染 / 着色器 / 镜头 / 场景视觉时，已运行 `npm run shots -- <label>` + `npm run shots:diff -- <label> base` 核对像素差异
 - [ ] `static/` 与 `docs/generated/` 的生成变更已一并提交
 - [ ] i18n 键 zh-CN 与 en 齐全，JSX 中无字面量
-- [ ] 改动涉及性能热点（模拟系统、物流、寻路、渲染循环）时，已运行 `npm run eval:perf` 并对比 `eval/baselines/`
+- [ ] 改动涉及性能热点（模拟系统、物流、寻路）时，已运行 `npm run eval:perf` 并对比 `eval/baselines/`（集群运动 / 小队改动另跑 `npm run eval:locomotion`；渲染耗时用 `DebugPanel` 实时遥测）

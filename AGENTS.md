@@ -22,20 +22,20 @@
 - 只做任务要求的改动，顺手发现的问题列出来汇报，不顺手改。新增模块、改模块边界或公共接口前，先简述方案。
 - 每个里程碑做完停下评审，通过后再开始下一个。下一步候选见 [architecture.md §1.4](docs/design/architecture.md#14-下一步候选)，开工前确认优先级。
 - 处理外部评审：先确认它基于哪个提交；逐条在当前代码里核实，分成"已修 / 属实 / 不实 / 需负责人定"；属实的每条配回归测试；黄金哈希变化逐条说明原因；结论沉淀为 ADR（如 0043、0045）。
-- 交付时如实报告跑了哪些检查、结果如何。Playwright `e2e/` 覆盖冒烟与 HUD/模式/小地图/防重叠交互；迷雾视觉观感、"再来一局"、多局重开 WebGL 显存等仍列为人工验证项（Human Gate），不写成"已验证"。交付前通读一遍自己的 diff。
+- 交付时如实报告跑了哪些检查、结果如何。Playwright `e2e/` 覆盖冒烟与 HUD/模式/小地图/防重叠及 3D↔2D 镜头过渡交互；迷雾视觉观感、"再来一局"、多局重开 WebGL 显存等仍列为人工验证项（Human Gate），不写成"已验证"。交付前通读一遍自己的 diff。
 
 ## 分层与依赖（工具强制，见 ADR 0007）
 - 模拟层（`core/`、`kernel/`、`features/*/sim/`、`features/*/rules/`）是无头游戏核心，只通过命令、快照、事件与外界交互（ADR 0004）。
-- `features/*/render/`、`features/*/ui/`、`modes/*/ui/`、`client/`、`input/` 等客户端层 **禁止 import 任何 `sim/`、`kernel/`、`runtime/`**。需要共享的纯规则放在 `features/*/rules/`。
-- 跨功能引用只能走对方的 `index.ts`，不能深入引用内部文件。禁止循环依赖。只有 `app/` 可以装配全部模块。
-- 客户端壳层（`render/`、`ui/`、`client/`、`input/`）**禁止 import 任何 `features/*`**（含类型导入与测试）：场景层、HUD 面板、检视器主题、小地图贡献、画布意图处理器都由功能声明、`app/` 装配（ADR 0062）。
+- `features/*/render/`、`features/*/ui/`、`modes/*/ui/`、`client/`、`input/`、`render/`、`ui/`、`dev/` 等客户端层 **禁止 import 任何 `sim/`、`kernel/`、`runtime/`**。需要共享的纯规则放在 `features/*/rules/`。
+- 跨功能引用只能走公共入口（`sim/index.ts`、`rules/index.ts`、`render/index.ts(x)` [跨功能 `render/` 间仍互禁]、`ui/index.ts(x)`、`protocol.ts`、`content.ts`），禁止深入内部文件与循环依赖。只有 `app/` 可装配全部模块；`eval/` 仅可引用上述公共入口及 `modes/*/index.ts`、`app/resolve-setup.ts`。
+- 客户端壳层（`render/`、`ui/`、`client/`、`input/`、`dev/`、`host/`、`i18n/`）**禁止 import 任何 `features/*`**（含类型导入与测试）：场景层、HUD 面板、检视器主题、小地图贡献、画布意图处理器都由功能声明、`app/` 装配（ADR 0062、0063）。
 - 玩法专属代码放在 `modes/<mode>/`，只有 `app/` 可以引用它。通用模块不感知玩法，禁止按玩法 ID 写特判（ADR 0019）。
 - 违反依赖规则时修改设计，不要修改规则。规则本身的改动属于架构级改动，必须先写 ADR。
 
 ## 模拟层硬性规则（ADR 0006、0008）
 以下前两条由 lint 强制，作用于纯度区：`core/`、`kernel/`、`content/`、`protocol/`、`features/*/sim/`、`features/*/rules/`、`features/*/content.ts`、`features/*/protocol.ts`、`modes/*/`（`ui/` 除外）。
 - 禁止 `Math.random`、`Date`、`performance`、DOM 全局对象。随机数只用 `core` 提供的带种子 RNG 流。
-- 禁止直接调用超越函数（`Math.sin`、`cos`、`tan`、`atan2`、`exp`、`log`、`pow` 等），一律用 `core` 的确定性数学。
+- 禁止直接调用超越函数与幂算子（`Math.sin`、`cos`、`tan`、`atan2`、`exp`、`log`、`pow`、`hypot`、`cbrt` 及 `**` 运算符等），一律用 `core` 的确定性数学。
 - 不依赖帧时间。每个 tick 推进固定的 50ms 模拟时间。
 - 时间用整数 tick；资源、血量、伤害等数量用千分单位整数，舍入只用 `core` 的整数运算；只有几何量用浮点（ADR 0020）。
 - 延迟效果走 kernel 调度队列，冷却用 `readyAtTick` 字段，不自写计时器（ADR 0021）。
@@ -60,8 +60,8 @@
 ## 客户端规则
 - 逐 tick 的实体状态不进 React state，也不进 zustand。渲染在 `useFrame` 里直接读快照缓冲。
 - 三态分离：`interactionStore`（一级模式 + 互斥二级工具）、`selectionStore`（仅己方可控句柄）、`inspectorStore`（`hovered`/`pinned`，地形格不可 Pin），跨局重置集中于 `client/session.ts`（[ADR 0048](docs/adr/0048-interaction-modes-and-inspector-contract.md)）。
-- UI 快照订阅走共享 `subscribeSnapshotClock` / `useSnapshotValue`（selector 返回引用稳定切片，禁止面板自建 `setInterval`）；检查器读强类型 `*Inspection` 契约。
-- UI 原语与离线 Token 统一收口在 `src/ui/kit/` 与 `src/ui/styles/`（[ADR 0049](docs/adr/0049-hud-design-system-and-layout.md)）；`render/` 与 `features/*/render/` 的命令式 Three.js 资源必须在卸载或替换时 `.dispose()`（[ADR 0050](docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）。
+- UI 快照订阅走 `useSnapshotValue`（基于 `SimClient.subscribe` 的事件驱动合并，selector 返回引用稳定切片，禁止面板自建 `setInterval`）；检查器读强类型 `*Inspection` 契约。
+- UI 原语与离线 Token 统一收口在 `src/ui/kit/` 与 `src/ui/styles/`（[ADR 0049](docs/adr/0049-hud-design-system-and-layout.md)、[ADR 0063](docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）；`render/` 与 `features/*/render/` 的命令式 Three.js 资源必须在卸载或替换时 `.dispose()`（[ADR 0050](docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0063](docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）。
 - 用户可见文本一律通过 i18next 的键获取，禁止写字面量。新增键时同时更新 `zh-CN` 和 `en`。
 - 输入的流程是"按键或鼠标 → 意图 → 命令"，不要在组件里直接监听某个具体按键。
 - 事件用各自的游标从 `sim-client` 的事件日志读取（`eventsSince`）；一份快照可能带多个 tick 的事件（ADR 0045）。
@@ -92,11 +92,11 @@
 在 `frontend/` 目录下：
 ```bash
 npm ci
-npm run verify   # = verify:static && test && verify:build（提交前跑全量）
-npm run e2e      # 浏览器端到端（冒烟 + HUD/模式/小地图/防重叠，首次需 npx playwright install chromium）；不进 verify
+npm run verify   # = verify:static / test / verify:build 三路并发执行（提交前跑全量）
+npm run e2e      # 浏览器端到端（冒烟 + HUD/模式/小地图/防重叠 + 镜头过渡，首次需 npx playwright install chromium）；不进 verify
 ```
 - 日常迭代用分段命令：`npm run verify:static`、`npm run test:unit`、`npx vitest --changed`。
-- 视觉改动必须附 `npm run shots` + `shots:diff <label> base` 的对比结果（基线在 `frontend/.shots/base`），证明渲染输出与上一提交逐像素一致。基线在 Windows + D3D11 GPU（ANGLE）下截取；GPU 与 SwiftShader 的光栅化结果不同，跨渲染器的 diff 无意义。设 `FTD_GL=software` 可强制 SwiftShader。
+- 视觉改动必须附 `npm run shots -- <label>` + `npm run shots:diff -- <label> base` 的对比结果（基线在 `frontend/.shots/base`），证明渲染输出与上一提交逐像素一致。基线在 Windows + D3D11 GPU（ANGLE）下截取；GPU 与 SwiftShader 的光栅化结果不同，跨渲染器的 diff 无意义。设 `FTD_GL=software` 可强制 SwiftShader。
 - 测试分两层：全对局/耗时 >~3 s 的测试命名 `*.scenario.test.ts`（`npm run test:scenario`），其余为 unit。
 - 本地 lint/format/typecheck 有缓存（`node_modules/.cache/`）；缓存不追踪跨文件类型变化，`rm -rf node_modules/.cache` 可复位，存疑以冷跑/CI 为准。
 - 黄金哈希（kernel determinism、`eval/match-smoke.scenario.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。

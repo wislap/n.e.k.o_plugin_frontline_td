@@ -2,6 +2,21 @@
 
 # 公共导出清单
 
+## src/client/canvas-input.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `CanvasInputEnv` | interface |  |
+| `CanvasIntentHandlerDef` | interface |  |
+| `defineCanvasIntentHandler` | function |  |
+| `indexCanvasIntentHandlers` | function |  |
+
+## src/client/contributions.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `sortContributions` | function | Contribution ordering (ADR 0062): features declare contribution lists (scene layers, HUD panels, …), app assembles them. |
+
 ## src/content/index.ts
 
 | 名称 | 种类 | 说明 |
@@ -631,6 +646,15 @@
 | `AssaultState` | interface |  |
 | `defaultSetup` | function |  |
 
+## src/modes/assault/protocol.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `AssaultChannel` | channel def |  |
+| `AssaultEliminated` | event def |  |
+| `AssaultEnded` | event def | winner is the surviving faction id, −1 for a draw. |
+| `AssaultState` | interface |  |
+
 ## src/protocol/index.ts
 
 | 名称 | 种类 | 说明 |
@@ -642,6 +666,15 @@
 | `SPEED_STEPS` | const | ADR 0005: index 0 is paused; indices are multipliers of base speed. |
 | `WorkerToMain` | type |  |
 
+## src/render/scene.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `SCENE_ORDER` | const | Named order segments (ADR 0062 §4). |
+| `SceneContext` | interface | Shared read-only dependencies every scene layer may need. |
+| `SceneLayerDef` | interface |  |
+| `SceneLayerProps` | interface |  |
+
 ## src/testing/index.ts
 
 | 名称 | 种类 | 说明 |
@@ -649,3 +682,55 @@
 | `denseUnits` | function | Read the dense-units snapshot channel for one faction (the common `dense(sim)` helper previously copy-pasted per test world). |
 | `makeGrid` | function | Grid builder from ASCII rows: '.' (anything else) = flat ground, '#' = rock surface 1, '^' or 'r' = ramp, 'p' = plateau (height 1), '1'..'9' = height level. |
 | `must` | function | Require a base-pack entry by name: throws with the entry name when the registry lookup misses (a content bug, not a test expectation). |
+
+## src/ui/hud-panels.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `groupHudPanels` | function | Sort all defs (stable, duplicate-id throw), then group by slot. |
+| `HudContext` | interface | Shared read-only dependencies every HUD panel may need. |
+| `HudPanelDef` | interface |  |
+| `HudPanelGroups` | type |  |
+| `HudPanelProps` | interface |  |
+| `HudSlot` | type |  |
+
+## src/ui/inspector/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `createInspectorPanel` | function |  |
+| `defineInspectorSubject` | function |  |
+| `hpValueText` | function |  |
+| `indexInspectorSubjects` | function |  |
+| `indexOfHandle` | function | Shared row-lookup helper for inspector resolvers (ADR 0062 step 3). |
+| `InspectorActions` | function |  |
+| `inspectorStyles` | const |  |
+| `InspectorSubjectDef` | interface |  |
+| `InspectorViewContext` | interface |  |
+| `matchInspection` | function | The shell matches the fetched inspection to the active subject's handle once; resolvers receive null for any other handle. |
+| `ModifiersSection` | function |  |
+| `SubjectKind` | type |  |
+
+## src/ui/kit/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `ActionButton` | function |  |
+| `cx` | function |  |
+| `Kbd` | function |  |
+| `MeterBar` | function |  |
+| `RateBadge` | function |  |
+| `SegmentedTabs` | function |  |
+| `TacticalPanel` | function |  |
+| `ToastItem` | interface |  |
+| `ToastStack` | function |  |
+
+## src/ui/minimap/index.tsx
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `createMinimapPanel` | function |  |
+| `MinimapMark` | type |  |
+| `MinimapMarkDef` | interface |  |
+| `MinimapRasterDef` | interface | Per-cell raster passes over the cached terrain image, applied in order on every recomposite. |
+| `resolveDisposition` | function | Shared faction→disposition resolver for mark collectors. |

@@ -6,6 +6,7 @@
 - 决策者：wislap
 - 批次：M4 MVP 收尾
 - 领域：工程
+- 部分取代：0029（选址快照适配器迁入 features/construction/rules/placement-view.ts）
 
 ## 背景
 

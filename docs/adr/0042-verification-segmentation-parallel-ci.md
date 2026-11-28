@@ -6,7 +6,8 @@
 - 决策者：wislap
 - 批次：治理
 - 领域：工程
-- 部分取代：0041（CI 为单一 job 顺序管道的描述）
+- 部分取代：0041（CI 单一顺序 job 描述改为并行 job；整局冒烟重命名为 eval/match-smoke.scenario.test.ts）
+- 部分取代：0037（确定性测试重命名为 eval/determinism.scenario.test.ts 并共享对局运行）
 - 部分取代：0017（CI 管道固定顺序：改为 verify:static → test → verify:build 三段、三个并行 job）
 
 ## 背景

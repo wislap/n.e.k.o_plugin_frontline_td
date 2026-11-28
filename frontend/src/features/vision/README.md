@@ -13,22 +13,22 @@
   按阵营分层）与 `VisionMemoryChannel`（`frontline_td:vision.memory`：
   记住的非己方结构，6 列：handles、kind、x、y、faction、state——
   废墟 faction 记 0；不含 structures 通道的 progressBp/hpBp）。
-- `sim/index.ts`：`createVisionModule` 返回 `VisionLayer`（含
-  `VisionApi` 的 `visible`/`visibleRect`；全知阵营恒真）；
-  `unitVisionParts`/`structureVisionParts` 部件工厂（结构无
-  Position，工厂直接烘入占地中心；工地也会挂 `Vision`，只是
-  `vision.recompute` 运行时跳过带 `UnderConstruction` 的实体；
-  废墟、蓝图不挂视野）。
+- `sim/index.ts`：`createVisionModule` 返回 `{ module, api: VisionApi }`
+  （`visible`/`visibleRect`，全知阵营恒真）；`VisionLayer` 为独立
+  `defineGridLayer` 导出；`unitVisionParts`/`structureVisionParts`
+  部件工厂（结构虽经 `structureParts` 带有 `Position`，
+  `structureVisionParts` 仍直接将 `{ radius, x, y }` 烘入 `Vision`；
+  工地也会挂 `Vision`，但 `vision.recompute` 运行时跳过
+  `UnderConstruction`；废墟、蓝图不挂视野）。
 - `rules/` 纯函数：`isCellVisible`、`hostileExcluders`
   （客户端共享：弹道、建造幽灵、禁建区覆盖）。
 - `ui/`：`visionInspectorSubjects`（ADR 0062 检视器主题注册：
   memory 迷雾记忆幽灵）、`visionMinimapRasters`/`visionMinimapMarks`
   （ADR 0062 小地图贡献：迷雾栅格、记忆幽灵标记）。
-- `render/`：`visionSceneLayers`（ADR 0062 场景层：FogOfWar——
-  无网格：把 vision.state 层逐格上传到 RGBA
-  `DataTexture` 绿色通道，并按相机模式驱动共享 `FogUniforms`；
-  地面材质经 `render/shaders.ts` 的 `ftdFogApply` 在编码后混合迷雾）、
-  `MemoryLayer`（记忆结构暗框）。导出全表见
+- `render/`：`visionSceneLayers`（ADR 0062 / ADR 0063 场景层：
+  `FogOfWar` 把 `vision.state` 上传到 RGBA `DataTexture` 绿色通道并
+  同步共享 `FogUniforms`，地面材质经 `render/shaders.ts` 的
+  `ftdFogApply` 混合迷雾；`MemoryLayer` 绘制记忆结构暗框）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 
@@ -40,15 +40,27 @@
   `MatchSetup.factions[i].vision`（如 `omniscient`，导演阵营用）。
 
 ## 不变量
-- 每 5 tick 在 `capture_fog` 阶段重算：先把 2 降为 1，再按每个
-  视野源盖整数圆盘为 2；视野源位置取组件快照时的坐标。
-- `vision.memory` 只记录"见过且当前不可见"的非己方结构；重新可见后
-  由 structures 通道承担实况，记忆行不重复。
+- 按固定重算周期在 `capture_fog` 阶段刷新：先把上次当前可见格降级为
+  已探索记忆格，再按活跃视野源盖出整数圆盘可见域；视野源位置优先取
+  `Position` 快照坐标，缺 `Position` 时回退到 `Vision` 烘入坐标。
+- 首个视野 tick 将带 `visionLandmark` 的结构（outpost / hive）在
+  未目击前即种入各阵营 `vision.memory`；当被记忆占地重新进入当前
+  视野时，先经句柄校验实体是否仍为存活结构，失效则逐出记忆，存活则由
+  structures 通道承担实况、`vision.memory` 不重复输出。
+- 渲染迷雾混合由 `ftdFogApply` 在 `EffectPass` 后处理之前的 Linear
+  工作空间执行，并按相机 Dolly-Zoom 补偿距离雾效。
 - 全知阵营（`MatchSetup.factions[i].vision`，如导演）`visible` 恒真。
 - 已知限制：事件可见性仍为 `all`，隐藏格内的效果只在客户端过滤
   （非反作弊保证）。
 
 ## 对应设计
 - [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)（迷雾模型、
-  记忆与过滤）；[ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
-  （实体 ID 复用下的句柄校验）。
+  记忆与过滤）、
+  [ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)
+  （实体 ID 复用下的句柄校验）、
+  [ADR 0047](../../../../docs/adr/0047-component-ownership-manifest.md)
+  （组件归属清单）、
+  [ADR 0062](../../../../docs/adr/0062-client-contribution-registry.md)
+  （客户端贡献点注册）、
+  [ADR 0063](../../../../docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)
+  （Linear 迷雾管线与镜头演进）。

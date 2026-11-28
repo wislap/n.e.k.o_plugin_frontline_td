@@ -8,7 +8,7 @@
 - 领域：模拟
 - 部分取代：0052（在 `smoothDirectionAt` Stage 1/2 失败时增加 Stage 2b 贴墙单侧迎风合法梯度回退，保留亚格安全门控）
 - 部分取代：0053（`integrate` 实际位移回写 `Velocity` 并对 `steer` 航向引入保留标量速率的惯性滤波；新增 `MoveTarget.stall` 3 tick 接触传染本地停驻与 `blockedByHolder` 存档往返）
-- 部分取代：0054（交战包抄改用 `projectSurroundArcSlots` 15 射线射程扇弧落位与同射程带 2-opt 解交叉，替代向敌心投影成块）
+- 部分取代：0054（交战包抄改用 `projectSurroundArcSlots` 15 射线射程扇弧落位与同射程带 2-opt 解交叉，替代向敌心投影成块；混编显式槽位按单兵净空档位校验）
 - 部分取代：0056（`MoveIntent` 轻重混编优先共享重型可达 `GoalField` 消除 1 格窄缝分道拆队；引入 1.5 格弧长 C¹ 平滑空间孔径脊柱与 `[3.8, 8.0]` 终端平滑渐隐替代离散路门硬切换）
 - 部分取代：0058（将 `squadGoalTier` 混编小队默认净空统一提升至 `CLEARANCE_HEAVY`，仅对跨墙离群标准成员懒惰探测 `CLEARANCE_STANDARD`；桥前反向宽度漏斗斜率由 `1.25` 改为 `0.7`）
 

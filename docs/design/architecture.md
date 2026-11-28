@@ -32,7 +32,7 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 ### 1.3 原型阶段最先验证的问题（来自 `game_design.md` 9.2，按 A6 补充）
 | 问题 | 现状 |
 |---|---|
-| 1. 大量单位自由寻路的性能（流场） | 有基线：`eval/baselines/perf-movement.json`，开发机上 2000 单位平均约 1.0 ms/tick、5000 单位约 2.7 ms/tick；更大地图与大量阻挡变化未测 |
+| 1. 大量单位自由寻路的性能（流场） | 有基线：`eval/baselines/perf-movement.json`（P5 后更新），开发机上 2000 单位平均约 1.3 ms/tick、5000 单位约 3.4 ms/tick；更大地图与大量阻挡变化未测 |
 | 2. 小队 AI 执行指令的可靠性 | 场景测试与 4 个对拍机器人覆盖驻守 / 推进 / 集结（ADR 0034、0037）；未经真人试玩 |
 | 3. 物流网的状态（瓶颈、缺货原因）是否一眼能看懂 | 物流覆盖层（ADR 0025）与检查器（ADR 0031）已有；是否看得懂未经试玩验证 |
 | 4. 核心循环在 10 分钟内是否已经有乐趣 | 未验证，需要负责人试玩判断；这是决定 Rogue 等后续系统的前提 |
@@ -104,7 +104,7 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 
 ### 3.8 许可证
 - 首选 MIT；必要时可接受 GPL。
-- 已核实（2026-11-14）：NEKO 主仓库为 Apache-2.0；three、@react-three/fiber、zustand、react、dependency-cruiser 为 MIT；bitecs 为 MPL-2.0（文件级弱 copyleft，作为未修改的依赖使用不影响 MIT）。
+- 已核实：NEKO 主仓库为 Apache-2.0；three、@react-three/fiber、@react-three/postprocessing@3.2.2、zustand、react、i18next / react-i18next、dependency-cruiser 为 MIT；postprocessing@6.39.6 为 Zlib；n8ao@2.0.2 为 ISC；bitecs 为 MPL-2.0（文件级弱 copyleft，作为未修改的依赖使用不影响 MIT）。
 
 ### 3.9 协作与环境
 - 跨平台开发（Windows / macOS / Linux）：`.gitattributes` 统一 LF；`engines` + `.nvmrc` 固定 Node 版本；包管理器 npm。
@@ -132,8 +132,8 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 |---|---|
 | 插件 ID | `frontline_td`（显示名以后再定） |
 | 插件形态 | static 面板 + Python 薄壳；`static/` 构建产物**入库**（插件市场托管的 release 只用官方 builder 从 tag 源码打包，没有前端构建钩子），`frontend.yml` 校验 `static/` 与源码构建结果一致 |
-| 技术栈 | TS + React + Vite + three.js + React Three Fiber + zustand + bitecs（部分 ECS） |
-| TypeScript 版本 | 锁定 6.0.x：typescript-eslint 要求 `typescript <6.1`，TS 7（Go 重写版）只提供 unstable API |
+| 技术栈 | TS + React + Vite + three.js + React Three Fiber（`@react-three/postprocessing` + `postprocessing` + `n8ao`）+ zustand + bitecs（部分 ECS） |
+| TypeScript 版本 | 锁定 `6.0.3`（6.0.x）：typescript-eslint 要求 `typescript <6.1`，TS 7（Go 重写版）只提供 unstable API |
 | CI | 新增 `frontend.yml` 承载前端检查；托管的 `verify.yml` / `release.yml` 保持模板原样，便于 CLI 升级 |
 | 模拟层位置 | Web Worker，从第一天起；测试直接调用 sim，不经 Worker，只有一套运行实现 |
 | tick | 20Hz（50ms/tick），变速只改每秒 tick 数，不改每 tick 时长 |
@@ -154,11 +154,11 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 | 分层检查 | dependency-cruiser |
 | 死代码检查 | knip |
 | 重复代码检查 | 暂不引入（jscpd 以后按需） |
-| i18n | i18next + react-i18next；键类型由 zh-CN 推导；eslint-plugin-i18next 禁止 JSX 字面量；中英键完整性由测试保证 |
+| i18n | `i18next`（27.0.1，MIT）+ `react-i18next`（17.1.13，MIT）；键类型由 zh-CN 推导；eslint-plugin-i18next 禁止 JSX 字面量；中英键完整性由测试保证 |
 | 局外进度 / 存档 | 以后再定 |
 | 许可证 | MIT |
 
-已核实的依赖最新版本（2026-11-14 npm latest，实际锁定版本在 M0 选定，优先发布满 7 天的版本）：Node 本机 24.19.0；bitecs 0.4.0（2025-12 发布，上一版 0.3.40 为 2023 年，更新慢但已封装在 kernel 内）；@react-three/fiber 9.8.2（peer：react `>=19 <19.4`）；three 0.187.0；react 19.3.1；zustand 5.1.0；vite 8.3.8；typescript 7.0.2；vitest 5.1.0。
+实际锁定版本（按 M0 / 7 天规则选定，见 `frontend/package.json`）：Node 本机 24.19.0；bitecs 0.4.0；@react-three/fiber 9.8.2（peer：react `>=19 <19.4`）；@react-three/postprocessing 3.2.2；postprocessing 6.39.6；n8ao 2.0.2；three 0.187.0；react 19.3.1；zustand 5.1.0；i18next 27.0.1；react-i18next 17.1.13；vite 8.3.6；typescript 6.0.3（不采用 7.0.2）；vitest 5.1.0。
 
 ---
 
@@ -176,7 +176,9 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 ```text
 frontline_td/
 ├── plugin.toml / __init__.py      Python 薄壳：声明 static 面板
-├── i18n/                          插件元数据 zh-CN / en（有需要时再加）
+├── config.example.toml            插件默认配置示例
+├── pyproject.toml / ruff.toml     Python 工具链与 lint 配置
+├── tests/                         Python 薄壳测试
 ├── frontend/                      Vite 工程（游戏本体）；tooling/ 仓库检查脚本，eval/ 评估框架
 ├── static/                        构建产物（入库，CI 校验与源码一致）
 ├── docs/{design,adr,generated}/
@@ -193,7 +195,7 @@ frontend/src/
 ├── kernel/      模拟基础设施：世界、组件注册、阶段调度、意图队列、事件队列、
 │                修正值管线、句柄校验
 ├── features/<x>/  capture, combat, construction, logistics, movement, pathing,
-│   ├── sim/        规则（进 Worker）       production, squads, terrain, units, vision
+│   ├── sim/        规则（进 Worker）       production, selection, squads, terrain, units, vision
 │   ├── rules/      纯规则，sim 与客户端共用
 │   ├── render/     画面
 │   ├── ui/         面板
@@ -205,25 +207,26 @@ frontend/src/
 ├── content/     内容数据（建筑、怪物、地图）+ 拼装 schema + 校验
 ├── protocol/    拼装各功能通道 + 编解码
 ├── runtime/     Worker 入口、时钟与变速、快照缓冲
-├── client/      快照读取与插值、共享节流时钟、客户端交互/选择/检视状态、视角与小队/小地图模型、集中会话重置
-├── render/      渲染公共设施：画布、镜头、高亮圈层、线缓冲、单位插值与输入分发
-├── ui/          战术 HUD 外壳、快捷键引导栏、战略小地图、战情检视器与离线原语组件库
+├── client/      快照读取/插值/事件驱动订阅（use-snapshot.ts）、地形高程采样（world.ts）、拾取数学（picking.ts）、画布输入状态（canvas-input.ts）、贡献点注册表协议（contributions.ts）、截图模式（capture-mode.ts）、小地图底图与几何（minimap-model.ts）、客户端交互/选择/检视/镜头状态与集中会话重置
+├── render/      渲染公共设施：画布（GameCanvas）、轨道镜头与 Dolly-Zoom 过渡（camera/、camera-transition.ts）、主题与后处理（theme/、PostEffects）、阴影/雾与覆盖层 uniforms（cover-uniforms.ts、shaders.ts）、线缓冲（line-buffer.ts）、实例写入与 GPU 性能探针
+├── ui/          8 槽位战术 HUD 外壳（HudShell）、右侧工具栏（RightRail）、快捷键引导栏（KeyGuideRail）、战略小地图（Minimap）、战情检视器（inspector/）与离线原语组件库（kit/）
 ├── input/       键鼠 → 意图 → 命令
 ├── i18n/        zh-CN / en 文案与类型化取词
 ├── host/        NEKO 桥接（显示模式；以后接解说）
 ├── dev/         调试面板
 ├── testing/     共享测试辅助（仅测试代码可引用，ADR 0043）
-└── app/         装配入口：main/App（主线程）、sim-registry + sim-worker（Worker 端）、dispatch（意图路由）、resolve-setup、assault 场景测试
+└── app/         装配入口：main/App（主线程）、sim-registry + sim-worker（Worker 端）、scene-layers.ts / hud-panels.tsx / inspector-subjects.ts / minimap-contributions.ts / canvas-intents.ts / modes.ts / selection-pruning.ts（客户端贡献点装配，ADR 0062）、dispatch（意图路由）、resolve-setup、assault 场景测试
 ```
 
 ### 6.4 依赖规则（dependency-cruiser 强制）
-- `core` 不依赖任何内部模块；`kernel` 只依赖 `core`。
-- `features/*/sim` 可依赖 `core`、`kernel`、`content`、本功能 `rules`，以及**其他功能 `sim/index.ts` 的公开接口**。
-- `features/*/rules` 只依赖 `core`、`protocol` 类型、`content` 类型。这是"客户端不得依赖模拟层"的**有意例外**：用于消除 UI 与 sim 重复实现同一规则（例如可否建造、是否买得起）。
-- `features/*/render`、`features/*/ui` **禁止依赖任何 `sim/`**，只能用 `client`、`protocol`、`rules`、`render` / `ui` 公共设施、`i18n`。
-- 跨功能引用只能经由 `index.ts`；禁止循环依赖；只有 `app/` 可以装配全部模块。
-- `modes/*` 可依赖各功能的公开接口；除 `app/` 外，任何模块禁止依赖 `modes/`（§6.15）。
-- `frontend/eval/` 可使用 `src/` 的公开接口；`src/` 禁止引用 `eval/` 与 `tooling/`。
+- `core` 不依赖任何内部模块；`kernel` 只依赖 `core`（npm 仅允许 `bitecs`）。
+- `features/*/sim`（`sim-deps`）可依赖 `core`、`kernel`、`content`、`testing/`、本功能 `sim/` / `rules/` / `content.ts` / `protocol.ts`，以及**其他功能 `sim/index.ts`、`rules/index.ts`、`protocol.ts`、`content.ts`**。
+- `features/*/rules`（`rules-deps`）只依赖 `core`、`content`（不含根 `protocol/`）、本功能 `rules/`，以及各功能的 `rules/index.ts`、`protocol.ts`、`content.ts`。这是"客户端不得依赖模拟层"的**有意例外**：用于消除 UI 与 sim 重复实现同一规则（例如可否建造、是否买得起）。
+- 客户端层（`client-not-to-sim`：`features/*/render`、`features/*/ui`、`modes/*/ui`、`client/`、`input/`、`render/`、`ui/`、`host/`、`i18n/`，以及 `dev/`）**禁止依赖任何 `features/*/sim/`、`kernel/`、`runtime/`**。
+- 跨功能引用（`cross-feature-public-only`）只能经由公共文件（`sim/index.ts`、`rules/index.ts`、`render/index.ts(x)`、`ui/index.ts(x)`、`protocol.ts`、`content.ts`）；禁止循环依赖；只有 `app/` 可以装配全部模块；客户端壳层（`shell-not-to-features`：`render/`、`ui/`、`client/`、`input/`、`dev/`、`host/`、`i18n/`）禁止依赖 `features/*`（含类型导入与测试，ADR 0062、0063）。
+- 渲染与 UI 分离（`ui-not-to-render`、`no-cross-feature-render`、`three-only-in-render`、`no-three-reachable-outside-render`）：`ui/`、`features/*/ui/`、`modes/` 禁止依赖 `render/` 与 `features/*/render/`；跨功能 `render/` 间互禁；只有 `render/`、`features/*/render/` 与 `app/` 可直接或传递依赖 `three` / `@react-three`。
+- 玩法隔离（`not-to-modes`、`modes-public-only`）：`modes/*` 仅可通过公共文件消费 `features/*`；除 `app/` 与 `modes/` 自身外，任何模块禁止依赖 `modes/`（§6.15）。
+- `frontend/eval/`（`eval-src-public-only`）仅可引用 `core`/`kernel`/`content`/`protocol` 的 `index.ts`、各功能 `sim/index.ts` / `rules/index.ts` / `protocol.ts` / `content.ts`、`app/resolve-setup.ts` 与 `modes/*/index.ts`；`src/` 禁止引用 `eval/` 与 `tooling/`。
 
 ### 6.5 模拟运行时
 - 每 tick 50ms 模拟时间；倍速 s 时每秒 20·s 个 tick。
@@ -275,19 +278,19 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 
 ### 6.12 内容与地图格式
 - 内容用 TS 数据 + `satisfies` 做类型约束，构建时校验。
-- 所有内容属于内容包，本体是包 `frontline_td`，与将来的 mod 走同一条加载管线。内容 ID 为 `包ID:名字`，发布后不改；模拟内部用加载时分配的数字索引，存档只存字符串 ID。修改其他包的内容须写显式补丁（ADR 0022）。
+- 所有内容属于内容包，本体是包 `frontline_td`，与将来的 mod 走同一条加载管线。内容 ID 为 `包ID:名字`，发布后不改；模拟内部用加载时分配的数字索引，以存档只存字符串 ID 为长期目标（ADR 0022）。修改其他包的内容须写显式补丁（ADR 0022）。
 - 对局启动参数 MatchSetup 是回放、存档、无头测试、将来 PVP 的统一开局描述（ADR 0022）。
 - 地图格式是契约：地形各层、进攻轴线与出怪点、前哨、初始物流节点，带 `formatVersion`。原型的固定地图按此格式手写；将来的编辑器、生成器、外部工具导入都只是"产出此格式"的来源。
 - 局内解锁状态（"本局可用内容"）由占领模块写入，建造、小队模块读取。（存档当前保存 u16 内容索引，与内容版本绑定；包补丁、别名与局内解锁尚未实现，ADR 0014、0022 实现：部分）
 
 ### 6.13 客户端
 - 渲染层在 `useFrame` 中直接读快照缓冲、更新 InstancedMesh 与缓冲区，**不经过 React state 或 zustand**。R3F 组件只表达结构稳定的东西：地形、建筑分组、灯光、镜头、信息层。`render/` 与 `features/*/render/` 的命令式 Three.js 资源（`BufferGeometry`、`Material`、`CanvasTexture`、`DataTexture`、`LineBuffer`）遵守统一的 `.dispose()` 生命周期，在卸载或容量重建前显式释放（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)）；全图动态 `<instancedMesh>` / `<lineSegments>` 批次统一显式声明 `frustumCulled={false}` 并由 ESLint `renderCullingBlock` 守门（[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)）。
-- 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：交互状态管理一级模式（`F1`/`F2`/`F3`）与互斥二级工具；选择状态仅持己方可控实体句柄；检视状态管理悬停与固定目标（地形格仅可悬停，严守迷雾零泄密），深查走强类型 `*Inspection` 契约。UI 面板统一经共享节流订阅快照，跨局重置收口于 `client/session.ts`。
-- 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：HUD 外壳按九宫格槽位布局时间/视角/指北针、快捷键引导、模式栏与战略小地图、工作台、资源面板与检视面板；原语与主题收口于 `src/ui/kit/` 与 `src/ui/styles/`，零外部字体/图标依赖。
+- 客户端状态遵循三态分离（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)）：交互状态管理一级模式（`F1`/`F2`/`F3`）与互斥二级工具；选择状态仅持己方可控实体句柄；检视状态管理悬停与固定目标（地形格仅可悬停，严守迷雾零泄密），深查走强类型 `*Inspection` 契约。UI 面板统一经事件驱动的 `useSnapshotValue`（基于 `SimClient.subscribe` 合并，暂停零回调）订阅快照，功能贡献点（场景层、HUD 面板、检视器主体、小地图贡献、画布意图）由各功能声明、在 `app/` 统一装配（[ADR 0062](../adr/0062-client-contribution-registry.md)），跨局重置收口于 `client/session.ts`。
+- 战术 HUD 与离线设计系统（[ADR 0049](../adr/0049-hud-design-system-and-layout.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)、[ADR 0063](../adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）：`HudShell` 采用 8 槽位 Field HUD 布局——`topLeft` 承接模式切换 `ModeTabs`、`Minimap`、`ToastsPanel` 与 `DebugPanel`，`topCenter` 承接 `GaugePill` 与工具/幽灵横幅，`middleLeft` 为默认收起的 `KeyGuideRail`，`middleRight` 为垂直工具栏 `RightRail`（视角锁定、2D/3D、物流覆盖、指北针等），其余槽位承接建造台、资源与检视面板；原语与主题收口于 `src/ui/kit/` 与 `src/ui/styles/`，零外部字体/图标依赖。
 - 输入分三段：按键 / 鼠标 → 意图 → 命令，由数据驱动的 `input/keymap.ts` 按通用层与当前模式分层解析，组件中不直接监听具体按键。
 - 建造预览由客户端依据快照网格层与 `rules/` 先行判断合法性并显示轮廓、连接/服务圈与阻塞原因，最终由模拟层裁决（拒绝时经事件提示）。
-- 镜头与三维拾取：同一摄像机在 3D 观战与 2D 正交战术视角间平滑切换，`Tab` 手动切换、`F2`/`F3` 自动 2D；R2 起为全向 3D 轨道阻尼镜头（旋转、抓地平移、射线锚定缩放、三维包围体拾取、一键归北），切 2D 保持当前朝向（[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）。
-- 电子沙盘信息可读性（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)）：地形网格含底座裙边与自适应着色器；建筑用程序化轮廓与正立屋顶图标区分状态；单位显示电量指示；高亮与贴花遵循统一 Y-lift 栈；物流覆盖层单纹理绘制；信息层同时以颜色与形状/图案区分。
+- 镜头与三维拾取：由 `CameraRig` 协同共享 `PerspectiveCamera` 与 `OrthographicCamera`，在 3D 观战与 2D 正交战术视角间以 Dolly-Zoom 平滑交接并保持地面视跨与航向 `yaw` 一致，焦距与悬停/移动射线高程对齐 `CameraElevationField`；R2 起为全向 3D 轨道阻尼镜头（旋转、抓地平移、射线锚定缩放、三维包围体拾取、一键归北），`Tab` 手动切换、`F2`/`F3` 自动 2D（[ADR 0028](../adr/0028-rendering-camera-picking.md)、[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)、[ADR 0063](../adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）。
+- 电子沙盘与 Field PBR 视觉管线（[ADR 0050](../adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0051](../adr/0051-scene-culling-depth-precision-and-decal-stack.md)、[ADR 0060](../adr/0060-orbital-3d-camera-ray-anchored-controls-and-volume-picking.md)、[ADR 0063](../adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）：地形与散射物采用 PBR `MeshStandardMaterial`，配合 `PostEffects`（N8AO + Bloom + SMAA，软件光栅化自动跳过 AO/Bloom）与 `buildOutskirtsGeometry` 外围裙边地貌；`FogOfWar` 与 `LogisticsOverlay` 各自通过单纹理共享 uniform 折叠进地表/道路着色器混合，不再叠加全屏膜片；建筑用程序化轮廓与正立屋顶图标区分状态；单位显示电量指示；高亮与贴花遵循统一 Y-lift 栈；信息层同时以颜色与形状/图案区分。
 
 ### 6.14 Python 薄壳
 只声明 static 面板与插件元数据（含 i18n）。将来如接入 NEKO 解说 / 语音，参照 `neko_survivors` 的 `game_event → /chat → speak` 模式，经事件流驱动。
@@ -388,17 +391,17 @@ Rogue 奖励、前哨加成、相邻加成、补给不足减益、驻防加成�
 - **代码测试只管正确性**：确定性与状态哈希、场景行为、内容 schema 与引用完整性、运行时不变量（无 NaN、无悬空句柄）、阵营对称性。性能与平衡不写成代码测试，由评估框架负责（ADR 0024）。
 - **无头运行器** `runScenario(地图, 种子, 命令序列, tick 数, 探针) → 统计` 由测试与评估框架共用，不为评估另写模拟逻辑。
 - 测试直接调用 sim，不经 Worker。
-- 浏览器端到端检查由 Playwright 覆盖（[ADR 0041](../adr/0041-governance-and-indexes-v2.md)），包含基础冒烟与 HUD/交互模式/小地图/多分辨率防重叠检查（`e2e/`）；视觉回归（像素/美感）与多局重开显存仍留待以后或人工验证。
+- 浏览器端到端检查由 Playwright 覆盖（[ADR 0041](../adr/0041-governance-and-indexes-v2.md)），包含基础冒烟、HUD/交互模式/小地图/多分辨率防重叠以及 3D↔2D 镜头过渡检查（`e2e/camera-transition.spec.ts` 等）；视觉回归通过 `npm run shots -- <label>` + `npm run shots:diff -- <label> base` 在本地核对逐像素差异，多局重开显存与主观美感仍列为人工验证项。
 
 ---
 
 ## 11. 工程与防腐化
 
 ### 11.1 工具链
-TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟，仅 Chromium）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
+TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright（浏览器冒烟与交互，仅 Chromium）、样式检查脚本（`check:styles`）、截图对比脚本（`shots` / `shots:diff`）、棘轮脚本（自写）、gen-index 脚本（自写）、文档检查脚本（自写）。引入新依赖前说明理由；版本优先选择发布满 7 天的版本，不用浮动范围。
 
 ### 11.2 CI
-`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器端到端检查（`npm run e2e`，含冒烟与 HUD/模式/小地图/防重叠测试，服务真实 `static/` 产物）→ 失败时上传报告。本地 `verify` = `verify:static && test && verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估运行器（`eval:perf`/`eval:balance`）不进 CI 门槛；`eval/` 下的 `*.scenario.test.ts` 是普通测试，随 `npm run test` 进 CI。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
+`frontend.yml` 三个并行 job（[ADR 0042](../adr/0042-verification-segmentation-parallel-ci.md)），各自 checkout → setup-node（npm 缓存）→ `npm ci` 后只调 npm 脚本，与本地门禁同一份：**static** = `verify:static`（类型检查、lint（含纯度、i18n 字面量）、格式、依赖规则、knip、索引新鲜度、文档检查、`check:styles` 样式检查、棘轮）；**test** = `test`（vitest `unit` + `scenario` 两个 project，全对局/慢测试命名 `*.scenario.test.ts`）；**build** = `verify:build`（构建并校验 `static/` 无差异、包体积 ≤ 32MiB / 24MiB 预警）→ 生成物一致性检查 → Playwright 浏览器端到端检查（`npm run e2e`，含冒烟、HUD/模式/小地图/防重叠及 `camera-transition.spec.ts` 镜头过渡测试，服务真实 `static/` 产物）→ 失败时上传报告。本地 `npm run verify` 通过 `run-parallel.ts` 三路并发执行 `verify:static`、`test`、`verify:build`；lint/format/typecheck 有本地缓存（CI 冷跑）。评估运行器（`eval:perf`/`eval:balance`/`eval:locomotion`）与截图对比（`shots` / `shots:diff`）不进 CI 门槛；`eval/` 下的 `*.scenario.test.ts` 是普通测试，随 `npm run test` 进 CI。插件市场托管的 `verify.yml`（含 `neko-plugin check`）/ `release.yml` 保持模板原样。
 
 ### 11.3 防腐化机制
 腐化的根源是 AI 追求完成眼前任务，单次合理的改动不断累积。防线设在"累积"这一层：
@@ -452,7 +455,7 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 | 事件可见性不过滤 | 已知限制（[ADR 0039](../adr/0039-vision-fog-of-war.md)）：事件以 `all` 下发，客户端表现层隐藏；如需按观察者过滤事件再定 |
 | 视野重算成本 | 以后；proto_01 实测约占系统时间 9.8%（ADR 0039），更大规模需重测 |
 | Rogue 奖励改变规则而不只是数值（奖励 = 给实体加组件或具名行为） | M4 未涉及，顺延；定时需与 ADR 0014 对齐 |
-| 通知与事件聚合：事件 → 聚合 → 通知，NEKO 解说读同一份 | 暂缓：当前 `Hud.tsx` 的 `ToastStack` 已承接命令拒绝（`COMMAND_REJECTED`）与 Worker 致命报错展示，另有集结警告横幅与结束画面，尚无跨源聚合管线需求；引入 NEKO 解说等新消费者时再定 |
+| 通知与事件聚合：事件 → 聚合 → 通知，NEKO 解说读同一份 | 暂缓：当前 `ui/shell-panels.tsx` 的 `ToastsPanel` 已承接命令拒绝（`COMMAND_REJECTED`）与 Worker 致命报错展示，另有集结警告横幅与结束画面，尚无跨源聚合管线需求；引入 NEKO 解说等新消费者时再定 |
 | 剧本、教程、地图触发事件：具名代码行为还是受限触发器数据 | 做教程或剧本时定，需与 ADR 0014 对齐 |
 | 复现包：构建 ID + 对局启动参数 + 命令日志 + 周期性状态哈希，Worker 崩溃时自动导出；与 PVP 不同步检测共用 | 以后 |
 | 热循环禁止分配对象（约定或 lint） | 依据评估框架的性能数据决定 |

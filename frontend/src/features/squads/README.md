@@ -29,18 +29,18 @@
   状态键 `frontline_td:squads`。
 
 ## 不变量
-- `create`/`assign` 只校验句柄存活、同阵营、带 `Mover` 且
-  `speed > 0`，不限同类单位；assign 前先退出原小队；玩家直接
-  MoveCommand 把成员移出小队（读 `MoveOrdered`）。
-- 空小队下次更新删除；集结中小队保留到 launchTick，发射不受
-  补给阻塞并发 `SquadsLaunched`。
+- `SquadsCreate`/`SquadsAssign` 先完整校验所有句柄：任一句柄无效、非己方
+  或非带正速度 `Mover` 单位即整条命令拒绝（`invalid_units`）；assign 前
+  先退出原小队；玩家直接 `MoveCommand` 把成员移出小队（读 `MoveOrdered`）。
+- 空小队下次更新删除；集结中小队保留到 `launchTick`，若到时仍为空则直接
+  删除且不发 `SquadsLaunched`，非空则发射（不受补给阻塞）并发 `SquadsLaunched`。
 - guard：锁定半径内敌对目标后追击，超出牵引范围则放弃返回；
   到达 advance 目标点自动转 guard。
 - 交战拆分：射程内有敌的成员停火（StopIntent），其余推进；
   目标漂移重取只在 engaging 生效。
-- routed advance：gather 时按 pathing 下降沿存预设路线，上限
-  `ROUTE_MAX_CELLS` 格；advance 目标不可达时转打最近可达敌对
-  建筑（排除废墟），摧毁后重新评估。
+- `squad.route` 在 gather 时沿 pathing 下降沿生成有界长度折线，仅作场景与
+  小地图威胁情报展示；实际行军仍跟随流场与走廊链。advance 目标不可达时
+  转打最近可达敌对建筑（排除废墟），摧毁后重新评估。
 - 补给：成员平均能量低于阈值撤向己方覆盖格，回到高位再复原
   命令；全员无电池永不进 resupplying。idle 订单不触发走失召回。
 - 增援：新出生单位补进缺编最大的同阵营小队，平局取最小 id。
@@ -54,10 +54,11 @@
 ## 对应设计
 - [ADR 0023](../../../../docs/adr/0023-grid-layers-groups-commands-rng-runtime-limits.md)、
   [ADR 0034](../../../../docs/adr/0034-squads.md)、
+  [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)、
+  [ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)、
   [ADR 0054](../../../../docs/adr/0054-squad-leader-anchor-role-formations-and-cruise-sync.md)、
   [ADR 0057](../../../../docs/adr/0057-geodesic-distance-cruise-pacing-and-immediate-squad-orders.md)、
   [ADR 0059](../../../../docs/adr/0059-damped-aperture-locomotion-mixed-cohesion-and-surround-arcs.md)、
-  [ADR 0039](../../../../docs/adr/0039-vision-fog-of-war.md)、
-  [ADR 0040](../../../../docs/adr/0040-entity-id-reuse-component-reads.md)。
-- [game_design.md §4.7](../../../../docs/design/game_design.md)
+  [ADR 0062](../../../../docs/adr/0062-client-contribution-registry.md)。
+- [game_design.md §4.7](../../../../docs/design/game_design.md#47-我方小队)
   （小队玩法）。

@@ -6,6 +6,10 @@
 - 决策者：wislap
 - 批次：前端重构 P3
 - 领域：工程
+- 部分取代：0007（新增 shell-not-to-features 禁止客户端壳层引用 features/*）
+- 部分取代：0048（删除 client/inspect-subject.ts 与 pick 汇总，修路工具状态拆入 features/logistics/ui/road-tool-store.ts）
+- 部分取代：0049（Hud 面板改为按槽位与 order 注册装配）
+- 部分取代：0060（三维拾取拆分为 client/picking.ts 与 features/selection/ui/pick-ray.ts）
 
 ## 背景
 
