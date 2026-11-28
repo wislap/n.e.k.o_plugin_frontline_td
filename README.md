@@ -20,7 +20,7 @@ NEKO 插件。游戏本体是 `frontend/` 下的网页游戏，构建产物在 `
 ## 文档入口
 
 - [AGENTS.md](AGENTS.md) — 开发守则，动手前必读（`CLAUDE.md` 等只有一行指向它）
-- [docs/design/game_design.md](docs/design/game_design.md) — 玩法设计（唯一来源）
+- [docs/design/game_design.md](docs/design/game_design.md) — 早期玩法概念讨论归档（背景参考与选题池，不具直接约束力；现行规则以 ADR 为准）
 - [docs/design/architecture.md](docs/design/architecture.md) — 架构总览
 - [docs/adr/](docs/adr/) — 架构决策记录，索引见 [docs/generated/adr-index.md](docs/generated/adr-index.md)
 

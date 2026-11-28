@@ -2,7 +2,7 @@
 
 > 本文记录项目的阶段与路线图、约束、诉求、架构与设计原则。
 >
-> - 玩法设计以 [`game_design.md`](./game_design.md) 为唯一来源，本文不重复玩法内容。
+> - 现行玩法机制与架构决策以 `docs/adr/` 与各功能 `README.md` 为准；[`game_design.md`](./game_design.md) 已冻结为早期概念讨论归档（无直接约束力，见 [ADR 0064](../adr/0064-downgrade-game-design-doc-to-historical-draft.md)）。
 > - 第 1 节「阶段与路线图」随项目推进更新：里程碑表是历史记录，§1.3、§1.4 反映当前状态。
 > - 第 2 节起是长期内容，其中的决策已拆分为 `docs/adr/` 下的 ADR，细节以 ADR 为准。
 
@@ -47,8 +47,8 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
   - 镜头拉远看全图、聚焦角落、自由旋转与低俯角时，建筑、屋顶图标、单位、选中圈、血条不消失、不闪烁、不被道路遮盖（ADR 0051、0060）。负责人确认通过（2026-11-22）；
   - 寻路与集群运动手感：开阔地斜线直行、大群过障碍整团同侧绕行、点建筑或岩壁时目标吸附到己方一侧、混编小队同步出发（ADR 0055–0059）。负责人试玩确认寻路明显改善（2026-11-22），混编小队待有第二种单位后再验；
   - NEKO 宿主内 `F1`–`F3`、`Tab` 能否被游戏拦截（ADR 0048）。负责人确认通过（2026-11-22）。
-- **试玩验证核心循环**（§1.3 第 4 条），据此决定 Rogue 奖励（`game_design.md` 中为【建议｜未实现】）与局外成长。
-- **玩法设计讨论**：怪物生态（`game_design.md` §8、§9.1）；`game_design.md` 中负责人不认可的【已定】条目待重新梳理；`game_design.md` §8 第 10–15 条待负责人决定。
+- **试玩验证核心循环**（§1.3 第 4 条），据此决定 Rogue 奖励与局外成长（早期讨论见 `game_design.md` §4.3）。
+- **玩法设计讨论**：以 `game_design.md` §8、§9.1 作为待决选题池（该文已归档无直接约束力，见 [ADR 0064](../adr/0064-downgrade-game-design-doc-to-historical-draft.md)），由负责人重新拍板后立 ADR 推进。
 - **内容扩充**：更多据点类型（目标一局 6–10 次攻占）、更多防御建筑与兵种、中立据点、对拍机器人学会占点（见 §13）。
 - **ADR 缺口**：[ADR 索引](../generated/adr-index.md)「实现」列中标为"部分"或"未实现"的条目。
 - **建造模式 `1–9` 绑定建造分类**（[ADR 0048](../adr/0048-interaction-modes-and-inspector-contract.md) 已预留）。
@@ -60,7 +60,7 @@ M2、M3 是团队后续开发时 AI 和人都会模仿的参考实现，逐行�
 
 - 项目是 NEKO 插件。现阶段 **NEKO 插件系统只是启动器**：游戏本体是打包好的网页游戏，跑在插件面板的 iframe 中。参考项目 `neko_survivors`（React + TS + PixiJS，规则跑在 Web Worker，Python 只做薄壳）。
 - 团队是开源小团队，成员默认都是 NEKO 插件开发者，普遍使用 AI 辅助编程（vibe coding）。
-- 玩法设计以 `game_design.md` 为准，但它不是不可动摇的需求：【已定】是当前采用的方案，负责人本人也不认可其中全部内容；【建议】【待定】需要先确认再实现（见该文档开头的「本文的地位」）。
+- 早期玩法概念讨论归档于 `game_design.md`，全文（含原标【已定】条目）已无直接约束力（[ADR 0064](../adr/0064-downgrade-game-design-doc-to-historical-draft.md)）：现行有效规则以 `docs/adr/` 为准，归档中的未落地设想须经负责人重新拍板并立 ADR 后才可实现。
 - 本文的核心关切：**中大型项目在 vibe coding 环境下如何长期开发、协作、维护**。加功能很廉价，架构、规范、可维护性才是重点。
 
 ---
@@ -420,13 +420,13 @@ TS strict、ESLint、Prettier、Vitest、dependency-cruiser、knip、Playwright�
 |---|---|---|---|---|
 | 入口守则 | `AGENTS.md`（其他工具的守则文件只有一行指向它） | 人与 agent，动手前必读 | 长期 | 长度上限（约 150 行），超出拆分为链接 |
 | 功能说明 | `features/<x>/README.md` | 改该功能的人与 agent | 长期 | 固定章节检查（check-docs） |
-| 设计文档 | `docs/design/` | 所有人 | 长期，随设计演进 | 评审：玩法改动的 PR 必须同时更新 |
+| 设计与总览 | `docs/design/` | 所有人 | `architecture.md` 长期随架构演进；`game_design.md` 冻结为早期讨论归档（无直接约束力，ADR 0064） | 架构与路线图变更更新 `architecture.md`；新玩法拍板进 ADR |
 | 架构决策 | `docs/adr/NNNN-*.md`（扁平编号，不按轮次分目录） | 想知道"为什么"的人 | 写好后不改正文；被推翻则新写一篇取代 | 头部元数据：状态、日期、决策者（GitHub ID）、批次、领域；ADR 索引自动生成，按领域分组列出当前有效的 ADR，已取代 / 已废弃单列，附批次时间线；只允许改头部元数据（状态、部分取代、实现，ADR 0044） |
 | 生成索引 | `docs/generated/` | agent 查询、评审 | 随代码生成 | 文件头"自动生成，勿手改"；CI diff 为空 |
 | 施工计划 | 不进主分支：个人 / agent 草稿放 `.plans/`（gitignore）；共享计划走 GitHub issue | 当次执行者 | 做完即扔 | Markdown 白名单 |
 
 - **Markdown 白名单**：只允许根目录的 `AGENTS.md`、`CLAUDE.md`、`README.md`、`CONTRIBUTING.md`，以及 `docs/{design,adr,generated}/`、`frontend/src/features/*/README.md`、`.github/**/*.md`。其他位置的 `.md`（如 agent 顺手生成的 `PLAN.md`、`NOTES.md`）由 CI 拦截。
-- **删除计划前先提炼**：决策 → ADR；玩法变化 → 设计文档。PR 模板含勾选项。
+- **删除计划前先提炼**：架构与玩法机制决策 → ADR；总览与路线图变化 → `architecture.md`。PR 模板含勾选项。
 - **agent 阅读顺序**：`AGENTS.md` → 要改的功能的 `README.md` → `docs/generated/` 相关索引 → 按 ADR 索引查对应 ADR。给 agent 的文档要短、用祈使句、多放链接。
 - NEKO 宿主的通用插件文档只放链接，不复制。
 

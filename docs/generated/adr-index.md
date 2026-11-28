@@ -7,7 +7,7 @@
 ### 工程
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
 |---|---|---|---|---|---|---|
-| [0001](../adr/0001-adr-process-and-docs.md) | ADR 流程与文档体系 | 已采纳；部分被 0041 取代（ADR 头部字段：新增可选的"部分取代"行）、部分被 0044 取代（ADR 头部字段：新增必填"实现"行，与"状态""部分取代"同属可更新的元数据）、部分被 0046 取代（ADR 领域取值"补给"改名为"物流"） | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
+| [0001](../adr/0001-adr-process-and-docs.md) | ADR 流程与文档体系 | 已采纳；部分被 0041 取代（ADR 头部字段：新增可选的"部分取代"行）、部分被 0044 取代（ADR 头部字段：新增必填"实现"行，与"状态""部分取代"同属可更新的元数据）、部分被 0046 取代（ADR 领域取值"补给"改名为"物流"）、部分被 0064 取代（`docs/design/game_design.md` 冻结为无直接约束力的早期概念讨论归档，不再作为现行玩法规范；同时正式移除未启用的 `docs/guides/` 白名单） | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
 | [0002](../adr/0002-plugin-form-static-panel.md) | 插件形态：static 面板 + Python 薄壳 | 已采纳；部分被 0032 取代（启动时主动请求显示模式） | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
 | [0003](../adr/0003-tech-stack.md) | 技术栈 | 已采纳；部分被 0063 取代（新增运行时依赖 `@react-three/postprocessing`、`postprocessing`、`n8ao`） | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
 | [0017](../adr/0017-anti-decay-mechanisms.md) | 防腐化机制 | 已采纳；部分被 0041 取代（棘轮的超长文件阈值、公共接口清单的形式）、部分被 0042 取代（CI 管道固定顺序：改为 verify:static → test → verify:build 三段、三个并行 job） | 已实现 | wislap | M0 架构基线 | 2026-11-14 |
@@ -24,6 +24,7 @@
 | [0046](../adr/0046-doc-consistency-conventions.md) | 文档一致性约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-20 |
 | [0061](../adr/0061-doc-abstraction-and-tuning-records.md) | 文档抽象层级与调参记录约定 | 已采纳 | 已实现 | wislap | 治理 | 2026-11-22 |
 | [0062](../adr/0062-client-contribution-registry.md) | 客户端贡献点注册：场景层、HUD 面板、检视器与小地图由功能声明、app 装配 | 已采纳；部分被 0063 取代（落地契约校正：`{ ctx }` 包装属性、`ui/inspector` 的 `InspectorSubjectDef`、`ui/minimap` 的 `MinimapRasterDef`/`MinimapMarkDef`、第 5 类 `CanvasIntentHandlerDef` 与 4 段 `SCENE_ORDER`） | 已实现 | wislap | 前端重构 P3 | 2026-11-24 |
+| [0064](../adr/0064-downgrade-game-design-doc-to-historical-draft.md) | 将 `game_design.md` 降级为无约束力的早期概念讨论归档 | 已采纳 | 已实现 | wislap | 文档治理收口 | 2026-11-28 |
 
 ### 架构
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -217,3 +218,6 @@
 
 ### 视觉与前端架构收口（2026-11-28）
 - [0063 晴野（Field）视觉管线、8 槽位胶囊 HUD、Dolly-Zoom 镜头与客户端契约收口](../adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)
+
+### 文档治理收口（2026-11-28）
+- [0064 将 `game_design.md` 降级为无约束力的早期概念讨论归档](../adr/0064-downgrade-game-design-doc-to-historical-draft.md)

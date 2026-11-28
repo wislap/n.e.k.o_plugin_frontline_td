@@ -5,7 +5,7 @@
 ## 项目是什么
 - NEKO 插件。插件系统只负责启动；游戏本体是 `frontend/` 下的网页游戏，构建产物在 `static/`，由 static 面板加载。
 - Python（`__init__.py`）只是薄壳，不写游戏逻辑。
-- 玩法设计：[docs/design/game_design.md](docs/design/game_design.md)。架构总览：[docs/design/architecture.md](docs/design/architecture.md)。具体决策以 [docs/adr/](docs/adr/) 为准，索引见 [docs/generated/adr-index.md](docs/generated/adr-index.md)。
+- 架构总览：[docs/design/architecture.md](docs/design/architecture.md)。现行规则与具体决策以 [docs/adr/](docs/adr/)（索引见 [docs/generated/adr-index.md](docs/generated/adr-index.md)）和各功能 `README.md` 为准；[docs/design/game_design.md](docs/design/game_design.md) 已降级为早期概念讨论归档（无直接约束力，[ADR 0064](docs/adr/0064-downgrade-game-design-doc-to-historical-draft.md)）。
 
 ## 动手前的阅读顺序
 1. 本文件。
@@ -16,7 +16,7 @@
 ## 协作与决策
 - 项目负责人（`wislap`）决定：玩法与产品取舍（名称、品类、范围、做不做某个系统）、数值平衡、架构级改动（写 ADR）、里程碑验收。agent 在已有 ADR 和设计的范围内决定实现细节。
 - 代码现状不等于产品决定：没实现不代表放弃（如 Rogue），数值没调可能是有意不调（architecture.md §13）。不要从代码推断负责人的意图，拿不准就问。
-- `game_design.md` 不是不可动摇的需求（见其开头「本文的地位」）：【建议】【待定】先确认再做；对【已定】有异议时带证据提出。
+- `game_design.md` 是早期概念讨论归档，全文（含原标【已定】条目）不具直接约束力（[ADR 0064](docs/adr/0064-downgrade-game-design-doc-to-historical-draft.md)）：仅作背景脉络与选题池参考，未落地设想须经负责人重新拍板并写 ADR 后再做。
 - 需要负责人定的事：给出选项、各自的代价和你的倾向，一次问完。负责人可以推迟决定，没定的事不要先做。
 - 有证据就可以反对，包括反对负责人、外部评审和本仓库的文档；同意也要基于核实，不附和。
 - 只做任务要求的改动，顺手发现的问题列出来汇报，不顺手改。新增模块、改模块边界或公共接口前，先简述方案。
