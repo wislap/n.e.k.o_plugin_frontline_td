@@ -7,8 +7,11 @@ import {
   SPECTATE_MIN_DIST,
   SPECTATE_MIN_PITCH_DEG,
   SPECTATE_PITCH_DEG,
+  SPECTATE_TERRAIN_FOLLOW_FULL_DIST,
+  SPECTATE_TERRAIN_FOLLOW_START_DIST,
   TACTICAL_MAX_HEIGHT,
   TACTICAL_MIN_HEIGHT,
+  TRANSITION_MIN_FOV_DEG,
   baseSpectatePitchDeg,
   clampCenter,
   clampPitchOffsetForDist,
@@ -16,6 +19,7 @@ import {
   clampSpectatePitch,
   clampTacticalHeight,
   compassHeadingDeg,
+  dollyZoomFovDeg,
   easeInOut,
   effectiveSpectatePitchDeg,
   frameDampingAlpha,
@@ -28,10 +32,12 @@ import {
   perspectiveClipPlanes,
   perspectiveDistAtPitch,
   perspectiveDistForOrthoHeight,
+  perspectiveTransitionClipPlanes,
   rotatePanVector,
   screenUpDir,
   spectateCameraPosition,
   spectateCursorGroundOffset,
+  spectateFocusElevation,
   spectateViewDir,
   visibleGroundHeight,
 } from './camera-math';
@@ -274,5 +280,66 @@ describe('camera math', () => {
     expect(frameDampingAlpha(0, 0.05)).toBe(0);
     expect(frameDampingAlpha(0.05, 0.05)).toBeCloseTo(1 - Math.exp(-1), 6);
     expect(frameDampingAlpha(0.016, 0)).toBe(1);
+  });
+
+  it('dollyZoomFovDeg hits endpoints, clamps blend, and decreases monotonically', () => {
+    expect(dollyZoomFovDeg(0)).toBeCloseTo(SPECTATE_FOV_DEG, 6);
+    expect(dollyZoomFovDeg(1)).toBeCloseTo(TRANSITION_MIN_FOV_DEG, 6);
+    expect(dollyZoomFovDeg(-0.5)).toBeCloseTo(SPECTATE_FOV_DEG, 6);
+    expect(dollyZoomFovDeg(1.5)).toBeCloseTo(TRANSITION_MIN_FOV_DEG, 6);
+
+    let prev = dollyZoomFovDeg(0);
+    for (let i = 1; i <= 20; i++) {
+      const cur = dollyZoomFovDeg(i / 20);
+      expect(cur).toBeLessThan(prev);
+      prev = cur;
+    }
+  });
+
+  it('perspectiveDistAtPitch preserves ground span across transition FOVs and pitches', () => {
+    for (const extent of [12, 30, 85]) {
+      for (const blend of [0, 0.25, 0.5, 0.75, 1]) {
+        const fov = dollyZoomFovDeg(blend);
+        const pitch = SPECTATE_PITCH_DEG + (90 - SPECTATE_PITCH_DEG) * blend;
+        const pitchRad = (pitch * Math.PI) / 180;
+        const dist = perspectiveDistAtPitch(extent, pitch, fov);
+        const recovered = orthoHeightForPerspectiveDist(dist, fov) / Math.sin(pitchRad);
+        expect(recovered).toBeCloseTo(extent, 6);
+      }
+    }
+  });
+
+  it('perspectiveTransitionClipPlanes caps near at 200 (< 380 sky dome) and covers dist + diag', () => {
+    const close = perspectiveTransitionClipPlanes(SPECTATE_MIN_DIST, 96, 64);
+    expect(close).toEqual(perspectiveClipPlanes(SPECTATE_MIN_DIST, 96, 64));
+
+    const telephoto = perspectiveTransitionClipPlanes(3000, 128, 96);
+    const diag = Math.hypot(128, 96);
+    expect(telephoto.near).toBe(200);
+    expect(telephoto.near).toBeLessThan(380);
+    expect(telephoto.far).toBeGreaterThan(3000 + diag);
+  });
+
+  it('spectateFocusElevation locks to baseY at mid/far distances and blends smoothly close in', () => {
+    const baseY = 0.1;
+    const localY = 0.9;
+
+    expect(spectateFocusElevation(SPECTATE_MAX_DIST, baseY, localY)).toBe(baseY);
+    expect(spectateFocusElevation(SPECTATE_DEFAULT_DIST, baseY, localY)).toBe(baseY);
+    expect(spectateFocusElevation(SPECTATE_TERRAIN_FOLLOW_START_DIST, baseY, localY)).toBe(baseY);
+
+    expect(spectateFocusElevation(SPECTATE_TERRAIN_FOLLOW_FULL_DIST, baseY, localY)).toBe(localY);
+    expect(spectateFocusElevation(SPECTATE_MIN_DIST, baseY, localY)).toBe(localY);
+
+    let prev = spectateFocusElevation(SPECTATE_TERRAIN_FOLLOW_START_DIST, baseY, localY);
+    for (
+      let d = SPECTATE_TERRAIN_FOLLOW_START_DIST - 1;
+      d >= SPECTATE_TERRAIN_FOLLOW_FULL_DIST;
+      d--
+    ) {
+      const cur = spectateFocusElevation(d, baseY, localY);
+      expect(cur).toBeGreaterThanOrEqual(prev);
+      prev = cur;
+    }
   });
 });

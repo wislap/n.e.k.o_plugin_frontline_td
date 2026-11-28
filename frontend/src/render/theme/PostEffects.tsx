@@ -6,7 +6,7 @@
 // gl.toneMapping = NoToneMapping, so any renderer-level tone-mapping
 // setting is dead — keep it that way.
 import { useEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import {
   EffectComposer,
   Bloom,
@@ -15,9 +15,11 @@ import {
   SMAA,
 } from '@react-three/postprocessing';
 import { N8AOPostPass } from 'n8ao';
+import type * as THREE from 'three';
 import { isCaptureMode } from '../../client/capture-mode';
 import { useUiStore } from '../../client/ui-store';
-import { setEffectComposer } from '../composer-ref';
+import { cameraTransitionState } from '../camera-transition';
+import { getSceneCameras, setEffectComposer } from '../composer-ref';
 import { VISUAL } from './visual';
 
 const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
@@ -28,19 +30,33 @@ function isSoftwareRenderer(gl: WebGLRenderingContext): boolean {
   return SOFTWARE_RENDERER.test(String(gl.getParameter(param)));
 }
 
+function syncAoPassForTransition(pass: N8AOPostPass, baseIntensity: number, blend: number): void {
+  const shouldEnable = blend < 1;
+  if (pass.enabled !== shouldEnable) {
+    pass.enabled = shouldEnable;
+  }
+  if (shouldEnable) {
+    const target = baseIntensity * (1 - blend);
+    if (Math.abs(pass.configuration.intensity - target) > 1e-4) {
+      pass.configuration.intensity = target;
+    }
+  }
+}
+
 // Ambient occlusion as a plain <primitive> pass instead of the <N8AO>
 // wrapper component: the wrapper registers its pass in the library's
 // groupPasses set, which makes EffectComposer append a trailing CopyPass
 // that only blits the finished frame to screen (~0.7 ms on iGPU).
 function AoPass({
+  camera,
   aoRadius,
   intensity,
 }: {
+  readonly camera: THREE.Camera;
   readonly aoRadius: number;
   readonly intensity: number;
 }) {
   const scene = useThree((s) => s.scene);
-  const camera = useThree((s) => s.camera);
   const pass = useMemo(() => {
     const p = new N8AOPostPass(scene, camera);
     const c = p.configuration;
@@ -57,11 +73,15 @@ function AoPass({
       pass.dispose();
     };
   }, [pass]);
+  useFrame(() => {
+    syncAoPassForTransition(pass, intensity, cameraTransitionState.blend);
+  });
   return <primitive object={pass} />;
 }
 
 export function PostEffects() {
   const gl = useThree((s) => s.gl);
+  const cameras = useMemo(() => getSceneCameras(gl), [gl]);
   const { post } = VISUAL;
   // Capture mode forces the full post chain on software rasterizers so
   // screenshot diffs cover every pass (N8AO/bloom are skipped only on real
@@ -70,12 +90,16 @@ export function PostEffects() {
   // Debug-panel render-cost toggles (all on by default).
   const cost = useUiStore((s) => s.renderCost);
   return (
-    <EffectComposer multisampling={0} ref={setEffectComposer}>
+    <EffectComposer camera={cameras.persp} multisampling={0} ref={setEffectComposer}>
       {software ? (
         <></>
       ) : (
         <>
-          {cost.n8ao ? <AoPass aoRadius={post.aoRadius} intensity={post.aoIntensity} /> : <></>}
+          {cost.n8ao ? (
+            <AoPass camera={cameras.persp} aoRadius={post.aoRadius} intensity={post.aoIntensity} />
+          ) : (
+            <></>
+          )}
           {cost.bloom ? (
             <Bloom
               intensity={post.bloomIntensity}

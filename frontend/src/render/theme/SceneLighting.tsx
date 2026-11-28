@@ -1,11 +1,11 @@
 // Scene lighting + renderer setup: hemisphere fill, shadow-casting sun
 // fitted to the map bounds, rim light, PMREM sky
 // environment. GPU/state changes are applied in effects.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useCameraStore } from '../../client/camera-store';
 import { useUiStore } from '../../client/ui-store';
+import { cameraTransitionState } from '../camera-transition';
 import type { SceneLayerProps } from '../scene';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
@@ -21,6 +21,7 @@ function applyRendererSettings(gl: THREE.WebGLRenderer): () => void {
   const prev = {
     shadow: gl.shadowMap.enabled,
     shadowType: gl.shadowMap.type,
+    shadowAutoUpdate: gl.shadowMap.autoUpdate,
     onShaderError: gl.debug.onShaderError,
   };
   gl.shadowMap.enabled = true;
@@ -45,6 +46,7 @@ function applyRendererSettings(gl: THREE.WebGLRenderer): () => void {
   return () => {
     gl.shadowMap.enabled = prev.shadow;
     gl.shadowMap.type = prev.shadowType;
+    gl.shadowMap.autoUpdate = prev.shadowAutoUpdate;
     gl.debug.onShaderError = prev.onShaderError;
   };
 }
@@ -103,7 +105,7 @@ function applyPmremEnvironment(
   const prev = scene.environment;
   const prevIntensity = scene.environmentIntensity;
   scene.environment = rt.texture;
-  scene.environmentIntensity = theme.envIntensity ?? 1;
+  scene.environmentIntensity = 1;
   return () => {
     scene.environment = prev;
     scene.environmentIntensity = prevIntensity;
@@ -115,25 +117,63 @@ function applyPmremEnvironment(
 
 // Per-frame haze gate: the horizon fog is a 3D-spectate effect. At
 // tactical height the whole map sits inside the fog range and washes out
-// to paper, so near/far are pushed out of range in the 2D info view.
-// Module-scope so the react-compiler immutability rule does not track
-// the hook-derived scene.
+// to paper, so near/far are pushed out of range and fog color dims toward
+// dark tactical slate as blend approaches 1. During Dolly-Zoom, +extraDist
+// cancels the telephoto pullback so fog never washes out mid-transition.
+// Module-scope so the react-compiler immutability rule does not track the
+// hook-derived scene/renderer.
+const TACTICAL_SCENE_FOG_HEX = '#141a18';
+let tacticalSceneFogColor: THREE.Color | null = null;
+let baseSceneFogColor: THREE.Color | null = null;
+
 function updateSceneFog(
   scene: THREE.Scene,
-  mode: string,
+  blend: number,
+  extraDist: number,
   diag: number,
   nearF: number,
   farF: number,
+  hazeColor: string,
+  info2dActive: boolean,
 ): void {
   const fog = scene.fog;
   if (fog === null || !(fog instanceof THREE.Fog)) {
     return;
   }
-  const near = mode === 'tactical' ? diag * 20 : diag * nearF;
-  const far = mode === 'tactical' ? diag * 21 : diag * farF;
-  if (fog.near !== near) {
+  const inv = 1 / Math.max(0.02, 1 - blend);
+  const near = diag * nearF * inv + extraDist;
+  const far = diag * farF * inv + extraDist;
+  if (Math.abs(fog.near - near) > 1e-3 || Math.abs(fog.far - far) > 1e-3) {
     fog.near = near;
     fog.far = far;
+  }
+  if (hazeColor !== '') {
+    const colorBlend = info2dActive ? Math.min(1, blend * 1.6) : 0;
+    const base = (baseSceneFogColor ??= new THREE.Color());
+    const tactical = (tacticalSceneFogColor ??= new THREE.Color(TACTICAL_SCENE_FOG_HEX));
+    base.set(hazeColor);
+    fog.color.copy(base).lerp(tactical, colorBlend);
+  }
+}
+
+function syncShadowTransition(
+  gl: THREE.WebGLRenderer,
+  light: THREE.DirectionalLight | null,
+  shadowsOn: boolean,
+  blend: number,
+): void {
+  if (light !== null) {
+    const targetInt = shadowsOn ? 1 - blend : 0;
+    if (Math.abs(light.shadow.intensity - targetInt) > 1e-4) {
+      light.shadow.intensity = targetInt;
+    }
+  }
+  const auto = shadowsOn && (blend < 1 || light?.shadow.map === null);
+  if (gl.shadowMap.autoUpdate !== auto) {
+    gl.shadowMap.autoUpdate = auto;
+    if (auto) {
+      gl.shadowMap.needsUpdate = true;
+    }
   }
 }
 
@@ -157,6 +197,7 @@ export function SceneLighting({ ctx }: SceneLayerProps) {
   const { lighting } = theme;
   // Debug-panel render-cost toggle: drops the sun's shadow pass.
   const shadows = useUiStore((s) => s.renderCost.shadows);
+  const sunRef = useRef<THREE.DirectionalLight>(null);
 
   useEffect(() => {
     return applyRendererSettings(gl);
@@ -174,11 +215,25 @@ export function SceneLighting({ ctx }: SceneLayerProps) {
     return applySceneBackground(scene, theme.background.haze, diag * 0.5);
   }, [scene, theme.background.haze, diag]);
 
-  // The horizon haze is a 3D-spectate effect: at tactical height the whole
-  // map sits inside the fog range and washes out to paper, so the fog is
-  // pushed out of range while the camera is in the 2D info view.
+  // Sync fog range, fog tint, and directional shadow intensity/autoUpdate with
+  // the per-frame camera transition state without toggling castShadow.
   useFrame(() => {
-    updateSceneFog(scene, useCameraStore.getState().mode, diag, theme.hazeNear, theme.hazeFar);
+    updateSceneFog(
+      scene,
+      cameraTransitionState.blend,
+      cameraTransitionState.extraDist,
+      diag,
+      theme.hazeNear,
+      theme.hazeFar,
+      theme.background.haze,
+      theme.info2d && useUiStore.getState().info2d,
+    );
+    syncShadowTransition(
+      gl,
+      sunRef.current,
+      lighting.shadow && shadows,
+      cameraTransitionState.blend,
+    );
   });
   const cx = mapWidth / 2;
   const cz = mapHeight / 2;
@@ -201,6 +256,7 @@ export function SceneLighting({ ctx }: SceneLayerProps) {
       <primitive object={target} position={[cx, 0, cz]} />
       <hemisphereLight args={[lighting.hemiSky, lighting.hemiGround, lighting.hemiIntensity]} />
       <directionalLight
+        ref={sunRef}
         position={sunPos}
         intensity={lighting.sunIntensity}
         color={lighting.sunColor}

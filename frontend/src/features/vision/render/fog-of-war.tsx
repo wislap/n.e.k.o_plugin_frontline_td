@@ -9,7 +9,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useCameraStore } from '../../../client/camera-store';
+import { cameraTransitionState } from '../../../render/camera-transition';
 import type { ResolvedMap } from '../../../content/index';
 import { readLayer } from '../../../core/index';
 import type { SceneLayerProps } from '../../../render/scene';
@@ -19,6 +19,8 @@ import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
 import { VISION_STATE_LAYER_ID } from '../protocol';
 
 const STATE_ALPHA = [Math.round(0.85 * 255), Math.round(0.45 * 255), 0] as const;
+const TACTICAL_FOG_COLOR = new THREE.Color('#333c3a');
+const spectateFogColor = new THREE.Color();
 
 // Texture uploads live in a module-scope helper: the react-compiler lint
 // treats hook-derived objects (refs) as immutable, so mutations of the
@@ -42,12 +44,15 @@ function syncFogUniforms(
   uniforms.uFtdFogMap.value = texture;
   uniforms.uFtdFogTexel.value.set(1 / map.grid.width, 1 / map.grid.height);
   uniforms.uFtdFogMapSize.value.set(map.grid.width, map.grid.height);
-  const tactical = useCameraStore.getState().mode === 'tactical';
+  const blend = cameraTransitionState.blend;
   // Same colour values the film carried; consumers mix them
   // post-encoding (see GLSL_FOG in render/shaders.ts).
-  uniforms.uFtdFogColor.value.set(tactical ? '#333c3a' : theme.fogColor);
+  spectateFogColor.set(theme.fogColor);
+  uniforms.uFtdFogColor.value.copy(spectateFogColor).lerp(TACTICAL_FOG_COLOR, blend);
   uniforms.uFtdFogHaze.value.set(theme.background.haze || theme.fogColor);
-  uniforms.uFtdFogHazeAmt.value = tactical ? 0 : 1;
+  uniforms.uFtdFogExtraDist.value = cameraTransitionState.extraDist;
+  const fade = 1 - blend;
+  uniforms.uFtdFogHazeAmt.value = fade * fade * fade;
 }
 
 export function FogOfWar({ ctx }: SceneLayerProps): null {

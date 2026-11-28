@@ -60,10 +60,11 @@ const FOG_HAZE_MIX = 0.65;
 /**
  * Shared mutable fog uniforms: one object is spread into every fogged
  * material's uniforms, so a single per-frame write (vision/render's
- * FogOfWar component) updates all consumers. Apply the mix AFTER the
- * material's `colorspace_fragment`: the old film blended in display
- * space with working-space colour uniforms, so a post-encode mix with
- * the same values reproduces the composite exactly.
+ * FogOfWar component) updates all consumers. Apply the mix AFTER
+ * `#include <fog_fragment>`: under EffectComposer's offscreen
+ * HalfFloatType target, `#include <colorspace_fragment>` compiles to a
+ * linear pass-through, so both scene.fog and ftdFogApply run in Linear
+ * working space and the trailing EffectPass encodes Linear → sRGB once.
  */
 export interface FogUniforms {
   uFtdFogMap: { value: THREE.DataTexture | null };
@@ -72,6 +73,7 @@ export interface FogUniforms {
   uFtdFogColor: { value: THREE.Color };
   uFtdFogHaze: { value: THREE.Color };
   uFtdFogHazeAmt: { value: number };
+  uFtdFogExtraDist: { value: number };
 }
 
 export function createFogUniforms(): FogUniforms {
@@ -82,6 +84,7 @@ export function createFogUniforms(): FogUniforms {
     uFtdFogColor: { value: new THREE.Color('#3d453a') },
     uFtdFogHaze: { value: new THREE.Color('#3d453a') },
     uFtdFogHazeAmt: { value: 1 },
+    uFtdFogExtraDist: { value: 0 },
   };
 }
 
@@ -96,6 +99,7 @@ uniform vec2 uFtdFogMapSize;
 uniform vec3 uFtdFogColor;
 uniform vec3 uFtdFogHaze;
 uniform float uFtdFogHazeAmt;
+uniform float uFtdFogExtraDist;
 
 float ftdFogSample(vec2 uv) {
   return texture2D(uFtdFogMap, uv).g;
@@ -110,7 +114,8 @@ vec3 ftdFogApply(vec3 color, vec2 worldXZ, float vDist) {
       * ${glslFloat(FOG_BLUR_TAP)};
   a = smoothstep(${glslFloat(FOG_SMOOTH_LO)}, ${glslFloat(FOG_SMOOTH_HI)}, a);
   float unexplored = smoothstep(${glslFloat(FOG_UNEXP_LO)}, ${glslFloat(FOG_UNEXP_HI)}, a);
-  float hz = smoothstep(${glslFloat(FOG_HAZE_START)}, ${glslFloat(FOG_HAZE_END)}, vDist)
+  float effDist = max(0.0, vDist - uFtdFogExtraDist);
+  float hz = smoothstep(${glslFloat(FOG_HAZE_START)}, ${glslFloat(FOG_HAZE_END)}, effDist)
     * uFtdFogHazeAmt;
   vec3 col = mix(uFtdFogColor, uFtdFogHaze, hz * ${glslFloat(FOG_HAZE_MIX)});
   return mix(color, col, a * mix(${glslFloat(FOG_SEEN_MIX)}, ${glslFloat(FOG_UNEXP_MIX)}, unexplored));
@@ -137,8 +142,10 @@ vFtdFogDist = distance(vFtdFogWorld, cameraPosition);`;
 /**
  * Adds the fog-of-war blend to a built-in three material: shares the
  * FogUniforms objects, computes a world-position varying (instancing
- * aware), and mixes post-`colorspace_fragment` — matching the removed
- * film's display-space blend (after the fog_fragment include). Chains any existing onBeforeCompile.
+ * aware), and mixes after `#include <fog_fragment>` in Linear working
+ * space (EffectComposer's offscreen HalfFloatType target keeps
+ * `#include <colorspace_fragment>` as a linear pass-through until the
+ * final EffectPass encodes sRGB). Chains any existing onBeforeCompile.
  */
 export function injectFog(material: THREE.Material, fog: FogUniforms): void {
   const prev = material.onBeforeCompile.bind(material);

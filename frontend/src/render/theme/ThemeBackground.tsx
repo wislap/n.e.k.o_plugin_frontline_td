@@ -4,12 +4,15 @@
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { useUiStore } from '../../client/ui-store';
+import { cameraTransitionState } from '../camera-transition';
 import type { SceneLayerProps } from '../scene';
 import { useGpuResource } from '../use-gpu-resource';
 import { VISUAL } from './visual';
 import type { RenderVisual } from './visual';
 
 const DOME_RADIUS = 380;
+const TACTICAL_BG = '#0c0f11';
 
 function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
   const bg = theme.background;
@@ -21,6 +24,8 @@ function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
       uTop: { value: new THREE.Color(bg.top) },
       uHorizon: { value: new THREE.Color(bg.horizon) },
       uBottom: { value: new THREE.Color(bg.bottom) },
+      uTacticalBg: { value: new THREE.Color(TACTICAL_BG) },
+      uInfo2D: { value: 0 },
     },
     vertexShader: `
       varying vec3 vDir;
@@ -33,6 +38,8 @@ function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
       uniform vec3 uTop;
       uniform vec3 uHorizon;
       uniform vec3 uBottom;
+      uniform vec3 uTacticalBg;
+      uniform float uInfo2D;
       varying vec3 vDir;
       void main() {
         float h = vDir.y;
@@ -42,6 +49,7 @@ function buildDomeMaterial(theme: RenderVisual): THREE.ShaderMaterial {
         // eye level wherever no platform/skirt hides it.
         vec3 col = mix(uBottom, uTop, smoothstep(-0.55, 0.8, h));
         col = mix(col, uHorizon, exp(-h * h * 5.0) * 0.42);
+        col = mix(col, uTacticalBg, uInfo2D);
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -65,6 +73,8 @@ function buildPlatformMaterial(
       uRadius: { value: 1 },
       uMapSize: { value: new THREE.Vector2(mapWidth, mapHeight) },
       uSkirtCells: { value: theme.terrain.skirtCells },
+      uTacticalBg: { value: new THREE.Color(TACTICAL_BG) },
+      uInfo2D: { value: 0 },
     },
     vertexShader: `
       varying vec3 vWorld;
@@ -82,6 +92,8 @@ function buildPlatformMaterial(
       uniform float uRadius;
       uniform vec2 uMapSize;
       uniform float uSkirtCells;
+      uniform vec3 uTacticalBg;
+      uniform float uInfo2D;
       varying vec3 vWorld;
       void main() {
         // The outskirts skirt mesh covers the whole ring within uSkirtCells
@@ -95,22 +107,43 @@ function buildPlatformMaterial(
         }
         float d = length(vWorld.xz - uCenter) / uRadius;
         float alpha = 1.0 - smoothstep(uFadeStart, uFadeEnd, d);
-        gl_FragColor = vec4(uColor, alpha);
+        vec3 col = mix(uColor, uTacticalBg, uInfo2D);
+        gl_FragColor = vec4(col, alpha * (1.0 - uInfo2D));
       }
     `,
   });
+}
+
+function syncBackgroundTransition(
+  domeMat: THREE.ShaderMaterial,
+  platformMat: THREE.ShaderMaterial,
+  themeInfo: boolean,
+  delta: number,
+): void {
+  const uDome = domeMat.uniforms['uInfo2D'] as { value: number } | undefined;
+  const uPlatform = platformMat.uniforms['uInfo2D'] as { value: number } | undefined;
+  if (uDome === undefined || uPlatform === undefined) {
+    return;
+  }
+  const blend = cameraTransitionState.blend;
+  const desired = themeInfo && useUiStore.getState().info2d ? blend : 0;
+  let info = uDome.value;
+  if (blend > 0 && blend < 1) {
+    info = desired;
+  } else {
+    info += (desired - info) * Math.min(1, delta * 8);
+    if (Math.abs(info - desired) < 0.01) {
+      info = desired;
+    }
+  }
+  uDome.value = info;
+  uPlatform.value = info;
 }
 
 export function ThemeBackground({ ctx }: SceneLayerProps) {
   const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const theme = VISUAL;
   const domeRef = useRef<THREE.Mesh>(null);
-  // Skybox-style: the dome follows the camera so its far limb can never
-  // expose the clear color — before, at max zoom-out the camera sat
-  // outside the map-centered sphere and the void showed through.
-  useFrame(({ camera }) => {
-    domeRef.current?.position.copy(camera.position);
-  });
 
   const dome = useMemo(() => {
     const geo = new THREE.SphereGeometry(DOME_RADIUS, 32, 16);
@@ -130,6 +163,14 @@ export function ThemeBackground({ ctx }: SceneLayerProps) {
     uCenter?.value.set(mapWidth / 2, mapHeight / 2);
     return { geo, mat };
   }, [theme, mapWidth, mapHeight]);
+
+  // Skybox-style: the dome follows the camera so its far limb can never
+  // expose the clear color — before, at max zoom-out the camera sat
+  // outside the map-centered sphere and the void showed through.
+  useFrame(({ camera }, delta) => {
+    domeRef.current?.position.copy(camera.position);
+    syncBackgroundTransition(dome.mat, platform.mat, theme.info2d, delta);
+  });
 
   useGpuResource(dome);
   useGpuResource(platform);

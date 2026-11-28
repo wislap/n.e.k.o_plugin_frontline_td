@@ -4,6 +4,8 @@ import {
   SPECTATE_MAX_PITCH_DEG,
   SPECTATE_MIN_PITCH_DEG,
   effectiveSpectatePitchDeg,
+  spectateCursorGroundOffset,
+  spectateFocusElevation,
   visibleGroundHeight,
 } from './camera-math';
 
@@ -110,5 +112,64 @@ describe('camera store', () => {
     s = useCameraStore.getState();
     expect(s.yaw).toBeCloseTo(Math.PI * 2, 6);
     expect(s.pitchOffsetDeg).toBe(0);
+  });
+
+  it('zoomToward preserves cursor ground anchoring across the terrain-follow zoom transition', () => {
+    const store = useCameraStore.getState();
+    store.setCenter({ x: 20, y: 40 });
+    store.setZoom(24);
+    const baseY = 0.1;
+    const localSmoothY = 0.8;
+    const planeY = 0.5;
+    const ndcX = 0.25;
+    const ndcY = -0.15;
+    const aspect = 16 / 9;
+
+    const cOld = spectateFocusElevation(24, baseY, localSmoothY);
+    const qOld = spectateCursorGroundOffset(
+      ndcX,
+      ndcY,
+      aspect,
+      24,
+      0,
+      effectiveSpectatePitchDeg(24, 0),
+      cOld,
+      planeY,
+    );
+    expect(qOld).not.toBeNull();
+    if (qOld === null) {
+      throw new Error('Expected ground hit before zoom');
+    }
+    const worldHitBefore = { x: 20 + qOld.x, y: 40 + qOld.y };
+
+    store.zoomToward(-10 / 24, worldHitBefore, {
+      ndcX,
+      ndcY,
+      aspect,
+      centerY: cOld,
+      baseY,
+      localSmoothY,
+      planeY,
+    });
+
+    const after = useCameraStore.getState();
+    expect(after.zoom).toBeCloseTo(14, 6);
+    const cNext = spectateFocusElevation(after.zoom, baseY, localSmoothY);
+    const qNext = spectateCursorGroundOffset(
+      ndcX,
+      ndcY,
+      aspect,
+      after.zoom,
+      after.yaw,
+      effectiveSpectatePitchDeg(after.zoom, after.pitchOffsetDeg),
+      cNext,
+      planeY,
+    );
+    expect(qNext).not.toBeNull();
+    if (qNext === null) {
+      throw new Error('Expected ground hit after zoom');
+    }
+    expect(after.center.x + qNext.x).toBeCloseTo(worldHitBefore.x, 5);
+    expect(after.center.y + qNext.y).toBeCloseTo(worldHitBefore.y, 5);
   });
 });

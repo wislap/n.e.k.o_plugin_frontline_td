@@ -9,9 +9,12 @@ export const SPECTATE_MAX_PITCH_DEG = 86;
 export const SPECTATE_DEFAULT_DIST = 26;
 export const SPECTATE_MIN_DIST = 8;
 export const SPECTATE_MAX_DIST = 80;
+export const SPECTATE_TERRAIN_FOLLOW_START_DIST = 22;
+export const SPECTATE_TERRAIN_FOLLOW_FULL_DIST = 11;
 export const TACTICAL_MIN_HEIGHT = 10;
 export const TACTICAL_MAX_HEIGHT = 120;
 export const TRANSITION_MS = 400;
+export const TRANSITION_MIN_FOV_DEG = 1.2;
 
 export function clampSpectateDist(dist: number): number {
   return Math.min(SPECTATE_MAX_DIST, Math.max(SPECTATE_MIN_DIST, dist));
@@ -191,6 +194,36 @@ export function easeInOut(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
+// Option B focus elevation: locked to constant map `baseY` at mid/far
+// distances (`dist >= 22`) so WASD/drag panning never bobs with terrain,
+// and smoothly blended into `localSmoothY` when zoomed close in (`<= 11`).
+export function spectateFocusElevation(dist: number, baseY: number, localSmoothY: number): number {
+  if (dist >= SPECTATE_TERRAIN_FOLLOW_START_DIST) {
+    return baseY;
+  }
+  if (dist <= SPECTATE_TERRAIN_FOLLOW_FULL_DIST) {
+    return localSmoothY;
+  }
+  const t =
+    (SPECTATE_TERRAIN_FOLLOW_START_DIST - dist) /
+    (SPECTATE_TERRAIN_FOLLOW_START_DIST - SPECTATE_TERRAIN_FOLLOW_FULL_DIST);
+  return baseY + (localSmoothY - baseY) * easeInOut(t);
+}
+
+// Interpolates vertical FOV during Dolly-Zoom mode transitions by linearly
+// blending tan(fov/2) so apparent perspective convergence transitions smoothly.
+export function dollyZoomFovDeg(
+  blend: number,
+  spectateFovDeg: number = SPECTATE_FOV_DEG,
+  minFovDeg: number = TRANSITION_MIN_FOV_DEG,
+): number {
+  const u = Math.max(0, Math.min(1, blend));
+  const tan0 = halfFovTan(spectateFovDeg);
+  const tan1 = halfFovTan(minFovDeg);
+  const tanHalf = tan0 + (tan1 - tan0) * u;
+  return (Math.atan(tanHalf) * 360) / Math.PI;
+}
+
 // Both cameras use map north (-Z) as their `up` reference. For the
 // perspective camera that vector is never parallel to the view direction
 // at pitch in (0°, 90°], so lookAt stays well defined through the whole
@@ -221,6 +254,19 @@ export function spectateViewDir(pitchDeg: number): { x: number; y: number; z: nu
   return { x: 0, y: -Math.sin(pitch), z: -Math.cos(pitch) };
 }
 
+function perspectiveClipPlanesWithMaxNear(
+  dist: number,
+  mapWidth: number,
+  mapHeight: number,
+  maxNear: number,
+): { near: number; far: number } {
+  const safeDist = Math.max(SPECTATE_MIN_DIST, dist);
+  const near = Math.max(0.8, Math.min(maxNear, safeDist * 0.12));
+  const diag = Math.hypot(Math.max(1, mapWidth), Math.max(1, mapHeight));
+  const far = Math.max(500, safeDist + diag + 120);
+  return { near, far };
+}
+
 // Dynamic depth clip planes for the perspective camera (ADR 0051): tightens
 // near with view distance to preserve 24-bit depth buffer precision while
 // expanding far to cover large maps.
@@ -229,11 +275,17 @@ export function perspectiveClipPlanes(
   mapWidth: number,
   mapHeight: number,
 ): { near: number; far: number } {
-  const safeDist = Math.max(SPECTATE_MIN_DIST, dist);
-  const near = Math.max(0.8, Math.min(8, safeDist * 0.12));
-  const diag = Math.hypot(Math.max(1, mapWidth), Math.max(1, mapHeight));
-  const far = Math.max(500, safeDist + diag + 120);
-  return { near, far };
+  return perspectiveClipPlanesWithMaxNear(dist, mapWidth, mapHeight, 8);
+}
+
+// Transition clip planes cap near at 200 (below the DOME_RADIUS = 380 sky
+// dome) so telephoto Dolly-Zoom distances keep high depth precision.
+export function perspectiveTransitionClipPlanes(
+  dist: number,
+  mapWidth: number,
+  mapHeight: number,
+): { near: number; far: number } {
+  return perspectiveClipPlanesWithMaxNear(dist, mapWidth, mapHeight, 200);
 }
 
 // Dynamic depth clip planes for the top-down orthographic camera (ADR 0051).

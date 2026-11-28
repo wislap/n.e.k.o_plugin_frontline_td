@@ -13,6 +13,7 @@ import {
   nearestNorthYaw,
   SPECTATE_DEFAULT_DIST,
   spectateCursorGroundOffset,
+  spectateFocusElevation,
 } from './camera-math';
 import type { PrimaryMode } from './interaction-store';
 
@@ -23,6 +24,8 @@ interface ZoomAnchor {
   ndcY: number;
   aspect: number;
   centerY: number;
+  baseY?: number;
+  localSmoothY?: number;
   planeY: number;
 }
 
@@ -118,6 +121,14 @@ export const useCameraStore = create<CameraState>((set, get) => ({
       if (anchor !== undefined) {
         const pOld = effectiveSpectatePitchDeg(oldZoom, state.pitchOffsetDeg);
         const pNext = effectiveSpectatePitchDeg(next, nextPitchOffset);
+        const cOld =
+          anchor.baseY !== undefined && anchor.localSmoothY !== undefined
+            ? spectateFocusElevation(oldZoom, anchor.baseY, anchor.localSmoothY)
+            : anchor.centerY;
+        const cNext =
+          anchor.baseY !== undefined && anchor.localSmoothY !== undefined
+            ? spectateFocusElevation(next, anchor.baseY, anchor.localSmoothY)
+            : anchor.centerY;
         const qOld = spectateCursorGroundOffset(
           anchor.ndcX,
           anchor.ndcY,
@@ -125,7 +136,7 @@ export const useCameraStore = create<CameraState>((set, get) => ({
           oldZoom,
           state.yaw,
           pOld,
-          anchor.centerY,
+          cOld,
           anchor.planeY,
         );
         const qNext = spectateCursorGroundOffset(
@@ -135,7 +146,7 @@ export const useCameraStore = create<CameraState>((set, get) => ({
           next,
           state.yaw,
           pNext,
-          anchor.centerY,
+          cNext,
           anchor.planeY,
         );
         if (qOld !== null && qNext !== null) {
