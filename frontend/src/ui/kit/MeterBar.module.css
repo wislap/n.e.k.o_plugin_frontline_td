@@ -65,12 +65,12 @@
 
 .tone-ok {
   background: var(--semantic-ok);
-  box-shadow: 0 0 8px var(--semantic-ok-35);
+  box-shadow: 0 0 8px var(--semantic-ok-glow);
 }
 
 .tone-warn {
   background: var(--semantic-warn);
-  box-shadow: 0 0 8px var(--semantic-warn-35);
+  box-shadow: 0 0 8px var(--semantic-warn-glow);
 }
 
 .tone-danger {

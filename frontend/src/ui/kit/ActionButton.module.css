@@ -57,7 +57,7 @@
   color: var(--text-primary);
   box-shadow:
     0 2px 10px var(--shadow-drop),
-    inset 0 0 0 1px var(--glint-inset-strong);
+    inset 0 0 0 1px var(--glint-inset);
 }
 
 .active:hover:not(:disabled) {

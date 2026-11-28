@@ -85,13 +85,13 @@
 }
 
 .tagWarn {
-  border-color: var(--semantic-warn-45);
+  border-color: var(--semantic-warn-glow);
   background: var(--semantic-warn-dim);
   color: var(--semantic-warn);
 }
 
 .tagDanger {
-  border-color: var(--semantic-danger-45);
+  border-color: var(--semantic-danger-glow);
   background: var(--semantic-danger-dim);
   color: var(--semantic-danger);
 }
@@ -142,8 +142,14 @@
   }
 }
 
+@media (max-height: 720px) {
+  .body {
+    max-height: 32vh;
+  }
+}
+
 @media (max-height: 700px) {
   .body {
-    max-height: 30vh;
+    max-height: 24vh;
   }
 }

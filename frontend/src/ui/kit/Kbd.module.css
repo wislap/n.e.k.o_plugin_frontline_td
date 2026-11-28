@@ -8,18 +8,18 @@
   border-radius: var(--radius-btn);
   border: none;
   background: var(--ink-chip);
-  color: var(--ink-dark-3);
+  color: var(--ink-dark);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  box-shadow: 0 1px 3px var(--shadow-chip);
+  box-shadow: 0 1px 3px var(--shadow-drop);
 }
 
 .active {
   border: none;
-  background: var(--mode-accent-92);
-  color: var(--ink-dark-1);
+  background: var(--mode-accent);
+  color: var(--ink-dark);
 }

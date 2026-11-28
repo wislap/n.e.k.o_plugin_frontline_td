@@ -5,6 +5,11 @@
 // fog film hazed toward the sky.
 // Pure data consumed by the render layer (lighting, terrain shader,
 // background, fog, post, materials, geometry). No registry, no ids.
+import {
+  CANONICAL_DANGER_RED,
+  CANONICAL_MOVE_MARKER,
+  CANONICAL_WARN_AMBER,
+} from '../../client/palette';
 
 interface VisualLighting {
   hemiSky: string;
@@ -22,20 +27,15 @@ interface VisualLighting {
 }
 
 interface VisualTerrain {
-  // Height ramp: vertex surface colors are mixed toward rampLow/rampHigh by
-  // normalized terrain height, then scaled by rampStrength.
+  // Height ramp: ground albedo is mixed between rampLow and rampHigh by
+  // normalized terrain height.
   rampLow: string;
   rampHigh: string;
-  rampStrength: number;
   cliffColor: string;
   // normal.y smoothstep range over which the cliff color blends in.
   cliffStart: number;
   cliffEnd: number;
   gridStrength: number;
-  // Fraction of gridStrength drawn in the 3D view; the info2d view always
-  // draws the full grid (1 = grid everywhere, 0 = grid only in info2d).
-  grid3d?: number | undefined;
-  noiseAmp: number;
   slopeDarken: number;
   // Dirt/gravel macro patches blended over the ramp (undefined = off).
   dirt?: string | undefined;
@@ -81,8 +81,18 @@ interface VisualMaterials {
 interface VisualMarkers {
   accent: string;
   secondary: string;
+  danger: string;
+  warn: string;
   invalid: string;
   link: string;
+  move: string;
+  service: string;
+  connect: string;
+  hover: string;
+  cellHover: string;
+  neutral: string;
+  tracer: string;
+  hostileGlyph: string;
 }
 
 interface VisualBackground {
@@ -121,10 +131,7 @@ interface VisualPad {
 
 export interface RenderVisual {
   accent: string;
-  // Scales scene.environmentIntensity for the PMREM sky.
-  envIntensity?: number | undefined;
   fogColor: string;
-  fogSoft: boolean;
   // Horizon haze: scene-fog near/far in map-diagonal units.
   hazeNear: number;
   hazeFar: number;
@@ -146,7 +153,6 @@ export interface RenderVisual {
 export const VISUAL: RenderVisual = {
   accent: '#FFE600',
   fogColor: '#3d453a',
-  fogSoft: true,
   // Distance haze starts inside the playfield at overview distance —
   // the far fog merges into the horizon (b8bd104 near/far).
   hazeNear: 0.45,
@@ -169,15 +175,11 @@ export const VISUAL: RenderVisual = {
     // Meadow ramp: valley green → sunlit grass, warm dirt on cliffs.
     rampLow: '#4f7c3e',
     rampHigh: '#9cbf74',
-    rampStrength: 1,
     cliffColor: '#a99e88',
     cliffStart: 0.55,
     cliffEnd: 0.82,
     // Grid is an information layer — drawn only in the info2d view.
     gridStrength: 0.07,
-    grid3d: 0,
-    // Continuous macro noise only — no per-cell hash colour in 3D.
-    noiseAmp: 0,
     dirt: '#8d8368',
     slopeDarken: 0.2,
     edgeOcc: 0.1,
@@ -194,8 +196,8 @@ export const VISUAL: RenderVisual = {
     saturation: 1.08,
   },
   materials: {
-    // Painted plates read as ~0.8 albedo off-white under AgX — below the
-    // clip point so sun highlights keep tonal variation.
+    // Painted plates read as ~0.8 albedo off-white with NoToneMapping — below
+    // the clip point so sun highlights keep tonal variation.
     unitBody: '#d8d9d1',
     unitTrim: '#25282a',
     structureBody: '#d9dad2',
@@ -210,8 +212,18 @@ export const VISUAL: RenderVisual = {
   markers: {
     accent: '#FFE600',
     secondary: '#1f2123',
-    invalid: '#d43a2e',
+    danger: CANONICAL_DANGER_RED,
+    warn: CANONICAL_WARN_AMBER,
+    invalid: CANONICAL_DANGER_RED,
     link: '#ff9a2a',
+    move: CANONICAL_MOVE_MARKER,
+    service: '#7fd4ff',
+    connect: '#7be8b8',
+    hover: '#d8e8ff',
+    cellHover: '#94b8d8',
+    neutral: '#8890a0',
+    tracer: '#ffd24f',
+    hostileGlyph: '#ff8a80',
   },
   scatter: { density: 0.55 },
   background: {

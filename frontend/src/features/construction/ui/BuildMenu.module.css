@@ -23,7 +23,7 @@
 
 .toolbar > button:last-child {
   border-radius: var(--radius-btn);
-  border-color: var(--ink-border);
+  border-color: var(--border-subtle);
   background: var(--surface-menu-card);
 }
 

@@ -18,7 +18,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--ink-strong);
+  color: var(--ink);
   font-size: var(--text-sm);
   font-weight: 500;
   white-space: nowrap;
@@ -38,7 +38,7 @@
   border-radius: 50%;
   border: none;
   background: var(--surface-pill);
-  color: var(--ink-dark-2);
+  color: var(--ink-dark);
   box-shadow: 0 2px 10px var(--shadow-drop);
   cursor: pointer;
   font-family: inherit;
@@ -59,9 +59,21 @@
 
 .btnActive {
   background: var(--mode-accent);
-  color: var(--ink-dark-1);
+  color: var(--ink-dark);
 }
 
 .cap {
   display: none;
+}
+
+@media (max-height: 700px) {
+  .rail {
+    gap: var(--space-1);
+  }
+
+  .btn {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+  }
 }

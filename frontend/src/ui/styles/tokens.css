@@ -1,140 +1,91 @@
-:root {
-  /* Obsidian & slate surfaces */
-  --surface-bg: #070b13;
-  --surface-panel: rgba(10, 15, 25, 0.84);
-  --surface-elevated: rgba(16, 23, 36, 0.94);
-  --surface-ghost: rgba(12, 18, 30, 0.64);
-  --surface-hover: rgba(148, 178, 214, 0.11);
-  --surface-inset: rgba(5, 8, 15, 0.72);
-  --backdrop-blur: blur(10px);
-
-  /* Hairline steel borders */
-  --border-subtle: rgba(148, 178, 214, 0.22);
-  --border-strong: rgba(148, 178, 214, 0.45);
-  --border-grid: rgba(148, 178, 214, 0.08);
-
-  /* Semantic palette */
-  --semantic-danger: #ff5c5c;
-  --semantic-danger-dim: rgba(255, 92, 92, 0.16);
-  --semantic-danger-glow: rgba(255, 92, 92, 0.36);
-  --semantic-warn: #ffc14d;
-  --semantic-warn-dim: rgba(255, 193, 77, 0.16);
-  --semantic-ok: #46e09a;
-  --semantic-ok-dim: rgba(70, 224, 154, 0.16);
-
-  /* Typography colors */
-  --text-primary: #eef3fa;
-  --text-secondary: #c1cfe0;
-  --text-muted: #8fa3bd;
-
-  /* Offline industrial font stacks */
-  --font-sans:
-    'Bahnschrift', 'DIN Alternate', 'Segoe UI Variable Text', 'PingFang SC', 'Microsoft YaHei UI',
-    system-ui, sans-serif;
-  --font-mono: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', monospace;
-
-  /* Scale & rhythm */
-  --text-xs: 10px;
-  --text-sm: 11px;
-  --text-base: 12px;
-  --text-md: 13px;
-  --text-lg: 15px;
-
-  --space-1: 4px;
-  --space-2: 6px;
-  --space-3: 10px;
-  --space-4: 14px;
-
-  /* Elevation & layering */
-  --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-
-  --z-hud: 900;
-  --z-modal: 1000;
-  --z-tooltip: 1050;
-
-  --ease-snap: cubic-bezier(0.2, 0.85, 0.25, 1);
-}
-
 /* Field look (the single unconditional skin): dark translucent cards on
    a shared 10px radius, soft warm-white type, signal-yellow accent for
    the current mode and primary actions. Capsule for text buttons,
    true circles for icon-only buttons. */
 :root {
+  /* Field surfaces & backdrop */
+  --surface-bg: #0c0f11;
   --surface-panel: rgba(20, 24, 27, 0.9);
   --surface-elevated: rgba(26, 31, 35, 0.94);
   --surface-ghost: rgba(22, 27, 31, 0.72);
+  --surface-hover: rgba(230, 233, 226, 0.1);
   --surface-inset: rgba(10, 13, 15, 0.8);
+  --surface-pill: rgba(244, 246, 238, 0.95);
+  --backdrop-blur: blur(10px);
+
+  /* Hairline stone borders */
   --border-subtle: rgba(230, 233, 226, 0.16);
   --border-strong: rgba(230, 233, 226, 0.4);
+
+  /* Field ink & mode accent */
   --text-primary: #f0f1ea;
   --text-secondary: #d6d9cf;
   --text-muted: #9aa094;
+  --ink: rgba(246, 248, 242, 0.94);
+  --ink-veil: rgba(246, 248, 242, 0.14);
+  --ink-chip: rgba(238, 240, 232, 0.9);
+  --ink-white: #ffffff;
+  --ink-dark: #22251f;
   --mode-accent: #ffe600;
   --mode-accent-dim: rgba(255, 230, 0, 0.14);
   --mode-accent-glow: rgba(255, 230, 0, 0.32);
-  --mode-accent-92: rgba(255, 230, 0, 0.92);
+
+  /* Semantic palette (symmetric 3-step scale + light alert text) */
+  --semantic-ok: #46e09a;
+  --semantic-ok-dim: rgba(70, 224, 154, 0.15);
+  --semantic-ok-glow: rgba(70, 224, 154, 0.38);
+  --semantic-warn: #ffc14d;
+  --semantic-warn-dim: rgba(255, 193, 77, 0.15);
+  --semantic-warn-glow: rgba(255, 193, 77, 0.42);
+  --semantic-warn-text: #ffe8b8;
+  --semantic-danger: #ff5c5c;
+  --semantic-danger-dim: rgba(255, 92, 92, 0.15);
+  --semantic-danger-glow: rgba(255, 92, 92, 0.4);
+  --semantic-danger-text: #ffd4d4;
+
+  /* Offline industrial font stacks & scale */
+  --font-sans:
+    'Bahnschrift', 'DIN Alternate', 'Segoe UI Variable Text', 'PingFang SC', 'Microsoft YaHei UI',
+    system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', monospace;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+
+  /* Rhythm & radii */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 10px;
+  --space-4: 14px;
   --radius-panel: 10px;
   --radius-btn: 999px;
 
-  /* Field ink: warm off-white for text/icons on dark surfaces and light
-     pill fills, and the dark olive ink used on those pills. */
-  --ink-strong: rgba(246, 248, 242, 0.95);
-  --ink: rgba(246, 248, 242, 0.92);
-  --ink-veil: rgba(246, 248, 242, 0.14);
-  --ink-chip: rgba(238, 240, 232, 0.9);
-  --ink-border: rgba(238, 240, 232, 0.14);
-  --ink-white: #ffffff;
-  --ink-dark: #101310;
-  --ink-dark-1: #22251f;
-  --ink-dark-2: #23261f;
-  --ink-dark-3: #2a2e26;
-  --surface-pill: rgba(244, 246, 238, 0.94);
-  --surface-pill-strong: rgba(244, 246, 238, 0.96);
-
-  /* Drop shadows and inner glints */
+  /* Elevation, shadows & glints */
+  --shadow-panel: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-elevated: 0 12px 36px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --shadow-drop: rgba(10, 14, 10, 0.4);
-  --shadow-chip: rgba(10, 14, 10, 0.35);
-  --shadow-glyph: rgba(10, 14, 10, 0.65);
-  --shadow-glyph-strong: rgba(10, 14, 10, 0.7);
-  --glint-inset: rgba(255, 255, 255, 0.05);
-  --glint-inset-strong: rgba(255, 255, 255, 0.06);
+  --shadow-glyph: rgba(10, 14, 10, 0.68);
+  --glint-inset: rgba(255, 255, 255, 0.06);
 
-  /* Semantic alpha variants (washes, hairline borders, glows); the
-     numeric suffix is the alpha in percent. */
-  --semantic-ok-12: rgba(70, 224, 154, 0.12);
-  --semantic-ok-32: rgba(70, 224, 154, 0.32);
-  --semantic-ok-35: rgba(70, 224, 154, 0.35);
-  --semantic-ok-38: rgba(70, 224, 154, 0.38);
-  --semantic-ok-40: rgba(70, 224, 154, 0.4);
-  --semantic-warn-12: rgba(255, 193, 77, 0.12);
-  --semantic-warn-32: rgba(255, 193, 77, 0.32);
-  --semantic-warn-35: rgba(255, 193, 77, 0.35);
-  --semantic-warn-38: rgba(255, 193, 77, 0.38);
-  --semantic-warn-42: rgba(255, 193, 77, 0.42);
-  --semantic-warn-45: rgba(255, 193, 77, 0.45);
-  --semantic-warn-50: rgba(255, 193, 77, 0.5);
-  --semantic-warn-55: rgba(255, 193, 77, 0.55);
-  --semantic-warn-text: #ffe8b8;
-  --semantic-danger-14: rgba(255, 92, 92, 0.14);
-  --semantic-danger-42: rgba(255, 92, 92, 0.42);
-  --semantic-danger-45: rgba(255, 92, 92, 0.45);
-  --semantic-danger-55: rgba(255, 92, 92, 0.55);
-  --semantic-danger-text: #ffd4d4;
+  /* Layering & motion */
+  --z-hud: 900;
+  --z-modal: 1000;
+  --z-tooltip: 1050;
+  --ease-snap: cubic-bezier(0.2, 0.85, 0.25, 1);
 
-  /* Component surfaces and one-off colours */
+  /* Component surfaces & resource colours */
   --resource-ore: #d9a45b;
   --resource-material: #9fb8cc;
   --resource-ammo: #ff8a5c;
-  --surface-minimap: #060a12;
-  --surface-stock-row: rgba(5, 8, 15, 0.42);
+  --surface-minimap: #060a12; /* matches minimap fogRgb (6, 10, 18) */
   --surface-stock-warn: rgba(20, 24, 20, 0.72);
   --surface-menu-card: rgba(18, 22, 20, 0.78);
   --surface-menu-card-hover: rgba(30, 36, 32, 0.88);
   --surface-toast-danger: rgba(44, 12, 18, 0.92);
-  --meterbar-track: rgba(7, 11, 19, 0.48);
-  --endscreen-veil: rgba(7, 11, 19, 0.88);
-  --endscreen-halo: rgba(16, 26, 44, 0.55);
-  --endscreen-scanline: rgba(148, 178, 214, 0.03);
-  --endscreen-scrim: rgba(5, 8, 15, 0.72);
+  --meterbar-track: rgba(10, 13, 15, 0.48);
+  --endscreen-veil: rgba(10, 13, 15, 0.88);
+  --endscreen-halo: rgba(26, 31, 35, 0.55);
+  --endscreen-scanline: rgba(230, 233, 226, 0.03);
+  --endscreen-scrim: rgba(10, 13, 15, 0.72);
 }

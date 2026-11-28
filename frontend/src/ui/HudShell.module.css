@@ -38,11 +38,13 @@
 }
 
 .colRight {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(min-content, 1fr) auto minmax(min-content, 1fr);
   justify-self: end;
-  justify-content: space-between;
-  align-items: flex-end;
+  justify-items: end;
+  width: 100%;
   max-width: min(340px, 32vw);
-  position: relative;
 }
 
 .slot {
@@ -60,8 +62,13 @@
 }
 
 .topLeft {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-height: 0;
   align-items: flex-start;
+}
+
+:where(.topLeft > *) {
+  flex-shrink: 0;
 }
 
 .topCenter {
@@ -71,25 +78,23 @@
 }
 
 .topRight {
-  flex: 0 1 auto;
+  align-self: start;
   min-height: 0;
+  max-height: 100%;
   align-items: flex-end;
 }
 
 .middleLeft {
-  flex: 0 1 auto;
+  flex: 0 100 auto;
   min-height: 0;
   overflow: hidden;
   align-items: flex-start;
 }
 
-/* Anchored to the column's vertical centre so the right rail stays put
-   when the bottom-right inspector appears or resizes. */
+/* Centered inside the middle grid track (`1fr auto 1fr`) so the right
+   rail stays stationary until topRight or bottomRight needs extra room. */
 .middleRight {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  align-self: center;
   align-items: flex-end;
 }
 
@@ -106,19 +111,13 @@
 }
 
 .bottomRight {
-  flex: 0 1 auto;
+  align-self: end;
   min-height: 0;
+  max-height: 100%;
   align-items: flex-end;
 }
 
 /* Shared HUD bar / banner helpers used by Hud.tsx */
-.bottomLeftBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .selectionBadge {
   display: inline-flex;
   align-items: center;
@@ -197,10 +196,6 @@
     max-width: min(240px, 31vw);
   }
 
-  .bottomLeftBar {
-    gap: var(--space-1);
-  }
-
   .selectionBadge {
     height: 22px;
     padding: 0 6px;
@@ -212,5 +207,11 @@
   .shell {
     gap: var(--space-1);
     padding: var(--space-2);
+  }
+
+  .colLeft,
+  .colCenter,
+  .colRight {
+    gap: var(--space-1);
   }
 }

@@ -5,6 +5,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
@@ -20,11 +21,11 @@
 }
 
 .tone-danger {
-  border-color: var(--semantic-danger-45);
+  border-color: var(--semantic-danger-glow);
 }
 
 .tone-warn {
-  border-color: var(--semantic-warn-45);
+  border-color: var(--semantic-warn-glow);
 }
 
 .header {
@@ -99,11 +100,11 @@
 :global([data-hud-slot='topCenter']) .tone-mode {
   border: none;
   background: var(--surface-pill);
-  color: var(--ink-dark-2);
+  color: var(--ink-dark);
 }
 
 :global([data-hud-slot='topCenter']) .tone-mode .body,
 :global([data-hud-slot='topCenter']) .tone-mode .body span {
-  color: var(--ink-dark-2);
+  color: var(--ink-dark);
   text-shadow: none;
 }

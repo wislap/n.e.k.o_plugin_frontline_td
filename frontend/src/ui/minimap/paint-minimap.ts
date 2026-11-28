@@ -10,8 +10,34 @@ import {
 import type { ContentDb, ResolvedMap } from '../../content/index';
 import type { Snapshot } from '../../core/index';
 import type { MinimapMark, MinimapMarkDef, MinimapRasterDef } from './contributions';
+import { MINIMAP_PALETTE } from './palette';
 
-const MOVE_MARKER_MS = 900;
+export const MOVE_MARKER_MS = 900;
+
+export function isMinimapAnimating(params: {
+  moveMarker: { x: number; y: number; at: number } | null;
+  nowMs: number;
+  snapshot: Snapshot | null;
+  isHostile: (observer: number, faction: number) => boolean;
+  marks: readonly MinimapMarkDef[];
+  captureMode?: boolean;
+}): boolean {
+  if (params.captureMode === true) {
+    return false;
+  }
+  if (params.moveMarker !== null) {
+    const age = params.nowMs - params.moveMarker.at;
+    if (age >= 0 && age < MOVE_MARKER_MS) {
+      return true;
+    }
+  }
+  for (const def of params.marks) {
+    if (def.isAnimating?.({ snapshot: params.snapshot, isHostile: params.isHostile }) === true) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export interface MinimapRenderCache {
   db: ContentDb;
@@ -241,7 +267,7 @@ export function paintMinimapCanvas(
   }
 
   // 1. Subtle radar grid lines at 25% / 50% / 75%.
-  ctx.strokeStyle = 'rgba(140, 185, 235, 0.08)';
+  ctx.strokeStyle = MINIMAP_PALETTE.gridStroke;
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (const frac of [0.25, 0.5, 0.75]) {
@@ -280,7 +306,7 @@ export function paintMinimapCanvas(
       const pt = mapToCanvas(params.moveMarker.x, params.moveMarker.y, width, height, mapW, mapH);
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - progress);
-      ctx.strokeStyle = '#ffe08a';
+      ctx.strokeStyle = MINIMAP_PALETTE.movePing;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, 3 + progress * 8, 0, Math.PI * 2);
@@ -321,12 +347,12 @@ export function paintMinimapCanvas(
       }
     }
     ctx.closePath();
-    ctx.fillStyle = 'rgba(232, 244, 255, 0.045)';
+    ctx.fillStyle = MINIMAP_PALETTE.frustumFill;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(5, 8, 15, 0.82)';
+    ctx.strokeStyle = MINIMAP_PALETTE.frustumOutline;
     ctx.lineWidth = 2.75;
     ctx.stroke();
-    ctx.strokeStyle = '#e8f4ff';
+    ctx.strokeStyle = MINIMAP_PALETTE.frustumStroke;
     ctx.lineWidth = 1.35;
     ctx.stroke();
     ctx.restore();

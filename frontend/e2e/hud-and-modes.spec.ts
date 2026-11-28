@@ -429,6 +429,75 @@ test('right rail circles stay right-aligned and anchored when the inspector appe
   expect(Math.abs(railAfter.y - (railBefore?.y ?? 0))).toBeLessThanOrEqual(1);
   expect(Math.abs(railAfter.x - (railBefore?.x ?? 0))).toBeLessThanOrEqual(1);
 
+  // Switch to F2 build and box-select main_base to open a tall own_structure
+  // InspectorPanel; RightRail shifts cleanly via CSS Grid with zero overlap.
+  await page.keyboard.press('F2');
+  await expect(page.locator('[data-mode="build"]')).toBeVisible();
+  await expect(
+    page.locator('[data-hud-slot="bottomCenter"]').getByRole('button', { name: /炮塔/ }),
+  ).toBeVisible();
+  await page.mouse.move(size.width * 0.35, size.height * 0.35);
+  await page.mouse.down();
+  await page.mouse.move(size.width * 0.65, size.height * 0.72, { steps: 8 });
+  await page.mouse.up();
+  await expect(bottomRight).toContainText('主基地');
+  await assertHudBoundsAndNonOverlap(page, '1280x720 F2+own_structure');
+
+  expect(failures).toEqual([]);
+});
+
+test('800x600 full HUD with InspectorPanel, SquadPanel (bottomCenter), DebugPanel, and KeyGuideRail stays in-bounds and non-overlapping', async ({
+  page,
+}) => {
+  const failures = collectFailures(page);
+  await page.setViewportSize({ width: 800, height: 600 });
+  await bootAndWaitForTick(page);
+
+  const topLeft = page.locator('[data-hud-slot="topLeft"]');
+  const topCenter = page.locator('[data-hud-slot="topCenter"]');
+  const middleLeft = page.locator('[data-hud-slot="middleLeft"]');
+  const bottomLeft = page.locator('[data-hud-slot="bottomLeft"]');
+  const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
+  const bottomRight = page.locator('[data-hud-slot="bottomRight"]');
+
+  // Phase A: F1 command — multi_own InspectorPanel + SquadPanel (bottomCenter) + DebugPanel + KeyGuideRail
+  await page.keyboard.press('F1');
+  await expect(page.locator('[data-mode="command"]')).toBeVisible();
+  await page.mouse.move(800 * 0.35, 600 * 0.35);
+  await page.mouse.down();
+  await page.mouse.move(800 * 0.65, 600 * 0.72, { steps: 8 });
+  await page.mouse.up();
+
+  await expect(bottomRight.locator('> *').first()).toBeVisible();
+  await expect(bottomLeft).toContainText('已选中');
+  await expect(bottomCenter.getByRole('button', { name: /\+ 小队/ })).toBeVisible();
+
+  await bottomCenter.getByRole('button', { name: /\+ 小队/ }).click();
+  await expect(bottomCenter).toContainText('双击居中视角');
+
+  await page.keyboard.press('Backquote');
+  await expect(topLeft).toContainText('运行遥测');
+  await page.keyboard.press('KeyK');
+  await expect(middleLeft).toContainText('快捷键引导');
+
+  await assertHudBoundsAndNonOverlap(page, '800x600 F1+inspector+squad+debug+keyguide');
+
+  // Phase B: F2 build — tall own_structure (main_base) InspectorPanel + BuildMenu + ToolBanner + DebugPanel + KeyGuideRail
+  await page.keyboard.press('F2');
+  await expect(page.locator('[data-mode="build"]')).toBeVisible();
+  await expect(bottomCenter.getByRole('button', { name: /炮塔/ })).toBeVisible();
+  await page.mouse.move(800 * 0.35, 600 * 0.35);
+  await page.mouse.down();
+  await page.mouse.move(800 * 0.65, 600 * 0.72, { steps: 8 });
+  await page.mouse.up();
+  await expect(bottomRight).toContainText('主基地');
+
+  await bottomCenter.getByRole('button', { name: /炮塔/ }).click();
+  await expect(topCenter).toContainText('放置 炮塔');
+  await expect(bottomRight).toContainText('主基地');
+
+  await assertHudBoundsAndNonOverlap(page, '800x600 F2+own_structure+place+debug+keyguide');
+
   expect(failures).toEqual([]);
 });
 
@@ -490,4 +559,189 @@ test('3D orbital rotation via Q/E and middle-drag updates compass and resets smo
   await expect(compass).toHaveAttribute('data-compass-deg', '0');
 
   expect(failures).toEqual([]);
+});
+
+test.describe('en-US HUD layout', () => {
+  test.use({ locale: 'en-US' });
+
+  test('800x600 full HUD across F1, F2, and F3 with InspectorPanel, SquadPanel, DebugPanel, KeyGuideRail, and live StockPanel warnings stays in-bounds and non-overlapping', async ({
+    page,
+  }) => {
+    const failures = collectFailures(page);
+    await page.setViewportSize({ width: 800, height: 600 });
+    await bootAndWaitForTick(page);
+
+    const topLeft = page.locator('[data-hud-slot="topLeft"]');
+    const topCenter = page.locator('[data-hud-slot="topCenter"]');
+    const topRight = page.locator('[data-hud-slot="topRight"]');
+    const middleLeft = page.locator('[data-hud-slot="middleLeft"]');
+    const bottomLeft = page.locator('[data-hud-slot="bottomLeft"]');
+    const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
+    const bottomRight = page.locator('[data-hud-slot="bottomRight"]');
+
+    // Phase A: F1 command — multi_own InspectorPanel + SquadPanel (bottomCenter) + DebugPanel + KeyGuideRail
+    await page.keyboard.press('F1');
+    await expect(page.locator('[data-mode="command"]')).toBeVisible();
+    await expect(topLeft.getByRole('tab', { name: /Command/ })).toBeVisible();
+    await page.mouse.move(800 * 0.35, 600 * 0.35);
+    await page.mouse.down();
+    await page.mouse.move(800 * 0.65, 600 * 0.72, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(bottomRight.locator('> *').first()).toBeVisible();
+    await expect(bottomLeft).toContainText('selected');
+    await expect(bottomCenter.getByRole('button', { name: /\+ Squad/ })).toBeVisible();
+
+    await bottomCenter.getByRole('button', { name: /\+ Squad/ }).click();
+    await expect(bottomCenter).toContainText('Double-click to center');
+
+    await page.keyboard.press('Backquote');
+    await expect(topLeft).toContainText('TELEMETRY');
+    await page.keyboard.press('KeyK');
+    await expect(middleLeft).toContainText('Key guide');
+
+    const modeTabsBox = await topLeft.locator('> *').first().boundingBox();
+    expect(modeTabsBox).not.toBeNull();
+    if (modeTabsBox !== null) {
+      expect(modeTabsBox.x + modeTabsBox.width).toBeLessThanOrEqual(251);
+    }
+    await assertHudBoundsAndNonOverlap(page, '800x600 [en-US] F1+inspector+squad+debug+keyguide');
+
+    // Phase B: F2 build — tall Main Base InspectorPanel + BuildMenu + Turret place banner + DebugPanel + KeyGuideRail
+    await page.keyboard.press('F2');
+    await expect(page.locator('[data-mode="build"]')).toBeVisible();
+    await expect(bottomCenter.getByRole('button', { name: /Turret/ })).toBeVisible();
+    await page.mouse.move(800 * 0.35, 600 * 0.35);
+    await page.mouse.down();
+    await page.mouse.move(800 * 0.65, 600 * 0.72, { steps: 8 });
+    await page.mouse.up();
+    await expect(bottomRight).toContainText('Main Base');
+
+    await bottomCenter.getByRole('button', { name: /Turret/ }).click();
+    await expect(topCenter).toContainText('Placing Turret');
+    await expect(bottomRight).toContainText('Main Base');
+
+    await assertHudBoundsAndNonOverlap(
+      page,
+      '800x600 [en-US] F2+own_structure+place+debug+keyguide',
+    );
+
+    // Phase C: Trigger live StockPanel .warnings while Main Base InspectorPanel is pinned in colRight
+    await topCenter.getByRole('tab', { name: '×3' }).click();
+    await page.keyboard.down('Shift');
+    for (const fx of [0.35, 0.41, 0.47, 0.53, 0.59, 0.65]) {
+      for (const fy of [0.32, 0.38]) {
+        await page.mouse.click(800 * fx, 600 * fy);
+      }
+    }
+    await page.keyboard.up('Shift');
+    await page.keyboard.press('Escape');
+
+    await page.mouse.move(800 * 0.31, 600 * 0.28);
+    await page.mouse.down();
+    await page.mouse.move(800 * 0.69, 600 * 0.42, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.press('KeyG');
+
+    await expect
+      .poll(async () => await topRight.locator('[class*="warnItem"]').count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+
+    // Re-pin Main Base InspectorPanel in bottomRight alongside live StockPanel warnings
+    await page.mouse.move(800 * 0.35, 600 * 0.44);
+    await page.mouse.down();
+    await page.mouse.move(800 * 0.65, 600 * 0.72, { steps: 8 });
+    await page.mouse.up();
+    await expect(bottomRight).toContainText('Main Base');
+    await assertHudBoundsAndNonOverlap(
+      page,
+      '800x600 [en-US] F2+live_warnings+own_structure+debug+keyguide',
+    );
+    const colRightBottomOk = await page.evaluate(() => {
+      const colRight = document
+        .querySelector('[data-hud-slot="bottomRight"]')
+        ?.parentElement?.getBoundingClientRect();
+      const bottomRightRect = document
+        .querySelector('[data-hud-slot="bottomRight"] > *')
+        ?.getBoundingClientRect();
+      if (colRight === undefined || bottomRightRect === undefined) {
+        return false;
+      }
+      return bottomRightRect.bottom <= colRight.bottom + 1;
+    });
+    expect(colRightBottomOk).toBe(true);
+
+    // Phase D: F3 logistics — RoadPanel + Road tool banner + InspectorPanel + DebugPanel + KeyGuideRail
+    await page.keyboard.press('F3');
+    await expect(page.locator('[data-mode="logistics"]')).toBeVisible();
+    await expect(bottomCenter.getByRole('button', { name: /Road Tool/ })).toBeVisible();
+    await page.keyboard.press('KeyR');
+    await expect(topCenter).toContainText('Road tool');
+    await expect(middleLeft).toContainText('Logistics Mode (F3)');
+
+    await assertHudBoundsAndNonOverlap(page, '800x600 [en-US] F3+road+inspector+debug+keyguide');
+
+    expect(failures).toEqual([]);
+  });
+
+  test('720x560 ModeTabs wrap and SquadPanel pill controls fit inside bottomCenter without overhang', async ({
+    page,
+  }) => {
+    const failures = collectFailures(page);
+    await page.setViewportSize({ width: 720, height: 560 });
+    await bootAndWaitForTick(page);
+
+    const topLeft = page.locator('[data-hud-slot="topLeft"]');
+    const bottomCenter = page.locator('[data-hud-slot="bottomCenter"]');
+
+    await page.keyboard.press('F1');
+    await expect(page.locator('[data-mode="command"]')).toBeVisible();
+    await expect(topLeft.getByRole('tab', { name: /Command/ })).toBeVisible();
+
+    await page.mouse.move(720 * 0.35, 560 * 0.35);
+    await page.mouse.down();
+    await page.mouse.move(720 * 0.65, 560 * 0.72, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(bottomCenter.getByRole('button', { name: /\+ Squad/ })).toBeVisible();
+    await bottomCenter.getByRole('button', { name: /\+ Squad/ }).click();
+    await expect(bottomCenter.getByRole('button', { name: 'Disband squad' })).toBeVisible();
+
+    await assertHudBoundsAndNonOverlap(page, '720x560 [en-US] F1+squad');
+
+    const fit = await page.evaluate(() => {
+      const modeTabs = document
+        .querySelector('[data-hud-slot="topLeft"] > *')
+        ?.getBoundingClientRect();
+      const topLeftRect = document
+        .querySelector('[data-hud-slot="topLeft"]')
+        ?.getBoundingClientRect();
+      const bottomCenterRect = document
+        .querySelector('[data-hud-slot="bottomCenter"]')
+        ?.getBoundingClientRect();
+      const disbandBtn = document
+        .querySelector('[data-hud-slot="bottomCenter"] button[aria-label="Disband squad"]')
+        ?.getBoundingClientRect();
+      if (
+        modeTabs === undefined ||
+        topLeftRect === undefined ||
+        bottomCenterRect === undefined ||
+        disbandBtn === undefined
+      ) {
+        return { ok: false };
+      }
+      return {
+        ok:
+          modeTabs.right <= topLeftRect.right + 0.5 &&
+          disbandBtn.right <= bottomCenterRect.right + 0.5,
+        modeTabsRight: modeTabs.right,
+        topLeftRight: topLeftRect.right,
+        disbandRight: disbandBtn.right,
+        bottomCenterRight: bottomCenterRect.right,
+      };
+    });
+    expect(fit.ok, JSON.stringify(fit)).toBe(true);
+
+    expect(failures).toEqual([]);
+  });
 });

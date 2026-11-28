@@ -65,6 +65,7 @@ export interface MinimapMarkDef {
   readonly id: string;
   readonly order: number;
   collect(input: MinimapInput): readonly MinimapMark[];
+  isAnimating?(input: Pick<MinimapInput, 'snapshot' | 'isHostile'>): boolean;
 }
 
 // Shared faction→disposition resolver for mark collectors.

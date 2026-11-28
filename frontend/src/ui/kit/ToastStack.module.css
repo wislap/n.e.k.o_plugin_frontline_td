@@ -50,13 +50,13 @@
 }
 
 .tone-danger {
-  border-color: var(--semantic-danger-55);
+  border-color: var(--semantic-danger-glow);
   border-left: 3px solid var(--semantic-danger);
   color: var(--semantic-danger-text);
 }
 
 .tone-warn {
-  border-color: var(--semantic-warn-50);
+  border-color: var(--semantic-warn-glow);
   border-left: 3px solid var(--semantic-warn);
   color: var(--semantic-warn-text);
 }

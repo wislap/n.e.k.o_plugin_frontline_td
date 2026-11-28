@@ -93,6 +93,7 @@ describe('submitMoveOrder', () => {
       inspect: vi.fn(),
       inspection: () => null,
       eventsSince: () => ({ events: [], cursor: 0 }),
+      subscribe: () => () => undefined,
     };
     return { client, submitted };
   }

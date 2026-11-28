@@ -17,7 +17,6 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: 2px 4px;
-  background: var(--surface-stock-row);
 }
 
 .cargoIcon {
@@ -78,7 +77,7 @@
   gap: 1px;
   padding: 4px 6px;
   border-radius: var(--radius-btn);
-  border: 1px solid var(--semantic-warn-32);
+  border: 1px solid var(--semantic-warn-glow);
   border-left: 2px solid var(--semantic-warn);
   background: var(--semantic-warn-dim);
 }
@@ -149,8 +148,8 @@
   padding: 0;
   gap: 4px;
   background: transparent;
-  color: var(--ink-strong);
-  text-shadow: 0 1px 6px var(--shadow-glyph-strong);
+  color: var(--ink);
+  text-shadow: 0 1px 6px var(--shadow-glyph);
 }
 
 .cargoIcon {
@@ -191,10 +190,19 @@
   border: none;
   border-radius: 50%;
   background: var(--surface-pill);
-  color: var(--ink-dark-2);
+  color: var(--ink-dark);
   box-shadow: 0 2px 8px var(--shadow-drop);
 }
 
 .priorityLabel {
   display: none;
+}
+
+@media (max-height: 700px) {
+  .warnings {
+    margin-top: var(--space-1);
+    padding-top: var(--space-1);
+    max-height: 52px;
+    overflow-y: auto;
+  }
 }
