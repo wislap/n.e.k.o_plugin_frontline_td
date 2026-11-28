@@ -1,5 +1,5 @@
-// Logistics overlay (M3 D), toggled with L and forced on while build
-// mode is active: updates shared CoverUniforms (RedFormat DataTexture)
+// Logistics overlay (M3 D), toggled with L and forced on while logistics
+// mode (F3) or place tool (tool.kind === 'place') is active: updates shared CoverUniforms (RedFormat DataTexture)
 // for terrain/road service-coverage tint, link polylines from pathCells
 // (brightness ∝ the 30 s EMA of outBp + inBp, red when either direction
 // saturates), and service-radius rings on nodes.

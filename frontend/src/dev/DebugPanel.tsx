@@ -1,4 +1,4 @@
-// Flow debug telemetry panel (dev only, topRight below StockPanel):
+// Flow debug telemetry panel (dev only, topLeft below ToastStack):
 // tick, speed, tick rate, entity count, top systems by avg time,
 // last worker error, and pause / speed step controls.
 import { useEffect, useState } from 'react';

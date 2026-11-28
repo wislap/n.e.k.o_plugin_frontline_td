@@ -52,7 +52,10 @@ export function EndScreen({ client, onRestart }: { client: SimClient; onRestart:
   const probes = stats?.probes ?? {};
   const probe = (name: string): number | undefined => probes[`${PROBE_PREFIX}${name}`];
   const own = `f${end.observer}`;
-  const foe = end.state.winner === -1 ? 'f2' : `f${end.state.winner}`;
+  const ownWavesKey = `${PROBE_PREFIX}waves.${own}`;
+  const enemyWaves = Object.entries(probes)
+    .filter(([k]) => k.startsWith(`${PROBE_PREFIX}waves.`) && k !== ownWavesKey)
+    .reduce((sum, [, v]) => sum + v, 0);
   const stockKeys = Object.keys(probes)
     .filter((k) => k.startsWith(`${PROBE_PREFIX}stock.${own}.`))
     .sort();
@@ -80,9 +83,7 @@ export function EndScreen({ client, onRestart }: { client: SimClient; onRestart:
           <div className={styles['statCell']}>
             {t('end.structures', { count: probe(`structures.${own}`) ?? 0 })}
           </div>
-          <div className={styles['statCell']}>
-            {t('end.waves', { count: probe(`waves.${foe}`) ?? 0 })}
-          </div>
+          <div className={styles['statCell']}>{t('end.waves', { count: enemyWaves })}</div>
           {stockKeys.map((k) => {
             const cargoName = k.split('.').pop() ?? '';
             const count = probes[k] ?? 0;

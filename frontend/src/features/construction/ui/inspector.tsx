@@ -305,7 +305,7 @@ const hostileStructure = defineInspectorSubject({
 
 const salvage = defineInspectorSubject({
   kind: 'salvage',
-  inspects: false,
+  inspects: true,
   hostile: false,
   resolve({ snapshot, subject, inspection }): SalvageView | null {
     const salvageChannel = readChannel(snapshot, SalvageChannel) ?? undefined;

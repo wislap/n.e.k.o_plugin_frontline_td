@@ -48,7 +48,7 @@ interface GpuStats {
 
 export interface UiState {
   debugPanelOpen: boolean;
-  // Logistics overlay toggle (L); forced on while build/logistics mode is active.
+  // Logistics overlay toggle (L); forced on while logistics mode (F3) or place tool (tool.kind === 'place') is active.
   logisticsOverlay: boolean;
   keymapHelpOpen: boolean;
   minimapOpen: boolean;

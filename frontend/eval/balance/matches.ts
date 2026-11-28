@@ -6,8 +6,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadContent } from '../../src/content/index';
-import { toFactionId } from '../../src/core/index';
+import { loadContent, localName } from '../../src/content/index';
+import { toFactionId, type FactionId } from '../../src/core/index';
 import { AssaultChannel, assaultEnded, defaultSetup } from '../../src/modes/assault/index';
 import type { AssaultState } from '../../src/modes/assault/index';
 import { resolveSetup } from '../../src/app/resolve-setup';
@@ -31,6 +31,36 @@ const BOTS: Record<string, (o: BotOptions) => ReturnType<typeof createRushBot>> 
   balanced: createBalancedBot,
 };
 
+interface StockSample {
+  tick: number;
+  material: number;
+  ore: number;
+  energy: number;
+  ammo: number;
+}
+
+const STOCK_CARGOS = {
+  material: localName('frontline_td:material'),
+  ore: localName('frontline_td:ore'),
+  energy: localName('frontline_td:energy'),
+  ammo: localName('frontline_td:ammo'),
+} as const;
+
+export function readPlayerStockSample(
+  tick: number,
+  probes: Readonly<Record<string, number>>,
+  playerFaction: FactionId,
+): StockSample {
+  const prefix = `frontline_td:assault.stock.f${Number(playerFaction)}.`;
+  return {
+    tick,
+    material: probes[`${prefix}${STOCK_CARGOS.material}`] ?? 0,
+    ore: probes[`${prefix}${STOCK_CARGOS.ore}`] ?? 0,
+    energy: probes[`${prefix}${STOCK_CARGOS.energy}`] ?? 0,
+    ammo: probes[`${prefix}${STOCK_CARGOS.ammo}`] ?? 0,
+  };
+}
+
 interface MatchRow {
   seed: number;
   bot: string;
@@ -40,7 +70,7 @@ interface MatchRow {
   hash: string;
   tickAvg: number;
   tickP95: number;
-  stock: { tick: number; material: number; ore: number; energy: number; ammo: number }[];
+  stock: StockSample[];
 }
 
 function stats(samples: number[]): { avg: number; p95: number } {
@@ -63,13 +93,6 @@ export function main(args: string[]): void {
   if (map === undefined) {
     throw new Error('proto_01 missing from content db');
   }
-  const cargoIndex = (id: string): number => db.cargos.byId(id)?.index ?? -1;
-  const stockKeys = [
-    'frontline_td:material',
-    'frontline_td:ore',
-    'frontline_td:energy',
-    'frontline_td:ammo',
-  ].map((id) => `frontline_td:assault.stock.f${Number(PLAYER)}.${cargoIndex(id)}`);
 
   const rows: MatchRow[] = [];
   for (const name of botNames) {
@@ -121,13 +144,7 @@ export function main(args: string[]): void {
         hash: sim.hash(),
         tickAvg: t.avg,
         tickP95: t.p95,
-        stock: samples.map((s) => ({
-          tick: s.tick,
-          material: Math.floor((s.probes[stockKeys[0] ?? ''] ?? 0) / 1000),
-          ore: Math.floor((s.probes[stockKeys[1] ?? ''] ?? 0) / 1000),
-          energy: Math.floor((s.probes[stockKeys[2] ?? ''] ?? 0) / 1000),
-          ammo: Math.floor((s.probes[stockKeys[3] ?? ''] ?? 0) / 1000),
-        })),
+        stock: samples.map((s) => readPlayerStockSample(s.tick, s.probes, PLAYER)),
       });
       console.log(
         `${name} seed=${seed} winner=${rows.at(-1)?.winner} t=${(tick / TICKS_PER_SECOND).toFixed(0)}s waves=${rows.at(-1)?.waves} hash=${rows.at(-1)?.hash}`,

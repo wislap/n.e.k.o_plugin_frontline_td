@@ -3,7 +3,10 @@
 // satisfies/Exclude pair fails typecheck if a kind is added to
 // HoverSubject without updating ALL_KINDS.
 import { describe, expect, it } from 'vitest';
-import { packHandle, type Inspection } from '../core/index';
+import { loadContent } from '../content/index';
+import { packHandle, toFactionId, toTick, type Inspection, type Snapshot } from '../core/index';
+import { SalvageChannel, type ConstructionSalvage } from '../features/construction/protocol';
+import { LOGISTICS_INSPECTOR_ID, type LogisticsInspection } from '../features/logistics/protocol';
 import {
   defineInspectorSubject,
   indexInspectorSubjects,
@@ -44,9 +47,72 @@ describe('INSPECTOR_SUBJECTS', () => {
   it('marks inspects/hostile flags on the expected kinds', () => {
     expect(INSPECTOR_SUBJECTS.get('own_unit')?.inspects).toBe(true);
     expect(INSPECTOR_SUBJECTS.get('own_structure')?.inspects).toBe(true);
+    expect(INSPECTOR_SUBJECTS.get('salvage')?.inspects).toBe(true);
     expect(INSPECTOR_SUBJECTS.get('road_segment')?.inspects).toBe(true);
     expect(INSPECTOR_SUBJECTS.get('hostile_unit')?.hostile).toBe(true);
     expect(INSPECTOR_SUBJECTS.get('hostile_structure')?.hostile).toBe(true);
+  });
+
+  it('resolves salvage with logistics inspection data when inspected', () => {
+    const db = loadContent();
+    const salvageDef = INSPECTOR_SUBJECTS.get('salvage');
+    expect(salvageDef).toBeDefined();
+    if (salvageDef === undefined) {
+      return;
+    }
+
+    const salvageChannel: ConstructionSalvage = {
+      handles: Float64Array.from([400]),
+      x: Float32Array.from([12.5]),
+      y: Float32Array.from([14.5]),
+    };
+    const snapshot: Snapshot = {
+      tick: toTick(10),
+      observer: toFactionId(1),
+      channels: { [SalvageChannel.id]: salvageChannel },
+      events: [],
+      layers: {},
+      changedLayers: [],
+    };
+    const logistics: LogisticsInspection = {
+      slots: [
+        {
+          cargo: 'frontline_td:material',
+          capacity: 50_000,
+          amount: 25_000,
+          class: 'reserve',
+          export: true,
+          site: false,
+          unmet: 'none',
+        },
+      ],
+      bottleneck: 0,
+      attachedNode: null,
+      node: null,
+    };
+    const inspection: Inspection = {
+      handle: packHandle(400, 0),
+      modifiers: [],
+      sections: { [LOGISTICS_INSPECTOR_ID]: logistics },
+    };
+
+    const view = salvageDef.resolve({
+      db,
+      map: db.maps.list[0] ?? null,
+      snapshot,
+      isHostile: (observer, faction) => faction !== 0 && faction !== observer,
+      subject: { kind: 'salvage', handle: 400 },
+      selected: new Set(),
+      inspection,
+    });
+    expect(view).toMatchObject({
+      kind: 'salvage',
+      handle: 400,
+      x: 12.5,
+      y: 14.5,
+      hasInspection: true,
+      logistics,
+    });
   });
 
   it('indexInspectorSubjects throws on a duplicate kind', () => {

@@ -42,8 +42,8 @@ export function traceRoute(
     }
     const route: number[] = [];
     let guard = 0;
-    // route stores flat (x, y) pairs, so the cap counts twice the cells.
-    while ((x !== tx || y !== ty) && route.length < ROUTE_MAX_CELLS * 2) {
+    // route stores flat (x, y) pairs; reserve 1 cell for the final push.
+    while ((x !== tx || y !== ty) && route.length < (ROUTE_MAX_CELLS - 1) * 2) {
       route.push(x, y);
       const d = pathing.directionAt(goal, x, y);
       if (d === null || (d.dx === 0 && d.dy === 0)) {
@@ -52,7 +52,7 @@ export function traceRoute(
       x += d.dx;
       y += d.dy;
       guard += 1;
-      if (guard > ROUTE_MAX_CELLS) {
+      if (guard >= ROUTE_MAX_CELLS - 1) {
         break;
       }
     }

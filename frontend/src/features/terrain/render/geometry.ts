@@ -180,9 +180,6 @@ export function buildTerrainGeometry(
   };
 }
 
-// Solid dark slate pedestal walls framing the four map borders so low-pitch
-// 360° camera orbits read as a solid carved tactical sandbox table.
-
 // Out-of-bounds terrain skirt (visual-languages): a ring of rolling noise
 // hills beyond the map rect so themed worlds sit in a landscape instead of
 // on a floating table. Heights blend from the nearest border cell into

@@ -44,7 +44,7 @@ function halfFovTan(fovDeg: number): number {
 }
 
 // Smart dolly-pitch curve: close inspection leans forward (34° at dist 8),
-// default distance sits at 55°, and overview zoom lifts toward 72°.
+// default distance sits at 50°, and overview zoom lifts toward 72°.
 export function baseSpectatePitchDeg(dist: number): number {
   const d = clampSpectateDist(dist);
   if (d <= SPECTATE_DEFAULT_DIST) {
