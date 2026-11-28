@@ -21,7 +21,7 @@
 - 有证据就可以反对，包括反对负责人、外部评审和本仓库的文档；同意也要基于核实，不附和。
 - 只做任务要求的改动，顺手发现的问题列出来汇报，不顺手改。新增模块、改模块边界或公共接口前，先简述方案。
 - 每个里程碑做完停下评审，通过后再开始下一个。下一步候选见 [architecture.md §1.4](docs/design/architecture.md#14-下一步候选)，开工前确认优先级。
-- 处理外部评审：先确认它基于哪个提交；逐条在当前代码里核实，分成"已修 / 属实 / 不实 / 需负责人定"；属实的每条配回归测试；黄金哈希变化逐条说明原因；结论沉淀为 ADR（如 0043、0045）。
+- 处理外部评审或前序诊断/优化清单：禁止未经源码或运行实证直接采信；先核实基于哪个提交，逐条分成"已修 / 属实 / 不实 / 需负责人定"；"问题属实"不等于"值得改"，须评估复杂度与实质收益，统一原语与架构整洁优先于局部修补；属实修复配回归测试，黄金哈希变化说明原因，结论沉淀为 ADR（如 0043、0045）。
 - 交付时如实报告跑了哪些检查、结果如何。Playwright `e2e/` 覆盖冒烟与 HUD/模式/小地图/防重叠及 3D↔2D 镜头过渡交互；迷雾视觉观感、"再来一局"、多局重开 WebGL 显存等仍列为人工验证项（Human Gate），不写成"已验证"。交付前通读一遍自己的 diff。
 
 ## 分层与依赖（工具强制，见 ADR 0007）
@@ -60,8 +60,11 @@
 ## 客户端规则
 - 逐 tick 的实体状态不进 React state，也不进 zustand。渲染在 `useFrame` 里直接读快照缓冲。
 - 三态分离：`interactionStore`（一级模式 + 互斥二级工具）、`selectionStore`（仅己方可控句柄）、`inspectorStore`（`hovered`/`pinned`，地形格不可 Pin），跨局重置集中于 `client/session.ts`（[ADR 0048](docs/adr/0048-interaction-modes-and-inspector-contract.md)）。
-- UI 快照订阅走 `useSnapshotValue`（基于 `SimClient.subscribe` 的事件驱动合并，selector 返回引用稳定切片，禁止面板自建 `setInterval`）；检查器读强类型 `*Inspection` 契约。
+- UI 快照订阅走 `useSnapshotValue`（基于 `SimClient.subscribe` 的事件驱动合并，selector 返回引用稳定切片，禁止面板自建 `setInterval`）；模拟暂停且无交互时 HUD 与小地图必须零轮询、零空转重绘；检查器读强类型 `*Inspection` 契约。
 - UI 原语与离线 Token 统一收口在 `src/ui/kit/` 与 `src/ui/styles/`（[ADR 0049](docs/adr/0049-hud-design-system-and-layout.md)、[ADR 0063](docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）；`render/` 与 `features/*/render/` 的命令式 Three.js 资源必须在卸载或替换时 `.dispose()`（[ADR 0050](docs/adr/0050-tactical-sandbox-rendering-and-gpu-lifecycle.md)、[ADR 0063](docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）。
+- 全图范围的地表信息层（迷雾、物流覆盖及同类态势层）一律走 `DataTexture` + 着色器 Uniform 内联合成，禁止为叠加层克隆第二份全图地形网格。
+- 离屏辅助 WebGL（如建造栏 3D 缩略图）禁止在首屏启动时创建第二个 `WebGLRenderer`，须在首次进入对应模式时懒渲染为静态位图并立即 `.dispose()`，经 `app/` 注入以维持 `ui ↛ render`。
+- 3D↔2D（`Tab`）过渡与镜头手感（[ADR 0063](docs/adr/0063-field-visual-pipeline-hud-and-camera-evolution.md)）：3D 平移在中远视距锁定基准高度水平滑翔，仅近距特写贴合平滑高程（缩放锚点须数学同构）；向 2D 过渡须压向深暗底（禁远景泛白与距离雾闪白），纯 3D 装饰层须随过渡进度提前压入地面、衰减动画后隐藏，禁止末帧硬切 `visible`；细碎散射物不开阴影，2D 视角关闭平行光阴影 Pass。
 - 用户可见文本一律通过 i18next 的键获取，禁止写字面量。新增键时同时更新 `zh-CN` 和 `en`。
 - 输入的流程是"按键或鼠标 → 意图 → 命令"，不要在组件里直接监听某个具体按键。
 - 事件用各自的游标从 `sim-client` 的事件日志读取（`eventsSince`）；一份快照可能带多个 tick 的事件（ADR 0045）。
@@ -96,9 +99,11 @@ npm run verify   # = verify:static / test / verify:build 三路并发执行（�
 npm run e2e      # 浏览器端到端（冒烟 + HUD/模式/小地图/防重叠 + 镜头过渡，首次需 npx playwright install chromium）；不进 verify
 ```
 - 日常迭代用分段命令：`npm run verify:static`、`npm run test:unit`、`npx vitest --changed`。
-- 视觉改动必须附 `npm run shots -- <label>` + `npm run shots:diff -- <label> base` 的对比结果（基线在 `frontend/.shots/base`），证明渲染输出与上一提交逐像素一致。基线在 Windows + D3D11 GPU（ANGLE）下截取；GPU 与 SwiftShader 的光栅化结果不同，跨渲染器的 diff 无意义。设 `FTD_GL=software` 可强制 SwiftShader。
+- 视觉对比（本地 gitignore 基线 `frontend/.shots/base`，首次在干净 `main` 跑 `npm run shots -- base` 建立）：纯重构/优化须经 `npm run shots -- <label>` + `npm run shots:diff -- <label> base` 证明 `0%` 像素差异；修复视觉缺陷或收敛统一原语允许改变画面，须先对齐方案或实机确认，落地后同步重录 `base`（统一原语优先于为凑 `0%` 保留多套实现）。基线在 Windows + D3D11 GPU 下截取，跨 GPU / SwiftShader（`FTD_GL=software`）的 diff 无意义。
 - 测试分两层：全对局/耗时 >~3 s 的测试命名 `*.scenario.test.ts`（`npm run test:scenario`），其余为 unit。
 - 本地 lint/format/typecheck 有缓存（`node_modules/.cache/`）；缓存不追踪跨文件类型变化，`rm -rf node_modules/.cache` 可复位，存疑以冷跑/CI 为准。
+- Windows 下运行 Vitest 必须保持大写盘符工作目录（如 PowerShell `Set-Location "D:\..."`）；`cmd /c cd /d d:\...` 的小写盘符会导致 Vitest 模块与 runner 路径匹配失败。
+- Playwright 本地默认 9 并发共享真 GPU，高负载偶发抢占帧率时可传 `npx playwright test --workers=4`；CI 无 GPU 走 SwiftShader 软件光栅（慢 4–6 倍），含读像素/截图的单个 `e2e` 用例须控制采样帧数并压在 `<35 s` 内。更新 `eval/baselines/` 必须在空载 CPU 下单进程串行运行。
 - 黄金哈希（kernel determinism、`eval/match-smoke.scenario.test.ts`）允许随规则变化更新：常量在同一次提交里改，提交信息写明原因。
 - `npm run build` 会更新 `static/`，`npm run gen:index` 会更新 `docs/generated/`，这两处的变更都要一起提交。
 
