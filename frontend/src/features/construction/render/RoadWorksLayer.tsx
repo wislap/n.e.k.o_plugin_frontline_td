@@ -14,7 +14,7 @@ import { InstanceWriter } from '../../../render/instance-writer';
 import type { SceneLayerProps } from '../../../render/scene';
 import { injectFog } from '../../../render/shaders';
 import { useGpuResource } from '../../../render/use-gpu-resource';
-import { terrainY } from '../../../render/world';
+import { terrainY } from '../../../client/world';
 import { RoadWorksChannel, type RoadWorks } from '../protocol';
 import { readChannel } from '../../../core/index';
 

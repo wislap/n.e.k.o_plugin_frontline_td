@@ -1,11 +1,13 @@
 // Themed terrain material (visual-slice item 4): MeshStandardMaterial so
 // the ground still receives light and shadow, with onBeforeCompile
-// injections for the theme height ramp, per-cell hash noise, grid
-// lines, cliff-face recolor by slope, slope darkening and map-edge
-// occlusion. One material per theme; callers dispose on change.
+// injections for the theme height ramp, macro noise, grid lines,
+// cliff-face recolor by slope, slope darkening, map-edge occlusion,
+// service-coverage tint, and blue cell-grid overlay. One material per
+// theme; callers dispose on change.
 // Optional haze-fade tint blends the out-of-bounds skirt into the
 // horizon; uInfo2D dims the ground for the tactical info view.
 import * as THREE from 'three';
+import { GLSL_COVER, type CoverUniforms } from '../../../render/cover-uniforms';
 import { GLSL_FOG, GLSL_GRID_LINE, GLSL_NOISE, type FogUniforms } from '../../../render/shaders';
 import type { RenderVisual } from '../../../render/theme/index';
 
@@ -17,16 +19,19 @@ export interface ThemedTerrainParams {
   // Skirt mode: fade the surface toward the horizon haze color outside
   // the map rect (distance in cells past the border).
   hazeFade?: { color: string; start: number; end: number } | undefined;
-  // Fog-of-war uniforms (shared object; mixed post-encoding so the
-  // composite matches the removed film exactly).
+  // Fog-of-war uniforms (shared object; mixed after scene fog in
+  // Linear working space under EffectComposer's HalfFloatType target).
   fog: FogUniforms;
+  // Shared logistics service-coverage uniforms.
+  cover: CoverUniforms;
 }
 
 // Shared mutable uniforms (module-scope, mutated per frame by callers):
-// uInfo2D is the tactical-info dim factor, uTime drives nothing here but
-// is reserved for parity with other themed materials.
+// uInfo2D is the tactical-info dim factor; gridOverlayOpacity drives the
+// blue 1x1 + 8x8 cell grid blended after scene fog.
 export interface ThemedTerrainUniforms {
   info2d: { value: number };
+  gridOverlayOpacity: { value: number };
 }
 
 export function createThemedTerrainMaterial(
@@ -34,10 +39,12 @@ export function createThemedTerrainMaterial(
   params: ThemedTerrainParams,
 ): { material: THREE.MeshStandardMaterial; uniforms: ThemedTerrainUniforms } {
   const t = theme.terrain;
-  const uniforms: ThemedTerrainUniforms = { info2d: { value: 0 } };
+  const uniforms: ThemedTerrainUniforms = {
+    info2d: { value: 0 },
+    gridOverlayOpacity: { value: 0 },
+  };
   const haze = params.hazeFade;
   const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
     roughness: 0.95,
     metalness: 0,
   });
@@ -45,19 +52,17 @@ export function createThemedTerrainMaterial(
     (mat as unknown as { _dbg?: unknown })._dbg = shader;
     shader.uniforms['uRampLow'] = { value: new THREE.Color(t.rampLow) };
     shader.uniforms['uRampHigh'] = { value: new THREE.Color(t.rampHigh) };
-    shader.uniforms['uRampStrength'] = { value: t.rampStrength };
     shader.uniforms['uCliffColor'] = { value: new THREE.Color(t.cliffColor) };
     shader.uniforms['uCliffStart'] = { value: t.cliffStart };
     shader.uniforms['uCliffEnd'] = { value: t.cliffEnd };
     shader.uniforms['uGridStrength'] = { value: t.gridStrength };
-    shader.uniforms['uGrid3D'] = { value: t.grid3d ?? 1 };
-    shader.uniforms['uNoiseAmp'] = { value: t.noiseAmp };
     shader.uniforms['uDirtColor'] = { value: new THREE.Color(t.dirt ?? '#000000') };
     shader.uniforms['uDirtOn'] = { value: t.dirt === undefined ? 0 : 1 };
     shader.uniforms['uSlopeDarken'] = { value: t.slopeDarken };
     shader.uniforms['uEdgeOcc'] = { value: t.edgeOcc };
     shader.uniforms['uEdgeFade'] = { value: t.edgeFadeDist };
     shader.uniforms['uInfo2D'] = uniforms.info2d;
+    shader.uniforms['uGridOverlayOpacity'] = uniforms.gridOverlayOpacity;
     shader.uniforms['uInfo2DTint'] = {
       value: new THREE.Vector3(0.2, 0.26, 0.22),
     };
@@ -75,7 +80,7 @@ export function createThemedTerrainMaterial(
     shader.uniforms['uMapSize'] = {
       value: new THREE.Vector2(params.mapWidth, params.mapHeight),
     };
-    Object.assign(shader.uniforms, params.fog);
+    Object.assign(shader.uniforms, params.fog, params.cover);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -97,19 +102,17 @@ export function createThemedTerrainMaterial(
         `#include <common>
         uniform vec3 uRampLow;
         uniform vec3 uRampHigh;
-        uniform float uRampStrength;
         uniform vec3 uCliffColor;
         uniform float uCliffStart;
         uniform float uCliffEnd;
         uniform float uGridStrength;
-        uniform float uGrid3D;
-        uniform float uNoiseAmp;
         uniform vec3 uDirtColor;
         uniform float uDirtOn;
         uniform float uSlopeDarken;
         uniform float uEdgeOcc;
         uniform float uEdgeFade;
         uniform float uInfo2D;
+        uniform float uGridOverlayOpacity;
         uniform vec3 uInfo2DTint;
         uniform float uHazeOn;
         uniform vec3 uHazeColor;
@@ -119,6 +122,7 @@ export function createThemedTerrainMaterial(
         varying vec3 vTerWorld;
         varying vec3 vTerNormal;
         varying float vFtdFogDist;
+        ${GLSL_COVER}
         ${GLSL_FOG}
         ${GLSL_NOISE}
         ${GLSL_GRID_LINE}
@@ -135,10 +139,7 @@ export function createThemedTerrainMaterial(
         {
           vec2 terP = vTerWorld.xz;
           float hNorm = clamp((vTerWorld.y - uHRange.x) / (uHRange.y - uHRange.x), 0.0, 1.0);
-          vec3 ramp = mix(uRampLow, uRampHigh, hNorm);
-          diffuseColor.rgb = mix(diffuseColor.rgb, ramp, uRampStrength);
-          float hn = ftdHash(floor(terP));
-          diffuseColor.rgb *= 1.0 + (hn - 0.5) * uNoiseAmp;
+          diffuseColor.rgb = mix(uRampLow, uRampHigh, hNorm);
           // Macro variation: continuous multi-octave value noise at
           // ~4-35 cell scales — large meadow patches with a slight hue
           // drift between the ramp ends, no per-cell tiling.
@@ -155,25 +156,21 @@ export function createThemedTerrainMaterial(
               * (0.75 + ftdValueNoise(terP / 3.0 + 17.7) * 0.5);
             diffuseColor.rgb = mix(diffuseColor.rgb, uDirtColor, dirtM * 0.65);
           }
-          float gline = ftdGridLine(terP);
-          diffuseColor.rgb *= 1.0 - uGridStrength * mix(uGrid3D, 1.0, uInfo2D) * gline;
+          if (uInfo2D > 0.001) {
+            float gline = ftdGridLine(terP);
+            diffuseColor.rgb *= 1.0 - uGridStrength * uInfo2D * gline;
+          }
           float ny = clamp(vTerNormal.y, 0.0, 1.0);
-          // Cliff edges: where the up-normal changes fast across pixels the
-          // fragment sits in a top/bottom transition band; brighten the top
-          // rim slightly and darken the cliff base.
-          float slopeChange = fwidth(ny);
-          float topRim = smoothstep(0.12, 0.45, slopeChange) * smoothstep(0.55, 0.92, ny);
-          float baseBand = smoothstep(0.12, 0.45, slopeChange) * (1.0 - smoothstep(0.05, 0.55, ny));
-          diffuseColor.rgb *= 1.0 + topRim * 0.12 - baseBand * 0.2;
           diffuseColor.rgb = mix(uCliffColor, diffuseColor.rgb, smoothstep(uCliffStart, uCliffEnd, ny));
           diffuseColor.rgb *= 1.0 - uSlopeDarken * (1.0 - ny);
           float dEdge = min(min(terP.x, terP.y), min(uMapSize.x - terP.x, uMapSize.y - terP.y));
           diffuseColor.rgb *= mix(1.0 - uEdgeOcc, 1.0, smoothstep(0.0, uEdgeFade, dEdge));
           // Out-of-bounds skirt: blend into the horizon haze by distance
-          // outside the map rect.
+          // outside the map rect, darkening toward tactical slate during transitions.
           if (uHazeOn > 0.5) {
             float dOut = terEdgeDist(terP, uMapSize);
-            diffuseColor.rgb = mix(diffuseColor.rgb, uHazeColor, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
+            vec3 skirtHaze = mix(uHazeColor, vec3(0.06, 0.08, 0.075), min(1.0, uInfo2D * 1.35));
+            diffuseColor.rgb = mix(diffuseColor.rgb, skirtHaze, smoothstep(uHazeRange.x, uHazeRange.y, dOut));
           }
         }`,
       )
@@ -187,16 +184,31 @@ export function createThemedTerrainMaterial(
           // cannot lift the map back toward pale olive.
           float grey = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
           gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(grey) * uInfo2DTint, uInfo2D);
+          gl_FragColor.rgb = ftdCoverApply(gl_FragColor.rgb, vTerWorld.xz);
         }`,
       )
       .replace(
         '#include <fog_fragment>',
         `#include <fog_fragment>
-        // Fog of war mixed after output encoding and scene fog, exactly
-        // as the removed film blended over the display-space result.
+        if (uGridOverlayOpacity > 0.0) {
+          float cellLine = ftdGridLine(vTerWorld.xz);
+          float secLine = ftdGridLine(vTerWorld.xz / 8.0);
+          float inBounds = step(0.0, vTerWorld.x) * step(vTerWorld.x, uMapSize.x)
+            * step(0.0, vTerWorld.z) * step(vTerWorld.z, uMapSize.y);
+          float flatMask = smoothstep(0.35, 0.75, vTerNormal.y);
+          float gridAlpha = clamp(
+            max(cellLine * 0.65, secLine * 1.15) * flatMask * uGridOverlayOpacity,
+            0.0,
+            1.0
+          ) * inBounds;
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.55, 0.78, 0.96), gridAlpha);
+        }
+        // Both scene.fog and ftdFogApply run in Linear working space
+        // (EffectComposer's offscreen HalfFloatType target makes
+        // colorspace_fragment a pass-through before EffectPass encodes sRGB).
         gl_FragColor.rgb = ftdFogApply(gl_FragColor.rgb, vTerWorld.xz, vFtdFogDist);`,
       );
   };
-  mat.customProgramCacheKey = () => 'themed-terrain-fog';
+  mat.customProgramCacheKey = () => 'themed-terrain-fog-cover-v2';
   return { material: mat, uniforms };
 }

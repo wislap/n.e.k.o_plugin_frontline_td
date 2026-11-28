@@ -5,9 +5,10 @@ import { readLayer } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
 import type { ContentDb, ResolvedMap } from '../../../content/index';
 import type { MinimapRasterDef } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { TERRAIN_HEIGHT_LAYER_ID, TERRAIN_SURFACE_LAYER_ID } from '../protocol';
 
-const DEFAULT_SURFACE_RGB: readonly [number, number, number] = [64, 72, 84];
+const DEFAULT_SURFACE_RGB: readonly [number, number, number] = MINIMAP_PALETTE.defaultSurfaceRgb;
 
 function parseHexRgb(hex: string | undefined): readonly [number, number, number] {
   if (hex === undefined || !/^#[0-9a-fA-F]{6}$/.test(hex)) {

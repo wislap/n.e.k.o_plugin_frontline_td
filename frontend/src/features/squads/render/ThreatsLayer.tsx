@@ -7,13 +7,14 @@ import * as THREE from 'three';
 import { formatClock } from '../../../client/match-info';
 import { InstanceWriter } from '../../../render/instance-writer';
 import type { SceneLayerProps } from '../../../render/scene';
-import { terrainY } from '../../../render/world';
+import { VISUAL } from '../../../render/theme/index';
+import { terrainY } from '../../../client/world';
 import { SquadsChannel } from '../protocol';
-import { arrowSpots, gatheringThreats, routedThreats } from './threat-info';
+import { arrowSpots, gatheringThreats, routedThreats } from '../rules/index';
 import { renderNowMs } from '../../../client/capture-mode';
 import { readChannel } from '../../../core/index';
 
-const THREAT_COLOR = '#ff5a4a';
+const THREAT_COLOR = VISUAL.markers.danger;
 const MARKER_CAPACITY = 16;
 const ARROW_CAPACITY = 256;
 const ARROW_EVERY = 8;

@@ -1,11 +1,23 @@
-// Shared smoothed per-link flow (M3 E3 review): one 30 s EMA per link,
+// Shared smoothed per-link flow (M3 E3 review, M3A): one 30 s EMA per link,
 // advanced once per snapshot tick and read by both the overlay (bp
 // utilization for brightness) and the road tool (carried volOut+volIn
-// for route extension). Keyed by link-set identity so a topology change
-// resets the smoothing instead of blending across a different network.
-import type { Snapshot } from '../../../core/index';
-import type { LogisticsNetwork } from '../protocol';
+// for route extension). Keyed by link-set identity and reset on client
+// session reset so restarts never blend across matches.
+import type { Snapshot } from '../core/index';
+import { registerSessionReset } from './session';
 import { emaUpdate } from './smoothing';
+
+export interface LinkFlowNetwork {
+  readonly nodes: { readonly handles: ArrayLike<number> };
+  readonly links: {
+    readonly a: ArrayLike<number>;
+    readonly pathCells: ArrayLike<number>;
+    readonly outBp: ArrayLike<number>;
+    readonly inBp: ArrayLike<number>;
+    readonly volOut: ArrayLike<number>;
+    readonly volIn: ArrayLike<number>;
+  };
+}
 
 interface LinkFlow {
   key: string;
@@ -17,7 +29,14 @@ interface LinkFlow {
 }
 const flow: LinkFlow = { key: '', atTick: -1, bp: [], vol: [] };
 
-export function linkFlow(latest: Snapshot, network: LogisticsNetwork): LinkFlow {
+registerSessionReset(() => {
+  flow.key = '';
+  flow.atTick = -1;
+  flow.bp = [];
+  flow.vol = [];
+});
+
+export function linkFlow(latest: Snapshot, network: LinkFlowNetwork): LinkFlow {
   const links = network.links;
   const key = `${links.a.length}:${links.pathCells.length}:${network.nodes.handles.length}`;
   if (key !== flow.key) {

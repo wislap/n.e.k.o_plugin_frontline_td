@@ -7,18 +7,19 @@ import {
   type MinimapMark,
   type MinimapMarkDef,
 } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { STATE_BLUEPRINT, STATE_RUIN, StructuresChannel } from '../protocol';
 
 function structureColor(disposition: 'own' | 'hostile' | 'ally' | 'ruin', isCore: boolean): string {
   switch (disposition) {
     case 'own':
-      return isCore ? '#9be2ff' : '#5cc8ff';
+      return isCore ? MINIMAP_PALETTE.ownCore : MINIMAP_PALETTE.own;
     case 'hostile':
-      return '#ff5c5c';
+      return MINIMAP_PALETTE.hostile;
     case 'ally':
-      return '#46e09a';
+      return MINIMAP_PALETTE.ally;
     case 'ruin':
-      return '#c8a24a';
+      return MINIMAP_PALETTE.ruin;
   }
 }
 
@@ -58,7 +59,7 @@ const structuresMarks: MinimapMarkDef = {
             y,
             w,
             h,
-            stroke: '#eef8ff',
+            stroke: MINIMAP_PALETTE.ownCoreStroke,
             lineWidth: 1,
             grow: 0.5,
           });

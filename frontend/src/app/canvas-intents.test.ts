@@ -9,6 +9,7 @@ const SHELL_CANVAS_KINDS = ['camera.zoom', 'camera.pan_start', 'camera.pan_px'] 
 
 const FEATURE_CANVAS_KINDS = [
   'cursor.move',
+  'cursor.leave',
   'select.click',
   'select.box',
   'road.click',

@@ -1,7 +1,8 @@
 // Logistics overlay (M3 D), toggled with L and forced on while build
-// mode is active: terrain-conforming service-coverage tint on the ground,
-// link polylines from pathCells (brightness ∝ the 30 s EMA of outBp + inBp,
-// red when either direction saturates), and service-radius rings on nodes.
+// mode is active: updates shared CoverUniforms (RedFormat DataTexture)
+// for terrain/road service-coverage tint, link polylines from pathCells
+// (brightness ∝ the 30 s EMA of outBp + inBp, red when either direction
+// saturates), and service-radius rings on nodes.
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -9,97 +10,73 @@ import { useInspectorStore } from '../../../client/inspector-store';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { useSelectionStore } from '../../../client/selection-store';
 import { useUiStore } from '../../../client/ui-store';
-import type { ContentDb, ResolvedMap } from '../../../content/index';
+import type { ContentDb } from '../../../content/index';
 import { readChannel, readLayer } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
-import { createCoverMaterial, type CoverMaterial } from '../../../render/cover-material';
+import type { CoverUniforms } from '../../../render/cover-uniforms';
 import { createDashRingMaterial, type DashRingMaterial } from '../../../render/dash-ring';
-import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import {
+  bindLineBuffer,
+  commitLineBuffer,
+  createLineBuffer,
+  type LineBuffer,
+} from '../../../render/line-buffer';
 import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
-import { useGpuResource } from '../../../render/use-gpu-resource';
-import { terrainY } from '../../../render/world';
+import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
+import { terrainY } from '../../../client/world';
 import {
   StructuresChannel,
   STATE_OPERATIONAL,
   type ConstructionStructures,
 } from '../../construction/protocol';
-import { buildTerrainGeometry } from '../../terrain/render/index';
 import { LogisticsNetworkChannel, SERVICE_LAYER_ID, type LogisticsNetwork } from '../protocol';
-import { linkFlow } from './link-flow';
+import { linkFlow } from '../../../client/link-flow';
 import { renderNowMs } from '../../../client/capture-mode';
 
 const ATTACH_MATERIAL = 'material';
 
-const COVER_COLOR = '#3f7fbf';
-const COVER_ALPHA = Math.round(0.22 * 255);
-const COVER_LIFT = 0.038;
-const LINK_SAT_COLOR = new THREE.Color('#ff5a4f');
+const LINK_SAT_COLOR = new THREE.Color(VISUAL.markers.danger);
 const MAX_LINK_VERTS = 8192;
 const RING_CAP = 64;
 const RING_SEGMENTS = 48;
 const LIFT = 0.05;
 
-interface BuiltCover {
-  geometry: THREE.BufferGeometry;
-  texture: THREE.DataTexture;
-}
-
-function buildCover(
-  map: ResolvedMap,
-  mesh: THREE.Mesh,
-  material: THREE.MeshBasicMaterial,
-): BuiltCover {
-  const grid = map.grid;
-  const data = buildTerrainGeometry(
-    grid.width,
-    grid.height,
-    grid.heights,
-    grid.surfaces,
-    grid.ramps,
-    [{ r: 1, g: 1, b: 1 }],
-  );
-  for (let i = 1; i < data.positions.length; i += 3) {
-    data.positions[i] = (data.positions[i] ?? 0) + COVER_LIFT;
-  }
-  const uvs = new Float32Array((data.positions.length / 3) * 2);
-  for (let i = 0; i < data.positions.length; i += 3) {
-    uvs[(i / 3) * 2] = (data.positions[i] ?? 0) / grid.width;
-    uvs[(i / 3) * 2 + 1] = (data.positions[i + 2] ?? 0) / grid.height;
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
-  const texData = new Uint8Array(grid.width * grid.height * 4);
-  const texture = new THREE.DataTexture(texData, grid.width, grid.height, THREE.RGBAFormat);
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearFilter;
-  texture.needsUpdate = true;
-  mesh.geometry = geometry;
-  material.alphaMap = texture;
-  material.needsUpdate = true;
-  return { geometry, texture };
-}
-
-// Red channel = coverage mask for the themed contour shader; green = the
-// legacy flat alphaMap value. Both are written on every upload so either
-// material can bind the same texture.
 function uploadServiceCoverage(
   texture: THREE.DataTexture,
-  layer: ArrayLike<number> | undefined,
+  layer: ArrayLike<number>,
   cells: number,
 ): void {
   const buf = texture.image.data as Uint8Array;
   for (let i = 0; i < cells; i++) {
-    const covered = (layer?.[i] ?? 0) !== 0;
-    buf[i * 4] = covered ? 255 : 0;
-    buf[i * 4 + 1] = covered ? COVER_ALPHA : 0;
-    buf[i * 4 + 2] = 0;
-    buf[i * 4 + 3] = 255;
+    buf[i] = (layer[i] ?? 0) !== 0 ? 255 : 0;
   }
   texture.needsUpdate = true;
+}
+
+// Uniform writes live in module-scope helpers so React Compiler's
+// immutability rule does not track context/ref-derived objects.
+function syncCoverUniforms(
+  cover: CoverUniforms,
+  texture: THREE.DataTexture,
+  width: number,
+  height: number,
+  color: string,
+): void {
+  cover.uFtdCoverMap.value = texture;
+  cover.uFtdCoverSize.value.set(width, height);
+  cover.uFtdCoverColor.value.set(color);
+  cover.uFtdCoverOn.value = 1;
+}
+
+function disableCoverUniforms(cover: CoverUniforms): void {
+  cover.uFtdCoverOn.value = 0;
+}
+
+function clearCoverUniforms(cover: CoverUniforms): void {
+  cover.uFtdCoverOn.value = 0;
+  cover.uFtdCoverMap.value = null;
 }
 
 function updateLinks(
@@ -114,7 +91,7 @@ function updateLinks(
   dashTime: number,
   linkColor: THREE.Color,
 ): void {
-  linkLines.geometry = linkBuf.geometry;
+  bindLineBuffer(linkLines, linkBuf);
   const linkPos = linkBuf.positions;
   const linkCol = linkBuf.colors;
   if (linkCol === null) {
@@ -209,79 +186,75 @@ function updateRings(
     }
   }
   rings.count = ringCount;
-  rings.instanceMatrix.needsUpdate = true;
+  rings.visible = ringCount > 0;
+  if (ringCount > 0) {
+    rings.instanceMatrix.needsUpdate = true;
+  }
 }
 
 export function LogisticsOverlay({ ctx }: SceneLayerProps) {
-  const { client, db, map, heights } = ctx;
+  const { client, db, map, heights, cover } = ctx;
   const theme = VISUAL;
   const toggled = useUiStore((s) => s.logisticsOverlay);
+  const layerVisible = useUiStore((s) => !s.hiddenSceneLayers.has('logistics.overlay'));
   const modeOn = useInteractionStore((s) => s.mode === 'logistics' || s.tool.kind === 'place');
-  const on = toggled || modeOn;
-  const coverMeshRef = useRef<THREE.Mesh>(null);
-  const coverMatRef = useRef<THREE.MeshBasicMaterial>(null);
-  const coverBuiltRef = useRef<BuiltCover | null>(null);
-  const coverBuiltForRef = useRef<{
-    map: ResolvedMap;
-    layer: ArrayLike<number> | undefined | null;
-  }>({
-    map,
-    layer: null,
-  });
+  const on = layerVisible && (toggled || modeOn);
+
+  const coverTex = useMemo(() => {
+    const { width, height } = map.grid;
+    const tex = new THREE.DataTexture(
+      new Uint8Array(width * height),
+      width,
+      height,
+      THREE.RedFormat,
+      THREE.UnsignedByteType,
+    );
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearFilter;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.generateMipmaps = false;
+    tex.unpackAlignment = 1;
+    tex.needsUpdate = true;
+    return tex;
+  }, [map]);
+  useGpuResource(coverTex);
+
+  const builtForLayer = useRef<ArrayLike<number> | null>(null);
+  const builtForTexture = useRef<THREE.DataTexture | null>(null);
   const linkRef = useRef<THREE.LineSegments>(null);
   const ringRef = useRef<THREE.InstancedMesh>(null);
   const linkBufRef = useRef<LineBuffer | null>(null);
   const writerRef = useRef<InstanceWriter | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
-  const linkColorRef = useRef(new THREE.Color('#7fd4ff'));
+  const linkColorRef = useRef(new THREE.Color(theme.markers.link));
   const ringDashMatRef = useRef<DashRingMaterial | null>(null);
   const ringDashMat = useMemo(() => createDashRingMaterial(theme.markers.accent), [theme]);
   const focusSetRef = useRef(new Set<number>());
 
-  const coverShaderRef = useRef<CoverMaterial | null>(null);
-  const coverShader = useMemo(() => createCoverMaterial(theme.markers.link), [theme]);
-
   useEffect(() => {
     return () => {
-      coverBuiltRef.current?.geometry.dispose();
-      coverBuiltRef.current?.texture.dispose();
-      coverBuiltRef.current = null;
       linkBufRef.current?.geometry.dispose();
       linkBufRef.current = null;
     };
   }, []);
   useEffect(() => {
+    return () => {
+      clearCoverUniforms(cover);
+    };
+  }, [cover]);
+  useEffect(() => {
     ringDashMatRef.current = ringDashMat;
   }, [ringDashMat]);
   useGpuResource(ringDashMat);
-  useEffect(() => {
-    coverShaderRef.current = coverShader;
-  }, [coverShader]);
-  useGpuResource(coverShader);
 
   useFrame(() => {
-    const coverMesh = coverMeshRef.current;
-    const coverMat = coverMatRef.current;
     const linkLines = linkRef.current;
     const rings = ringRef.current;
-    if (coverMesh === null || coverMat === null || linkLines === null || rings === null) {
-      return;
-    }
-    if (coverBuiltRef.current === null || coverBuiltForRef.current.map !== map) {
-      coverBuiltRef.current?.geometry.dispose();
-      coverBuiltRef.current?.texture.dispose();
-      coverBuiltRef.current = buildCover(map, coverMesh, coverMat);
-      coverBuiltForRef.current.map = map;
-      coverBuiltForRef.current.layer = null;
-    }
-    const coverShaderMat = coverShaderRef.current;
-    if (coverShaderMat === null) {
+    if (linkLines === null || rings === null) {
       return;
     }
     linkColorRef.current.set(theme.markers.link);
-    coverShaderMat.uniforms.uCover.value = coverBuiltRef.current.texture;
-    coverShaderMat.uniforms.uColor.value.set(theme.markers.link);
-    coverMesh.material = coverShaderMat;
 
     const ringDash = ringDashMatRef.current;
     if (ringDash !== null) {
@@ -294,8 +267,9 @@ export function LogisticsOverlay({ ctx }: SceneLayerProps) {
 
     const latest = client.snapshots().latest;
     if (!on || latest === null) {
-      coverMesh.visible = false;
+      disableCoverUniforms(cover);
       rings.count = 0;
+      rings.visible = false;
       linkLines.visible = false;
       return;
     }
@@ -303,11 +277,18 @@ export function LogisticsOverlay({ ctx }: SceneLayerProps) {
     const { width, height } = map.grid;
     const observer = latest.observer;
     const service = readLayer(latest, `${SERVICE_LAYER_ID}#${observer}`) ?? undefined;
-    if (service !== coverBuiltForRef.current.layer) {
-      coverBuiltForRef.current.layer = service;
-      uploadServiceCoverage(coverBuiltRef.current.texture, service, width * height);
+    if (service === undefined) {
+      disableCoverUniforms(cover);
+    } else {
+      // Evaluate both markBuilt calls without short-circuiting so map
+      // changes (new coverTex) always upload even if service is unchanged.
+      const freshLayer = markBuilt(builtForLayer, service);
+      const freshTexture = markBuilt(builtForTexture, coverTex);
+      if (freshLayer || freshTexture) {
+        uploadServiceCoverage(coverTex, service, width * height);
+      }
+      syncCoverUniforms(cover, coverTex, width, height, theme.markers.link);
     }
-    coverMesh.visible = service !== undefined;
 
     const network = readChannel(latest, LogisticsNetworkChannel) ?? undefined;
     const structures = readChannel(latest, StructuresChannel) ?? undefined;
@@ -357,15 +338,6 @@ export function LogisticsOverlay({ ctx }: SceneLayerProps) {
 
   return (
     <group visible={on}>
-      <mesh ref={coverMeshRef} renderOrder={1} frustumCulled={false}>
-        <meshBasicMaterial
-          ref={coverMatRef}
-          color={COVER_COLOR}
-          transparent
-          depthWrite={false}
-          opacity={1}
-        />
-      </mesh>
       <lineSegments ref={linkRef} visible={false} frustumCulled={false}>
         <lineBasicMaterial vertexColors transparent opacity={0.9} depthWrite={false} />
       </lineSegments>
@@ -373,6 +345,7 @@ export function LogisticsOverlay({ ctx }: SceneLayerProps) {
         key={`rings`}
         ref={ringRef}
         args={[undefined, undefined, RING_CAP]}
+        visible={false}
         frustumCulled={false}
       >
         <ringGeometry args={[0.95, 1, RING_SEGMENTS]} />

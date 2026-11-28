@@ -7,7 +7,7 @@
 ## 公开接口
 - `content.ts`：`unitSchema`、`UnitContent`（speed 装载时换算为
   格/tick；`vision` 视野半径；`visual { shape, scale }` 渲染参数，
-  渲染层按 shape 索引取实例网格）。
+  渲染层统一合批绘制机器人轮廓，按 `scale` 缩放）。
 - `sim/index.ts`：`createUnitsModule(db, terrain, starts, unitParts?,
   readouts?)`；`DenseUnitsChannel`；`StartUnit`/`FactionStart`/
   `DenseUnits`；组件 `UnitKind`。
@@ -15,12 +15,12 @@
   出怪，负载自带 faction/kind/x/y/source（出口位置由调用方算，
   非本模块内建）。
 - `render/`：`unitsSceneLayers`（UnitsLayer + 单位 HP 条，
-  ADR 0062 场景层注册）、`factionColorHex`。
+  ADR 0062 场景层注册）。阵营配色在 `render/faction-colors`，跨特征
+  位置插值器在 `client/interpolate`（selection 拾取与高亮共用
+  `DenseUnitsChannel`）。
 - `ui/`：`unitsInspectorSubjects`（ADR 0062 检视器主题注册：
   own_unit / hostile_unit / multi_own）、`unitsMinimapMarks`
-  （ADR 0062 小地图标记贡献：单位色块与选中描边）；`render/` 另导出
-  `interpolatedUnits` / `UnitInterpolator` 插值器（selection 拾取复用）。
-  导出全表见
+  （ADR 0062 小地图标记贡献：单位色块与选中描边）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

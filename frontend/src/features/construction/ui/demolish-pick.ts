@@ -11,7 +11,7 @@ import {
   rayAabbHitT,
   surfaceHeightAt,
   type Ray,
-} from '../../../render/picking';
+} from '../../../client/picking';
 import { classifyCancelSelection } from '../rules/index';
 import {
   RoadWorksChannel,

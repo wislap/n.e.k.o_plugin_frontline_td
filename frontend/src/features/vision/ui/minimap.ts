@@ -10,12 +10,11 @@ import {
   type MinimapMarkDef,
   type MinimapRasterDef,
 } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { STATE_RUIN } from '../../construction/protocol';
 import { VISION_STATE_LAYER_ID, VisionMemoryChannel } from '../protocol';
 
-const FOG_R = 6;
-const FOG_G = 10;
-const FOG_B = 18;
+const [FOG_R, FOG_G, FOG_B] = MINIMAP_PALETTE.fogRgb;
 
 function visionLayerId(snapshot: Snapshot | null): string {
   return `${VISION_STATE_LAYER_ID}#${snapshot?.observer ?? 0}`;
@@ -60,13 +59,13 @@ const fogRaster: MinimapRasterDef = {
 function memoryColor(disposition: 'own' | 'hostile' | 'ally' | 'neutral'): string {
   switch (disposition) {
     case 'own':
-      return '#4d7ea8';
+      return MINIMAP_PALETTE.memoryOwn;
     case 'hostile':
-      return '#8a5058';
+      return MINIMAP_PALETTE.memoryHostile;
     case 'ally':
-      return '#468a73';
+      return MINIMAP_PALETTE.memoryAlly;
     case 'neutral':
-      return '#5b7390';
+      return MINIMAP_PALETTE.memoryNeutral;
   }
 }
 

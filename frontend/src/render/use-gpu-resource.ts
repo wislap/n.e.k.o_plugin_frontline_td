@@ -45,6 +45,28 @@ export function useGpuResource(resource: GpuResourceInput): void {
   }, [resource]);
 }
 
+export interface BindableGeometry {
+  dispose(): void;
+  userData: Record<string, unknown>;
+}
+
+/**
+ * Replaces `object.geometry` with `geometry`, disposing the previous geometry
+ * unless it is marked `userData.shared === true` (e.g., silhouette assets).
+ * Disposes R3F's default placeholder BufferGeometry on first imperative bind.
+ */
+export function bindGeometry<G extends BindableGeometry>(
+  object: { geometry: G },
+  geometry: G,
+): void {
+  if (object.geometry !== geometry) {
+    if (object.geometry.userData['shared'] !== true) {
+      object.geometry.dispose();
+    }
+    object.geometry = geometry;
+  }
+}
+
 /**
  * useFrame rebuild gate: records `source` in `ref` and returns true when it
  * differs from the previously recorded identity. Pair with an early return

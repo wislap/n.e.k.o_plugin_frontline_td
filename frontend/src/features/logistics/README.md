@@ -15,9 +15,11 @@
 - `content.ts`：货物、store、node 与全局配置 schema（`roadLevels`
   等）、`lowestBuildableRoadLevel`（预览与下单共用）。
 - `render/`：`logisticsSceneLayers`（ADR 0062 场景层：RoadLayer、
-  LogisticsOverlay 全图 DataTexture 服务覆盖层、RoadToolLayer）；`ui/`：`logisticsHudPanels`（ADR 0062 HUD 面板注册：StockPanel/RoadPanel）、
-  `logisticsCanvasIntents`（road.click）、道路工具 store 与道路选择/
-  下单辅助、`logisticsMinimapRasters`（小地图道路栅格贡献）；检查器（节点/链路/存储）。导出全表见
+  LogisticsOverlay 共享 CoverUniforms 服务覆盖层与链路/范围环、
+  RoadToolLayer）；`ui/`：`logisticsHudPanels`（ADR 0062 HUD 面板注册：StockPanel/RoadPanel）、
+  `logisticsCanvasIntents`（road.click）、道路工具 store 与道路选择
+  （经 `client/link-flow` 读平滑流量）/下单辅助、`logisticsMinimapRasters`
+  （小地图道路栅格贡献）；检查器（节点/链路/存储）。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

@@ -4,6 +4,7 @@
 // paint-minimap.ts.
 import { readChannel } from '../../../core/index';
 import type { MinimapMark, MinimapMarkDef } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { STATE_RUIN, StructuresChannel } from '../../construction/protocol';
 import { CapturePointsChannel } from '../protocol';
 
@@ -50,12 +51,21 @@ const ruinMarks: MinimapMarkDef = {
           y,
           w,
           h,
-          stroke: '#ffc14d',
+          stroke: MINIMAP_PALETTE.warn,
           lineWidth: 1.25,
           grow: 1,
         });
       } else if (leader === observer) {
-        marks.push({ kind: 'ring', x, y, w, h, color: '#5cc8ff', lineWidth: 1, padPx: 2 });
+        marks.push({
+          kind: 'ring',
+          x,
+          y,
+          w,
+          h,
+          color: MINIMAP_PALETTE.own,
+          lineWidth: 1,
+          padPx: 2,
+        });
       }
     }
     return marks;

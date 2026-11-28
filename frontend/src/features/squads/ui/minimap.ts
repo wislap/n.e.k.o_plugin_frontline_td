@@ -3,6 +3,7 @@
 // collectMinimapEntities and paint-minimap.ts.
 import { readChannel } from '../../../core/index';
 import type { MinimapMark, MinimapMarkDef } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { SquadsChannel } from '../protocol';
 
 const threatsMarks: MinimapMarkDef = {
@@ -27,7 +28,7 @@ const threatsMarks: MinimapMarkDef = {
         marks.push({
           kind: 'path',
           points: route,
-          color: '#ff5c5c',
+          color: MINIMAP_PALETTE.hostile,
           lineWidth: 1.25,
           dash: [4, 3],
         });
@@ -39,12 +40,25 @@ const threatsMarks: MinimapMarkDef = {
           x: s.order.x,
           y: s.order.y,
           radiusPx: 3 + pulse * 2,
-          color: pulse > 0.5 ? '#ff5c5c' : '#ffc14d',
+          color: pulse > 0.5 ? MINIMAP_PALETTE.hostile : MINIMAP_PALETTE.warn,
           lineWidth: 1.5,
         });
       }
     }
     return marks;
+  },
+  isAnimating({ snapshot, isHostile }) {
+    const squadsChan = readChannel(snapshot, SquadsChannel) ?? undefined;
+    if (squadsChan === undefined) {
+      return false;
+    }
+    const observer = snapshot?.observer ?? 0;
+    for (const s of squadsChan.squads) {
+      if (isHostile(observer, s.faction) && s.order.kind === 'gather') {
+        return true;
+      }
+    }
+    return false;
   },
 };
 

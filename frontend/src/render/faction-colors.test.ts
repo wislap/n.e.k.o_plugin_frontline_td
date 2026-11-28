@@ -2,7 +2,7 @@
 // faction comes from a palette that never contains it (pre-snapshot:
 // everyone uses the palette).
 import { describe, expect, it } from 'vitest';
-import { factionColorHex, LOCAL_COLOR } from './colors';
+import { factionColorHex, LOCAL_COLOR } from './faction-colors';
 
 describe('factionColorHex', () => {
   it('returns the local colour for the observer faction', () => {

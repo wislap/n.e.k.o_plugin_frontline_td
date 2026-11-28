@@ -14,6 +14,7 @@ import type { SceneLayerProps } from '../../../render/scene';
 import { useGpuResource } from '../../../render/use-gpu-resource';
 import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
+import { cameraTransitionState } from '../../../render/camera-transition';
 import { RoadWorksChannel, SalvageChannel, StructuresChannel } from '../../construction/protocol';
 import { ROAD_LAYER_ID } from '../../logistics/protocol';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
@@ -25,15 +26,46 @@ import {
   createGrassMaterial,
   createPropMaterials,
   createRockGeometry,
+  createScatterTransitionUniforms,
   propPalette,
   SCATTER_MESH_PREFIX,
   type MeadowTint,
   type PropKind,
+  type ScatterTransitionUniforms,
 } from './scatter-assets';
 import { readChannel, readLayer } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
 const NO_RAYCAST: THREE.Object3D['raycast'] = () => {};
+const SCATTER_FADE_END_BLEND = 0.78;
+
+function updateScatterTransition(
+  uniforms: ScatterTransitionUniforms,
+  group: THREE.Group | null,
+  themeInfo: boolean,
+  delta: number,
+): boolean {
+  const blend = cameraTransitionState.blend;
+  const desired = themeInfo && useUiStore.getState().info2d ? blend : 0;
+  let info = uniforms.info2d.value;
+  if (blend > 0 && blend < 1) {
+    info = desired;
+  } else {
+    info += (desired - info) * Math.min(1, delta * 8);
+    if (Math.abs(info - desired) < 0.005) {
+      info = desired;
+    }
+  }
+  uniforms.info2d.value = info;
+  const t = Math.max(0, Math.min(1, info / SCATTER_FADE_END_BLEND));
+  const presence = 1 - t * t * (3 - 2 * t);
+  uniforms.presence.value = presence;
+  const visible = presence > 0.001;
+  if (group !== null) {
+    group.visible = visible;
+  }
+  return visible;
+}
 
 export function ScatterLayer({ ctx }: SceneLayerProps) {
   const { client, db, map, heights, fog } = ctx;
@@ -69,10 +101,17 @@ export function ScatterLayer({ ctx }: SceneLayerProps) {
   }, [heights, theme.terrain.rampLow, theme.terrain.rampHigh]);
 
   const palette = useMemo(() => propPalette(theme), [theme]);
+  const scatterTransition = useMemo(() => createScatterTransitionUniforms(), []);
   const grassGeo = useMemo(() => createGrassGeometry(), []);
   const stoneGeo = useMemo(() => createRockGeometry(0.13, 53), []);
-  const grassMat = useMemo(() => createGrassMaterial(palette.grass, fog), [palette.grass, fog]);
-  const propMats = useMemo(() => createPropMaterials(palette, fog), [palette, fog]);
+  const grassMat = useMemo(
+    () => createGrassMaterial(palette.grass, fog, scatterTransition),
+    [palette.grass, fog, scatterTransition],
+  );
+  const propMats = useMemo(
+    () => createPropMaterials(palette, fog, scatterTransition),
+    [palette, fog, scatterTransition],
+  );
 
   useEffect(() => {
     grassTimeRef.current = (grassMat.userData['uTime'] as { value: number } | undefined) ?? null;
@@ -89,9 +128,14 @@ export function ScatterLayer({ ctx }: SceneLayerProps) {
     [theme.scatter.density, grid, db],
   );
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const latest = client.snapshots().latest;
     if (latest === null) {
+      return;
+    }
+    // The tactical info view drops props after smoothly shrinking and
+    // darkening them into the ground — zero hard snap during transitions.
+    if (!updateScatterTransition(scatterTransition, groupRef.current, theme.info2d, delta)) {
       return;
     }
     const structures = readChannel(latest, StructuresChannel) ?? undefined;
@@ -103,16 +147,6 @@ export function ScatterLayer({ ctx }: SceneLayerProps) {
     // distance cull needs a fresh pass even when channels are unchanged.
     const camState = useCameraStore.getState();
     const camCenter = camState.center;
-    // The tactical info view drops props entirely — grass and stones are
-    // noise on the dark slate read, not information.
-    const groupVis = groupRef.current;
-    if (groupVis !== null) {
-      groupVis.visible = !(
-        theme.info2d &&
-        useUiStore.getState().info2d &&
-        camState.mode === 'tactical'
-      );
-    }
     const camQ = Math.floor(camCenter.x / 4) * 4096 + Math.floor(camCenter.y / 4);
     const watched = watchedRef.current;
     if (
@@ -224,7 +258,6 @@ export function ScatterLayer({ ctx }: SceneLayerProps) {
             raycast={NO_RAYCAST}
             args={[undefined, undefined, cap('stone')]}
             frustumCulled={false}
-            castShadow
             receiveShadow
             geometry={stoneGeo}
             material={propMats.stone}

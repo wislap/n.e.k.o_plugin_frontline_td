@@ -1,13 +1,12 @@
 // Remembered-structure overlay (M5 batch D): dim translucent boxes at
 // the last-seen positions from the 'frontline_td:vision.memory' channel.
-// Height/footprint come from structureKindHeight + the content db — the
-// same geometry rules the live StructuresLayer uses.
+// Height/footprint come directly from the content db — the same geometry
+// rules the live StructuresLayer uses.
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { structureKindHeight } from '../../construction/render/index';
 import type { SceneLayerProps } from '../../../render/scene';
-import { terrainY } from '../../../render/world';
+import { terrainY } from '../../../client/world';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt } from '../../../render/use-gpu-resource';
 import { VisionMemoryChannel } from '../protocol';
@@ -47,7 +46,7 @@ export function MemoryLayer({ ctx }: SceneLayerProps) {
       const h = kind.footprint.h;
       const cx = (memory.x[i] ?? 0) + w / 2;
       const cy = (memory.y[i] ?? 0) + h / 2;
-      const height = structureKindHeight(db, memory.kind[i] ?? 0);
+      const height = kind.visual.height;
       writer.set(
         mesh,
         count,

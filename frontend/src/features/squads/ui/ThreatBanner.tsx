@@ -1,45 +1,41 @@
 // Threat banner (topCenter): danger pill shown while hostile squads
-// close on the observer's structures. Reads SquadsChannel on the shared
-// 100 ms snapshot clock with an equality-guarded setState.
-import { useEffect, useState } from 'react';
+// close on the observer's structures. Reads SquadsChannel via
+// useSnapshotValue on the coalesced 100 ms snapshot clock.
 import { useTranslation } from 'react-i18next';
 import { formatClock } from '../../../client/match-info';
-import { subscribeSnapshotClock } from '../../../client/use-snapshot';
+import type { SnapshotPair } from '../../../client/sim-client';
+import { useSnapshotValue } from '../../../client/use-snapshot';
 import { readChannel } from '../../../core/index';
-import { TacticalPanel } from '../../../ui/kit/index';
 import type { HudPanelProps } from '../../../ui/hud-panels';
 import styles from '../../../ui/HudShell.module.css';
-import { bannerThreat } from '../render/index';
+import { TacticalPanel } from '../../../ui/kit/index';
 import { SquadsChannel } from '../protocol';
+import { bannerThreat } from '../rules/index';
+
+interface ThreatSummary {
+  count: number;
+  ticksLeft: number;
+}
+
+function selectThreat(pair: SnapshotPair): ThreatSummary | null {
+  const latest = pair.latest;
+  if (latest === null) {
+    return null;
+  }
+  const squads = readChannel(latest, SquadsChannel)?.squads ?? [];
+  return bannerThreat(squads, latest.observer, latest.tick);
+}
+
+function sameThreat(a: ThreatSummary | null, b: ThreatSummary | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  return a.count === b.count && a.ticksLeft === b.ticksLeft;
+}
 
 export function ThreatBanner({ ctx }: HudPanelProps) {
   const { t } = useTranslation();
-  const [threat, setThreat] = useState<{ count: number; ticksLeft: number } | null>(null);
-
-  useEffect(() => {
-    return subscribeSnapshotClock(ctx.client, 100, () => {
-      const latest = ctx.client.snapshots().latest;
-      if (latest === null) {
-        return;
-      }
-      const squads = readChannel(latest, SquadsChannel)?.squads ?? [];
-      const nextThreat = bannerThreat(squads, latest.observer, latest.tick);
-      setThreat((cur) => {
-        if (cur === null && nextThreat === null) {
-          return cur;
-        }
-        if (
-          cur !== null &&
-          nextThreat !== null &&
-          cur.count === nextThreat.count &&
-          cur.ticksLeft === nextThreat.ticksLeft
-        ) {
-          return cur;
-        }
-        return nextThreat;
-      });
-    });
-  }, [ctx.client]);
+  const threat = useSnapshotValue(ctx.client, selectThreat, sameThreat, 100);
 
   if (threat === null) {
     return null;

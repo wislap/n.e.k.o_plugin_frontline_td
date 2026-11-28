@@ -7,7 +7,7 @@ import { injectFog, type FogUniforms } from '../../../render/shaders';
 import { renderNowMs } from '../../../client/capture-mode';
 import type { ContentDb } from '../../../content/index';
 import type { RenderVisual } from '../../../render/theme/index';
-import { terrainY } from '../../../render/world';
+import { terrainY } from '../../../client/world';
 
 export interface PropInstance {
   x: number;
@@ -45,7 +45,7 @@ function cellHash(x: number, y: number, salt: number): number {
 // Irregular low-poly rock: icosahedron with deterministic per-vertex jitter
 // and a flattened base so props read as stone, not dice.
 export function createRockGeometry(radius: number, seed: number): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(radius, 1);
+  const geo = new THREE.IcosahedronGeometry(radius, 0);
   const pos = geo.getAttribute('position');
   for (let i = 0; i < pos.count; i++) {
     const h = cellHash(i + seed, i * 7 + seed, 11) * U32;
@@ -298,10 +298,26 @@ export function propPalette(theme: RenderVisual): PropPalette {
   };
 }
 
+export interface ScatterTransitionUniforms {
+  presence: { value: number };
+  info2d: { value: number };
+}
+
+export function createScatterTransitionUniforms(): ScatterTransitionUniforms {
+  return {
+    presence: { value: 1 },
+    info2d: { value: 0 },
+  };
+}
+
 // Meadow grass material: vertex-colored tapered blades with a wind-sway
 // vertex displacement keyed on the instance's world offset; the uTime
 // uniform is fed per frame via material.userData.
-export function createGrassMaterial(tint: string, fog: FogUniforms): THREE.MeshStandardMaterial {
+export function createGrassMaterial(
+  tint: string,
+  fog: FogUniforms,
+  transition: ScatterTransitionUniforms = createScatterTransitionUniforms(),
+): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({
     // White base: the per-instance color carries the terrain-matched
     // tint and the vertex color carries the root→tip gradient.
@@ -320,22 +336,47 @@ export function createGrassMaterial(tint: string, fog: FogUniforms): THREE.MeshS
     // one — starting at the live time keeps every compile on the same
     // phase instead of jumping to a zeroed wind.
     shader.uniforms['uTime'] = { value: renderNowMs() / 1000 };
+    shader.uniforms['uScatterPresence'] = transition.presence;
+    shader.uniforms['uInfo2D'] = transition.info2d;
     mat.userData['uTime'] = shader.uniforms['uTime'];
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float uTime;\nuniform float uScatterPresence;',
+      )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+        transformed *= uScatterPresence;
+        transformed.y -= (1.0 - uScatterPresence) * 0.03;
         #ifdef USE_INSTANCING
           float swayPh = instanceMatrix[3][0] * 2.31 + instanceMatrix[3][2] * 1.73;
-          float swayW = smoothstep(0.05, 0.25, position.y);
+          float swayW = smoothstep(0.05, 0.25, position.y) * uScatterPresence * uScatterPresence;
           transformed.x += sin(uTime * 1.9 + swayPh) * 0.07 * swayW;
           transformed.z += cos(uTime * 1.35 + swayPh * 1.7) * 0.05 * swayW;
         #endif`,
       );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float uScatterPresence;\nuniform float uInfo2D;',
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance *= uScatterPresence;`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        `#include <opaque_fragment>
+        {
+          float grey = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(grey) * vec3(0.2, 0.26, 0.22), uInfo2D);
+        }`,
+      );
   };
   injectFog(mat, fog);
-  mat.customProgramCacheKey = () => 'meadow-grass-fog';
+  mat.customProgramCacheKey = () => 'meadow-grass-fog-v2';
   return mat;
 }
 
@@ -344,17 +385,49 @@ export function createGrassMaterial(tint: string, fog: FogUniforms): THREE.MeshS
 export function createPropMaterials(
   palette: PropPalette,
   fog: FogUniforms,
+  transition: ScatterTransitionUniforms = createScatterTransitionUniforms(),
 ): Record<'stone' | 'flower', THREE.MeshStandardMaterial> {
-  const mk = (color: string | undefined, roughness: number): THREE.MeshStandardMaterial => {
+  const mk = (
+    color: string | undefined,
+    roughness: number,
+    sink: number,
+  ): THREE.MeshStandardMaterial => {
     const mat = new THREE.MeshStandardMaterial({ roughness });
     if (color !== undefined) {
       mat.color.set(color);
     }
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms['uScatterPresence'] = transition.presence;
+      shader.uniforms['uInfo2D'] = transition.info2d;
+      shader.uniforms['uScatterSink'] = { value: sink };
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform float uScatterPresence;\nuniform float uScatterSink;',
+        )
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          transformed *= uScatterPresence;
+          transformed.y -= (1.0 - uScatterPresence) * uScatterSink;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uInfo2D;')
+        .replace(
+          '#include <opaque_fragment>',
+          `#include <opaque_fragment>
+          {
+            float grey = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(grey) * vec3(0.2, 0.26, 0.22), uInfo2D);
+          }`,
+        );
+    };
     injectFog(mat, fog);
+    mat.customProgramCacheKey = () => 'scatter-prop-fog-v2';
     return mat;
   };
   return {
-    stone: mk(palette.stone, 1),
-    flower: mk(undefined, 0.8),
+    stone: mk(palette.stone, 1, 0.12),
+    flower: mk(undefined, 0.8, 0.04),
   };
 }

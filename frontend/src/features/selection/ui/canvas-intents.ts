@@ -11,14 +11,15 @@ import { useSelectionStore } from '../../../client/selection-store';
 import {
   defineCanvasIntentHandler,
   type CanvasIntentHandlerDef,
-} from '../../../render/canvas-input';
-import { pickGround, type Ray } from '../../../render/picking';
-import { HEIGHT_STEP } from '../../../render/world';
+} from '../../../client/canvas-input';
+import { interpolateChannelEntities } from '../../../client/interpolate';
+import { pickGround, type Ray } from '../../../client/picking';
+import { HEIGHT_STEP } from '../../../client/world';
 import { StructuresChannel } from '../../construction/protocol';
 import { pickDemolishableByRay } from '../../construction/ui/index';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../../logistics/protocol';
 import { nearestLink, useRoadToolStore } from '../../logistics/ui/index';
-import { interpolatedUnits } from '../../units/render/index';
+import { DenseUnitsChannel } from '../../units/protocol';
 import { ownSubjectForHandle } from './pick';
 import { pickSubjectByRay } from './pick-ray';
 
@@ -35,7 +36,7 @@ const cursorMove = defineCanvasIntentHandler({
     cursorState.setGround(ground);
     const latest = env.client.snapshots().latest;
     const observer = latest?.observer ?? -1;
-    const units = interpolatedUnits(env.client.snapshots(), nowMs);
+    const units = interpolateChannelEntities(DenseUnitsChannel, env.client.snapshots(), nowMs);
     const picked = pickSubjectByRay(
       env.db,
       { width: mapWidth, height: mapHeight },
@@ -90,7 +91,7 @@ const selectClick = defineCanvasIntentHandler({
     const inspector = useInspectorStore.getState();
     const latest = env.client.snapshots().latest;
     const observer = latest?.observer ?? -1;
-    const units = interpolatedUnits(env.client.snapshots(), nowMs);
+    const units = interpolateChannelEntities(DenseUnitsChannel, env.client.snapshots(), nowMs);
     const picked = pickSubjectByRay(
       env.db,
       { width: mapWidth, height: mapHeight },
@@ -144,7 +145,7 @@ const selectBox = defineCanvasIntentHandler({
     const latest = client.snapshots().latest;
     const observer = latest?.observer ?? -1;
     const mode = useInteractionStore.getState().mode;
-    const units = interpolatedUnits(client.snapshots(), nowMs);
+    const units = interpolateChannelEntities(DenseUnitsChannel, client.snapshots(), nowMs);
     const box = {
       x0: Math.min(intent.x0, intent.x1),
       y0: Math.min(intent.y0, intent.y1),
@@ -206,6 +207,14 @@ const selectBox = defineCanvasIntentHandler({
 
 export const selectionCanvasIntents: readonly CanvasIntentHandlerDef[] = [
   cursorMove,
+  defineCanvasIntentHandler({
+    id: 'selection.cursor_leave',
+    kind: 'cursor.leave',
+    handle() {
+      cursorState.setGround(null);
+      useInspectorStore.getState().setHovered(null);
+    },
+  }),
   selectClick,
   selectBox,
 ];

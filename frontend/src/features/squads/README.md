@@ -12,6 +12,8 @@
   `SquadsLaunched`，快照通道 `SquadsChannel`（己方全量，敌方公开
   视图：集结点、launchTick、目标与存储路径）。
 - `sim/index.ts`：`createSquadsModule(deps)`。
+- `rules/`：`gatheringThreats` / `routedThreats` / `arrowSpots` /
+  `bannerThreat`（纯威胁筛选与横幅汇总，ThreatsLayer 与 ThreatBanner 共用）。
 - `render/`：`squadsSceneLayers`（ThreatsLayer：敌方小队预警，
   卸载时释放 GPU 资源；ADR 0062 场景层注册）；
   `ui/`：`squadsHudPanels`（ADR 0062 HUD 面板注册：SquadPanel 仅指挥

@@ -10,9 +10,10 @@ import * as THREE from 'three';
 import { VISUAL } from '../../../render/theme/index';
 import { InstanceWriter } from '../../../render/instance-writer';
 import { markBuilt, useGpuResource } from '../../../render/use-gpu-resource';
-import { terrainY } from '../../../render/world';
+import { terrainY } from '../../../client/world';
 import { readLayer } from '../../../core/index';
 import type { SceneLayerProps } from '../../../render/scene';
+import { GLSL_COVER, type CoverUniforms } from '../../../render/cover-uniforms';
 import { GLSL_FOG, type FogUniforms } from '../../../render/shaders';
 import { ROAD_LAYER_ID } from '../protocol';
 
@@ -20,22 +21,32 @@ const LIFT = 0.03;
 const CAP = 65536;
 const ATTACH_MATERIAL = 'material';
 
-function createRoadGlowMaterial(edge: string, fog: FogUniforms): THREE.ShaderMaterial {
+function createRoadGlowMaterial(
+  edge: string,
+  fog: FogUniforms,
+  cover: CoverUniforms,
+): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
+    fog: true,
     uniforms: {
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       uBed: { value: new THREE.Color('#24282b') },
       uEdge: { value: new THREE.Color(edge) },
       ...fog,
+      ...cover,
     },
     vertexShader: `
       varying vec2 vUv;
       varying vec3 vFtdFogWorld;
       varying float vFtdFogDist;
+      #include <fog_pars_vertex>
       void main() {
         vUv = uv;
         vFtdFogWorld = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
         vFtdFogDist = distance(vFtdFogWorld, cameraPosition);
-        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
       }
     `,
     fragmentShader: `
@@ -44,6 +55,8 @@ function createRoadGlowMaterial(edge: string, fog: FogUniforms): THREE.ShaderMat
       varying vec2 vUv;
       varying vec3 vFtdFogWorld;
       varying float vFtdFogDist;
+      #include <fog_pars_fragment>
+      ${GLSL_COVER}
       ${GLSL_FOG}
       void main() {
         // Thin emissive trim just inside the cell border + two darker
@@ -53,20 +66,26 @@ function createRoadGlowMaterial(edge: string, fog: FogUniforms): THREE.ShaderMat
         float tread = smoothstep(0.30, 0.34, abs(vUv.y - 0.5));
         vec3 col = uBed * mix(0.72, 1.0, tread);
         col = mix(col, uEdge * 1.6, edge);
-        gl_FragColor = vec4(ftdFogApply(col, vFtdFogWorld.xz, vFtdFogDist), 1.0);
+        col = ftdCoverApply(col, vFtdFogWorld.xz);
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+        gl_FragColor.rgb = ftdFogApply(gl_FragColor.rgb, vFtdFogWorld.xz, vFtdFogDist);
       }
     `,
   });
 }
 
 export function RoadLayer({ ctx }: SceneLayerProps) {
-  const { client, map, heights, fog } = ctx;
+  const { client, map, heights, fog, cover } = ctx;
   const theme = VISUAL;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const builtFor = useRef<ArrayLike<number> | null>(null);
   const writer = useMemo(() => new InstanceWriter(), []);
 
-  const glowMat = useMemo(() => createRoadGlowMaterial(theme.markers.link, fog), [theme, fog]);
+  const glowMat = useMemo(
+    () => createRoadGlowMaterial(theme.markers.link, fog, cover),
+    [theme, fog, cover],
+  );
   useGpuResource(glowMat);
 
   useFrame(() => {
@@ -99,11 +118,17 @@ export function RoadLayer({ ctx }: SceneLayerProps) {
       }
     }
     mesh.count = count;
+    mesh.visible = count > 0;
     mesh.instanceMatrix.needsUpdate = true;
   });
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, CAP]} frustumCulled={false}>
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, CAP]}
+      visible={false}
+      frustumCulled={false}
+    >
       <planeGeometry args={[1, 1]} rotateX={-Math.PI / 2} />
       <primitive object={glowMat} attach={ATTACH_MATERIAL} />
     </instancedMesh>

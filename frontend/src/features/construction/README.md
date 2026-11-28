@@ -18,10 +18,11 @@
 - `content.ts`：结构基础字段、`BUILD_CATEGORIES`、轮廓/图标声明。
 - `render/`/`ui/`/`inspector`：`constructionSceneLayers`（ADR 0062
   场景层：Structures、结构 HP、RoadWorks、道路段 HP、Ghost、
-  Exclusion）、`constructionHudPanels`（ADR 0062 HUD 面板注册：
-  BuildMenu）、`constructionCanvasIntents`（build.place / demolish.click
-  与可拆除目标射线拾取）、`constructionMinimapMarks`（ADR 0062 小地图
-  标记贡献：结构/蓝图轮廓）、工地检查器。导出全表见
+  Exclusion）、`renderStructureThumbnails`（BuildMenu 离线 3D 缩略图，
+  由 `app/` 懒注入）、`createConstructionHudPanels`（ADR 0062 HUD
+  面板工厂：BuildMenu）、`constructionCanvasIntents`（build.place /
+  demolish.click 与可拆除目标射线拾取）、`constructionMinimapMarks`
+  （ADR 0062 小地图标记贡献：结构/蓝图轮廓）、工地检查器。导出全表见
   [exports.md](../../../../docs/generated/exports.md) 与
   [contracts.md](../../../../docs/generated/contracts.md)。
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTerrainGeometry } from './geometry';
+import { buildOutskirtsGeometry, buildTerrainGeometry } from './geometry';
 
 interface Vec {
   x: number;
@@ -38,13 +38,10 @@ describe('terrain geometry winding', () => {
     const width = 5;
     const height = 5;
     const heights = new Uint8Array(width * height);
-    const surfaces = new Uint16Array(width * height);
     const ramps = new Uint8Array(width * height);
     heights[2 * width + 2] = 1;
     ramps[1 * width + 2] = 1;
-    const geo = buildTerrainGeometry(width, height, heights, surfaces, ramps, [
-      { r: 0.5, g: 0.5, b: 0.5 },
-    ]);
+    const geo = buildTerrainGeometry(width, height, heights, ramps);
 
     const triCount = geo.indices.length / 3;
     let upFaces = 0;
@@ -79,7 +76,6 @@ describe('terrain geometry winding', () => {
     const width = 5;
     const height = 5;
     const heights = new Uint8Array(width * height);
-    const surfaces = new Uint16Array(width * height);
     const ramps = new Uint8Array(width * height);
     heights[2 * width + 2] = 1;
     for (const [rx, ry] of [
@@ -90,80 +86,18 @@ describe('terrain geometry winding', () => {
     ]) {
       ramps[(ry ?? 0) * width + (rx ?? 0)] = 1;
     }
-    const geo = buildTerrainGeometry(width, height, heights, surfaces, ramps, [
-      { r: 0.5, g: 0.5, b: 0.5 },
-    ]);
+    const geo = buildTerrainGeometry(width, height, heights, ramps);
     for (let t = 0; t < geo.indices.length / 3; t++) {
       expect(triNormal(geo.positions, geo.indices, t).y).toBeGreaterThanOrEqual(-1e-6);
     }
   });
 });
 
-describe('terrain tactical contrast & buffer sizing', () => {
-  it('shades height-2 plateau brighter than height-0 ground', () => {
-    const width = 4;
-    const height = 4;
-    const heights = new Uint8Array(width * height);
-    const surfaces = new Uint16Array(width * height);
-    const ramps = new Uint8Array(width * height);
-    // 2x2 height-2 plateau at (2..3, 2..3), height-0 ground elsewhere.
-    heights[2 * width + 2] = 2;
-    heights[2 * width + 3] = 2;
-    heights[3 * width + 2] = 2;
-    heights[3 * width + 3] = 2;
-    const geo = buildTerrainGeometry(width, height, heights, surfaces, ramps, [
-      { r: 0.5, g: 0.5, b: 0.5 },
-    ]);
-
-    // First 4 vertices belong to cell (0,0) top quad at height 0.
-    const groundR = geo.colors[0] ?? 0;
-    // Find a top-quad vertex at y > 0 (plateau top).
-    let plateauR = 0;
-    for (let v = 0; v < geo.positions.length / 3; v++) {
-      const y = geo.positions[v * 3 + 1] ?? 0;
-      if (y > 0.5) {
-        plateauR = Math.max(plateauR, geo.colors[v * 3] ?? 0);
-      }
-    }
-    expect(plateauR).toBeGreaterThan(groundR);
-  });
-
-  it('shades ramp high-end vertices brighter than low-end vertices', () => {
-    const width = 3;
-    const height = 3;
-    const heights = new Uint8Array(width * height);
-    const surfaces = new Uint16Array(width * height);
-    const ramps = new Uint8Array(width * height);
-    heights[1 * width + 2] = 1;
-    ramps[1 * width + 1] = 1; // Cell (1,1) slopes east towards (2,1).
-    const geo = buildTerrainGeometry(width, height, heights, surfaces, ramps, [
-      { r: 0.5, g: 0.5, b: 0.5 },
-    ]);
-
-    // Cell (1,1) is cell index 4, and cells 0..3 are flat height 0 with 0 cliffs,
-    // so cell (1,1)'s quad starts at vertex index 16.
-    const baseVert = 4 * 4;
-    const ys = [0, 1, 2, 3].map((k) => geo.positions[(baseVert + k) * 3 + 1] ?? 0);
-    const reds = [0, 1, 2, 3].map((k) => geo.colors[(baseVert + k) * 3] ?? 0);
-    const maxY = Math.max(...ys);
-    const minY = Math.min(...ys);
-    expect(maxY).toBeGreaterThan(minY);
-    const highReds = reds.filter((_, idx) => (ys[idx] ?? 0) === maxY);
-    const lowReds = reds.filter((_, idx) => (ys[idx] ?? 0) === minY);
-    expect(highReds.length).toBe(2);
-    expect(lowReds.length).toBe(2);
-    for (const hi of highReds) {
-      for (const lo of lowReds) {
-        expect(hi).toBeGreaterThan(lo);
-      }
-    }
-  });
-
+describe('terrain buffer sizing & outskirts geometry', () => {
   it('builds a checkerboard 1/0 cliff map without buffer truncation', () => {
     const width = 8;
     const height = 8;
     const heights = new Uint8Array(width * height);
-    const surfaces = new Uint16Array(width * height);
     const ramps = new Uint8Array(width * height);
     let expectedQuads = width * height;
     for (let y = 0; y < height; y++) {
@@ -186,11 +120,27 @@ describe('terrain tactical contrast & buffer sizing', () => {
     // Exceeds the old 2 * width * height cap.
     expect(expectedQuads).toBeGreaterThan(width * height * 2);
 
-    const geo = buildTerrainGeometry(width, height, heights, surfaces, ramps, [
-      { r: 0.5, g: 0.5, b: 0.5 },
-    ]);
+    const geo = buildTerrainGeometry(width, height, heights, ramps);
     expect(geo.indices.length).toBe(expectedQuads * 6);
     expect(geo.positions.length).toBe(expectedQuads * 4 * 3);
-    expect(geo.colors.length).toBe(expectedQuads * 4 * 3);
+  });
+
+  it('builds outskirts skirt excluding interior cells and returning empty when skirtCells <= 0', () => {
+    const width = 4;
+    const height = 4;
+    const heights = new Uint8Array(width * height);
+    const ramps = new Uint8Array(width * height);
+
+    const empty = buildOutskirtsGeometry(width, height, heights, ramps, 0);
+    expect(empty.positions.length).toBe(0);
+    expect(empty.indices.length).toBe(0);
+
+    const skirtCells = 2;
+    const skirt = buildOutskirtsGeometry(width, height, heights, ramps, skirtCells);
+    // Total grid (4 + 4) * (4 + 4) = 64 quads minus inner (4 - 2) * (4 - 2) = 4 quads.
+    const expectedQuads =
+      (width + skirtCells * 2) * (height + skirtCells * 2) - (width - 2) * (height - 2);
+    expect(skirt.indices.length).toBe(expectedQuads * 6);
+    expect(skirt.positions.length % 3).toBe(0);
   });
 });

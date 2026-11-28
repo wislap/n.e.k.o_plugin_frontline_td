@@ -9,6 +9,9 @@
 const QUERY_RESULT = 0x8866;
 const QUERY_RESULT_AVAILABLE = 0x8867;
 const HISTORY_LEN = 60;
+const COMPACT_THRESHOLD = 64;
+const MAX_PENDING = 4096;
+const MAX_POOL = 512;
 
 // Minimal subset of WebGL2RenderingContext used by the profiler; the
 // real context satisfies it, and tests drive it with a fake clock.
@@ -47,7 +50,7 @@ export interface GpuProfilerSnapshot {
 
 interface OpenSegment {
   label: string;
-  query: object;
+  query: object | null;
 }
 
 interface PendingSegment {
@@ -67,7 +70,9 @@ export class GpuProfiler {
   readonly available: boolean;
   private stack: OpenSegment[] = [];
   private frame = 0;
+  private minCommitFrame = 0;
   private pending: PendingSegment[] = [];
+  private pendingHead = 0;
   private issued = new Map<number, number>();
   private collected = new Map<number, FrameCollect>();
   private history = new Map<string, number[]>();
@@ -99,12 +104,47 @@ export class GpuProfiler {
     return this.pool.pop() ?? this.gl.createQuery();
   }
 
-  private record(seg: OpenSegment): void {
-    this.pending.push({ frame: this.frame, label: seg.label, query: seg.query });
-    this.issued.set(this.frame, (this.issued.get(this.frame) ?? 0) + 1);
-    const calls = this.frameCalls.get(this.frame) ?? new Map<string, number>();
-    calls.set(seg.label, (calls.get(seg.label) ?? 0) + 1);
-    this.frameCalls.set(this.frame, calls);
+  private recycleQuery(query: object): void {
+    if (this.pool.length < MAX_POOL) {
+      this.pool.push(query);
+    } else {
+      this.gl.deleteQuery(query);
+    }
+  }
+
+  private compactPending(): void {
+    const remaining = this.pending.length - this.pendingHead;
+    if (remaining <= 0) {
+      this.pending.length = 0;
+      this.pendingHead = 0;
+    } else if (this.pendingHead >= COMPACT_THRESHOLD && this.pendingHead >= remaining) {
+      this.pending.copyWithin(0, this.pendingHead);
+      this.pending.length = remaining;
+      this.pendingHead = 0;
+    }
+  }
+
+  private record(label: string, query: object): void {
+    this.pending.push({ frame: this.frame, label, query });
+    if (this.frame >= this.minCommitFrame) {
+      this.issued.set(this.frame, (this.issued.get(this.frame) ?? 0) + 1);
+      const calls = this.frameCalls.get(this.frame) ?? new Map<string, number>();
+      calls.set(label, (calls.get(label) ?? 0) + 1);
+      this.frameCalls.set(this.frame, calls);
+    }
+    while (this.pending.length - this.pendingHead > MAX_PENDING) {
+      const dropped = this.pending[this.pendingHead];
+      this.pendingHead += 1;
+      if (dropped !== undefined) {
+        this.gl.deleteQuery(dropped.query);
+        this.issued.delete(dropped.frame);
+        this.collected.delete(dropped.frame);
+        this.frameCalls.delete(dropped.frame);
+      }
+    }
+    if (this.pendingHead >= MAX_PENDING) {
+      this.compactPending();
+    }
   }
 
   // Opens a span. If another span is open the parent's segment is closed
@@ -115,15 +155,15 @@ export class GpuProfiler {
       return;
     }
     const top = this.stack[this.stack.length - 1];
-    if (top !== undefined) {
+    if (top !== undefined && top.query !== null) {
       this.gl.endQuery(ext.TIME_ELAPSED_EXT);
-      this.record(top);
+      this.record(top.label, top.query);
+      top.query = null;
     }
     const query = this.alloc();
-    if (query === null) {
-      return;
+    if (query !== null) {
+      this.gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
     }
-    this.gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
     this.stack.push({ label, query });
   }
 
@@ -137,13 +177,15 @@ export class GpuProfiler {
     if (top === undefined) {
       return;
     }
-    this.gl.endQuery(ext.TIME_ELAPSED_EXT);
-    this.record(top);
+    if (top.query !== null) {
+      this.gl.endQuery(ext.TIME_ELAPSED_EXT);
+      this.record(top.label, top.query);
+    }
     const parent = this.stack[this.stack.length - 1];
     if (parent !== undefined) {
       const query = this.alloc();
+      parent.query = query;
       if (query !== null) {
-        parent.query = query;
         this.gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
       }
     }
@@ -161,6 +203,50 @@ export class GpuProfiler {
     this.frame += 1;
   }
 
+  resetHistory(): void {
+    // Invalidate pre-reset frames (and any currently open frame) so
+    // in-flight async queries still drain and recycle via poll()
+    // without committing stale labels/timings or orphan frame maps.
+    this.minCommitFrame = this.stack.length > 0 ? this.frame + 1 : this.frame;
+    this.issued.clear();
+    this.collected.clear();
+    this.frameCalls.clear();
+    this.history.clear();
+    this.callHistory.clear();
+    this.lastSeen.clear();
+  }
+
+  dispose(): void {
+    if (this.ext !== null) {
+      const top = this.stack[this.stack.length - 1];
+      if (top !== undefined && top.query !== null) {
+        this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+      }
+      for (const seg of this.stack) {
+        if (seg.query !== null) {
+          this.gl.deleteQuery(seg.query);
+        }
+      }
+      for (let i = this.pendingHead; i < this.pending.length; i += 1) {
+        const p = this.pending[i];
+        if (p !== undefined) {
+          this.gl.deleteQuery(p.query);
+        }
+      }
+      for (const q of this.pool) {
+        this.gl.deleteQuery(q);
+      }
+    }
+    this.stack.length = 0;
+    this.pending.length = 0;
+    this.pendingHead = 0;
+    this.pool.length = 0;
+    this.issued.clear();
+    this.collected.clear();
+    this.frameCalls.clear();
+    this.resetHistory();
+  }
+
   private poll(): void {
     const ext = this.ext;
     if (ext === null) {
@@ -170,25 +256,34 @@ export class GpuProfiler {
       // The whole pending window is unreliable: recycle the queries and
       // drop every incomplete frame outright — its results can never be
       // trusted or completed now.
-      for (const p of this.pending) {
-        this.pool.push(p.query);
+      for (let i = this.pendingHead; i < this.pending.length; i += 1) {
+        const p = this.pending[i];
+        if (p === undefined) {
+          continue;
+        }
+        this.recycleQuery(p.query);
         this.issued.delete(p.frame);
         this.collected.delete(p.frame);
         this.frameCalls.delete(p.frame);
       }
-      this.pending = [];
+      this.pending.length = 0;
+      this.pendingHead = 0;
     }
-    while (this.pending.length > 0) {
-      const head = this.pending[0];
+    while (this.pendingHead < this.pending.length) {
+      const head = this.pending[this.pendingHead];
       if (head === undefined) {
         break;
       }
       if (this.gl.getQueryParameter(head.query, QUERY_RESULT_AVAILABLE) !== true) {
         break;
       }
-      this.pending.shift();
+      this.pendingHead += 1;
+      if (!this.issued.has(head.frame)) {
+        this.recycleQuery(head.query);
+        continue;
+      }
       const ns = Number(this.gl.getQueryParameter(head.query, QUERY_RESULT));
-      this.pool.push(head.query);
+      this.recycleQuery(head.query);
       let c = this.collected.get(head.frame);
       if (c === undefined) {
         c = { count: 0, sums: new Map() };
@@ -197,6 +292,7 @@ export class GpuProfiler {
       c.count += 1;
       c.sums.set(head.label, (c.sums.get(head.label) ?? 0) + ns / 1e6);
     }
+    this.compactPending();
     for (const [frame, expected] of this.issued) {
       if (frame >= this.frame) {
         continue;

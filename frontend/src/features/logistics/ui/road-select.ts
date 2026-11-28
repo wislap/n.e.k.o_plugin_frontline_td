@@ -7,7 +7,7 @@ import { readChannel } from '../../../core/index';
 import type { Snapshot } from '../../../core/index';
 import { StructuresChannel } from '../../construction/protocol';
 import { LogisticsNetworkChannel, type RoadLinkKey } from '../protocol';
-import { linkFlow } from '../render/link-flow';
+import { linkFlow } from '../../../client/link-flow';
 
 export type { RoadLinkKey };
 

@@ -6,7 +6,7 @@ import { readChannel } from '../../../core/index';
 import {
   defineCanvasIntentHandler,
   type CanvasIntentHandlerDef,
-} from '../../../render/canvas-input';
+} from '../../../client/canvas-input';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
 import { submitRoadOrder } from './road-order';
 import { useRoadToolStore } from './road-tool-store';

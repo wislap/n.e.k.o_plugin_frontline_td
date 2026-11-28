@@ -3,8 +3,13 @@
 // pre-registry in-slot DOM order.
 import { useSelectionStore } from '../client/selection-store';
 import { useUiStore } from '../client/ui-store';
+import type { ContentDb } from '../content/index';
 import { DebugPanel } from '../dev/DebugPanel';
-import { constructionHudPanels } from '../features/construction/ui/index';
+import { renderStructureThumbnails } from '../features/construction/render/index';
+import {
+  createConstructionHudPanels,
+  type ThumbnailRenderer,
+} from '../features/construction/ui/index';
 import { logisticsHudPanels } from '../features/logistics/ui/index';
 import { squadsHudPanels, submitMoveOrder } from '../features/squads/ui/index';
 import { groupHudPanels, type HudPanelProps } from '../ui/hud-panels';
@@ -16,6 +21,17 @@ import { MINIMAP_MARKS, MINIMAP_RASTERS } from './minimap-contributions';
 import { SCENE_LAYERS } from './scene-layers';
 
 const SCENE_LAYER_IDS = SCENE_LAYERS.map((l) => l.id);
+
+const thumbnailCache = new WeakMap<ContentDb, ReadonlyMap<string, string>>();
+const getStructureThumbnails: ThumbnailRenderer = (db) => {
+  const cached = thumbnailCache.get(db);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const rendered = renderStructureThumbnails(db);
+  thumbnailCache.set(db, rendered);
+  return rendered;
+};
 
 // Dev debug panel: registered like every other panel; it reads the
 // store flag itself and renders nothing while closed.
@@ -29,7 +45,7 @@ function DebugHudPanel({ ctx }: HudPanelProps) {
 
 export const HUD_PANELS = groupHudPanels([
   ...SHELL_HUD_PANELS,
-  ...constructionHudPanels,
+  ...createConstructionHudPanels({ renderThumbnails: getStructureThumbnails }),
   ...logisticsHudPanels,
   ...squadsHudPanels,
   {

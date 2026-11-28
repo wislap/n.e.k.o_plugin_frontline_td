@@ -1,7 +1,7 @@
 // Canvas intent handler assembly (ADR 0062): app is the only place
 // feature handler lists are combined into the registry the GameCanvas
 // dispatch consults for non-camera intents.
-import { indexCanvasIntentHandlers } from '../render/canvas-input';
+import { indexCanvasIntentHandlers } from '../client/canvas-input';
 import { constructionCanvasIntents } from '../features/construction/ui/index';
 import { logisticsCanvasIntents } from '../features/logistics/ui/index';
 import { selectionCanvasIntents } from '../features/selection/ui/index';

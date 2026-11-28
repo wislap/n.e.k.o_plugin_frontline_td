@@ -326,12 +326,12 @@ export function buildSilhouetteGeometryData(
   return builder.finish();
 }
 
+export type SilhouetteGeometries = Record<StructureSilhouette, THREE.BufferGeometry>;
+
 // Per-theme geometry set: `bevel` is the language's chamfer radius
 // (RoundedBoxGeometry) applied to every MeshBuilder box part.
-export function createSilhouetteGeometries(
-  bevel = 0,
-): Record<StructureSilhouette, THREE.BufferGeometry> {
-  const record: Partial<Record<StructureSilhouette, THREE.BufferGeometry>> = {};
+export function createSilhouetteGeometries(bevel = 0): SilhouetteGeometries {
+  const record: Partial<SilhouetteGeometries> = {};
   for (const silhouette of STRUCTURE_SILHOUETTES) {
     const data = buildSilhouetteGeometryData(silhouette, bevel);
     const geo = new THREE.BufferGeometry();
@@ -343,12 +343,10 @@ export function createSilhouetteGeometries(
     geo.userData['shared'] = true;
     record[silhouette] = geo;
   }
-  return record as Record<StructureSilhouette, THREE.BufferGeometry>;
+  return record as SilhouetteGeometries;
 }
 
-export function disposeSilhouetteGeometries(
-  geos: Record<StructureSilhouette, THREE.BufferGeometry>,
-): void {
+export function disposeSilhouetteGeometries(geos: SilhouetteGeometries): void {
   for (const silhouette of STRUCTURE_SILHOUETTES) {
     geos[silhouette].dispose();
   }

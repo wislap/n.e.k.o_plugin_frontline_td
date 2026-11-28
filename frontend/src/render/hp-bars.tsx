@@ -7,8 +7,8 @@ import * as THREE from 'three';
 import type { SnapshotPair } from '../client/sim-client';
 import type { SimClient } from '../client/sim-client';
 import { InstanceWriter } from './instance-writer';
-import { interpAlpha } from './interpolate';
-import { terrainY } from './world';
+import { interpAlpha } from '../client/interpolate';
+import { terrainY } from '../client/world';
 import { renderNowMs } from '../client/capture-mode';
 
 export interface HpBarSink {

@@ -1,25 +1,39 @@
-// Road tool visuals (M3 E3): hovered/selected link polylines in road
-// mode, plus a dashed red overlay on intercepted links whenever the
-// logistics overlay is on. Selection/hover indices live in the build
-// store; geometry is rebuilt each frame (link counts are small).
+// Road tool visuals (M3 E3, M2B 1.2b): hovered/selected link polylines
+// in road mode, plus a dashed red overlay on intercepted links whenever
+// the logistics overlay is on. Dirty-gated per mesh with preallocated
+// lineDistance on the dashed intercept buffer.
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useInteractionStore } from '../../../client/interaction-store';
 import { useRoadToolStore } from '../ui/road-tool-store';
 import { useUiStore } from '../../../client/ui-store';
-import { commitLineBuffer, createLineBuffer, type LineBuffer } from '../../../render/line-buffer';
+import {
+  bindLineBuffer,
+  commitLineBuffer,
+  commitLineDistances,
+  createLineBuffer,
+  type LineBuffer,
+} from '../../../render/line-buffer';
 import type { SceneLayerProps } from '../../../render/scene';
-import { terrainY } from '../../../render/world';
+import { VISUAL } from '../../../render/theme/index';
+import { terrainY } from '../../../client/world';
 import { LogisticsNetworkChannel, type LogisticsNetwork } from '../protocol';
 import { linkIndices } from '../ui/road-select';
 import { readChannel } from '../../../core/index';
 
 const HOVER_COLOR = '#ffffff';
-const SELECT_COLOR = '#ffd166';
-const INTERCEPT_COLOR = '#ff5a4f';
+const SELECT_COLOR = VISUAL.markers.accent;
+const INTERCEPT_COLOR = VISUAL.markers.danger;
 const LIFT = 0.09;
 const MAX_VERTS = 8192;
+
+interface LineMeshCache<K> {
+  network: LogisticsNetwork | undefined;
+  key: K;
+  heights: ArrayLike<number> | null;
+  vertCount: number;
+}
 
 function fillLines(
   pos: Float32Array,
@@ -60,6 +74,39 @@ function fillLines(
   return v;
 }
 
+function drawGated<K>(
+  lines: THREE.LineSegments,
+  buf: LineBuffer,
+  visible: boolean,
+  network: LogisticsNetwork | undefined,
+  key: K,
+  heights: ArrayLike<number>,
+  width: number,
+  height: number,
+  cache: LineMeshCache<K>,
+  resolveLinks: (net: LogisticsNetwork) => readonly number[],
+): void {
+  if (!visible || network === undefined) {
+    lines.visible = false;
+    return;
+  }
+  if (cache.network === network && cache.key === key && cache.heights === heights) {
+    lines.visible = cache.vertCount > 0;
+    return;
+  }
+  const n = fillLines(buf.positions, network, resolveLinks(network), width, height, heights, LIFT);
+  const vertCount = n / 3;
+  commitLineBuffer(buf, vertCount);
+  if (vertCount > 0 && buf.lineDistances !== null) {
+    commitLineDistances(buf, vertCount);
+  }
+  lines.visible = vertCount > 0;
+  cache.network = network;
+  cache.key = key;
+  cache.heights = heights;
+  cache.vertCount = vertCount;
+}
+
 export function RoadToolLayer({ ctx }: SceneLayerProps) {
   const { client, map, heights } = ctx;
   const selRef = useRef<THREE.LineSegments>(null);
@@ -67,6 +114,25 @@ export function RoadToolLayer({ ctx }: SceneLayerProps) {
   const intRef = useRef<THREE.LineSegments>(null);
   const bufsRef = useRef<{ sel: LineBuffer; hov: LineBuffer; int: LineBuffer } | null>(null);
   const interceptedRef = useRef<number[]>([]);
+  const selCacheRef = useRef<LineMeshCache<unknown>>({
+    network: undefined,
+    key: null,
+    heights: null,
+    vertCount: 0,
+  });
+  const hovCacheRef = useRef<LineMeshCache<number>>({
+    network: undefined,
+    key: -1,
+    heights: null,
+    vertCount: 0,
+  });
+  const intCacheRef = useRef<LineMeshCache<null>>({
+    network: undefined,
+    key: null,
+    heights: null,
+    vertCount: 0,
+  });
+
   useEffect(() => {
     return () => {
       bufsRef.current?.sel.geometry.dispose();
@@ -85,30 +151,15 @@ export function RoadToolLayer({ ctx }: SceneLayerProps) {
     bufsRef.current ??= {
       sel: createLineBuffer(MAX_VERTS, false),
       hov: createLineBuffer(MAX_VERTS, false),
-      int: createLineBuffer(MAX_VERTS, false),
+      int: createLineBuffer(MAX_VERTS, false, true),
     };
     const bufs = bufsRef.current;
+    bindLineBuffer(sel, bufs.sel);
+    bindLineBuffer(hov, bufs.hov);
+    bindLineBuffer(int, bufs.int);
+
     const network = readChannel(client.snapshots().latest, LogisticsNetworkChannel) ?? undefined;
     const { width, height } = map.grid;
-    const draw = (
-      lines: THREE.LineSegments,
-      buf: LineBuffer,
-      links: readonly number[],
-      visible: boolean,
-    ): void => {
-      if (!visible || network === undefined) {
-        lines.visible = false;
-        return;
-      }
-      const n = fillLines(buf.positions, network, links, width, height, heights, LIFT);
-      commitLineBuffer(buf, n / 3);
-      lines.geometry = buf.geometry;
-      (lines.material as THREE.LineDashedMaterial).needsUpdate = true;
-      lines.computeLineDistances();
-      lines.visible = true;
-    };
-    // Store reads happen per frame via getState — the visuals are
-    // imperative, so subscribing would only add React re-renders.
     const interaction = useInteractionStore.getState();
     const roadTool = useRoadToolStore.getState();
     const roadMode = interaction.tool.kind === 'road';
@@ -116,37 +167,64 @@ export function RoadToolLayer({ ctx }: SceneLayerProps) {
       useUiStore.getState().logisticsOverlay ||
       interaction.mode === 'logistics' ||
       interaction.tool.kind === 'place';
-    // roadSel stores handle pairs (stable across network rebuilds);
-    // resolve to current link indices here, dropping dead links.
-    draw(
+
+    drawGated(
       sel,
       bufs.sel,
-      network === undefined ? [] : linkIndices(network, roadTool.roadSel),
       roadMode,
+      network,
+      roadTool.roadSel,
+      heights,
+      width,
+      height,
+      selCacheRef.current,
+      (net) => linkIndices(net, roadTool.roadSel),
     );
-    draw(hov, bufs.hov, roadTool.roadHover >= 0 ? [roadTool.roadHover] : [], roadMode);
-    const intercepted = interceptedRef.current;
-    intercepted.length = 0;
-    if (network !== undefined) {
-      for (let i = 0; i < network.links.a.length; i++) {
-        if ((network.links.intercept[i] ?? 0) > 0) {
-          intercepted.push(i);
+    drawGated(
+      hov,
+      bufs.hov,
+      roadMode,
+      network,
+      roadTool.roadHover,
+      heights,
+      width,
+      height,
+      hovCacheRef.current,
+      () => (roadTool.roadHover >= 0 ? [roadTool.roadHover] : []),
+    );
+    drawGated(
+      int,
+      bufs.int,
+      overlayOn,
+      network,
+      null,
+      heights,
+      width,
+      height,
+      intCacheRef.current,
+      (net) => {
+        const intercepted = interceptedRef.current;
+        intercepted.length = 0;
+        for (let i = 0; i < net.links.a.length; i++) {
+          if ((net.links.intercept[i] ?? 0) > 0) {
+            intercepted.push(i);
+          }
         }
-      }
-    }
-    draw(int, bufs.int, intercepted, overlayOn);
+        return intercepted;
+      },
+    );
   });
 
   const dashed = { dashSize: 0.4, gapSize: 0.25 };
   return (
     <>
-      <lineSegments ref={selRef} frustumCulled={false}>
+      <lineSegments ref={selRef} visible={false} frustumCulled={false}>
         <lineBasicMaterial color={SELECT_COLOR} />
       </lineSegments>
-      <lineSegments ref={hovRef} frustumCulled={false}>
+      <lineSegments ref={hovRef} visible={false} frustumCulled={false}>
         <lineBasicMaterial color={HOVER_COLOR} />
       </lineSegments>
-      <lineSegments ref={intRef} frustumCulled={false}>
+      <lineSegments ref={intRef} visible={false} frustumCulled={false}>
         <lineDashedMaterial color={INTERCEPT_COLOR} {...dashed} />
       </lineSegments>
     </>

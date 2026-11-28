@@ -149,6 +149,42 @@ const config: IConfiguration = {
       to: { path: 'node_modules/(three|@react-three)/' },
     },
     {
+      name: 'no-three-reachable-outside-render',
+      severity: 'error',
+      comment:
+        'Only src/render/, src/features/*/render/, and src/app/ may transitively' +
+        ' depend on three or @react-three (M3A).',
+      from: {
+        path: '^src/',
+        pathNot: '^(src/render/|src/features/[^/]+/render/|src/app/)',
+      },
+      to: {
+        path: 'node_modules/(three|@react-three)/',
+        reachable: true,
+      },
+    },
+    {
+      name: 'ui-not-to-render',
+      severity: 'error',
+      comment:
+        'UI and mode modules (src/ui/, features/*/ui/, modes/) must not import' +
+        ' src/render/ or features/*/render/ (M3A).',
+      from: { path: '^src/(ui|features/[^/]+/ui|modes)/' },
+      to: { path: '^src/(render|features/[^/]+/render)/' },
+    },
+    {
+      name: 'no-cross-feature-render',
+      severity: 'error',
+      comment:
+        'Feature render modules must not import another feature render/; share' +
+        ' via src/render/ or src/client/ or wire in src/app/ (M3A).',
+      from: { path: '^src/features/([^/]+)/render/' },
+      to: {
+        path: '^src/features/[^/]+/render/',
+        pathNot: '^src/features/$1/render/',
+      },
+    },
+    {
       name: 'not-to-modes',
       severity: 'error',
       comment:

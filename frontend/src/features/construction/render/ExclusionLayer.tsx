@@ -1,107 +1,134 @@
-// Hostile exclusion circles (M5 batch D): while a build tool is active,
-// draw the exclusion radius of every operational hostile structure that
-// carries `exclusion` — live rows from the structures channel plus
-// remembered rows from vision memory (same columns, never duplicated).
-import { useEffect, useRef } from 'react';
+// Hostile exclusion circles (M5 batch D, M2B 1.2c): while a build tool
+// is active, draw the exclusion radius of every operational hostile
+// structure that carries `exclusion` via a single dirty-gated
+// DashRingMaterial InstancedMesh.
+import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useInteractionStore } from '../../../client/interaction-store';
+import type { ContentDb } from '../../../content/index';
+import { createDashRingMaterial } from '../../../render/dash-ring';
+import { InstanceWriter } from '../../../render/instance-writer';
 import type { SceneLayerProps } from '../../../render/scene';
-import {
-  commitLineBuffer,
-  createLineBuffer,
-  ensureLineCapacity,
-  type LineBuffer,
-} from '../../../render/line-buffer';
-import { writeRingVertices } from '../../../render/rings';
-import { terrainY } from '../../../render/world';
-import { VisionMemoryChannel } from '../../vision/protocol';
+import { VISUAL } from '../../../render/theme/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
+import { terrainY } from '../../../client/world';
+import { VisionMemoryChannel, type VisionMemory } from '../../vision/protocol';
 import { hostileExcluders } from '../../vision/rules/index';
-import { StructuresChannel } from '../protocol';
+import { StructuresChannel, type ConstructionStructures } from '../protocol';
 import { readChannel } from '../../../core/index';
 
-const RING_COLOR = new THREE.Color('#ff5a4f');
-const SEGMENTS = 48;
-const MAX_CIRCLES = 32;
+const RING_COLOR = VISUAL.markers.danger;
+const RING_SEGMENTS = 64;
+const INITIAL_CAPACITY = 32;
 const LIFT = 0.07;
 
-function ensureExclusionBuffer(
-  bufRef: { current: LineBuffer | null },
-  segs: THREE.LineSegments,
-  vertices: number,
-): LineBuffer {
-  bufRef.current ??= createLineBuffer(MAX_CIRCLES * SEGMENTS * 2, true);
-  const buf = bufRef.current;
-  ensureLineCapacity(buf, vertices);
-  if (segs.geometry !== buf.geometry) {
-    segs.geometry.dispose();
-    segs.geometry = buf.geometry;
-  }
-  return buf;
+interface ExclusionCache {
+  structures: ConstructionStructures | undefined;
+  memory: VisionMemory | undefined;
+  observer: number;
+  heights: ArrayLike<number> | null;
+  db: ContentDb | null;
+  capacity: number;
+  count: number;
 }
 
 export function ExclusionLayer({ ctx }: SceneLayerProps) {
   const { client, db, heights, isHostile } = ctx;
   const { width: mapWidth, height: mapHeight } = ctx.map.grid;
-  const bufRef = useRef<LineBuffer | null>(null);
-  const segsRef = useRef<THREE.LineSegments>(null);
+  const [capacity, setCapacity] = useState(INITIAL_CAPACITY);
 
-  useEffect(() => {
-    return () => {
-      bufRef.current?.geometry.dispose();
-      bufRef.current = null;
-    };
-  }, []);
+  const ringGeo = useMemo(() => new THREE.RingGeometry(0.8, 1, RING_SEGMENTS), []);
+  useGpuResource(ringGeo);
+
+  const ringMat = useMemo(
+    () => createDashRingMaterial(RING_COLOR, { dash: 0, width: 0.06, opacity: 0.85 }),
+    [],
+  );
+  useGpuResource(ringMat);
+
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const writerRef = useRef<InstanceWriter | null>(null);
+  const cacheRef = useRef<ExclusionCache>({
+    structures: undefined,
+    memory: undefined,
+    observer: -1,
+    heights: null,
+    db: null,
+    capacity: 0,
+    count: 0,
+  });
 
   useFrame(() => {
-    const segs = segsRef.current;
-    if (segs === null) {
+    const mesh = meshRef.current;
+    if (mesh === null) {
       return;
     }
     const building = useInteractionStore.getState().tool.kind === 'place';
     const latest = client.snapshots().latest;
     if (!building || latest === null) {
-      segs.visible = false;
+      mesh.visible = false;
       return;
     }
     const observer = latest.observer;
     const structures = readChannel(latest, StructuresChannel) ?? undefined;
     const memory = readChannel(latest, VisionMemoryChannel) ?? undefined;
-    const circles = hostileExcluders(db, (f) => isHostile(observer, f), [structures, memory]);
-    const buf = ensureExclusionBuffer(bufRef, segs, circles.length * SEGMENTS * 2);
-    const positions = buf.positions;
-    const colors = buf.colors;
-    if (colors === null) {
+    const cache = cacheRef.current;
+
+    if (
+      cache.structures === structures &&
+      cache.memory === memory &&
+      cache.observer === observer &&
+      cache.heights === heights &&
+      cache.db === db &&
+      cache.capacity === capacity
+    ) {
+      mesh.visible = cache.count > 0;
       return;
     }
-    let cursor = 0;
+
+    const circles = hostileExcluders(db, (f) => isHostile(observer, f), [structures, memory]);
+    if (circles.length > capacity) {
+      setCapacity(Math.max(capacity * 2, circles.length));
+      mesh.visible = false;
+      return;
+    }
+
+    writerRef.current ??= new InstanceWriter();
+    const writer = writerRef.current;
+    let count = 0;
     for (let i = 0; i < circles.length; i++) {
       const c = circles[i];
       if (c === undefined) {
         continue;
       }
       const y = terrainY(heights, mapWidth, mapHeight, c.cx, c.cy) + LIFT;
-      cursor = writeRingVertices(
-        positions,
-        colors,
-        cursor,
-        c.cx,
-        c.cy,
-        y,
-        c.r,
-        SEGMENTS,
-        RING_COLOR.r,
-        RING_COLOR.g,
-        RING_COLOR.b,
-      );
+      writer.setFlat(mesh, count, c.cx, y, c.cy, c.r, c.r);
+      count += 1;
     }
-    commitLineBuffer(buf, cursor / 3);
-    segs.visible = cursor > 0;
+    mesh.count = count;
+    mesh.visible = count > 0;
+    if (count > 0) {
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    cache.structures = structures;
+    cache.memory = memory;
+    cache.observer = observer;
+    cache.heights = heights;
+    cache.db = db;
+    cache.capacity = capacity;
+    cache.count = count;
   });
 
   return (
-    <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
-      <lineBasicMaterial vertexColors transparent opacity={0.85} depthWrite={false} />
-    </lineSegments>
+    <instancedMesh
+      key={capacity}
+      ref={meshRef}
+      args={[ringGeo, ringMat, capacity]}
+      visible={false}
+      renderOrder={4}
+      frustumCulled={false}
+    />
   );
 }

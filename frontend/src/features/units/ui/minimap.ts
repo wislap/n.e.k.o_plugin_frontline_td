@@ -7,16 +7,17 @@ import {
   type MinimapMark,
   type MinimapMarkDef,
 } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { DenseUnitsChannel } from '../protocol';
 
 function unitColor(disposition: 'own' | 'hostile' | 'ally'): string {
   switch (disposition) {
     case 'hostile':
-      return '#ff6b6b';
+      return MINIMAP_PALETTE.hostile;
     case 'own':
-      return '#6ee7ff';
+      return MINIMAP_PALETTE.ownUnit;
     case 'ally':
-      return '#46e09a';
+      return MINIMAP_PALETTE.ally;
   }
 }
 
@@ -55,8 +56,8 @@ const unitsMarks: MinimapMarkDef = {
     }
     for (const u of rows) {
       if (u.selected) {
-        marks.push({ kind: 'dot', x: u.x, y: u.y, sizePx: 5, color: '#6ee7ff' });
-        marks.push({ kind: 'dot', x: u.x, y: u.y, sizePx: 3, color: '#ffffff' });
+        marks.push({ kind: 'dot', x: u.x, y: u.y, sizePx: 5, color: MINIMAP_PALETTE.ownUnit });
+        marks.push({ kind: 'dot', x: u.x, y: u.y, sizePx: 3, color: MINIMAP_PALETTE.selectedCore });
       }
     }
     return marks;

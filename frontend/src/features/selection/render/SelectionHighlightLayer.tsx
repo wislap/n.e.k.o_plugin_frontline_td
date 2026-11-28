@@ -1,7 +1,7 @@
-// Selection, hover, pin, demolish, and range-circle LineSegments overlay
-// (F4): collects pure highlight primitives from snapshot channels and
-// client stores each frame and writes them into a single dynamic LineBuffer.
-import { useEffect, useRef } from 'react';
+// Selection, hover, pin, demolish, and range-circle overlay (F4, M2B 1.2c):
+// L-brackets stay in a dirty-gated LineBuffer; ground range/service/connect
+// circles render via a dirty-gated DashRingMaterial InstancedMesh.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
@@ -9,50 +9,74 @@ import {
   type HoverSubject,
   type PinnableSubject,
 } from '../../../client/inspector-store';
-import { useInteractionStore } from '../../../client/interaction-store';
+import { useInteractionStore, type SecondaryTool } from '../../../client/interaction-store';
 import { useSelectionStore } from '../../../client/selection-store';
 import type { SnapshotPair } from '../../../client/sim-client';
-import { interpAlpha } from '../../../render/interpolate';
+import type { Snapshot } from '../../../core/index';
+import { createDashRingMaterial } from '../../../render/dash-ring';
+import { InstanceWriter } from '../../../render/instance-writer';
+import {
+  ChannelPositionInterpolator,
+  interpAlpha,
+  type InterpEntity,
+} from '../../../client/interpolate';
 import type { SceneLayerProps } from '../../../render/scene';
 import {
+  bindLineBuffer,
   commitLineBuffer,
   createLineBuffer,
   ensureLineCapacity,
   type LineBuffer,
 } from '../../../render/line-buffer';
-import { writeRingVertices } from '../../../render/rings';
 import { VISUAL } from '../../../render/theme/index';
+import { useGpuResource } from '../../../render/use-gpu-resource';
 import {
   collectSelectionHighlights,
   type HighlightBracket,
   type HighlightCircle,
 } from './selection-highlights';
-import { UnitInterpolator, type InterpUnit } from '../../units/render/index';
-import { terrainY } from '../../../render/world';
+import { DenseUnitsChannel, type DenseUnits } from '../../units/protocol';
+import { terrainY } from '../../../client/world';
 import { renderNowMs } from '../../../client/capture-mode';
 
 const INITIAL_CAPACITY_VERTICES = 1024;
-const RING_SEGMENTS = 48;
+const INITIAL_CIRCLE_CAP = 64;
+const RING_SEGMENTS = 64;
 const VERTS_PER_BRACKET = 16;
-const VERTS_PER_CIRCLE = RING_SEGMENTS * 2;
 const LIFT = 0.07;
 const EMPTY_TARGETS: readonly number[] = [];
 
 const BRACKET_COLORS: Readonly<Record<HighlightBracket['tone'], string>> = {
-  selected: '#ffffff',
-  pinned_own: '#5cb8ff',
-  pinned_hostile: '#ff5a4f',
-  hover: '#d8e8ff',
-  danger: '#ff4d4d',
-  cell_hover: '#94b8d8',
+  selected: VISUAL.markers.accent,
+  pinned_own: VISUAL.markers.accent,
+  pinned_hostile: VISUAL.markers.danger,
+  hover: VISUAL.markers.hover,
+  danger: VISUAL.markers.danger,
+  cell_hover: VISUAL.markers.cellHover,
 };
 
 const CIRCLE_COLORS: Readonly<Record<HighlightCircle['kind'], string>> = {
-  weapon_own: '#ffd166',
-  weapon_hostile: '#ff5a4f',
-  service: '#7fd4ff',
-  connect: '#7be8b8',
+  weapon_own: VISUAL.markers.accent,
+  weapon_hostile: VISUAL.markers.danger,
+  service: VISUAL.markers.service,
+  connect: VISUAL.markers.connect,
 };
+
+interface HighlightCache {
+  latest: Snapshot | null;
+  prev: Snapshot | null;
+  alpha: number;
+  selected: ReadonlySet<number> | null;
+  hovered: HoverSubject | null;
+  pinned: PinnableSubject | null;
+  toolKind: SecondaryTool['kind'] | null;
+  demolishHoverHandle: number | null;
+  demolishConfirmTargets: readonly number[] | null;
+  heights: ArrayLike<number> | null;
+  circleCap: number;
+  bracketVerts: number;
+  circleCount: number;
+}
 
 function isUnitSubject(
   subject: HoverSubject | PinnableSubject | null,
@@ -61,13 +85,13 @@ function isUnitSubject(
 }
 
 function populateUnitFocusMap(
-  interp: UnitInterpolator,
+  interp: ChannelPositionInterpolator<DenseUnits>,
   pair: SnapshotPair,
-  now: number,
+  alpha: number,
   hovered: HoverSubject | null,
   pinned: PinnableSubject | null,
-  unitMap: Map<number, InterpUnit>,
-  unitPool: InterpUnit[],
+  unitMap: Map<number, InterpEntity>,
+  unitPool: InterpEntity[],
 ): void {
   const latest = interp.update(pair);
   unitMap.clear();
@@ -79,7 +103,6 @@ function populateUnitFocusMap(
   if (hUnit === null && pUnit === null) {
     return;
   }
-  const alpha = interpAlpha(now, pair.receivedAt, pair.intervalMs);
   let poolIdx = 0;
   for (let i = 0; i < latest.handles.length; i++) {
     const handle = latest.handles[i] ?? 0;
@@ -132,32 +155,31 @@ function writeSegment(
   return cursor + 6;
 }
 
-function writeHighlights(
+function writeBrackets(
   segs: THREE.LineSegments,
   buf: LineBuffer,
   brackets: readonly HighlightBracket[],
-  circles: readonly HighlightCircle[],
   heights: ArrayLike<number>,
   mapWidth: number,
   mapHeight: number,
   tempColor: THREE.Color,
   accent: string | null,
-): void {
-  const neededVerts = brackets.length * VERTS_PER_BRACKET + circles.length * VERTS_PER_CIRCLE;
+): number {
+  const neededVerts = brackets.length * VERTS_PER_BRACKET;
   if (neededVerts === 0) {
     commitLineBuffer(buf, 0);
-    segs.geometry = buf.geometry;
+    bindLineBuffer(segs, buf);
     segs.visible = false;
-    return;
+    return 0;
   }
   ensureLineCapacity(buf, neededVerts);
-  segs.geometry = buf.geometry;
+  bindLineBuffer(segs, buf);
 
   const positions = buf.positions;
   const colors = buf.colors;
   if (colors === null) {
     segs.visible = false;
-    return;
+    return 0;
   }
 
   let cursor = 0;
@@ -187,40 +209,104 @@ function writeHighlights(
     cursor = writeSegment(positions, colors, cursor, x1, y, z1, x1, z1 - arm, r, g, bl);
   }
 
-  for (const c of circles) {
-    tempColor.set(accent !== null && c.kind === 'weapon_own' ? accent : CIRCLE_COLORS[c.kind]);
-    const y = terrainY(heights, mapWidth, mapHeight, c.cx, c.cy) + LIFT;
-    cursor = writeRingVertices(
-      positions,
-      colors,
-      cursor,
-      c.cx,
-      c.cy,
-      y,
-      c.radius,
-      RING_SEGMENTS,
-      tempColor.r,
-      tempColor.g,
-      tempColor.b,
-      c.kind === 'connect',
-    );
-  }
-
   const vertexCount = cursor / 3;
   commitLineBuffer(buf, vertexCount);
   segs.visible = vertexCount > 0;
+  return vertexCount;
+}
+
+function writeCircles(
+  rings: THREE.InstancedMesh,
+  circles: readonly HighlightCircle[],
+  heights: ArrayLike<number>,
+  mapWidth: number,
+  mapHeight: number,
+  writer: InstanceWriter,
+  tempColor: THREE.Color,
+  accent: string | null,
+): number {
+  const count = circles.length;
+  if (count === 0) {
+    rings.count = 0;
+    rings.visible = false;
+    return 0;
+  }
+  const aDash = rings.geometry.getAttribute('aDash');
+  if (!(aDash instanceof THREE.InstancedBufferAttribute)) {
+    rings.count = 0;
+    rings.visible = false;
+    return 0;
+  }
+  for (let i = 0; i < count; i++) {
+    const c = circles[i];
+    if (c === undefined) {
+      continue;
+    }
+    const y = terrainY(heights, mapWidth, mapHeight, c.cx, c.cy) + LIFT;
+    writer.setFlat(rings, i, c.cx, y, c.cy, c.radius, c.radius);
+    tempColor.set(accent !== null && c.kind === 'weapon_own' ? accent : CIRCLE_COLORS[c.kind]);
+    rings.setColorAt(i, tempColor);
+    aDash.setX(i, c.kind === 'connect' ? 1 : 0);
+  }
+  rings.count = count;
+  rings.visible = true;
+  rings.instanceMatrix.needsUpdate = true;
+  if (rings.instanceColor !== null) {
+    rings.instanceColor.needsUpdate = true;
+  }
+  aDash.needsUpdate = true;
+  return count;
 }
 
 export function SelectionHighlightLayer({ ctx }: SceneLayerProps) {
   const { client, db, heights, isHostile } = ctx;
   const { width: mapWidth, height: mapHeight } = ctx.map.grid;
   const theme = VISUAL;
+  const [circleCap, setCircleCap] = useState(INITIAL_CIRCLE_CAP);
+
+  const ringGeo = useMemo(() => {
+    const geo = new THREE.RingGeometry(0.8, 1, RING_SEGMENTS);
+    const attr = new THREE.InstancedBufferAttribute(new Float32Array(circleCap), 1);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aDash', attr);
+    return geo;
+  }, [circleCap]);
+  useGpuResource(ringGeo);
+
+  const ringMat = useMemo(
+    () =>
+      createDashRingMaterial('#ffffff', {
+        width: 0.06,
+        opacity: 0.65,
+        instancedDash: true,
+      }),
+    [],
+  );
+  useGpuResource(ringMat);
+
   const segsRef = useRef<THREE.LineSegments>(null);
+  const ringsRef = useRef<THREE.InstancedMesh>(null);
   const bufRef = useRef<LineBuffer | null>(null);
+  const writerRef = useRef<InstanceWriter | null>(null);
   const tempColorRef = useRef(new THREE.Color());
-  const unitInterpRef = useRef(new UnitInterpolator());
-  const unitMapRef = useRef(new Map<number, InterpUnit>());
-  const unitPoolRef = useRef<InterpUnit[]>([]);
+  const unitInterpRef = useRef(new ChannelPositionInterpolator(DenseUnitsChannel));
+  const unitMapRef = useRef(new Map<number, InterpEntity>());
+  const unitPoolRef = useRef<InterpEntity[]>([]);
+  const cacheRef = useRef<HighlightCache>({
+    latest: null,
+    prev: null,
+    alpha: -1,
+    selected: null,
+    hovered: null,
+    pinned: null,
+    toolKind: null,
+    demolishHoverHandle: null,
+    demolishConfirmTargets: null,
+    heights: null,
+    circleCap: 0,
+    bracketVerts: 0,
+    circleCount: 0,
+  });
 
   useEffect(() => {
     return () => {
@@ -231,27 +317,63 @@ export function SelectionHighlightLayer({ ctx }: SceneLayerProps) {
 
   useFrame(() => {
     const segs = segsRef.current;
-    if (segs === null) {
+    const rings = ringsRef.current;
+    if (segs === null || rings === null) {
       return;
     }
     bufRef.current ??= createLineBuffer(INITIAL_CAPACITY_VERTICES, true);
     const buf = bufRef.current;
+    bindLineBuffer(segs, buf);
 
     const pair = client.snapshots();
+    const cache = cacheRef.current;
     if (pair.latest === null) {
-      segs.geometry = buf.geometry;
+      if (cache.latest !== null) {
+        commitLineBuffer(buf, 0);
+        cache.latest = null;
+        cache.bracketVerts = 0;
+        cache.circleCount = 0;
+      }
       segs.visible = false;
+      rings.count = 0;
+      rings.visible = false;
       return;
     }
 
     const selected = useSelectionStore.getState().selected;
     const { hovered, pinned } = useInspectorStore.getState();
     const interaction = useInteractionStore.getState();
+    const toolKind = interaction.tool.kind;
+    const demolishHoverHandle = interaction.demolishHover?.handle ?? null;
+    const demolishConfirmTargets = interaction.demolishConfirm?.targets ?? EMPTY_TARGETS;
+
+    const hasUnitFocus = isUnitSubject(hovered) || isUnitSubject(pinned);
+    const alpha = hasUnitFocus ? interpAlpha(renderNowMs(), pair.receivedAt, pair.intervalMs) : 1;
+
+    const sameStatic =
+      cache.latest === pair.latest &&
+      cache.selected === selected &&
+      cache.hovered === hovered &&
+      cache.pinned === pinned &&
+      cache.toolKind === toolKind &&
+      cache.demolishHoverHandle === demolishHoverHandle &&
+      cache.demolishConfirmTargets === demolishConfirmTargets &&
+      cache.heights === heights &&
+      cache.circleCap === circleCap;
+
+    const sameUnitFocus =
+      !hasUnitFocus || (cache.prev === pair.previous && alpha === 1 && cache.alpha === 1);
+
+    if (sameStatic && sameUnitFocus) {
+      segs.visible = cache.bracketVerts > 0;
+      rings.visible = cache.circleCount > 0;
+      return;
+    }
 
     populateUnitFocusMap(
       unitInterpRef.current,
       pair,
-      renderNowMs(),
+      alpha,
       hovered,
       pinned,
       unitMapRef.current,
@@ -267,29 +389,70 @@ export function SelectionHighlightLayer({ ctx }: SceneLayerProps) {
       selected,
       hovered,
       pinned,
-      toolKind: interaction.tool.kind,
-      demolishHoverHandle: interaction.demolishHover?.handle ?? null,
-      demolishConfirmTargets: interaction.demolishConfirm?.targets ?? EMPTY_TARGETS,
+      toolKind,
+      demolishHoverHandle,
+      demolishConfirmTargets,
       isHostile,
       unitGroupBracket: true,
     });
 
-    writeHighlights(
+    if (circles.length > circleCap) {
+      setCircleCap(Math.max(circleCap * 2, circles.length));
+      segs.visible = false;
+      rings.visible = false;
+      return;
+    }
+
+    writerRef.current ??= new InstanceWriter();
+    const bracketVerts = writeBrackets(
       segs,
       buf,
       brackets,
-      circles,
       heights,
       mapWidth,
       mapHeight,
       tempColorRef.current,
       theme.markers.accent,
     );
+    const circleCount = writeCircles(
+      rings,
+      circles,
+      heights,
+      mapWidth,
+      mapHeight,
+      writerRef.current,
+      tempColorRef.current,
+      theme.markers.accent,
+    );
+
+    cache.latest = pair.latest;
+    cache.prev = pair.previous;
+    cache.alpha = alpha;
+    cache.selected = selected;
+    cache.hovered = hovered;
+    cache.pinned = pinned;
+    cache.toolKind = toolKind;
+    cache.demolishHoverHandle = demolishHoverHandle;
+    cache.demolishConfirmTargets = demolishConfirmTargets;
+    cache.heights = heights;
+    cache.circleCap = circleCap;
+    cache.bracketVerts = bracketVerts;
+    cache.circleCount = circleCount;
   });
 
   return (
-    <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
-      <lineBasicMaterial vertexColors transparent opacity={0.65} depthWrite={false} />
-    </lineSegments>
+    <>
+      <lineSegments ref={segsRef} visible={false} renderOrder={4} frustumCulled={false}>
+        <lineBasicMaterial vertexColors transparent opacity={0.65} depthWrite={false} />
+      </lineSegments>
+      <instancedMesh
+        key={circleCap}
+        ref={ringsRef}
+        args={[ringGeo, ringMat, circleCap]}
+        visible={false}
+        renderOrder={4}
+        frustumCulled={false}
+      />
+    </>
   );
 }

@@ -2,10 +2,10 @@
 // for the screen-space intents that need the camera/raycaster; the shell
 // keeps the camera.* cases and delegates the rest to the assembled map.
 // This module must not import features/*.
-import type { SimClient } from '../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import type { Intent } from '../input/intents';
 import type { Ray } from './picking';
+import type { SimClient } from './sim-client';
 
 export interface CanvasInputEnv {
   readonly client: SimClient;

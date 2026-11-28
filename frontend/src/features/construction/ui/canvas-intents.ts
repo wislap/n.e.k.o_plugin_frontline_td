@@ -6,9 +6,9 @@ import { useInteractionStore } from '../../../client/interaction-store';
 import {
   defineCanvasIntentHandler,
   type CanvasIntentHandlerDef,
-} from '../../../render/canvas-input';
-import { pickGround, type Ray } from '../../../render/picking';
-import { HEIGHT_STEP } from '../../../render/world';
+} from '../../../client/canvas-input';
+import { pickGround, type Ray } from '../../../client/picking';
+import { HEIGHT_STEP } from '../../../client/world';
 import { CancelCommand, PlaceCommand } from '../protocol';
 import { centeredFootprint } from '../rules/index';
 import { pickDemolishableByRay } from './demolish-pick';

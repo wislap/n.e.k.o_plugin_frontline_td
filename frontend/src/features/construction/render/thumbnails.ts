@@ -4,13 +4,18 @@
 // all GPU objects. Returns data URLs the build cards show as images.
 import * as THREE from 'three';
 import type { ContentDb } from '../../../content/index';
-import { createSilhouetteGeometries } from './structure-geometries';
+import { VISUAL } from '../../../render/theme/index';
+import {
+  createSilhouetteGeometries,
+  disposeSilhouetteGeometries,
+  type SilhouetteGeometries,
+} from './structure-geometries';
 
 const THUMB_SIZE = 72;
 
 export function renderStructureThumbnails(
   db: ContentDb,
-  bevel: number,
+  bevel: number = VISUAL.geometry.bevel,
 ): ReadonlyMap<string, string> {
   const out = new Map<string, string>();
   const canvas = document.createElement('canvas');
@@ -22,24 +27,28 @@ export function renderStructureThumbnails(
     alpha: true,
     preserveDrawingBuffer: true,
   });
-  renderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
+  let geometries: SilhouetteGeometries | null = null;
+  let material: THREE.MeshStandardMaterial | null = null;
+  let mesh: THREE.Mesh | null = null;
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight('#cfe2f5', '#4a5240', 1.1));
-  const sun = new THREE.DirectionalLight('#fff4dd', 2.2);
-  sun.position.set(3, 5, 2.5);
-  scene.add(sun);
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.55,
-    metalness: 0.15,
-  });
-  const geometries = createSilhouetteGeometries(bevel);
-  const sphere = new THREE.Sphere();
-  const mesh = new THREE.Mesh(undefined, material);
-  scene.add(mesh);
 
   try {
+    renderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
+    scene.add(new THREE.HemisphereLight('#cfe2f5', '#4a5240', 1.1));
+    const sun = new THREE.DirectionalLight('#fff4dd', 2.2);
+    sun.position.set(3, 5, 2.5);
+    scene.add(sun);
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+    material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.55,
+      metalness: 0.15,
+    });
+    geometries = createSilhouetteGeometries(bevel);
+    const sphere = new THREE.Sphere();
+    mesh = new THREE.Mesh(geometries.block, material);
+    scene.add(mesh);
+
     for (const kind of db.structures.list) {
       if (kind.build === undefined) {
         continue;
@@ -60,11 +69,13 @@ export function renderStructureThumbnails(
       out.set(kind.id, renderer.domElement.toDataURL('image/png'));
     }
   } finally {
-    mesh.geometry = new THREE.BufferGeometry();
-    for (const g of Object.values(geometries)) {
-      g.dispose();
+    if (mesh !== null) {
+      scene.remove(mesh);
     }
-    material.dispose();
+    if (geometries !== null) {
+      disposeSilhouetteGeometries(geometries);
+    }
+    material?.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
   }

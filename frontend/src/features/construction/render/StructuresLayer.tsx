@@ -8,51 +8,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { effectiveSpectatePitchDeg } from '../../../client/camera-math';
-import { useCameraStore } from '../../../client/camera-store';
 import { useUiStore } from '../../../client/ui-store';
+import { cameraTransitionState } from '../../../render/camera-transition';
 import type { SceneLayerProps } from '../../../render/scene';
 import { VISUAL } from '../../../render/theme/index';
 import { useGpuResource } from '../../../render/use-gpu-resource';
-import { terrainY } from '../../../render/world';
 import { InstanceWriter } from '../../../render/instance-writer';
-import { factionColorHex } from '../../units/render/index';
 import { STRUCTURE_SILHOUETTES, type StructureSilhouette } from '../content';
-import {
-  SalvageChannel,
-  STATE_BLUEPRINT,
-  STATE_DEMOLISHING,
-  STATE_OPERATIONAL,
-  STATE_RUIN,
-  STATE_SITE,
-  STATE_WAITING,
-  StructuresChannel,
-} from '../protocol';
+import { SalvageChannel, StructuresChannel } from '../protocol';
 import { createPadMaterial } from './pad-material';
 import { createThemedStructureMaterial } from './themed-structure-material';
 import { ACTIVE_STRUCTURE_GLYPHS, disposeGlyphMaterials } from './structure-glyphs';
 import {
-  AMBER_COLOR,
   bindGpuToMeshes,
-  commitMeshBuffers,
-  DEMOLISH_DARKEN,
+  ensureDimAttrs,
   ensureGpuAssets,
+  hasNonZeroGlyphs,
+  hideAllStructureMeshes,
+  makeCrateCache,
   makeGlyphCounts,
   makeSilhouetteCounts,
-  OUTPOST_TINT,
-  resetGlyphCounts,
-  resetSilhouetteCounts,
-  resolveGlyphTint,
-  RUIN_COLOR,
-  RUIN_HEIGHT,
+  makeStructCache,
+  rebuildStructuresFull,
+  resolveGlyphOpacity,
   SALVAGE_COLOR,
-  SALVAGE_SIZE,
   setWaitingOpacity,
-  SITE_DARKEN,
   STATUS_COLOR,
-  structureKindHeight,
+  stepInfo2dUniforms,
+  updateCrates,
   updateGlyphOpacity,
+  updateStructureYawOnly,
   type ActiveGlyph,
+  type CrateCache,
+  type StructCache,
   type StructureGpuAssets,
 } from './structure-gpu';
 import { disposeSilhouetteGeometries } from './structure-geometries';
@@ -60,6 +48,13 @@ import { renderNowMs } from '../../../client/capture-mode';
 import { readChannel } from '../../../core/index';
 
 const ATTACH_MATERIAL = 'material';
+const YAW_EPSILON = 1e-4;
+
+function setInfo2dUniforms(uniforms: readonly { value: number }[], value: number): void {
+  for (const u of uniforms) {
+    u.value = value;
+  }
+}
 
 export function StructuresLayer({ ctx }: SceneLayerProps) {
   const { client, db, heights, isHostile } = ctx;
@@ -93,6 +88,8 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
   const glyphCountsRef = useRef<Record<ActiveGlyph, number> | null>(null);
   const writerRef = useRef<InstanceWriter | null>(null);
   const colorRef = useRef<THREE.Color | null>(null);
+  const structCacheRef = useRef<StructCache | null>(null);
+  const crateCacheRef = useRef<CrateCache | null>(null);
 
   useEffect(() => {
     return () => {
@@ -111,6 +108,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
     const waitMesh = waitingRef.current;
     const crates = crateRef.current;
     const statusMesh = statusRef.current;
+    const padMesh = padRef.current;
     if (bpMesh === null || waitMesh === null || crates === null) {
       return;
     }
@@ -119,29 +117,14 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
     if (!bindGpuToMeshes(silRefs.current, glyphRefs.current, gpu)) {
       return;
     }
-    const dimAttrs = dimAttrsRef.current;
-    for (const s of STRUCTURE_SILHOUETTES) {
-      const mesh = silRefs.current[s];
-      if (mesh === undefined || mesh === null) {
-        continue;
-      }
-      let attr = dimAttrs[s];
-      if (attr === undefined || attr.count !== capacity) {
-        attr = new THREE.InstancedBufferAttribute(new Float32Array(capacity).fill(1), 1);
-        mesh.geometry.setAttribute('aDim', attr);
-        dimAttrs[s] = attr;
-      }
-    }
+    ensureDimAttrs(silRefs.current, dimAttrsRef.current, capacity);
 
     silCountsRef.current ??= makeSilhouetteCounts();
     glyphCountsRef.current ??= makeGlyphCounts();
     writerRef.current ??= new InstanceWriter();
     colorRef.current ??= new THREE.Color();
-
-    const silCounts = silCountsRef.current;
-    const glyphCounts = glyphCountsRef.current;
-    const writer = writerRef.current;
-    const color = colorRef.current;
+    structCacheRef.current ??= makeStructCache();
+    crateCacheRef.current ??= makeCrateCache();
 
     const pair = client.snapshots();
     const latest = pair.latest;
@@ -152,245 +135,113 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
     const n = channel?.handles.length ?? 0;
     const cratesN = salvage?.handles.length ?? 0;
     if (n + cratesN > capacity) {
+      hideAllStructureMeshes(
+        silRefs.current,
+        glyphRefs.current,
+        bpMesh,
+        waitMesh,
+        crates,
+        statusMesh,
+        padMesh,
+      );
       setCapacity((n + cratesN) * 2);
       return;
     }
 
-    resetSilhouetteCounts(silCounts);
-    resetGlyphCounts(glyphCounts);
-    let bpCount = 0;
-    let waitCount = 0;
-    let statusCount = 0;
-    let padCount = 0;
-
-    const cam = useCameraStore.getState();
-    // Tactical info view (弱化显示): lerp the structure/pad dim uniforms
-    // toward 1 while the camera is in tactical mode.
-    const infoTarget =
-      theme.info2d && useUiStore.getState().info2d && cam.mode === 'tactical' ? 1 : 0;
-    for (const u of [themed.uniforms.info2d, pad.uniforms.info2d]) {
-      u.value += (infoTarget - u.value) * 0.25;
-      if (Math.abs(u.value - infoTarget) < 0.01) {
-        u.value = infoTarget;
-      }
+    const blend = cameraTransitionState.blend;
+    const info2dActive = theme.info2d && useUiStore.getState().info2d;
+    if (blend > 0 && blend < 1) {
+      setInfo2dUniforms([themed.uniforms.info2d, pad.uniforms.info2d], info2dActive ? blend : 0);
+    } else {
+      stepInfo2dUniforms(
+        [themed.uniforms.info2d, pad.uniforms.info2d],
+        info2dActive && blend >= 1 ? 1 : 0,
+      );
     }
-    const glyphYawRot = camera.rotation.y;
-    updateGlyphOpacity(
-      gpu.glyphs,
-      cam.mode,
-      effectiveSpectatePitchDeg(cam.zoom, cam.pitchOffsetDeg),
+
+    const structCache = structCacheRef.current;
+    if (gpu.bevel !== structCache.bevel) {
+      structCache.glyphOpacity = -1;
+    }
+    const opacity = resolveGlyphOpacity(
+      blend >= 1 ? 'tactical' : 'spectate',
+      cameraTransitionState.visualPitchDeg,
+    );
+    if (opacity !== structCache.glyphOpacity) {
+      updateGlyphOpacity(gpu.glyphs, opacity);
+      structCache.glyphOpacity = opacity;
+    }
+
+    updateCrates(
+      crates,
+      salvage,
+      heights,
+      mapWidth,
+      mapHeight,
+      capacity,
+      writerRef.current,
+      crateCacheRef.current,
     );
 
-    if (channel !== undefined) {
-      for (let i = 0; i < channel.handles.length; i++) {
-        const kindIndex = channel.kind[i] ?? 0;
-        const kind = db.structures.byIndex(kindIndex);
-        if (kind === undefined) {
-          continue;
-        }
-        const state = channel.state[i] ?? 0;
-        const faction = channel.faction[i] ?? 0;
-        const w = kind.footprint.w;
-        const h = kind.footprint.h;
-        const cx = (channel.x[i] ?? 0) + w / 2;
-        const cy = (channel.y[i] ?? 0) + h / 2;
-        const groundY = terrainY(heights, mapWidth, mapHeight, cx, cy);
-        const full = structureKindHeight(db, kindIndex);
-        const progress = (channel.progressBp[i] ?? 0) / 10000;
-
-        if (state === STATE_BLUEPRINT) {
-          writer.set(
-            bpMesh,
-            bpCount,
-            cx,
-            groundY + (full * 0.5) / 2,
-            cy,
-            w * 0.9,
-            full * 0.5,
-            h * 0.9,
-          );
-          color.set(factionColorHex(faction, localFaction));
-          bpMesh.setColorAt(bpCount, color);
-          bpCount += 1;
-          continue;
-        }
-
-        if (state === STATE_WAITING) {
-          writer.set(
-            waitMesh,
-            waitCount,
-            cx,
-            groundY + (full * 0.5) / 2,
-            cy,
-            w * 0.9,
-            full * 0.5,
-            h * 0.9,
-          );
-          color.set(factionColorHex(faction, localFaction));
-          color.lerp(AMBER_COLOR, 0.55);
-          waitMesh.setColorAt(waitCount, color);
-          waitCount += 1;
-          continue;
-        }
-
-        const heightScale =
-          state === STATE_RUIN
-            ? RUIN_HEIGHT / full
-            : state === STATE_SITE
-              ? Math.max(0.15, progress)
-              : 1;
-        const silhouette: StructureSilhouette =
-          state === STATE_RUIN ? 'block' : kind.visual.silhouette;
-        const silMesh = silRefs.current[silhouette];
-        if (silMesh !== undefined && silMesh !== null) {
-          const slot = silCounts[silhouette];
-          writer.set(silMesh, slot, cx, groundY, cy, w * 0.92, full * heightScale, h * 0.92);
-          let dim = 1;
-          if (state === STATE_RUIN) {
-            color.set(RUIN_COLOR);
-            dim = OUTPOST_TINT * DEMOLISH_DARKEN;
-          } else {
-            color.set(factionColorHex(faction, localFaction));
-            if (kind.capture !== undefined) {
-              color.multiplyScalar(OUTPOST_TINT);
-            }
-            if (state === STATE_SITE) {
-              dim = SITE_DARKEN + progress * (1 - SITE_DARKEN);
-            } else if (state === STATE_DEMOLISHING) {
-              dim = DEMOLISH_DARKEN;
-            }
-            if (dim !== 1) {
-              color.multiplyScalar(dim);
-            }
-          }
-          dimAttrs[silhouette]?.setX(slot, dim);
-          silMesh.setColorAt(slot, color);
-          silCounts[silhouette] = slot + 1;
-        }
-
-        // Foundation pad under built structures (field): graphite slab
-        // slightly larger than the footprint, sunk into the terrain.
-        const padMesh = padRef.current;
-        if (padMesh !== null && state !== STATE_RUIN) {
-          const margin = theme.pad.margin;
-          writer.set(
-            padMesh,
-            padCount,
-            cx,
-            groundY - 0.04 + theme.pad.height / 2,
-            cy,
-            w + margin * 2,
-            theme.pad.height,
-            h + margin * 2,
-          );
-          padCount += 1;
-        }
-
-        // Damaged operational structures get a floating warning marker
-        // (themed modes only; uses hpBp already in the channel).
-        if (
-          statusMesh !== null &&
-          state === STATE_OPERATIONAL &&
-          (channel.hpBp[i] ?? 10000) < 9000 &&
-          statusCount < capacity
-        ) {
-          writer.setEuler(
-            statusMesh,
-            statusCount,
-            cx,
-            groundY + full + 0.55,
-            cy,
-            0,
-            glyphYawRot,
-            0,
-            0.22,
-            0.22,
-            0.22,
-          );
-          statusCount += 1;
-        }
-
-        const glyph = kind.visual.glyph;
-        if (state === STATE_OPERATIONAL && glyph !== 'none') {
-          const gMesh = glyphRefs.current[glyph];
-          if (gMesh !== undefined && gMesh !== null) {
-            const gSlot = glyphCounts[glyph];
-            const badgeSize = Math.max(0.42, Math.min(w, h) * 0.34);
-            writer.setEuler(
-              gMesh,
-              gSlot,
-              cx,
-              groundY + full + 0.06,
-              cy,
-              0,
-              glyphYawRot,
-              0,
-              badgeSize,
-              1,
-              badgeSize,
-            );
-            color.set(resolveGlyphTint(faction, localFaction, isHostile));
-            // HDR tint so roof glyphs feed bloom.
-            color.multiplyScalar(theme.materials.emissiveBoost);
-            gMesh.setColorAt(gSlot, color);
-            glyphCounts[glyph] = gSlot + 1;
-          }
-        }
-      }
+    const glyphYawRot = camera.rotation.y;
+    if (
+      channel !== structCache.channel ||
+      localFaction !== structCache.localFaction ||
+      heights !== structCache.heights ||
+      isHostile !== structCache.isHostile ||
+      capacity !== structCache.capacity ||
+      gpu.bevel !== structCache.bevel
+    ) {
+      rebuildStructuresFull(
+        channel,
+        localFaction,
+        heights,
+        mapWidth,
+        mapHeight,
+        db,
+        isHostile,
+        capacity,
+        gpu.bevel,
+        theme.pad.margin,
+        theme.pad.height,
+        theme.materials.emissiveBoost,
+        glyphYawRot,
+        silRefs.current,
+        glyphRefs.current,
+        dimAttrsRef.current,
+        bpMesh,
+        waitMesh,
+        statusMesh,
+        padMesh,
+        silCountsRef.current,
+        glyphCountsRef.current,
+        writerRef.current,
+        colorRef.current,
+        structCache,
+      );
+    } else if (
+      Math.abs(glyphYawRot - structCache.yaw) > YAW_EPSILON &&
+      (structCache.statusCount > 0 || hasNonZeroGlyphs(structCache.glyphCounts))
+    ) {
+      updateStructureYawOnly(
+        channel,
+        heights,
+        mapWidth,
+        mapHeight,
+        db,
+        capacity,
+        glyphYawRot,
+        glyphRefs.current,
+        statusMesh,
+        glyphCountsRef.current,
+        writerRef.current,
+        structCache,
+      );
     }
 
-    for (const s of STRUCTURE_SILHOUETTES) {
-      const silMesh = silRefs.current[s];
-      if (silMesh !== undefined && silMesh !== null) {
-        commitMeshBuffers(silMesh, silCounts[s]);
-      }
-      const dimAttr = dimAttrs[s];
-      if (dimAttr !== undefined) {
-        dimAttr.needsUpdate = true;
-      }
-    }
-    for (const g of ACTIVE_STRUCTURE_GLYPHS) {
-      const gMesh = glyphRefs.current[g];
-      if (gMesh !== undefined && gMesh !== null) {
-        commitMeshBuffers(gMesh, glyphCounts[g]);
-      }
-    }
-
-    if (statusMesh !== null) {
-      statusMesh.count = statusCount;
-      statusMesh.instanceMatrix.needsUpdate = true;
-    }
-    commitMeshBuffers(bpMesh, bpCount);
-    commitMeshBuffers(waitMesh, waitCount);
-    const pulse = 0.38 + 0.3 * (0.5 + 0.5 * Math.sin(renderNowMs() / 180));
-    setWaitingOpacity(waitMesh, pulse);
-
-    if (salvage !== undefined) {
-      for (let i = 0; i < salvage.handles.length; i++) {
-        const x = salvage.x[i] ?? 0;
-        const y = salvage.y[i] ?? 0;
-        const groundY = terrainY(heights, mapWidth, mapHeight, x, y);
-        writer.set(
-          crates,
-          i,
-          x,
-          groundY + SALVAGE_SIZE / 2,
-          y,
-          SALVAGE_SIZE,
-          SALVAGE_SIZE,
-          SALVAGE_SIZE,
-        );
-      }
-      crates.count = salvage.handles.length;
-    } else {
-      crates.count = 0;
-    }
-    crates.instanceMatrix.needsUpdate = true;
-
-    const padMesh = padRef.current;
-    if (padMesh !== null) {
-      padMesh.count = padCount;
-      padMesh.instanceMatrix.needsUpdate = true;
+    if (waitMesh.visible) {
+      const pulse = 0.38 + 0.3 * (0.5 + 0.5 * Math.sin(renderNowMs() / 180));
+      setWaitingOpacity(waitMesh, pulse);
     }
   });
 
@@ -403,6 +254,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
             silRefs.current[s] = m;
           }}
           args={[undefined, undefined, capacity]}
+          visible={false}
           frustumCulled={false}
           castShadow
         >
@@ -416,6 +268,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
             glyphRefs.current[g] = m;
           }}
           args={[undefined, undefined, capacity]}
+          visible={false}
           frustumCulled={false}
           renderOrder={1}
         />
@@ -424,6 +277,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
         key={`bp-${capacity}`}
         ref={blueprintRef}
         args={[undefined, undefined, capacity]}
+        visible={false}
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
@@ -433,6 +287,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
         key={`wait-${capacity}`}
         ref={waitingRef}
         args={[undefined, undefined, capacity]}
+        visible={false}
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
@@ -442,6 +297,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
         key={`c-${capacity}`}
         ref={crateRef}
         args={[undefined, undefined, capacity]}
+        visible={false}
         frustumCulled={false}
       >
         <boxGeometry args={[1, 1, 1]} />
@@ -451,6 +307,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
         key={`status-${capacity}`}
         ref={statusRef}
         args={[undefined, undefined, capacity]}
+        visible={false}
         frustumCulled={false}
       >
         <octahedronGeometry args={[0.16, 0]} />
@@ -460,6 +317,7 @@ export function StructuresLayer({ ctx }: SceneLayerProps) {
         key={`pad-${capacity}`}
         ref={padRef}
         args={[undefined, undefined, capacity]}
+        visible={false}
         frustumCulled={false}
         receiveShadow
       >

@@ -101,4 +101,67 @@ describe('squads minimap threats', () => {
       },
     ]);
   });
+
+  it('reports isAnimating true only when a hostile squad has a gather order', () => {
+    const def = squadsMinimapMarks[0];
+    expect(def?.isAnimating?.({ snapshot: null, isHostile })).toBe(false);
+
+    const gatherSquads: SquadsSnapshot = {
+      squads: [
+        {
+          id: 1,
+          faction: ENEMY,
+          memberCount: 2,
+          strength: 2,
+          order: { kind: 'gather', x: 10, y: 10, radius: 2, targetX: 4, targetY: 4 },
+          phase: 'gather',
+          centroid: { x: 10, y: 10 },
+        },
+      ],
+    };
+    expect(
+      def?.isAnimating?.({
+        snapshot: makeSnapshot({ [SquadsChannel.id]: gatherSquads }),
+        isHostile,
+      }),
+    ).toBe(true);
+
+    const nonGatherSquads: SquadsSnapshot = {
+      squads: [
+        {
+          id: 2,
+          faction: ENEMY,
+          memberCount: 2,
+          strength: 2,
+          order: { kind: 'advance', x: 4, y: 4, radius: 2 },
+          phase: 'advance',
+          centroid: { x: 12, y: 12 },
+        },
+        {
+          id: 3,
+          faction: ENEMY,
+          memberCount: 2,
+          strength: 2,
+          order: { kind: 'guard', x: 6, y: 6, radius: 2 },
+          phase: 'guard',
+          centroid: { x: 6, y: 6 },
+        },
+        {
+          id: 4,
+          faction: ALLY,
+          memberCount: 2,
+          strength: 2,
+          order: { kind: 'gather', x: 8, y: 8, radius: 2, targetX: 4, targetY: 4 },
+          phase: 'gather',
+          centroid: { x: 8, y: 8 },
+        },
+      ],
+    };
+    expect(
+      def?.isAnimating?.({
+        snapshot: makeSnapshot({ [SquadsChannel.id]: nonGatherSquads }),
+        isHostile,
+      }),
+    ).toBe(false);
+  });
 });

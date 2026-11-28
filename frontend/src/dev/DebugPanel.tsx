@@ -39,6 +39,8 @@ export function DebugPanel({
   const setRenderCost = useUiStore((state) => state.setRenderCost);
   const renderStats = useUiStore((state) => state.renderStats);
   const gpuStats = useUiStore((state) => state.gpuStats);
+  const gpuPerObject = useUiStore((state) => state.gpuPerObject);
+  const setGpuPerObject = useUiStore((state) => state.setGpuPerObject);
   const hiddenSceneLayers = useUiStore((state) => state.hiddenSceneLayers);
   const setSceneLayerHidden = useUiStore((state) => state.setSceneLayerHidden);
   const [fps, setFps] = useState(0);
@@ -188,8 +190,21 @@ export function DebugPanel({
       </div>
 
       <div className={styles['section']}>
-        <div className={styles['sectionTitle']}>{t('dev.scene_breakdown')}</div>
-        {gpuStats !== null && gpuStats.available && (
+        <div className={styles['sectionHeader']}>
+          <span className={styles['sectionTitle']}>{t('dev.scene_breakdown')}</span>
+          <label className={styles['toggleLabel']}>
+            <span>{t('dev.scene_breakdown_toggle')}</span>
+            <input
+              type="checkbox"
+              data-gpu-per-object
+              checked={gpuPerObject}
+              onChange={(e) => {
+                setGpuPerObject(e.target.checked);
+              }}
+            />
+          </label>
+        </div>
+        {gpuPerObject && gpuStats !== null && gpuStats.available && (
           <>
             {gpuStats.labels
               .filter((l) => l.label.includes('/'))

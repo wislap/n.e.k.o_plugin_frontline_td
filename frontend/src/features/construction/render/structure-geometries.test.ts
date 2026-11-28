@@ -111,9 +111,56 @@ describe('structure-geometries', () => {
       expect(geo.getAttribute('normal')).toBeDefined();
       expect(geo.getAttribute('color')).toBeDefined();
       expect(geo.getIndex()).not.toBeNull();
+      expect(geo.userData['shared']).toBe(true);
     }
     expect(() => {
       disposeSilhouetteGeometries(geos);
     }).not.toThrow();
+  });
+
+  it('builds valid chamfered geometries with bevel = 0.04 and shared flag', () => {
+    for (const silhouette of STRUCTURE_SILHOUETTES) {
+      const data = buildSilhouetteGeometryData(silhouette, 0.04);
+      const vertCount = data.positions.length / 3;
+      expect(vertCount, `${silhouette} chamfered vertices`).toBeGreaterThan(0);
+      expect(data.indices.length % 3).toBe(0);
+
+      for (let v = 0; v < vertCount; v++) {
+        const p = readVec(data.positions, v);
+        const n = readVec(data.normals, v);
+        expect(p.x, `${silhouette} bevel x`).toBeGreaterThanOrEqual(-0.55);
+        expect(p.x, `${silhouette} bevel x`).toBeLessThanOrEqual(0.55);
+        expect(p.z, `${silhouette} bevel z`).toBeGreaterThanOrEqual(-0.55);
+        expect(p.z, `${silhouette} bevel z`).toBeLessThanOrEqual(0.55);
+        expect(p.y, `${silhouette} bevel y`).toBeGreaterThanOrEqual(-1e-4);
+        expect(p.y, `${silhouette} bevel y`).toBeLessThanOrEqual(1.05);
+        expect(Math.abs(Math.hypot(n.x, n.y, n.z) - 1)).toBeLessThan(1e-4);
+      }
+
+      const triCount = data.indices.length / 3;
+      for (let t = 0; t < triCount; t++) {
+        const ia = data.indices[t * 3] ?? 0;
+        const ib = data.indices[t * 3 + 1] ?? 0;
+        const ic = data.indices[t * 3 + 2] ?? 0;
+        const pa = readVec(data.positions, ia);
+        const pb = readVec(data.positions, ib);
+        const pc = readVec(data.positions, ic);
+        const e1 = { x: pb.x - pa.x, y: pb.y - pa.y, z: pb.z - pa.z };
+        const e2 = { x: pc.x - pa.x, y: pc.y - pa.y, z: pc.z - pa.z };
+        const gn = {
+          x: e1.y * e2.z - e1.z * e2.y,
+          y: e1.z * e2.x - e1.x * e2.z,
+          z: e1.x * e2.y - e1.y * e2.x,
+        };
+        const na = readVec(data.normals, ia);
+        expect(gn.x * na.x + gn.y * na.y + gn.z * na.z).toBeGreaterThan(0);
+      }
+    }
+
+    const geos = createSilhouetteGeometries(0.04);
+    for (const silhouette of STRUCTURE_SILHOUETTES) {
+      expect(geos[silhouette].userData['shared']).toBe(true);
+    }
+    disposeSilhouetteGeometries(geos);
   });
 });

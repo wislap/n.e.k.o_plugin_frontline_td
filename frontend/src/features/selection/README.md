@@ -12,7 +12,7 @@
   道路/拆除工具悬停，经 logistics/construction 的公开拾取器）、
   `select.click`、`select.box` 画布意图处理器。内部 `pick.ts` /
   `pick-ray.ts` 提供地面点与 3D 射线两级拾取（射线先打单位圆柱/
-  结构 AABB，miss 后回落地面点；射线数学在 `render/picking`）。
+  结构 AABB，miss 后回落地面点；射线数学在 `client/picking`）。
 - `render/index.ts`：`selectionSceneLayers`（高亮覆盖层，挂载在全部
   功能层之后）；`collectSelectionHighlights` 为纯收集函数，测试直接
   验证迷雾安全与射程圈半径。

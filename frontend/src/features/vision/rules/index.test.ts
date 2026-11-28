@@ -1,8 +1,7 @@
 // Pure client vision helpers (M5 batch D): cell visibility against the
 // observer's fog layer, the unexplored/explored bucketing the fog-of-war
 // instances from, and the hostile-excluder merge over structures +
-// memory rows. The ring/arc strip geometry lives in render/rings and is
-// covered by render/rings.test.ts.
+// memory rows.
 import { describe, expect, it } from 'vitest';
 import { loadContent } from '../../../content/index';
 import { STATE_OPERATIONAL, STATE_RUIN } from '../../construction/protocol';

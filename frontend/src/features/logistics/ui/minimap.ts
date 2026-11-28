@@ -3,11 +3,10 @@
 // client/minimap-model.ts.
 import { readLayer } from '../../../core/index';
 import type { MinimapRasterDef } from '../../../ui/minimap/index';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { ROAD_LAYER_ID } from '../protocol';
 
-const ROAD_R = 150;
-const ROAD_G = 166;
-const ROAD_B = 188;
+const [ROAD_R, ROAD_G, ROAD_B] = MINIMAP_PALETTE.roadRgb;
 
 const roadsRaster: MinimapRasterDef = {
   id: 'logistics.roads',

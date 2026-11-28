@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 import type { SimClient } from '../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import type { PanTracker } from '../input/pan';
+import { subscribeGhostSync } from '../features/construction/ui/index';
 import { readTerrainHeights } from '../features/terrain/render/index';
 import { EndScreen } from '../modes/assault/ui/EndScreen';
 import { GameCanvas } from '../render/GameCanvas';
 import { CANVAS_INTENTS } from './canvas-intents';
 import { HUD_PANELS } from './hud-panels';
 import { SCENE_LAYERS } from './scene-layers';
+import { subscribeSelectionPruning } from './selection-pruning';
 import { Hud } from '../ui/Hud';
 
 export function App({
@@ -32,6 +34,9 @@ export function App({
   useEffect(() => {
     document.title = t('app.title');
   }, [t]);
+
+  useEffect(() => subscribeSelectionPruning(client), [client]);
+  useEffect(() => subscribeGhostSync({ client, db, map, isHostile }), [client, db, map, isHostile]);
 
   return (
     <main>

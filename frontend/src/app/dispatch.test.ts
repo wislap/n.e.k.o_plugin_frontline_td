@@ -43,6 +43,7 @@ function fakeClient(
     inspect: vi.fn(),
     inspection: () => null,
     eventsSince: () => ({ events: [], cursor: 0 }),
+    subscribe: () => () => undefined,
   };
 }
 

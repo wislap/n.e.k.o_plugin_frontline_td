@@ -1,2 +1,2 @@
 export { constructionSceneLayers } from './scene-layers';
-export { structureKindHeight } from './structure-gpu';
+export { renderStructureThumbnails } from './thumbnails';

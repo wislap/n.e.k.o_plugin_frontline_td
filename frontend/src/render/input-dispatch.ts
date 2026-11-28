@@ -7,22 +7,24 @@ import {
   clampCenter,
   intersectHorizontalPlane,
   rotatePanVector,
+  spectateFocusElevation,
   visibleGroundHeight,
 } from '../client/camera-math';
 import { useCameraStore } from '../client/camera-store';
+import { renderNowMs } from '../client/capture-mode';
 import type { SimClient } from '../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import type { Intent } from '../input/intents';
-import { pickGround, type Ray } from './picking';
-import type { CanvasInputEnv, CanvasIntentHandlerDef } from './canvas-input';
-import { terrainY } from './world';
+import { pickGround, type Ray } from '../client/picking';
+import type { CanvasInputEnv, CanvasIntentHandlerDef } from '../client/canvas-input';
+import { getCameraElevationField, sampleCameraElevation, terrainY } from '../client/world';
 
 export interface DispatchEnv {
   client: SimClient;
   db: ContentDb;
   map: ResolvedMap;
   heights: ArrayLike<number>;
-  camera: THREE.Camera;
+  camera: THREE.Camera | (() => THREE.Camera);
   size: { height: number };
   // Canvas element bounds for screen → NDC/box projection.
   rect: () => { left: number; top: number; width: number; height: number };
@@ -35,6 +37,9 @@ export function makeDispatch(
   const { client, db, map, heights } = env;
   const { width: mapWidth, height: mapHeight } = map.grid;
   const raycaster = new THREE.Raycaster();
+  const camOrGetter = env.camera;
+  const getCamera: () => THREE.Camera =
+    typeof camOrGetter === 'function' ? camOrGetter : () => camOrGetter;
   let panPlaneY = 0;
 
   const rayAt = (sx: number, sy: number): Ray => {
@@ -43,7 +48,7 @@ export function makeDispatch(
       rect.width > 0 ? ((sx - rect.left) / rect.width) * 2 - 1 : 0,
       rect.height > 0 ? -((sy - rect.top) / rect.height) * 2 + 1 : 0,
     );
-    raycaster.setFromCamera(ndc, env.camera);
+    raycaster.setFromCamera(ndc, getCamera());
     return {
       origin: {
         x: raycaster.ray.origin.x,
@@ -70,7 +75,7 @@ export function makeDispatch(
   ): { x: number; y: number; inFront: boolean } => {
     const rect = env.rect();
     const v = new THREE.Vector3(x, terrainY(heights, mapWidth, mapHeight, x, y) + elevOffset, y);
-    v.project(env.camera);
+    v.project(getCamera());
     return {
       x: ((v.x + 1) / 2) * rect.width + rect.left,
       y: ((1 - v.y) / 2) * rect.height + rect.top,
@@ -81,7 +86,7 @@ export function makeDispatch(
   const inputEnv: CanvasInputEnv = { client, db, map, heights, rayAt, groundAt, project };
 
   return (intent: Intent): void => {
-    const now = performance.now();
+    const now = renderNowMs();
     switch (intent.kind) {
       case 'camera.zoom': {
         const cam = useCameraStore.getState();
@@ -90,7 +95,9 @@ export function makeDispatch(
         const ndcX = rect.width > 0 ? ((intent.x - rect.left) / rect.width) * 2 - 1 : 0;
         const ndcY = rect.height > 0 ? -((intent.y - rect.top) / rect.height) * 2 + 1 : 0;
         const aspect = rect.height > 0 && rect.width > 0 ? rect.width / rect.height : 16 / 9;
-        const centerY = terrainY(heights, mapWidth, mapHeight, cam.center.x, cam.center.y);
+        const elevField = getCameraElevationField(heights, mapWidth, mapHeight);
+        const localSmoothY = sampleCameraElevation(elevField, cam.center.x, cam.center.y);
+        const centerY = spectateFocusElevation(cam.zoom, elevField.baseY, localSmoothY);
         const planeY =
           ground !== null ? terrainY(heights, mapWidth, mapHeight, ground.x, ground.y) : centerY;
         cam.zoomToward(intent.delta, ground, {
@@ -98,6 +105,8 @@ export function makeDispatch(
           ndcY,
           aspect,
           centerY,
+          baseY: elevField.baseY,
+          localSmoothY,
           planeY,
         });
         const next = useCameraStore.getState();
@@ -107,10 +116,16 @@ export function makeDispatch(
       case 'camera.pan_start': {
         const g = groundAt(intent.x, intent.y);
         const cam = useCameraStore.getState();
-        panPlaneY =
-          g !== null
-            ? terrainY(heights, mapWidth, mapHeight, g.x, g.y)
-            : terrainY(heights, mapWidth, mapHeight, cam.center.x, cam.center.y);
+        if (g !== null) {
+          panPlaneY = terrainY(heights, mapWidth, mapHeight, g.x, g.y);
+        } else {
+          const elevField = getCameraElevationField(heights, mapWidth, mapHeight);
+          panPlaneY = spectateFocusElevation(
+            cam.zoom,
+            elevField.baseY,
+            sampleCameraElevation(elevField, cam.center.x, cam.center.y),
+          );
+        }
         return;
       }
       case 'camera.pan_px': {

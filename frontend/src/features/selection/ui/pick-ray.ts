@@ -20,7 +20,7 @@ import {
   rayCylinderHitT,
   surfaceHeightAt,
   type Ray,
-} from '../../../render/picking';
+} from '../../../client/picking';
 import { pickSubjectAt, type PickResult } from './pick';
 
 export function pickSubjectByRay(

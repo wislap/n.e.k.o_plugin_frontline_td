@@ -8,28 +8,29 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBoxStore } from '../client/box-store';
 import { isCaptureMode, renderNowMs } from '../client/capture-mode';
+import type { CanvasIntentHandlerDef } from '../client/canvas-input';
 import { useInteractionStore } from '../client/interaction-store';
 import { useIntentRouter, type IntentRouter } from '../client/intent';
 import type { SimClient } from '../client/sim-client';
 import { useSelectionStore } from '../client/selection-store';
 import { useUiStore } from '../client/ui-store';
+import { terrainY } from '../client/world';
 import type { ContentDb, ResolvedMap } from '../content/index';
 import type { Snapshot } from '../core/index';
 import type { Intent } from '../input/intents';
 import type { PanTracker } from '../input/pan';
 import { installPointer } from '../input/pointer';
 import { CameraRig } from './camera/CameraRig';
-import type { CanvasIntentHandlerDef } from './canvas-input';
 import { effectComposerRef } from './composer-ref';
 import { installGpuInstrumentation, type GpuInstrumentation } from './gpu-instrument';
+import { createCoverUniforms } from './cover-uniforms';
 import type { SceneContext, SceneLayerDef } from './scene';
 import { createFogUniforms } from './shaders';
 import { makeDispatch } from './input-dispatch';
-import { PostEffects, SceneLighting, ThemeBackground } from './theme/index';
-import { terrainY } from './world';
+import { PostEffects, SceneLighting, ThemeBackground, VISUAL } from './theme/index';
 
-const BACKGROUND = '#0b1020';
-const MARKER_COLOR = '#ffe08a';
+const BACKGROUND = '#0c0f11';
+const MARKER_COLOR = VISUAL.markers.move;
 
 export interface GameCanvasProps {
   client: SimClient;
@@ -102,10 +103,13 @@ function publishPerfStats(
 function PerfProbe() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
+  const gpuPerObject = useUiStore((s) => s.gpuPerObject);
   const acc = useRef({ frames: 0, ms: 0 });
   const instr = useRef<GpuInstrumentation | null>(null);
   useEffect(() => {
-    const installed = installGpuInstrumentation(gl, () => effectComposerRef.current, scene);
+    const installed = installGpuInstrumentation(gl, () => effectComposerRef.current, scene, {
+      perObject: useUiStore.getState().gpuPerObject,
+    });
     instr.current = installed;
     return () => {
       installed.uninstall();
@@ -114,6 +118,9 @@ function PerfProbe() {
       useUiStore.getState().setGpuStats(null);
     };
   }, [gl, scene]);
+  useEffect(() => {
+    instr.current?.setPerObject(gpuPerObject);
+  }, [gpuPerObject]);
   // Frame begin runs before every other subscriber; frame end runs after
   // the composer's render (priority 1), so 'frame' brackets all GPU work.
   useFrame(() => {
@@ -150,6 +157,10 @@ function InputBridge({
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
+  const cameraRef = useRef(camera);
+  useEffect(() => {
+    cameraRef.current = camera;
+  }, [camera]);
   const size = useThree((s) => s.size);
   const { client, db, heights } = ctx;
   useEffect(() => {
@@ -160,7 +171,7 @@ function InputBridge({
         db,
         map: ctx.map,
         heights,
-        camera,
+        camera: () => cameraRef.current,
         size,
         rect: () => el.getBoundingClientRect(),
       },
@@ -185,7 +196,7 @@ function InputBridge({
       uninstall();
       router.setCanvasHandler(null);
     };
-  }, [gl, camera, size, client, db, heights, ctx.map, canvasIntents, router]);
+  }, [gl, size, client, db, heights, ctx.map, canvasIntents, router]);
 
   return null;
 }
@@ -205,7 +216,7 @@ function MoveMarker({ ctx }: { ctx: SceneContext }) {
     const age = renderNowMs() - marker.at;
     const life = 900;
     material.current.opacity = Math.max(0, 1 - age / life);
-    ref.current.visible = age < life;
+    ref.current.visible = age >= 0 && age < life;
   });
 
   if (marker === null) {
@@ -244,20 +255,33 @@ export function GameCanvas({
   const router = useIntentRouter();
   // Wait for the first snapshot (terrain layers + observer) before
   // mounting the scene content.
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => {
+    const latest = client.snapshots().latest;
+    return latest !== null && readHeights(latest) !== null;
+  });
   useEffect(() => {
     if (ready) {
       return;
     }
-    const id = setInterval(() => {
+    let cancelled = false;
+    let unsub: (() => void) | null = null;
+    const check = (): void => {
+      if (cancelled) {
+        return;
+      }
       const latest = client.snapshots().latest;
       if (latest !== null && readHeights(latest) !== null) {
+        unsub?.();
+        unsub = null;
         setReady(true);
-        clearInterval(id);
       }
-    }, 50);
+    };
+    unsub = client.subscribe(check);
+    queueMicrotask(check);
     return () => {
-      clearInterval(id);
+      cancelled = true;
+      unsub?.();
+      unsub = null;
     };
   }, [client, ready, readHeights]);
 
@@ -265,13 +289,14 @@ export function GameCanvas({
   const snapshot = ready ? client.snapshots().latest : null;
   const heights = readHeights(snapshot) ?? grid.heights;
   const fogUniforms = useMemo(() => createFogUniforms(), []);
+  const coverUniforms = useMemo(() => createCoverUniforms(), []);
   const dprCap = useUiStore((s) => s.renderCost.dprCap);
   const hiddenLayers = useUiStore((s) => s.hiddenSceneLayers);
   const panelOpen = useUiStore((s) => s.debugPanelOpen);
   const perfProbe = panelOpen;
   const ctx = useMemo<SceneContext>(
-    () => ({ client, db, map, heights, isHostile, fog: fogUniforms }),
-    [client, db, map, heights, isHostile, fogUniforms],
+    () => ({ client, db, map, heights, isHostile, fog: fogUniforms, cover: coverUniforms }),
+    [client, db, map, heights, isHostile, fogUniforms, coverUniforms],
   );
 
   return (

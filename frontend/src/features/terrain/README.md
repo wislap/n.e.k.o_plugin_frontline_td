@@ -18,7 +18,7 @@
   规则（`CLEARANCE_*`、`clearanceTierForRadius`、anchor 工具；纯
   规则，客户端共享）。
 - `render/`：`terrainSceneLayers`（TerrainMesh + ScatterLayer，
-  ADR 0062 场景层注册）与 `buildTerrainGeometry`。
+  ADR 0062 场景层注册）。
 - `ui/`：`terrainInspectorSubjects`（ADR 0062 检视器主题注册：
   cell / cell_unexplored 地形格检视）、`terrainMinimapRasters`
   （ADR 0062 小地图栅格贡献：基础地形着色）；`render/` 另导出

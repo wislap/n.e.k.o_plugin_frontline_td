@@ -6,12 +6,14 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { SceneLayerProps } from '../../../render/scene';
 import {
+  bindLineBuffer,
   commitLineBuffer,
   createLineBuffer,
   ensureLineCapacity,
   type LineBuffer,
 } from '../../../render/line-buffer';
-import { terrainY } from '../../../render/world';
+import { terrainY } from '../../../client/world';
+import { VISUAL } from '../../../render/theme/index';
 import { VISION_STATE_LAYER_ID } from '../../vision/protocol';
 import { isCellVisible } from '../../vision/rules/index';
 import { BEAM_LIFE_MS, collectBeams, type Beam } from './beams';
@@ -19,7 +21,7 @@ import { renderNowMs } from '../../../client/capture-mode';
 import { readLayer } from '../../../core/index';
 
 const MAX_BEAMS = 256;
-const BEAM_COLOR = new THREE.Color('#ffd24f');
+const BEAM_COLOR = new THREE.Color(VISUAL.markers.tracer);
 const BEAM_LIFT = 0.6;
 
 export function BeamsLayer({ ctx }: SceneLayerProps) {
@@ -35,6 +37,7 @@ export function BeamsLayer({ ctx }: SceneLayerProps) {
   }, []);
   const active = useRef<Beam[]>([]);
   const eventCursor = useRef(0);
+  const wasEmptyRef = useRef(true);
   const segsRef = useRef<THREE.LineSegments>(null);
   const tempColorRef = useRef(new THREE.Color());
 
@@ -45,6 +48,7 @@ export function BeamsLayer({ ctx }: SceneLayerProps) {
     }
     bufRef.current ??= createLineBuffer(MAX_BEAMS * 2, true);
     const buf = bufRef.current;
+    bindLineBuffer(segs, buf);
     const now = renderNowMs();
     const delivered = client.eventsSince(eventCursor.current);
     eventCursor.current = delivered.cursor;
@@ -78,8 +82,18 @@ export function BeamsLayer({ ctx }: SceneLayerProps) {
     }
     beams.length = write;
 
+    if (beams.length === 0) {
+      if (!wasEmptyRef.current) {
+        commitLineBuffer(buf, 0);
+        wasEmptyRef.current = true;
+      }
+      segs.visible = false;
+      return;
+    }
+    wasEmptyRef.current = false;
+
     ensureLineCapacity(buf, beams.length * 2);
-    segs.geometry = buf.geometry;
+    bindLineBuffer(segs, buf);
     const positions = buf.positions;
     const colors = buf.colors;
     if (colors === null) {

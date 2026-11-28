@@ -194,7 +194,7 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `constructionSceneLayers` | const |  |
-| `structureKindHeight` | function | Greybox height from content (`visual.height`, required per kind); unknown indices fall back to a unit-height box. |
+| `renderStructureThumbnails` | function |  |
 
 ## src/features/construction/rules/index.ts
 
@@ -226,11 +226,13 @@
 | 名称 | 种类 | 说明 |
 |---|---|---|
 | `constructionCanvasIntents` | const |  |
-| `constructionHudPanels` | const |  |
 | `constructionInspectorSubjects` | const |  |
 | `constructionMinimapMarks` | const |  |
+| `createConstructionHudPanels` | function |  |
 | `findOwnStructureAt` | function | Own structure whose footprint contains (x, y) — also used by selection's pickAt through the ui index. |
 | `pickDemolishableByRay` | function |  |
+| `subscribeGhostSync` | function |  |
+| `ThumbnailRenderer` | type |  |
 
 ## src/features/logistics/content.ts
 
@@ -406,8 +408,16 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `bannerThreat` | function | Banner summary while any gather is visible: biggest gathering squad's member count and the soonest launch. |
 | `squadsSceneLayers` | const |  |
+
+## src/features/squads/rules/index.ts
+
+| 名称 | 种类 | 说明 |
+|---|---|---|
+| `arrowSpots` | function | Arrowhead positions every `every` waypoints, pointing at the next one. |
+| `bannerThreat` | function | Banner summary while any gather is visible: biggest gathering squad's member count and the soonest launch. |
+| `gatheringThreats` | function | Hostile squads currently gathering (visible marker + countdown). |
+| `routedThreats` | function | Hostile squads with a stored route — gathering waves plus launched waves still en route (order advance until they arrive). |
 
 ## src/features/squads/sim/index.ts
 
@@ -453,7 +463,6 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `buildTerrainGeometry` | function |  |
 | `readTerrainHeights` | function |  |
 | `terrainSceneLayers` | const |  |
 
@@ -508,10 +517,6 @@
 
 | 名称 | 种类 | 说明 |
 |---|---|---|
-| `factionColorHex` | function |  |
-| `interpolatedUnits` | function | One-shot map of handle → interpolated position/faction (box and click selection paths). |
-| `InterpUnit` | interface |  |
-| `UnitInterpolator` | class | Stateful per-frame interpolator: call update() with the newest pair, then interpolated() for each row of the latest channel. |
 | `unitsSceneLayers` | const |  |
 
 ## src/features/units/sim/index.ts

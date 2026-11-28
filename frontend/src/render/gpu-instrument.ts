@@ -18,6 +18,7 @@ export interface GpuInstrumentation {
   readonly profiler: GpuProfiler;
   beginFrame(): void;
   endFrame(): void;
+  setPerObject(enabled: boolean): void;
   uninstall(): void;
 }
 
@@ -80,14 +81,22 @@ export function resolveSceneLayerId(object: LayerTaggedObject): string {
   return 'shell';
 }
 
+interface ObjectRestore {
+  readonly ref: WeakRef<THREE.Object3D>;
+  readonly before: THREE.Object3D['onBeforeRender'];
+  readonly after: THREE.Object3D['onAfterRender'];
+}
+
 export function installGpuInstrumentation(
   renderer: THREE.WebGLRenderer,
-  getComposer: () => EffectComposer | null,
+  getComposer: () => EffectComposer | null | undefined,
   scene: THREE.Object3D,
+  options?: { perObject?: boolean },
 ): GpuInstrumentation {
   const profiler = GpuProfiler.fromContext(renderer.getContext() as WebGL2RenderingContext);
   const restores: Array<() => void> = [];
   let installed = true;
+  let perObjectEnabled = options?.perObject ?? false;
 
   const info = renderer.info;
   const prevAutoReset = info.autoReset;
@@ -115,8 +124,23 @@ export function installGpuInstrumentation(
   // ancestor walk once and cached. Note: WebGLShadowMap draws via
   // renderBufferDirect without firing onBeforeRender, so shadow draws do
   // not produce per-object labels — they stay inside the 'shadow' span.
-  const wrappedObjects = new WeakSet<THREE.Object3D>();
+  let wrappedObjects = new WeakSet<THREE.Object3D>();
   const layerIds = new WeakMap<THREE.Object3D, string>();
+  const objectRestores: ObjectRestore[] = [];
+  function pruneDeadObjectRestores(): void {
+    if (objectRestores.length <= 256) {
+      return;
+    }
+    let write = 0;
+    for (let i = 0; i < objectRestores.length; i += 1) {
+      const entry = objectRestores[i];
+      if (entry !== undefined && entry.ref.deref() !== undefined) {
+        objectRestores[write] = entry;
+        write += 1;
+      }
+    }
+    objectRestores.length = write;
+  }
   function wrapObject(object: THREE.Object3D): void {
     wrappedObjects.add(object);
     let layerId = layerIds.get(object);
@@ -145,19 +169,34 @@ export function installGpuInstrumentation(
         profiler.end();
       }
     };
-    restores.push(() => {
-      object.onBeforeRender = originalBefore;
-      object.onAfterRender = originalAfter;
+    objectRestores.push({
+      ref: new WeakRef(object),
+      before: originalBefore,
+      after: originalAfter,
     });
   }
   function ensureObjectsWrapped(): void {
+    pruneDeadObjectRestores();
     scene.traverse((object) => {
       if (isDrawable(object) && !wrappedObjects.has(object)) {
         wrapObject(object);
       }
     });
   }
-  ensureObjectsWrapped();
+  function restoreObjects(): void {
+    for (const entry of objectRestores) {
+      const obj = entry.ref.deref();
+      if (obj !== undefined) {
+        obj.onBeforeRender = entry.before;
+        obj.onAfterRender = entry.after;
+      }
+    }
+    objectRestores.length = 0;
+    wrappedObjects = new WeakSet<THREE.Object3D>();
+  }
+  if (perObjectEnabled) {
+    ensureObjectsWrapped();
+  }
 
   // Passes and effects can be recreated when the debug toggles rebuild
   // the composer children, so wrapping is re-checked every frame.
@@ -165,7 +204,7 @@ export function installGpuInstrumentation(
   const wrappedEffects = new WeakSet<Effect>();
   function ensureWrapped(): void {
     const composer = getComposer();
-    if (composer === null) {
+    if (composer == null) {
       return;
     }
     for (const pass of composer.passes) {
@@ -227,18 +266,34 @@ export function installGpuInstrumentation(
         return;
       }
       ensureWrapped();
-      ensureObjectsWrapped();
+      if (perObjectEnabled) {
+        ensureObjectsWrapped();
+      }
       profiler.endFrame();
+    },
+    setPerObject(enabled: boolean) {
+      if (!installed || enabled === perObjectEnabled) {
+        return;
+      }
+      perObjectEnabled = enabled;
+      if (enabled) {
+        ensureObjectsWrapped();
+      } else {
+        restoreObjects();
+      }
+      profiler.resetHistory();
     },
     uninstall() {
       if (!installed) {
         return;
       }
       installed = false;
+      restoreObjects();
       for (const restore of restores) {
         restore();
       }
       restores.length = 0;
+      profiler.dispose();
     },
   };
 }

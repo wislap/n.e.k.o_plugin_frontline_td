@@ -6,7 +6,7 @@ import { useSelectionStore } from '../../../client/selection-store';
 import {
   defineCanvasIntentHandler,
   type CanvasIntentHandlerDef,
-} from '../../../render/canvas-input';
+} from '../../../client/canvas-input';
 import { submitMoveOrder } from './squad-controls';
 
 const commandMoveTo = defineCanvasIntentHandler({

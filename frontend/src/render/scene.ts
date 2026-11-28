@@ -6,6 +6,7 @@
 import type { ComponentType } from 'react';
 import type { SimClient } from '../client/sim-client';
 import type { ContentDb, ResolvedMap } from '../content/index';
+import type { CoverUniforms } from './cover-uniforms';
 import type { FogUniforms } from './shaders';
 
 // Shared read-only dependencies every scene layer may need. Width and
@@ -18,6 +19,7 @@ export interface SceneContext {
   // Hostility from the match relations (observer, faction) → bool.
   readonly isHostile: (observer: number, faction: number) => boolean;
   readonly fog: FogUniforms;
+  readonly cover: CoverUniforms;
 }
 
 export interface SceneLayerProps {

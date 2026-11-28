@@ -42,6 +42,11 @@ describe('dependency rules on the fixture tree', () => {
     ['not-to-unresolvable', /client\/bad_unresolvable\.ts/],
     ['not-to-modes', /client\/bad_mode\.ts/],
     ['three-only-in-render', /client\/bad_three\.ts/],
+    ['no-three-reachable-outside-render', /client\/bad_transitive_three\.ts/],
+    ['no-three-reachable-outside-render', /features\/f1\/ui\/leak_render\.ts/],
+    ['ui-not-to-render', /ui\/bad_render\.ts/],
+    ['ui-not-to-render', /features\/f1\/ui\/leak_render\.ts/],
+    ['no-cross-feature-render', /features\/f1\/render\/leak_cross_render\.ts/],
     ['modes-public-only', /modes\/m1\/leak\.ts/],
   ])('flags %s', (ruleName, fromPattern) => {
     expect(ruleNamesFor(fromPattern)).toContain(ruleName);
@@ -54,6 +59,7 @@ describe('dependency rules on the fixture tree', () => {
     'src/features/f1/sim/ok.ts',
     'src/features/f1/rules/r.ts',
     'src/features/f1/render/ok.ts',
+    'src/render/r.ts',
     'src/app/x.ts',
     'src/app/use_mode.ts',
     'src/modes/m1/ok.ts',

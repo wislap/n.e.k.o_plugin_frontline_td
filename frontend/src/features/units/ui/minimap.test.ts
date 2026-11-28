@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { loadContent } from '../../../content/index';
 import { toFactionId, toTick, type Snapshot } from '../../../core/index';
 import { DenseUnitsChannel, type DenseUnits } from '../protocol';
+import { MINIMAP_PALETTE } from '../../../ui/minimap/palette';
 import { unitsMinimapMarks } from './minimap';
 
 const db = loadContent();
@@ -52,12 +53,13 @@ describe('units minimap dots', () => {
       selected: new Set([100, 102]),
       nowMs: 0,
     });
+    expect(MINIMAP_PALETTE.hostile).toBe('#ff5c5c');
     expect(marks).toEqual([
-      { kind: 'dot', x: 4.5, y: 4.5, sizePx: 2.5, color: '#6ee7ff' },
-      { kind: 'dot', x: 18.5, y: 18.5, sizePx: 2.5, color: '#ff6b6b' },
-      { kind: 'dot', x: 19.5, y: 19.5, sizePx: 2.5, color: '#46e09a' },
-      { kind: 'dot', x: 3.5, y: 3.5, sizePx: 5, color: '#6ee7ff' },
-      { kind: 'dot', x: 3.5, y: 3.5, sizePx: 3, color: '#ffffff' },
+      { kind: 'dot', x: 4.5, y: 4.5, sizePx: 2.5, color: MINIMAP_PALETTE.ownUnit },
+      { kind: 'dot', x: 18.5, y: 18.5, sizePx: 2.5, color: MINIMAP_PALETTE.hostile },
+      { kind: 'dot', x: 19.5, y: 19.5, sizePx: 2.5, color: MINIMAP_PALETTE.ally },
+      { kind: 'dot', x: 3.5, y: 3.5, sizePx: 5, color: MINIMAP_PALETTE.ownUnit },
+      { kind: 'dot', x: 3.5, y: 3.5, sizePx: 3, color: MINIMAP_PALETTE.selectedCore },
     ]);
   });
 });
