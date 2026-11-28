@@ -85,6 +85,7 @@
 |---|---|---|---|---|---|---|
 | [0025](../adr/0025-logistics-model.md) | 物流模型：运力配额、统一货物与自动路由 | 已采纳；部分被 0030 取代（连线沿道路走、倍率按长度加权；线路车辆时间由两端节点共同消耗，改为每个方向由一端节点付费） | 部分（修复类别与节点修复、车站造车与车队表现、单位移动耗能、线宽随流量缩放及道路升级预览排队运量未做） | wislap | M1 前置 | 2026-11-15 |
 | [0030](../adr/0030-logistics-implementation.md) | 物流实现约定：付费方、道路倍率、走廊拦截与拓扑增量失效 | 已采纳 | 已实现 | wislap | M3 跨模块参考实现 | 2026-11-17 |
+| [0065](../adr/0065-supply-line-v1-5-lifeline-batching-deliverable-attach-and-power-penalty.md) | Supply Line v1.5：生命线分段分配、可交付挂载与缺能惩罚 | 待定 | 未实现（生命线分段分配、可交付候选挂载、供给状态契约与缺能行为均未落地） | wislap | 补给线规则提案 | 2026-11-29 |
 
 ### 内容
 | 编号 | 标题 | 状态 | 实现 | 决策者 | 批次 | 日期 |
@@ -221,3 +222,6 @@
 
 ### 文档治理收口（2026-11-28）
 - [0064 将 `game_design.md` 降级为无约束力的早期概念讨论归档](../adr/0064-downgrade-game-design-doc-to-historical-draft.md)
+
+### 补给线规则提案（2026-11-29）
+- [0065 Supply Line v1.5：生命线分段分配、可交付挂载与缺能惩罚](../adr/0065-supply-line-v1-5-lifeline-batching-deliverable-attach-and-power-penalty.md)
