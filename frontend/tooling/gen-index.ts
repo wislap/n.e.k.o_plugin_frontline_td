@@ -1,8 +1,10 @@
 /**
  * gen-index: regenerate machine-generated index files.
  *
- * Generators are an explicit array; later milestones add entries.
- * M0 has one generator: the ADR index at docs/generated/adr-index.md.
+ * Generators are an explicit array:
+ *   - docs/generated/adr-index.md (ADR index)
+ *   - docs/generated/contracts.md (SimManifest contracts)
+ *   - docs/generated/exports.md (public TypeScript export surface)
  *
  * Usage:
  *   node tooling/gen-index.ts           write outputs that are stale
@@ -490,6 +492,9 @@ function exportKind(decl: ts.Declaration): string {
   if (ts.isEnumDeclaration(decl)) {
     return 'enum';
   }
+  if (ts.isModuleDeclaration(decl)) {
+    return 'namespace';
+  }
   if (ts.isVariableDeclaration(decl)) {
     const init = decl.initializer;
     if (init !== undefined && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
@@ -579,6 +584,29 @@ function leadingComment(decl: ts.Declaration): string {
   return firstSentence(joined).replace(/\|/g, '\\|');
 }
 
+const CLIENT_SURFACE_FILES = [
+  'src/ui/kit/index.ts',
+  'src/ui/hud-panels.ts',
+  'src/ui/inspector/index.ts',
+  'src/ui/minimap/index.tsx',
+  'src/render/scene.ts',
+  'src/client/contributions.ts',
+  'src/client/canvas-input.ts',
+];
+
+function subdirs(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function addIfExists(files: Set<string>, candidates: readonly string[]): void {
+  for (const candidate of candidates) {
+    if (existsSync(path.join(FRONTEND_ROOT, candidate))) files.add(candidate);
+  }
+}
+
 export function exportSurfaceFiles(): string[] {
   const files = new Set<string>([
     'src/core/index.ts',
@@ -587,35 +615,35 @@ export function exportSurfaceFiles(): string[] {
     'src/protocol/index.ts',
     'src/testing/index.ts',
   ]);
-  const featuresDir = path.join(FRONTEND_ROOT, 'src', 'features');
-  for (const feature of readdirSync(featuresDir).sort()) {
-    for (const candidate of [
+  addIfExists(files, CLIENT_SURFACE_FILES);
+  for (const feature of subdirs(path.join(FRONTEND_ROOT, 'src', 'features'))) {
+    addIfExists(files, [
       `src/features/${feature}/protocol.ts`,
       `src/features/${feature}/content.ts`,
       ...['sim', 'rules', 'render', 'ui'].flatMap((sub) => [
         `src/features/${feature}/${sub}/index.ts`,
         `src/features/${feature}/${sub}/index.tsx`,
       ]),
-    ]) {
-      if (existsSync(path.join(FRONTEND_ROOT, candidate))) {
-        files.add(candidate);
-      }
-    }
+    ]);
   }
-  const modesDir = path.join(FRONTEND_ROOT, 'src', 'modes');
-  for (const mode of readdirSync(modesDir).sort()) {
-    for (const candidate of [`src/modes/${mode}/index.ts`, `src/modes/${mode}/index.tsx`]) {
-      if (existsSync(path.join(FRONTEND_ROOT, candidate))) {
-        files.add(candidate);
-      }
-    }
+  for (const mode of subdirs(path.join(FRONTEND_ROOT, 'src', 'modes'))) {
+    addIfExists(files, [
+      `src/modes/${mode}/index.ts`,
+      `src/modes/${mode}/index.tsx`,
+      `src/modes/${mode}/protocol.ts`,
+      `src/modes/${mode}/ui/index.ts`,
+      `src/modes/${mode}/ui/index.tsx`,
+    ]);
   }
   return [...files].sort();
 }
 
-export function renderExports(files: readonly string[]): string {
+export function renderExports(
+  files: readonly string[],
+  frontendRoot: string = FRONTEND_ROOT,
+): string {
   const program = ts.createProgram(
-    files.map((f) => path.join(FRONTEND_ROOT, f)),
+    files.map((f) => path.join(frontendRoot, f)),
     {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
@@ -631,7 +659,7 @@ export function renderExports(files: readonly string[]): string {
   const checker = program.getTypeChecker();
   const out: string[] = [GENERATED_HEADER, '', '# 公共导出清单'];
   for (const rel of files) {
-    const source = program.getSourceFile(path.join(FRONTEND_ROOT, rel));
+    const source = program.getSourceFile(path.join(frontendRoot, rel));
     const symbol = source !== undefined ? checker.getSymbolAtLocation(source) : undefined;
     if (source === undefined || symbol === undefined) {
       continue;

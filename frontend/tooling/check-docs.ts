@@ -15,9 +15,10 @@
  * Usage: node tooling/check-docs.ts
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { splitLines } from './ratchet.ts';
 
 const PLUGIN_ROOT = path.resolve(import.meta.dirname, '..', '..');
 
@@ -25,7 +26,6 @@ const WHITELIST: RegExp[] = [
   /^(AGENTS|CLAUDE|README|CONTRIBUTING)\.md$/,
   /^docs\/design\//,
   /^docs\/adr\//,
-  /^docs\/guides\//,
   /^docs\/generated\//,
   /^frontend\/src\/features\/[^/]+\/README\.md$/,
   /^\.github\/.*\.md$/,
@@ -34,11 +34,15 @@ const WHITELIST: RegExp[] = [
 const AGENTS_MAX_LINES = 150;
 const LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
 const H2_RE = /^## .+$/gm;
+const HEADING_RE = /^#{1,6}\s+(.+?)(?:\s+#+)?\s*$/gm;
 // In a feature README's 对应设计 section, ADR/design references must be
 // Markdown links so the link checker can guard them (ADR 0046); bare
 // mentions are an error.
 const DESIGN_SECTION_RE = /## 对应设计\r?\n([\s\S]*)$/;
-const BARE_DESIGN_REF_RE = /\bADR\s*\d{4}\b|\bdocs\/[^\s)]+|architecture\.md|game_design\.md/;
+const PUBLIC_SECTION_RE = /## 公开接口\r?\n([\s\S]*?)(?=\r?\n## |$)/;
+const EXPORTS_LINK_RE = /\[[^\]]*\]\([^)]*exports\.md(?:#[^)]*)?\)/;
+const BARE_DESIGN_REF_RE =
+  /\bADR\s*\d{4}\b|(?:ADR\s*(?:\d{4}|LINKED)|LINKED)(?:\s*[、/,，&和与]\s*(?:\d{4}|LINKED))*\s*[、/,，&和与]\s*(\d{4})\b|\bdocs\/[^\s)]+|architecture\.md|game_design\.md/;
 
 const FEATURE_README_MAX_LINES = 80;
 const FEATURE_README_MAX_COLS = 200;
@@ -51,6 +55,37 @@ export const FEATURE_README_HEADINGS = [
   '## 对应设计',
 ];
 
+function stripFencedCode(text: string): string {
+  return text.replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, ''));
+}
+
+function stripCode(text: string): string {
+  return stripFencedCode(text).replace(/`[^`\n]+`/g, '');
+}
+
+export function headingSlugs(markdownText: string): Set<string> {
+  const slugs = new Set<string>();
+  const seen = new Map<string, number>();
+  for (const match of stripFencedCode(markdownText).matchAll(HEADING_RE)) {
+    const raw = match[1] ?? '';
+    const text = raw
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/`/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/(^|[^\p{L}\p{N}_])__([^_\n]+)__(?=$|[^\p{L}\p{N}_])/gu, '$1$2')
+      .replace(/(^|[^\p{L}\p{N}_])_([^_\n]+)_(?=$|[^\p{L}\p{N}_])/gu, '$1$2')
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{M}\p{N}_\- ]/gu, '')
+      .replace(/ /g, '-');
+    const count = seen.get(text) ?? 0;
+    seen.set(text, count + 1);
+    slugs.add(count === 0 ? text : `${text}-${count}`);
+  }
+  return slugs;
+}
+
 // Returns an error string when the README's 对应设计 section mentions an
 // ADR or a docs/ path without a Markdown link around it.
 export function checkDesignSection(readmeText: string): string | null {
@@ -58,9 +93,65 @@ export function checkDesignSection(readmeText: string): string | null {
   if (section === undefined) {
     return null;
   }
-  const bare = section.replace(LINK_RE, '');
+  const bare = stripCode(section).replace(
+    /\[([^\]]*)\]\(([^)]+)\)/g,
+    (_full, label: string, url: string) => {
+      let masked = label;
+      for (const m of url.matchAll(/(?:^|\/)(\d{4})(?:-[^/)]*)?\.md/g)) {
+        const num = m[1];
+        if (num !== undefined) {
+          masked = masked.replace(new RegExp(`\\b${num}\\b`, 'g'), 'LINKED');
+        }
+      }
+      for (const doc of ['architecture.md', 'game_design.md']) {
+        if (url.includes(doc)) {
+          masked = masked.replaceAll(doc, 'LINKED_DOC');
+        }
+      }
+      return masked;
+    },
+  );
   const hit = BARE_DESIGN_REF_RE.exec(bare);
-  return hit === null ? null : `'${hit[0]}' in 对应设计 must be a Markdown link, not bare text`;
+  if (hit === null) {
+    return null;
+  }
+  const ref = hit[1] ?? hit[0];
+  return `'${ref}' in 对应设计 must be a Markdown link, not bare text`;
+}
+
+// Returns an error string when a feature README mentions ADR NNNN outside
+// code blocks without linking NNNN- in ## 对应设计, or omits exports.md in
+// ## 公开接口.
+export function checkFeatureReadmeRefs(readmeText: string): string | null {
+  const publicSection = PUBLIC_SECTION_RE.exec(readmeText)?.[1] ?? '';
+  if (!EXPORTS_LINK_RE.test(stripCode(publicSection))) {
+    return '## 公开接口 must contain a Markdown link to exports.md';
+  }
+  const designSection = DESIGN_SECTION_RE.exec(readmeText)?.[1] ?? '';
+  const linkedAdrs = new Set<string>();
+  for (const match of stripCode(designSection).matchAll(LINK_RE)) {
+    const url = match[1] ?? '';
+    for (const numMatch of url.matchAll(/(?:^|\/)(\d{4})-[^/)]*\.md/g)) {
+      if (numMatch[1] !== undefined) {
+        linkedAdrs.add(numMatch[1]);
+      }
+    }
+  }
+  const missing = new Set<string>();
+  for (const match of stripCode(readmeText).matchAll(/\bADR\s*(\d{4})\b/g)) {
+    const num = match[1];
+    if (num !== undefined && !linkedAdrs.has(num)) {
+      missing.add(num);
+    }
+  }
+  if (missing.size > 0) {
+    const list = [...missing]
+      .sort()
+      .map((n) => `ADR ${n}`)
+      .join(', ');
+    return `mentioned ${list} must have a Markdown link in ## 对应设计`;
+  }
+  return null;
 }
 
 // Returns an error string when the README exceeds the size limits of ADR
@@ -72,7 +163,7 @@ function charCount(text: string): number {
 }
 
 export function checkFeatureReadmeSize(readmeText: string): string | null {
-  const lines = readmeText.split('\n');
+  const lines = splitLines(readmeText);
   if (lines.length > FEATURE_README_MAX_LINES) {
     return `${lines.length} lines exceeds the ${FEATURE_README_MAX_LINES}-line limit`;
   }
@@ -114,23 +205,70 @@ function listFiles(root: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-function isExternalTarget(target: string): boolean {
-  return /^(https?:|mailto:)/i.test(target) || target.startsWith('#');
+function safeDecode(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function isInsideRoot(rootDir: string, resolved: string): boolean {
+  const rel = path.relative(path.resolve(rootDir), resolved);
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
 function findBrokenLinks(root: string, repoRelativePath: string): string[] {
   const filePath = path.join(root, repoRelativePath);
   const text = readFileSync(filePath, 'utf8');
   const broken: string[] = [];
-  for (const match of text.matchAll(LINK_RE)) {
-    const raw = match[1] ?? '';
-    const target = raw.split('#')[0] ?? '';
-    if (target === '' || isExternalTarget(raw)) {
+  let selfSlugs: Set<string> | null = null;
+  for (const match of stripCode(text).matchAll(LINK_RE)) {
+    const raw = (match[1] ?? '').trim();
+    if (raw === '' || /^(https?:|mailto:)/i.test(raw)) {
       continue;
     }
-    const resolved = path.resolve(path.dirname(filePath), decodeURIComponent(target));
-    if (!existsSync(resolved)) {
+    const hashIdx = raw.indexOf('#');
+    const target = hashIdx === -1 ? raw : raw.slice(0, hashIdx);
+    const fragment = hashIdx === -1 ? null : raw.slice(hashIdx + 1);
+    if (target === '') {
+      const decodedFrag = fragment === null ? null : safeDecode(fragment);
+      if (decodedFrag === null) {
+        broken.push(raw);
+        continue;
+      }
+      selfSlugs ??= headingSlugs(text);
+      if (!selfSlugs.has(decodedFrag.toLowerCase())) {
+        broken.push(raw);
+      }
+      continue;
+    }
+    const decodedTarget = safeDecode(target);
+    if (decodedTarget === null) {
       broken.push(raw);
+      continue;
+    }
+    const resolved = path.resolve(path.dirname(filePath), decodedTarget);
+    if (!isInsideRoot(root, resolved) || !existsSync(resolved)) {
+      broken.push(raw);
+      continue;
+    }
+    if (fragment !== null) {
+      if (statSync(resolved).isDirectory()) {
+        broken.push(raw);
+        continue;
+      }
+      if (resolved.endsWith('.md')) {
+        const decodedFrag = safeDecode(fragment);
+        if (decodedFrag === null) {
+          broken.push(raw);
+          continue;
+        }
+        const targetSlugs = headingSlugs(readFileSync(resolved, 'utf8'));
+        if (!targetSlugs.has(decodedFrag.toLowerCase())) {
+          broken.push(raw);
+        }
+      }
     }
   }
   return broken;
@@ -155,7 +293,7 @@ export function checkDocs(root: string = PLUGIN_ROOT): string[] {
 
   const agentsPath = path.join(root, 'AGENTS.md');
   if (existsSync(agentsPath)) {
-    const lineCount = readFileSync(agentsPath, 'utf8').split('\n').length;
+    const lineCount = splitLines(readFileSync(agentsPath, 'utf8')).length;
     if (lineCount > AGENTS_MAX_LINES) {
       errors.push(`AGENTS.md: ${lineCount} lines exceeds the ${AGENTS_MAX_LINES}-line limit`);
     }
@@ -184,6 +322,10 @@ export function checkDocs(root: string = PLUGIN_ROOT): string[] {
       const designProblem = checkDesignSection(readmeText);
       if (designProblem !== null) {
         errors.push(`frontend/src/features/${entry.name}/README.md: ${designProblem}`);
+      }
+      const refsProblem = checkFeatureReadmeRefs(readmeText);
+      if (refsProblem !== null) {
+        errors.push(`frontend/src/features/${entry.name}/README.md: ${refsProblem}`);
       }
     }
   }

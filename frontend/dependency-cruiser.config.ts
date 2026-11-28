@@ -14,7 +14,7 @@ const CROSS_FEATURE_PUBLIC =
 
 // Client-side directories that must never reach the simulation layer.
 const CLIENT_SIDE =
-  'src/(features/[^/]+/(render|ui)|modes/[^/]+/ui|client|input|render|ui|host|i18n)/';
+  'src/(features/[^/]+/(render|ui)|modes/[^/]+/ui|client|input|render|ui|host|i18n|dev)/';
 
 const config: IConfiguration = {
   forbidden: [
@@ -84,7 +84,7 @@ const config: IConfiguration = {
       severity: 'error',
       comment:
         'R6: client-side code (features render/ui, client, input, render, ui,' +
-        ' host, i18n) must not import sim/, kernel/ or runtime/ (ADR 0007).',
+        ' host, i18n, dev) must not import sim/, kernel/ or runtime/ (ADR 0007).',
       from: { path: `^${CLIENT_SIDE}` },
       to: { path: '^src/(features/[^/]+/sim|kernel|runtime)/' },
     },
@@ -105,10 +105,10 @@ const config: IConfiguration = {
       name: 'shell-not-to-features',
       severity: 'error',
       comment:
-        'R10: the client shell (render/, ui/, client/, input/) must not import' +
+        'R13: the client shell (render/, ui/, client/, input/, dev/, host/, i18n/) must not import' +
         ' features/* — type-only imports and tests included; feature wiring' +
         ' happens in src/app (ADR 0062).',
-      from: { path: '^src/(render|ui|client|input)/' },
+      from: { path: '^src/(render|ui|client|input|dev|host|i18n)/' },
       to: { path: '^src/features/' },
     },
     {

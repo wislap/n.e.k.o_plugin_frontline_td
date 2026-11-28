@@ -9,8 +9,8 @@ import { FOOTPRINT_CODES, RANGE_CODES } from '../features/construction/rules/ind
 import { CARGO_CLASSES, UNMET_REASONS } from '../features/logistics/protocol';
 import { PRODUCTION_STATES } from '../features/production/protocol';
 import { KEYBINDING_GROUPS } from '../input/keymap';
-import en from './locales/en.json';
-import zhCN from './locales/zh-CN.json';
+import en from '../i18n/locales/en.json';
+import zhCN from '../i18n/locales/zh-CN.json';
 
 // Command reject reasons emitted by sim command handlers.
 const REJECT_CODES = [

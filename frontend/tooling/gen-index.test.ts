@@ -357,14 +357,34 @@ describe('renderExports', () => {
         .find((l) => l.includes('`helper`')) ?? '';
     expect(row).toContain('| function |');
   });
+
+  it('classifies an exported namespace declaration as namespace', () => {
+    writeFileSync(
+      path.join(dir, 'ns.ts'),
+      '/** Namespace docs. */\nexport namespace DemoNs {\n  export const v = 1;\n}\n',
+    );
+    const row =
+      renderExports(['ns.ts'], dir)
+        .split('\n')
+        .find((l) => l.includes('`DemoNs`')) ?? '';
+    expect(row).toContain('| namespace | Namespace docs. |');
+  });
 });
 
 describe('exportSurfaceFiles', () => {
-  it('includes feature content.ts, mode index and testing entry', () => {
+  it('includes feature content.ts, mode index/protocol, client shell files, and testing entry', () => {
     const files = exportSurfaceFiles();
     expect(files).toContain('src/features/logistics/content.ts');
     expect(files).toContain('src/modes/assault/index.ts');
+    expect(files).toContain('src/modes/assault/protocol.ts');
     expect(files).toContain('src/testing/index.ts');
+    expect(files).toContain('src/ui/kit/index.ts');
+    expect(files).toContain('src/ui/hud-panels.ts');
+    expect(files).toContain('src/ui/inspector/index.ts');
+    expect(files).toContain('src/ui/minimap/index.tsx');
+    expect(files).toContain('src/render/scene.ts');
+    expect(files).toContain('src/client/contributions.ts');
+    expect(files).toContain('src/client/canvas-input.ts');
   });
 });
 

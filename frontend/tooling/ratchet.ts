@@ -58,6 +58,11 @@ function* sourceFiles(root: string): Generator<string> {
   }
 }
 
+export function splitLines(text: string): string[] {
+  const norm = text.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  return norm === '' ? [] : norm.split('\n');
+}
+
 function countInText(text: string, pattern: RegExp): number {
   return [...text.matchAll(pattern)].length;
 }
@@ -84,7 +89,7 @@ export function measure(frontendRoot: string = FRONTEND_ROOT): Metrics {
       metrics.tsIgnore += countInText(text, PATTERNS.tsIgnore);
       metrics.tsExpectError += countInText(text, PATTERNS.tsExpectError);
       metrics.eslintDisable += countInText(text, PATTERNS.eslintDisable);
-      if (!isLongFileExempt(file) && text.split('\n').length > LONG_FILE_RED_LINES) {
+      if (!isLongFileExempt(file) && splitLines(text).length > LONG_FILE_RED_LINES) {
         metrics.longFiles += 1;
       }
     }
@@ -101,7 +106,7 @@ export function longFileWarnings(frontendRoot: string = FRONTEND_ROOT): string[]
       if (isLongFileExempt(file)) {
         continue;
       }
-      const lines = readFileSync(file, 'utf8').split('\n').length;
+      const lines = splitLines(readFileSync(file, 'utf8')).length;
       if (lines > LONG_FILE_YELLOW_LINES && lines <= LONG_FILE_RED_LINES) {
         warnings.push(`${path.relative(frontendRoot, file)}: ${lines} lines`);
       }

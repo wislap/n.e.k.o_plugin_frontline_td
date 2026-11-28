@@ -48,6 +48,14 @@ describe('measure', () => {
     expect(metrics.longFiles).toBe(1);
   });
 
+  it('does not let trailing newline or CRLF inflate line counts', () => {
+    const exact800Crlf = `${new Array(800).fill('// x').join('\r\n')}\r\n`;
+    writeFileSync(path.join(root, 'src', 'exact800.ts'), exact800Crlf);
+    const metrics = measure(root);
+    expect(metrics.longFiles).toBe(0);
+    expect(longFileWarnings(root)).toEqual([`${path.join('src', 'exact800.ts')}: 800 lines`]);
+  });
+
   it('exempts tests, test-world, and kernel testing scaffolding', () => {
     writeFileSync(path.join(root, 'src', 'a.test.ts'), lines(900));
     writeFileSync(path.join(root, 'src', 'test-world.ts'), lines(900));

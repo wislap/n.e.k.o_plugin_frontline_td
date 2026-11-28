@@ -6,8 +6,6 @@ const config: KnipConfig = {
     'src/kernel/index.ts',
     'src/content/index.ts',
     'src/protocol/index.ts',
-    'src/features/*/sim/index.ts',
-    'src/features/*/render/index.ts',
     'eval/**/*.ts',
     'tooling/*.ts',
     '!tooling/**/*.test.ts',
